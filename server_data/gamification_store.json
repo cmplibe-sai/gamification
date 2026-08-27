@@ -1,0 +1,54 @@
+{
+  "submissions": [
+    {
+      "id": "sub_1787835259767_n570xd",
+      "userId": "test_user_1",
+      "userEmail": "",
+      "userName": "Test Student",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": 1,
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "What did you learn today?",
+          "answer": "Learned full-stack architecture"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-27T12:54:19.767Z",
+      "updatedAt": "2026-08-27T12:54:19.767Z"
+    }
+  ],
+  "customMilestoneConfigs": {
+    "1": {
+      "dip": {
+        "2026-08-27": {
+          "lcOnTime": 33,
+          "lcLate": 3,
+          "startTime": "05:00",
+          "endTime": "17:00",
+          "questions": [
+            {
+              "title": "What did you learn today?",
+              "type": "text"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "customProjectsDB": {},
+  "levelUpAccessConfig": [],
+  "milestoneStartDates": {
+    "1": "2026-07-31",
+    "2": "2026-08-21",
+    "3": "2026-11-21"
+  },
+  "campusPartnersDB": {}
+}
