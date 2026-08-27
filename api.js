@@ -13,6 +13,24 @@ window.ADMIN_EMAILS = [
     'cmplifutureadi@gmail.com', '6309764212', '9845421644'
 ];
 
+// Asynchronously sync config from backend Web Service if available
+(async function syncBackendConfig() {
+    try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.hostUrl) window.APP_CONFIG.hostUrl = data.hostUrl;
+            if (data.baseUrl) window.APP_CONFIG.baseUrl = data.baseUrl;
+            if (data.creatorId) window.APP_CONFIG.creatorId = data.creatorId;
+            if (Array.isArray(data.adminEmails) && data.adminEmails.length > 0) {
+                window.ADMIN_EMAILS = data.adminEmails;
+            }
+        }
+    } catch (e) {
+        // Standalone/static fallback
+    }
+})();
+
 // --- ENDPOINT REGISTRY ---
 window.TagMangoAPI = {
     Gamification: {
