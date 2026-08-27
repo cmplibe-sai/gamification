@@ -1,0 +1,278 @@
+### TagMango API Environment Variables
+@token = tmk_6a548d2ad99f41ea005cfb8e.2c6260d65f3f09ca4f0a479d15081d98288cc2a6f9e51e191f5249cc0068b8f6
+@baseUrl = https://api-prod-new.tagmango.com/api/v1
+@host = learn.cmplibe.com
+
+@timezone = 330
+
+@creatorId = 6682734e120c766a6e5af59c
+
+@testUserId = 68a805cf8c448ccc00abc23f
+@badgeId = 68d279be6c45a2ac8c2b8e0f
+@mangoId = 6a168e4213e4e9a10984b164
+@courseId = 6714cba5a1796409b279bc2d
+
+### ========================================================
+### 📁 FEED (Main Menu)
+### ========================================================
+
+### 1. Get Feed Posts
+GET {{baseUrl}}/external/feeds/posts
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 2. Create Feed Posts
+POST {{baseUrl}}/external/feeds/posts
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "mangoes": [
+    "698c0af094f2b79d63427fca"
+  ],
+  "contentType": "text",
+  "caption": "API Testing Reference Doc Link vs code"
+}
+
+### ========================================================
+### 📁 ACCOUNT (Main Menu)
+### ========================================================
+
+### 1. Create or find user
+POST {{baseUrl}}/external/users
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "email": "cmplifutureadi@cmplibe.com",
+    "phone": 9900880099,
+    "name": "cMPLi Be",
+    "country": "IN"
+}
+
+### 2. Get User By Email or Phone
+GET {{baseUrl}}/external/users/lookup
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "email": "engineersai02@gmail.com",
+    "phone": 9703764212
+}
+
+### 3. Get User By ID
+GET {{baseUrl}}/external/users/{{testUserId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### ========================================================
+### 📁 GAMIFICATION (Main Menu)
+### ========================================================
+
+### 2. Get Points Ledger For User (Submenu)
+GET {{baseUrl}}/external/gamification/points/ledger/{{testUserId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 3. Get Collective Points For User (Submenu)
+GET {{baseUrl}}/external/gamification/points/collective/{{testUserId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 5. Update Points For Users (Submenu)
+PATCH {{baseUrl}}/external/gamification/points/assign
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "fanIds": [
+        "{{testUserId}}"
+    ],
+    "score": 18,
+    "description": "checking via api reference doc without mentioning type value from vs code"
+}
+
+### 6. Get Badges (Submenu)
+GET {{baseUrl}}/external/gamification/badges
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 7. Create Badges (Submenu)
+POST {{baseUrl}}/external/gamification/badges
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "API Testing vs code"
+}
+
+### 8. Update Badge (Submenu)
+PATCH {{baseUrl}}/external/gamification/badges/{{badgeId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Badge Testing from VS code",
+  "imageUrl": "https://tagmango.com/assets/cmpli-curious-credential-c9ac93ad362dc3ecb662acbd35c43316.png"
+}
+
+### 9. Assign Badge to User (Submenu)
+PATCH {{baseUrl}}/external/gamification/badges/{{testUserId}}/assign
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+    "fanIds": ["{{testUserId}}"],
+  "badges": ["6a69db459af13fbff789810e",
+    "6a69dabf7340652091f91f77"
+  ]
+}
+
+### ========================================================
+### 📁 SOLUTION/MANGO (Main Menu)
+### ========================================================
+
+### 1. Get Mangoes
+GET {{baseUrl}}/external/mangos
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 2. Create Mango
+POST {{baseUrl}}/external/mangos
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "API Testing Course via vs code",
+  "description": "5-week test training program to master aesthetics.",
+  "type": "onetime",
+  "price": 999
+}
+
+### 3. Get Mango by ID
+GET {{baseUrl}}/external/mangos/{{mangoId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 4. Get Mango Subscription Count
+GET {{baseUrl}}/external/mangos/subscriptions/count
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### ========================================================
+### 📁 SUBSCRIPTION (Main Menu)
+### ========================================================
+
+### 4. Get Subscriptions By User
+GET {{baseUrl}}/external/subscriptions/{{testUserId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 5. Get Subscriptions For Creator 
+GET {{baseUrl}}/external/subscriptions/subscribers-by-creator/{{creatorId}}
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### ========================================================
+### 📁 WORKSHOP (Main Menu)
+### ========================================================
+
+### 1. Get Workshop Video Calls
+GET {{baseUrl}}/external/workshops/video-calls
+x-whitelabel-host: {{host}}
+x-timezone-offset: {{timezone}}
+Authorization: Bearer {{token}}
+
+
+### 2. Create Video Call
+POST {{baseUrl}}/external/workshops/video-calls
+x-whitelabel-host: {{host}}
+x-timezone-offset: {{timezone}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Weekly Marketing Call",
+  "mango": "674b3ae55079905e17d8a4c0",
+  "startDate": "2026-08-12",
+  "fromTime": "18:00",
+  "timezoneName": "Asia/Calcutta",
+  "duration": 45,
+  "description": "API Testing from api reference vs code",
+  "recurringType": "daily",
+  "thumbnail": "https://tagmango.com/publicassets/-thumbnail-1-632c9db144f88b33a36bd5bce9bbc34f.png",
+  "autoUploadRecordingsEnabled": true,
+  "enableRecordingZoomCall": true,
+  "repeatingDays": [
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0
+  ],
+  "endDate": "2026-08-20"
+}
+
+### 3. Check Availability
+POST {{baseUrl}}/external/workshops/video-calls/check-availability
+x-whitelabel-host: {{host}}
+x-timezone-offset: 330
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "startDate": "2026-07-30",
+  "fromTime": "18:00",
+  "timezoneName": "Asia/Calcutta",
+  "duration": 80,
+  "recurringType": "weekly",
+  "endDate": "2026-08-10",
+  "repeatingDays": [
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0
+  ]
+}
+
+### ========================================================
+### 📁 COURSES (Main Menu)
+### ========================================================
+
+### 1. Get Courses
+GET {{baseUrl}}/external/courses
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 2. Get Student Overview
+GET {{baseUrl}}/external/courses/{{testUserId}}/overview
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 3. Get Course Reporting
+GET {{baseUrl}}/external/courses/{{courseId}}/reporting
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 4. List Course Reporting Students
+GET {{baseUrl}}/external/courses/{{courseId}}/reporting/students
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
+
+### 5. Get Course Review Summary
+GET {{baseUrl}}/external/courses/{{courseId}}/reviews/summary
+x-whitelabel-host: {{host}}
+Authorization: Bearer {{token}}
