@@ -139,12 +139,14 @@ app.post('/api/submissions', (req, res) => {
         const subType = (subData.type || '').toLowerCase().trim();
         const subDay = String(subData.day || subData.date || '');
 
-        const existingIdx = store.submissions.findIndex(s => 
-            (String(s.userId) === String(subData.userId) || (s.userEmail && subData.userEmail && s.userEmail.toLowerCase() === subData.userEmail.toLowerCase())) &&
-            String(s.milestoneId || 1) === String(subMsId) &&
-            (s.type || '').toLowerCase().trim() === subType &&
-            (String(s.day || '') === subDay || String(s.date || '') === subDay)
-        );
+        const existingIdx = store.submissions.findIndex(s => {
+            const sameUser = String(s.userId) === String(subData.userId) || 
+                (s.userEmail && subData.userEmail && s.userEmail.toLowerCase() === subData.userEmail.toLowerCase());
+            const sameMs = String(s.milestoneId || 1) === String(subMsId);
+            const sameType = (s.type || '').toLowerCase().trim() === subType;
+            const sameDay = String(s.day !== undefined && s.day !== null ? s.day : (s.date || '')) === subDay;
+            return sameUser && sameMs && sameType && sameDay;
+        });
 
         const record = {
             id: subData.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,

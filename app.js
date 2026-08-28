@@ -68,14 +68,21 @@ async function syncGlobalServerData() {
             let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
             const serverData = subsRes.value.data;
             
-            // 1. Merge server submissions into local DB
+            // 1. Merge server submissions into local DB by (User + Milestone + Type + DayNumber)
             serverData.forEach(sSub => {
-                const idx = localDB.findIndex(lSub => 
-                    (String(lSub.userId) === String(sSub.userId) || (lSub.userEmail && sSub.userEmail && lSub.userEmail.toLowerCase() === sSub.userEmail.toLowerCase())) &&
-                    String(lSub.milestoneId || 1) === String(sSub.milestoneId || 1) &&
-                    normalizeLevelUpType(lSub.type) === normalizeLevelUpType(sSub.type) &&
-                    (String(lSub.day) === String(sSub.day) || String(lSub.date) === String(sSub.day) || String(lSub.date) === String(sSub.date))
-                );
+                const sDay = String(sSub.day !== undefined && sSub.day !== null ? sSub.day : (sSub.date || ''));
+                const sType = normalizeLevelUpType(sSub.type || 'dip');
+                const sMsId = String(sSub.milestoneId || 1);
+
+                const idx = localDB.findIndex(lSub => {
+                    const sameUser = (String(lSub.userId) === String(sSub.userId)) || 
+                        (lSub.userEmail && sSub.userEmail && lSub.userEmail.toLowerCase() === sSub.userEmail.toLowerCase());
+                    const sameMs = String(lSub.milestoneId || 1) === sMsId;
+                    const sameType = normalizeLevelUpType(lSub.type || 'dip') === sType;
+                    const sameDay = String(lSub.day !== undefined && lSub.day !== null ? lSub.day : (lSub.date || '')) === sDay;
+                    return sameUser && sameMs && sameType && sameDay;
+                });
+
                 if (idx > -1) {
                     localDB[idx] = { ...localDB[idx], ...sSub };
                 } else {
@@ -86,12 +93,19 @@ async function syncGlobalServerData() {
 
             // 2. Upload any local submissions that are not yet on the server
             localDB.forEach(lSub => {
-                const onServer = serverData.some(sSub =>
-                    (String(sSub.userId) === String(lSub.userId) || (sSub.userEmail && lSub.userEmail && sSub.userEmail.toLowerCase() === lSub.userEmail.toLowerCase())) &&
-                    String(sSub.milestoneId || 1) === String(lSub.milestoneId || 1) &&
-                    normalizeLevelUpType(sSub.type) === normalizeLevelUpType(lSub.type) &&
-                    (String(sSub.day) === String(lSub.day) || String(sSub.date) === String(lSub.day))
-                );
+                const lDay = String(lSub.day !== undefined && lSub.day !== null ? lSub.day : (lSub.date || ''));
+                const lType = normalizeLevelUpType(lSub.type || 'dip');
+                const lMsId = String(lSub.milestoneId || 1);
+
+                const onServer = serverData.some(sSub => {
+                    const sameUser = (String(sSub.userId) === String(lSub.userId)) || 
+                        (sSub.userEmail && lSub.userEmail && sSub.userEmail.toLowerCase() === lSub.userEmail.toLowerCase());
+                    const sameMs = String(sSub.milestoneId || 1) === lMsId;
+                    const sameType = normalizeLevelUpType(sSub.type || 'dip') === lType;
+                    const sameDay = String(sSub.day !== undefined && sSub.day !== null ? sSub.day : (sSub.date || '')) === lDay;
+                    return sameUser && sameMs && sameType && sameDay;
+                });
+
                 if (!onServer && lSub.userId) {
                     fetch('/api/submissions', {
                         method: 'POST',
@@ -100,43 +114,7 @@ async function syncGlobalServerData() {
                     }).catch(e => console.error(e));
                 }
             });
-        }
-
-        if (configsRes.status === 'fulfilled' && configsRes.value.success && configsRes.value.data) {
-            if (typeof customMilestoneConfigs !== 'undefined') {
-                customMilestoneConfigs = { ...customMilestoneConfigs, ...configsRes.value.data };
-                localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
-            }
-        }
-
-        if (projectsRes.status === 'fulfilled' && projectsRes.value.success && projectsRes.value.data) {
-            if (typeof customProjectsDB !== 'undefined') {
-                customProjectsDB = { ...customProjectsDB, ...projectsRes.value.data };
-                localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
-            }
-        }
-
-        if (accessRes.status === 'fulfilled' && accessRes.value.success && Array.isArray(accessRes.value.data)) {
-            if (accessRes.value.data.length > 0) {
-                levelUpAccessConfig = accessRes.value.data;
-                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-            } else if (levelUpAccessConfig && levelUpAccessConfig.length > 0) {
-                // Seed server with local config so server is up to date
-                fetch('/api/levelup-access', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ config: levelUpAccessConfig })
-                }).catch(e => console.error(e));
-            }
-        }
-
-        if (datesRes.status === 'fulfilled' && datesRes.value.success && datesRes.value.data) {
-            if (typeof milestoneStartDates !== 'undefined') {
-                milestoneStartDates = { ...milestoneStartDates, ...datesRes.value.data };
-                localStorage.setItem('milestoneStartDates', JSON.stringify(milestoneStartDates));
-            }
-        }
-    } catch (e) {
+        }} catch (e) {
         console.warn('Server sync offline mode:', e);
     }
 }
@@ -2920,7 +2898,7 @@ function switchMilestoneTab(moduleName, btnElement = null) {
 
     // --- BULLETPROOF START DATE & SANITY CHECK ---
     let startDate = new Date();
-    const allUserSubs = getUserSubmissionsByUserId(currentUser._id);
+    const allUserSubs = getUserSubmissionsByUserId(currentUser);
     
     // Find the absolute first submission for MS1 Day 1 to perfectly anchor the calendar
     const day1Sub = allUserSubs.find(s => normalizeLevelUpType(s.type) === 'dip' && String(s.day) === '1' && String(s.milestoneId || 1) === '1');
@@ -4766,22 +4744,40 @@ async function approveSubmissionManually(userId, day, type) {
     renderAdminCohortSubmissions();
 }
 
-// --- REAL-TIME LIVE SYNC POLLER ---
-let adminLiveSyncInterval = null;
-function startAdminLiveSync() {
-    if (adminLiveSyncInterval) clearInterval(adminLiveSyncInterval);
-    adminLiveSyncInterval = setInterval(async () => {
-        const adminTab = document.getElementById('adminTab');
+// --- REAL-TIME LIVE SYNC POLLER (Unified for Creators & Learners) ---
+let liveSyncInterval = null;
+let lastRenderedSubHash = '';
+
+function startLiveSync() {
+    if (liveSyncInterval) clearInterval(liveSyncInterval);
+    liveSyncInterval = setInterval(async () => {
+        if (!currentUser && !isAdminLogin) return;
+
+        await syncGlobalServerData();
+
+        // 1. If Creator Completion Grid is open, re-render with latest live data
+        const completionView = document.getElementById('adminCompletionView');
         const adminLevelUpTab = document.getElementById('adminLevelUpTab');
-        const isTabVisible = (adminTab && !adminTab.classList.contains('hidden')) || (adminLevelUpTab && !adminLevelUpTab.classList.contains('hidden'));
-        
-        if (isAdminLogin && isTabVisible) {
-            await syncGlobalServerData();
-            const completionView = document.getElementById('adminCompletionView');
-            if (completionView && !completionView.classList.contains('hidden')) {
-                renderAdminCohortSubmissions();
+        if (isAdminLogin && adminLevelUpTab && !adminLevelUpTab.classList.contains('hidden') && completionView && !completionView.classList.contains('hidden')) {
+            renderAdminCohortSubmissions();
+        }
+
+        // 2. If Learner Level-Up timeline is open, re-render timeline with latest live checkmarks
+        const levelUpTab = document.getElementById('levelUpTab');
+        const milestoneDetail = document.getElementById('milestoneDetailContainer');
+        if (!isAdminLogin && currentUser && levelUpTab && !levelUpTab.classList.contains('hidden') && milestoneDetail && !milestoneDetail.classList.contains('hidden')) {
+            const activeNavBtn = document.querySelector('.milestone-nav-btn.border-indigo-500');
+            let currentModule = 'dip';
+            if (activeNavBtn) {
+                const btnText = activeNavBtn.innerText.toLowerCase();
+                if (btnText.includes('immerse')) currentModule = 'immerse';
+                else if (btnText.includes('ios')) currentModule = 'ios';
+                else if (btnText.includes('project')) currentModule = 'projects';
+            }
+            if (typeof switchMilestoneTab === 'function') {
+                switchMilestoneTab(currentModule);
             }
         }
-    }, 6000); // Poll every 6 seconds for live updates
+    }, 4000); // 4-second live bi-directional sync
 }
-startAdminLiveSync();
+startLiveSync();
