@@ -3027,7 +3027,7 @@ function switchMilestoneTab(moduleName, btnElement = null) {
     html += `<div class="space-y-4 border-l-2 border-slate-700 pl-4 ml-2">`;
     
     // STRICT FILTER: Match exactly by module AND current Milestone ID (Fallback to MS1 for old test data)
-    const typeSubs = getUserSubmissionsByUserId(currentUser._id).filter(s => {
+    const typeSubs = getUserSubmissionsByUserId(currentUser).filter(s => {
         const subMsId = s.milestoneId || 1; 
         return normalizeLevelUpType(s.type) === moduleName && String(subMsId) === String(activeMilestoneId);
     });
