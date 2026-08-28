@@ -4829,3 +4829,24 @@ async function approveSubmissionManually(userId, day, type) {
     viewMySubmission(userId, day, type);
     renderAdminCohortSubmissions();
 }
+
+
+// --- REAL-TIME LIVE SYNC POLLER ---
+let adminLiveSyncInterval = null;
+function startAdminLiveSync() {
+    if (adminLiveSyncInterval) clearInterval(adminLiveSyncInterval);
+    adminLiveSyncInterval = setInterval(async () => {
+        const adminTab = document.getElementById('adminTab');
+        const adminLevelUpTab = document.getElementById('adminLevelUpTab');
+        const isTabVisible = (adminTab && !adminTab.classList.contains('hidden')) || (adminLevelUpTab && !adminLevelUpTab.classList.contains('hidden'));
+        
+        if (isAdminLogin && isTabVisible) {
+            await syncGlobalServerData();
+            const completionView = document.getElementById('adminCompletionView');
+            if (completionView && !completionView.classList.contains('hidden')) {
+                renderAdminCohortSubmissions();
+            }
+        }
+    }, 6000); // Poll every 6 seconds for live updates
+}
+startAdminLiveSync();
