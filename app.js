@@ -1160,41 +1160,33 @@ function renderAdminCustomerGrid() {
 }
 
 function toggleLevelUpAccess(mangoId, isEnabled) {
-    // 1. Safety Check: Ensure it's always an array before trying to push to it
     if (!Array.isArray(levelUpAccessConfig)) {
         levelUpAccessConfig = [];
     }
 
-    // 2. Add or remove the ID
     if (isEnabled && !levelUpAccessConfig.includes(mangoId)) {
         levelUpAccessConfig.push(mangoId);
     } else if (!isEnabled) {
         levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
     }
     
-    // 3. Update the local UI
+    // 1. Save to local storage immediately
     localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+    
+    // 2. Re-populate cohort dropdown filters
     if (typeof populateAdminCohortFilters === 'function') {
         populateAdminCohortFilters();
     }
 
-    // 4. Debug Trackers
-    console.log("🚀 Attempting to trigger Scenario A...");
-    console.log("📦 Payload:", levelUpAccessConfig);
-    console.log("🔗 Target URL:", typeof CONFIG_SAVE_WEBHOOK !== 'undefined' ? CONFIG_SAVE_WEBHOOK : "MISSING!");
-
-    // 5. Send to Make.com (Scenario A)
-    if (typeof CONFIG_SAVE_WEBHOOK !== 'undefined' && CONFIG_SAVE_WEBHOOK.includes("make.com")) {
-        fetch(CONFIG_SAVE_WEBHOOK, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active_mangoes: levelUpAccessConfig })
-        })
-        .then(res => console.log("✅ Scenario A successfully received the signal. Status:", res.status))
-        .catch(err => console.error("❌ Scenario A Fetch Blocked:", err));
-    } else {
-        console.error("❌ Scenario A Fetch Aborted: CONFIG_SAVE_WEBHOOK is missing or invalid.");
-    }
+    // 3. Save directly to Render server backend (Single Source of Truth)
+    fetch('/api/levelup-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: levelUpAccessConfig })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Level-Up Access saved to Render backend:', levelUpAccessConfig))
+    .catch(err => console.error('Error saving access to server:', err));
 }
 
 // 1. Filter Mangos by Pricing (All / Paid / Free)
@@ -4760,61 +4752,36 @@ async function loadAIEvaluations() {
 }
 
 // --- GLOBAL CONFIG SYNC ---
-// Removed Make.com CONFIG_SAVE_WEBHOOK (using Render backend)
- //https://hook.eu1.make.com/6j5qd6jl9ga5ierhlagnyh73ronimoov, new: https://hook.eu1.make.com/46d26e5u9k0cgogw44s1mzpj6i71scdq
-// Removed Make.com CONFIG_LOAD_WEBHOOK (using Render backend)
- //https://hook.eu1.make.com/gvftoy8ckceeq4mxpzg05yi8ycrpn4aa, new: https://hook.eu1.make.com/i3vxcoylbnmmxlh5c0zi8geczo35nwbp
-
-// --- SMART CACHE TIMER ---    
 let lastConfigSyncTime = 0; 
 
 async function loadGlobalSettings(forceSync = false) {
     try {
-        const now = new Date().getTime();
-        
-        // 🛑 THE CREDIT SAVER
-        if (!forceSync && (now - lastConfigSyncTime < 300000)) {
-            console.log("⚡ Using cached Level-Up settings to save Make.com credits.");
-            return; 
-        }
-
-        const cacheBusterUrl = CONFIG_LOAD_WEBHOOK + "?t=" + now;
-        const res = await fetch(cacheBusterUrl);
-        
+        const res = await fetch('/api/levelup-access');
         if (res.ok) {
             const data = await res.json();
-            let rawData = data.activeMangoes || data.active_mangoes;
-            
-            // 📦 NEW: THE INCEPTION UNPACKER
-            // If Make.com double-wrapped it as a string inside an array, slice open the inner box!
-            if (Array.isArray(rawData) && typeof rawData[0] === 'string' && rawData[0].includes('active_mangoes')) {
-                rawData = JSON.parse(rawData[0]);
-            }
-            
-            let parsedData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-            
-            if (parsedData && parsedData.active_mangoes) {
-                levelUpAccessConfig = parsedData.active_mangoes;
-            } else if (parsedData && parsedData.activeMangoes) {
-                levelUpAccessConfig = parsedData.activeMangoes;
-            } else if (Array.isArray(parsedData)) {
-                levelUpAccessConfig = parsedData;
+            if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+                levelUpAccessConfig = data.data;
+                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+                console.log("✅ Level-Up Access Config loaded from server:", levelUpAccessConfig);
             } else {
-                levelUpAccessConfig = [];
-            }
-            
-            // FORCE SAVE
-            localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-            lastConfigSyncTime = now; 
-            
-            console.log("✅ Global Level-Up Config locked in live from Vault:", levelUpAccessConfig);
-            
-            if (typeof renderAdminMangoToggles === 'function') {
-                renderAdminMangoToggles();
+                // If server is empty but local storage has active choices, sync local up to server
+                const savedLocal = JSON.parse(localStorage.getItem('adminLevelUpConfig'));
+                if (Array.isArray(savedLocal) && savedLocal.length > 0) {
+                    levelUpAccessConfig = savedLocal;
+                    fetch('/api/levelup-access', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config: levelUpAccessConfig })
+                    }).catch(e => console.error(e));
+                }
             }
         }
-    } catch (error) {
-        console.error("Could not load global config from Make.com:", error);
+    } catch (e) {
+        console.warn("Using local Level-Up config fallback:", e);
+    }
+    
+    if (typeof renderAdminMangoToggles === 'function') {
+        renderAdminMangoToggles();
     }
 }
 
@@ -4840,7 +4807,6 @@ async function approveSubmissionManually(userId, day, type) {
     viewMySubmission(userId, day, type);
     renderAdminCohortSubmissions();
 }
-
 
 // --- REAL-TIME LIVE SYNC POLLER ---
 let adminLiveSyncInterval = null;
