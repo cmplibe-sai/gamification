@@ -44,7 +44,10 @@
     }
   },
   "customProjectsDB": {},
-  "levelUpAccessConfig": [],
+  "levelUpAccessConfig": [
+    "6a168e4213e4e9a10984b164",
+    "6735e395013c9a1f0a8768b0"
+  ],
   "milestoneStartDates": {
     "1": "2026-07-31",
     "2": "2026-08-21",

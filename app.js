@@ -97,8 +97,17 @@ async function syncGlobalServerData() {
         }
 
         if (accessRes.status === 'fulfilled' && accessRes.value.success && Array.isArray(accessRes.value.data)) {
-            levelUpAccessConfig = accessRes.value.data;
-            localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+            if (accessRes.value.data.length > 0) {
+                levelUpAccessConfig = accessRes.value.data;
+                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+            } else if (levelUpAccessConfig && levelUpAccessConfig.length > 0) {
+                // Seed server with local config so server is up to date
+                fetch('/api/levelup-access', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config: levelUpAccessConfig })
+                }).catch(e => console.error(e));
+            }
         }
 
         if (datesRes.status === 'fulfilled' && datesRes.value.success && datesRes.value.data) {
@@ -4751,8 +4760,10 @@ async function loadAIEvaluations() {
 }
 
 // --- GLOBAL CONFIG SYNC ---
-const CONFIG_SAVE_WEBHOOK = "https://hook.eu1.make.com/46d26e5u9k0cgogw44s1mzpj6i71scdq"; //https://hook.eu1.make.com/6j5qd6jl9ga5ierhlagnyh73ronimoov, new: https://hook.eu1.make.com/46d26e5u9k0cgogw44s1mzpj6i71scdq
-const CONFIG_LOAD_WEBHOOK = "https://hook.eu1.make.com/i3vxcoylbnmmxlh5c0zi8geczo35nwbp"; //https://hook.eu1.make.com/gvftoy8ckceeq4mxpzg05yi8ycrpn4aa, new: https://hook.eu1.make.com/i3vxcoylbnmmxlh5c0zi8geczo35nwbp
+// Removed Make.com CONFIG_SAVE_WEBHOOK (using Render backend)
+ //https://hook.eu1.make.com/6j5qd6jl9ga5ierhlagnyh73ronimoov, new: https://hook.eu1.make.com/46d26e5u9k0cgogw44s1mzpj6i71scdq
+// Removed Make.com CONFIG_LOAD_WEBHOOK (using Render backend)
+ //https://hook.eu1.make.com/gvftoy8ckceeq4mxpzg05yi8ycrpn4aa, new: https://hook.eu1.make.com/i3vxcoylbnmmxlh5c0zi8geczo35nwbp
 
 // --- SMART CACHE TIMER ---    
 let lastConfigSyncTime = 0; 
