@@ -140,7 +140,7 @@ app.post('/api/submissions', (req, res) => {
         const subDay = String(subData.day || subData.date || '');
 
         const existingIdx = store.submissions.findIndex(s => 
-            String(s.userId) === String(subData.userId) &&
+            (String(s.userId) === String(subData.userId) || (s.userEmail && subData.userEmail && s.userEmail.toLowerCase() === subData.userEmail.toLowerCase())) &&
             String(s.milestoneId || 1) === String(subMsId) &&
             (s.type || '').toLowerCase().trim() === subType &&
             (String(s.day || '') === subDay || String(s.date || '') === subDay)

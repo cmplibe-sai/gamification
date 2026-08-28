@@ -66,9 +66,12 @@ async function syncGlobalServerData() {
 
         if (subsRes.status === 'fulfilled' && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            subsRes.value.data.forEach(sSub => {
+            const serverData = subsRes.value.data;
+            
+            // 1. Merge server submissions into local DB
+            serverData.forEach(sSub => {
                 const idx = localDB.findIndex(lSub => 
-                    String(lSub.userId) === String(sSub.userId) &&
+                    (String(lSub.userId) === String(sSub.userId) || (lSub.userEmail && sSub.userEmail && lSub.userEmail.toLowerCase() === sSub.userEmail.toLowerCase())) &&
                     String(lSub.milestoneId || 1) === String(sSub.milestoneId || 1) &&
                     normalizeLevelUpType(lSub.type) === normalizeLevelUpType(sSub.type) &&
                     (String(lSub.day) === String(sSub.day) || String(lSub.date) === String(sSub.day) || String(lSub.date) === String(sSub.date))
@@ -80,6 +83,23 @@ async function syncGlobalServerData() {
                 }
             });
             localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+
+            // 2. Upload any local submissions that are not yet on the server
+            localDB.forEach(lSub => {
+                const onServer = serverData.some(sSub =>
+                    (String(sSub.userId) === String(lSub.userId) || (sSub.userEmail && lSub.userEmail && sSub.userEmail.toLowerCase() === lSub.userEmail.toLowerCase())) &&
+                    String(sSub.milestoneId || 1) === String(lSub.milestoneId || 1) &&
+                    normalizeLevelUpType(sSub.type) === normalizeLevelUpType(lSub.type) &&
+                    (String(sSub.day) === String(lSub.day) || String(sSub.date) === String(lSub.day))
+                );
+                if (!onServer && lSub.userId) {
+                    fetch('/api/submissions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(lSub)
+                    }).catch(e => console.error(e));
+                }
+            });
         }
 
         if (configsRes.status === 'fulfilled' && configsRes.value.success && configsRes.value.data) {
@@ -3751,7 +3771,7 @@ function renderAdminCohortSubmissions() {
 
     // Filter by Status & prepare math
     cohort.forEach(user => {
-        const subs = getUserSubmissionsByUserId(user._id);
+        const subs = getUserSubmissionsByUserId(user);
 
         let calculatedLcs = 0;
         subs.forEach(s => {
@@ -3817,7 +3837,7 @@ function renderAdminCohortSubmissions() {
 
     let tbodyHtml = `<tbody class="divide-y divide-slate-800 bg-slate-900/40">`;
     validCohort.forEach(user => {
-        const subs = getUserSubmissionsByUserId(user._id);
+        const subs = getUserSubmissionsByUserId(user);
         
         let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
             : (user.isPending ? `<button onclick="alert('Cert Approved!')" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
@@ -4147,18 +4167,36 @@ function getSubmissionBucketForUser(user) {
     return levelUpSubmissions[key];
 }
 
-function getUserSubmissionsByUserId(userId) {
+function getUserSubmissionsByUserId(userIdentifier) {
     const localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     const legacySubs = typeof userSubmissions !== 'undefined' ? userSubmissions : [];
     
+    let targetId = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier._id : userIdentifier;
+    let targetEmail = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.email : null;
+    let targetPhone = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.phone : null;
+
+    if (!targetEmail && targetId && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+        const found = actualUsers.find(u => String(u._id) === String(targetId));
+        if (found) {
+            targetEmail = found.email;
+            targetPhone = found.phone;
+        }
+    }
+
     const map = new Map();
     [...legacySubs, ...localDB].forEach(sub => {
-        if (!sub || !sub.userId) return;
-        const key = `${sub.userId}_${sub.milestoneId || 1}_${normalizeLevelUpType(sub.type)}_${sub.day || sub.date || sub.dateKey}`;
+        if (!sub) return;
+        const key = `${sub.userId || sub.userEmail}_${sub.milestoneId || 1}_${normalizeLevelUpType(sub.type)}_${sub.day || sub.date || sub.dateKey}`;
         map.set(key, sub);
     });
 
-    return Array.from(map.values()).filter(sub => String(sub.userId) === String(userId));
+    return Array.from(map.values()).filter(sub => {
+        if (!sub) return false;
+        if (targetId && String(sub.userId) === String(targetId)) return true;
+        if (targetEmail && sub.userEmail && sub.userEmail.toLowerCase() === targetEmail.toLowerCase()) return true;
+        if (targetPhone && sub.userPhone && String(sub.userPhone) === String(targetPhone)) return true;
+        return false;
+    });
 }
 
 function getUserMilestoneLcs(userId, milestoneId) {
