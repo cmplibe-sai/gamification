@@ -4661,93 +4661,13 @@ async function uploadMediaToCloudinary(file) {
 
 // --- DATABASE READ API (The Drive-Thru Window) ---
 
-async function fetchUserDataFromDatabase() {
-    // 1. Paste your Make.com Webhook URL right here inside the quotes
-    const READ_API_WEBHOOK_URL = "https://hook.eu1.make.com/fgvswjo9sif61d79c2d5n1rwsycotau8";
-
-    // 2. Make sure we have a user logged in before asking for data
-    if (!currentUser || !currentUser.email) {
-        console.warn("No user logged in. Cannot fetch data.");
-        return null;
-    }
-
-    try {
-        console.log("Fetching live data from PostgreSQL vault...");
-        
-        // 3. Send the request to Make.com with the user's email
-        const response = await fetch(READ_API_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                userEmail: currentUser.email,
-                userId: currentUser._id
-            })
-        });
-
-        // 4. Catch the reply from Make.com
-        if (response.ok) {
-            const data = await response.json();
-            console.log("Success! Data retrieved:", data);
-            return data;
-        } else {
-            console.error("Failed to connect to the Read API.");
-            return null;
-        }
-    } catch (error) {
-        console.error("Network Error while fetching user data:", error);
-        return null;
-    }
-}
-
-// --- SYNC AI FEEDBACK FROM POSTGRESQL ---
-
+// --- AI EVALUATIONS & FEEDBACK SYNC ---
 async function loadAIEvaluations() {
-    // Fetch the rich data (evaluations, URLs) from Make.com Read API
-    const dbData = await fetchUserDataFromDatabase();
-
-    if (dbData && dbData.checkins) {
-        console.log("Syncing AI Evaluations to UI...");
-        
-        let allUserSubsDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-        let stateChanged = false;
-
-        // Loop through the PostgreSQL data and inject it into the local UI state
-        dbData.checkins.forEach(checkin => {
-            
-            // Find the placeholder 'evaluating' submission we saved earlier
-            const existingIndex = allUserSubsDB.findIndex(sub => 
-                String(sub.day) === String(checkin.session_day) && 
-                String(sub.userId) === String(currentUser._id)
-            );
-
-            if (existingIndex > -1) {
-                // If it finds it, update the status to 'completed' (turning the badge Green!)
-                allUserSubsDB[existingIndex].status = 'completed';
-                allUserSubsDB[existingIndex].summary = checkin.evaluation;
-                allUserSubsDB[existingIndex].media = { data: checkin.media_url };
-                
-                // Append the AI feedback without deleting their original answers
-                const hasAIEval = allUserSubsDB[existingIndex].responses.some(r => r.question === 'AI Evaluation');
-                if (!hasAIEval) {
-                    allUserSubsDB[existingIndex].responses.push(
-                        { question: 'AI Transcription', answer: checkin.transcription, type: 'text' },
-                        { question: 'AI Evaluation', answer: checkin.evaluation, type: 'text' }
-                    );
-                }
-                stateChanged = true;
-            }
-        });
-        
-        // Only trigger a re-render if the database actually updated something
-        if (stateChanged) {
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
-            renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
-            
-            // Refresh the grid icons to match the new status
-            if (typeof renderTimelines === 'function') renderTimelines(); 
-        }
+    // Gracefully syncs submissions from the Render server backend
+    try {
+        await syncGlobalServerData();
+    } catch (e) {
+        console.warn("Evaluation sync:", e);
     }
 }
 
