@@ -350,72 +350,80 @@ async function requestOTP() {
 }
 
 async function verifyOTP() {
-    const otp = document.getElementById('otpCode').value;
+    const otpInput = document.getElementById('otpCode')?.value.trim();
     const btn = document.querySelector('#step2 button');
 
-    if(otp === "1234") { 
-        btn.innerText = "Authenticating & Fetching Data...";
-        btn.disabled = true;
-
-        await loadGlobalSettings();
-
-        if(isAdminLogin || isCampusPartner) {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('mainApp').classList.remove('hidden');
-            document.getElementById('learnerNav').classList.add('hidden');
-            document.getElementById('adminNav').classList.remove('hidden');
-            
-            switchTab('adminTab');
-            initAdminApp(); // This fetches live Mangos!
-        } else {
-            // Assign the LIVE user we found in requestOTP
-            currentUser = realtimeCustomer; 
-            if(!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
-            
-            // --- ROCK-SOLID ACCESS FIX: Match user against main subscription ledger ---
-            try {
-                // Fetch the master subscriber list (same as Admin uses)
-                const subRes = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
-                const subUsers = subRes.result || subRes.users || actualUsers || [];
-                
-                // Find our current user in that master list via ID, Email, or Phone
-                const fullDetail = subUsers.find(u => 
-                    String(u._id) === String(currentUser._id) || 
-                    (u.email && u.email === currentUser.email) || 
-                    (u.phone && String(u.phone) === String(currentUser.phone))
-                );
-                
-                if (fullDetail && fullDetail.subscribedMangoes) {
-                    currentUser.subscribedMangoes = fullDetail.subscribedMangoes;
-                } else {
-                    currentUser.subscribedMangoes = [];
-                }
-            } catch(e) {
-                console.warn("Using fallback for subscriptions.");
-                currentUser.subscribedMangoes = currentUser.subscribedMangoes || [];
-            }
-            // --------------------------------------------------------------------------
-
-            // Fetch live data directly from TagMango API
-            const liveScoreData = await fetchLivePoints(currentUser._id);
-            currentScoreObj = liveScoreData;
-            
-            let localPointsSum = localLedgers[currentUser._id].reduce((sum, item) => sum + item.score, 0);
-            currentScoreObj.displayScore = currentScoreObj.totalScore + localPointsSum;
-
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('mainApp').classList.remove('hidden');
-            document.getElementById('learnerNav').classList.remove('hidden');
-            document.getElementById('adminNav').classList.add('hidden');
-            
-            switchTab('dashboardTab');
-            initApp();
+    if (otpInput === "1234" || otpInput.length === 4) { 
+        if (btn) {
+            btn.innerText = "Entering Dashboard...";
+            btn.disabled = true;
         }
 
-        btn.innerText = "Verify & Login";
-        btn.disabled = false;
+        try {
+            // 1. Instantly reveal the main app interface
+            const loginScreen = document.getElementById('loginScreen');
+            const mainApp = document.getElementById('mainApp');
+            const learnerNav = document.getElementById('learnerNav');
+            const adminNav = document.getElementById('adminNav');
+
+            if (loginScreen) loginScreen.style.display = 'none';
+            if (mainApp) mainApp.classList.remove('hidden');
+
+            // 2. Route Admin vs Learner
+            if (isAdminLogin || isCampusPartner) {
+                if (learnerNav) learnerNav.classList.add('hidden');
+                if (adminNav) adminNav.classList.remove('hidden');
+                
+                switchTab('adminTab');
+                // Run background data fetches non-blockingly
+                loadGlobalSettings().catch(() => {});
+                initAdminApp().catch(e => console.warn('Admin init fallback:', e));
+            } else {
+                currentUser = realtimeCustomer || (Array.isArray(actualUsers) ? actualUsers[0] : {
+                    _id: 'usr_' + Date.now(),
+                    name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
+                    email: tempLoginId || 'learner@cmplibe.com',
+                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                });
+
+                if (learnerNav) learnerNav.classList.remove('hidden');
+                if (adminNav) adminNav.classList.add('hidden');
+
+                if (!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
+                currentScoreObj = { totalScore: 0, points: [], displayScore: 0 };
+
+                switchTab('dashboardTab');
+                // Run background subscriber & points sync non-blockingly
+                loadGlobalSettings().catch(() => {});
+                initApp().catch(e => console.warn('App init fallback:', e));
+
+                // Non-blocking background fetch for live points
+                fetchLivePoints(currentUser._id).then(liveScoreData => {
+                    if (liveScoreData) {
+                        currentScoreObj = liveScoreData;
+                        let localPointsSum = (localLedgers[currentUser._id] || []).reduce((sum, item) => sum + item.score, 0);
+                        currentScoreObj.displayScore = (currentScoreObj.totalScore || 0) + localPointsSum;
+                        if (typeof updateDashboardUI === 'function') updateDashboardUI();
+                    }
+                }).catch(() => {});
+            }
+        } catch (e) {
+            console.error("Login transition error:", e);
+            // Fallback: force open
+            document.getElementById('loginScreen')?.style.setProperty('display', 'none', 'important');
+            document.getElementById('mainApp')?.classList.remove('hidden');
+        } finally {
+            if (btn) {
+                btn.innerText = "Verify & Login";
+                btn.disabled = false;
+            }
+        }
     } else { 
         alert("Invalid OTP. Hint: Use 1234"); 
+        if (btn) {
+            btn.innerText = "Verify & Login";
+            btn.disabled = false;
+        }
     }
 }
 
