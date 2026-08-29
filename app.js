@@ -36,8 +36,9 @@ const milestoneConfig = [
         name: "cMPLi Challenge Embracer", 
         subtitle: "Foundation Phase (~21 Days)", 
         durationDays: 21, 
-        desc: "Strictly 21 Days continuous baseline. Form morning reflection habits with cMPLi Dip and explore audio insights with cMPLi POD.", 
+        modules: ['dip', 'pod'],
         defaultModules: ['dip', 'pod'], 
+        desc: "Strictly 21 Days continuous baseline. Form morning reflection habits with cMPLi Dip and explore audio insights with cMPLi POD.", 
         rules: "Completion % must be >90%. Complete daily cMPLi Dip (05:00 AM - 05:00 PM, 33 LCs) and cMPLi POD audio quizzes (33 LCs) to qualify for promotion." 
     },
     { 
@@ -46,8 +47,9 @@ const milestoneConfig = [
         name: "cMPLi Curious", 
         subtitle: "Exploration Phase (~4 Months)", 
         durationDays: 120, 
-        desc: "~4 Months adaptive journey. Broaden perspectives, continue daily Dip & POD, and unlock cMPLi Immerse deep-dives.", 
+        modules: ['dip', 'pod', 'immerse'],
         defaultModules: ['dip', 'pod', 'immerse'], 
+        desc: "~4 Months adaptive journey. Broaden perspectives, continue daily Dip & POD, and unlock cMPLi Immerse deep-dives.", 
         rules: "Continuous Dip (6 days/week) & POD Quizzes. cMPLi Immerse deep-dives unlock upon satisfying activity criteria. Minimum benchmark LCs required to advance." 
     },
     { 
@@ -56,8 +58,9 @@ const milestoneConfig = [
         name: "cMPLi Committed", 
         subtitle: "Execution Phase (~4 Months)", 
         durationDays: 120, 
-        desc: "~4 Months adaptive execution. Execute cMPLi-ai real-world challenges, continue Dip, POD, and Immerse deep dives.", 
+        modules: ['dip', 'pod', 'immerse', 'projects'],
         defaultModules: ['dip', 'pod', 'immerse', 'projects'], 
+        desc: "~4 Months adaptive execution. Execute cMPLi-ai real-world challenges, continue Dip, POD, and Immerse deep dives.", 
         rules: "Consistent Dip & POD + Real-world execution projects. Achieve required benchmark LCs for capstone eligibility." 
     },
     { 
@@ -66,13 +69,13 @@ const milestoneConfig = [
         name: "cMPLi futureREadi earliTalent", 
         subtitle: "Capstone & Corporate Phase (~4-5 Months)", 
         durationDays: 150, 
-        desc: "Final frontier of leadership. Engage in Corporate Residency, Problem-Solution Insight Engine, and daily Dip & POD mastery.", 
+        modules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'],
         defaultModules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'], 
+        desc: "Final frontier of leadership. Engage in Corporate Residency, Problem-Solution Insight Engine, and daily Dip & POD mastery.", 
         rules: "Complete Corporate Residency immersion and Problem-Solution capstone deliverables to attain the ultimate cMPLi futureREadi credential." 
     }
 ];
 
-// Module registry across platform
 const ALL_PLATFORM_MODULES = [
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
     { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Randomized Comprehension Quiz' },
@@ -613,7 +616,7 @@ function renderAdminMilestoneGrid() {
     }
 
     const gridCards = milestoneConfig.map(ms => {
-        const isBlank = ms.modules.length === 0;
+        const isBlank = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).length === 0;
         const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
         return `
         <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
@@ -690,7 +693,7 @@ function openMilestone(id) {
     const descEl = document.getElementById('activeMilestoneDesc');
     if(descEl) descEl.innerText = "Must maintain strict compliance to avoid a complete reset.";
     
-    const navHtml = ms.modules.map((mod, i) => {
+    const navHtml = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).map((mod, i) => {
         const labels = { dip: 'cMPLi Dip', immerse: 'cMPLi Immerse', ios: 'cMPLi iOS', projects: 'Projects' };
         const icons = { dip: 'fa-sun', immerse: 'fa-moon', ios: 'fa-mobile-alt', projects: 'fa-briefcase' };
         const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
@@ -707,8 +710,8 @@ function openMilestone(id) {
         btnCert.innerHTML = '<i class="fas fa-award mr-1"></i> Claim My Credential';
     }
     
-    if (ms.modules.length > 0 && typeof switchMilestoneTab === 'function') {
-        switchMilestoneTab(ms.modules[0]);
+    if ((ms.modules || getEnabledModulesForMilestone(ms.id) || []).length > 0 && typeof switchMilestoneTab === 'function') {
+        switchMilestoneTab((ms.modules || getEnabledModulesForMilestone(ms.id) || [])[0]);
     }
 }
 
@@ -760,7 +763,7 @@ function renderMilestoneGrid() {
         // --- GOD MODE OVERRIDE ---
         // If testMode is true, ALL milestones are unlocked.
         const isUnlocked = testMode || ms.id <= userState.highestUnlocked;
-        const isBlank = ms.modules.length === 0; 
+        const isBlank = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).length === 0; 
         
         let cardClasses = "glass p-6 rounded-2xl border flex flex-col justify-between min-h-[200px] transition-all duration-300 relative overflow-hidden ";
         
@@ -867,20 +870,30 @@ function initApp() {
 }
 
 function updateDashboardUI() {
-    document.getElementById('userPoints').innerText = currentScoreObj.displayScore;
+    const pointsEl = document.getElementById('userPoints');
+    if (pointsEl) pointsEl.innerText = (currentScoreObj && currentScoreObj.displayScore) ? currentScoreObj.displayScore : '0';
     
-    document.getElementById('userDetailsContent').innerHTML = `
-        <div class="profile-header">
-            <img src="${currentUser.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
-            <div><h3 class="text-xl font-bold text-white">${currentUser.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${currentUser._id}</p></div>
-        </div>
-        <div class="user-info text-sm">
-            <p><span>Email:</span> ${currentUser.email || 'N/A'}</p>
-            <p><span>Phone:</span> ${currentUser.dialCode || ''} ${currentUser.phone || 'N/A'}</p>
-        </div>
-    `;
+    const userDetailsEl = document.getElementById('userDetailsContent');
+    if (userDetailsEl && currentUser) {
+        userDetailsEl.innerHTML = `
+            <div class="profile-header">
+                <img src="${currentUser.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+                <div>
+                    <h3 class="text-xl font-bold text-white">${currentUser.name || 'Learner'}</h3>
+                    <p class="text-xs text-indigo-400 mt-1">ID: ${currentUser._id}</p>
+                </div>
+            </div>
+            <div class="user-info text-sm space-y-2 mt-4 pt-3 border-t border-slate-700/60">
+                <p><span class="text-indigo-400 font-bold">Email:</span> ${currentUser.email || 'N/A'}</p>
+                <p><span class="text-indigo-400 font-bold">Phone:</span> ${currentUser.dialCode || ''} ${currentUser.phone || 'N/A'}</p>
+            </div>
+        `;
+    }
 
-    document.getElementById('pointsContent').innerHTML = buildPointsHtml(currentScoreObj);
+    const pointsContentEl = document.getElementById('pointsContent');
+    if (pointsContentEl) {
+        pointsContentEl.innerHTML = buildPointsHtml(currentScoreObj || {});
+    }
     
     // Render the dashboard components
     renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
@@ -3572,7 +3585,7 @@ function renderAdminMilestoneGrid() {
     }
 
     const gridCards = milestoneConfig.map(ms => {
-        const isBlank = ms.modules.length === 0;
+        const isBlank = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).length === 0;
         const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
         return `
         <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
