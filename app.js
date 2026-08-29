@@ -1,5 +1,38 @@
 
 // ==============================================================
+// TAGMANGO LIVE IN-COMMUNITY WALLET API SYNC
+// ==============================================================
+async function assignTagMangoPoints(userId, points, description, type = 'community') {
+    try {
+        const apiKey = window.APP_CONFIG?.tagmangoKey || '117769efad62c64b63e8a71f7fcb16d10c144e6ef402ff6e927c32724490f5c6b653133ffbc8daebcb72798e6ad48a60424564c7816db73650cbe1131c9443c9';
+        const hostUrl = window.APP_CONFIG?.hostUrl || 'learn.cmplibe.com';
+        
+        const res = await fetch('https://api-prod-new.tagmango.com/api/v1/external/gamification/points/assign', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'x-whitelabel-host': hostUrl
+            },
+            body: JSON.stringify({
+                fanIds: [userId],
+                score: Number(points) || 33,
+                description: description || `[AI Approved] Milestone-1 Day-1 Check-in`,
+                type: type,
+                date: new Date().toISOString()
+            })
+        });
+        const data = await res.json();
+        console.log('✅ TagMango Live Wallet Response:', data);
+        return data;
+    } catch (e) {
+        console.error('TagMango Wallet API Error:', e);
+    }
+}
+window.assignTagMangoPoints = assignTagMangoPoints;
+
+
+// ==============================================================
 // DEFAULT cMPLi POD QUESTIONS POOL
 // ==============================================================
 function getPodQuestionsPool() {
@@ -2537,14 +2570,13 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
 async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
     const btn = document.getElementById('btnSubmitCheckin') || document.getElementById('btnSubmitDynamicCheckIn');
     if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing Media...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting & Uploading...';
         btn.disabled = true;
     }
 
     let answers = [];
     let hasMissingAnswers = false;
 
-    // 1. Gather responses & handle both File Uploads AND In-Browser Media Recordings
     for (let i = 0; i < totalQuestions; i++) {
         const qInput = document.getElementById(`dynamic_input_${i}`);
         const qTitle = document.getElementById(`dynamic_q_${i}`) ? document.getElementById(`dynamic_q_${i}`).value : `Question ${i+1}`;
@@ -2563,27 +2595,19 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
                     const mediaElem = preview.querySelector('audio, video');
                     if (mediaElem && mediaElem.src) {
                         try {
-                            if (btn) btn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i> Capturing Recorded Media...';
                             const blob = await fetch(mediaElem.src).then(r => r.blob());
                             const ext = qType === 'video' ? 'webm' : 'mp3';
                             const mime = blob.type || (qType === 'video' ? 'video/webm' : 'audio/mp3');
                             mediaFile = new File([blob], `recorded_${qType}_${Date.now()}.${ext}`, { type: mime });
                         } catch (e) {
-                            console.error("Could not capture recorded media blob:", e);
+                            console.error("Capture media error:", e);
                         }
                     }
                 }
             }
 
             if (mediaFile) {
-                if (btn) btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-bounce mr-2"></i> Uploading Media...';
-                const secureUrl = await uploadMediaToCloudinary(mediaFile);
-                if (!secureUrl) {
-                    alert("Media upload failed. Please check your connection.");
-                    if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
-                    return;
-                }
-                val = secureUrl;
+                val = await uploadMediaToCloudinary(mediaFile);
             }
         } else {
             if (qInput) val = qInput.value.trim();
@@ -2593,20 +2617,18 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
         
         answers.push({ 
             question: qTitle, 
-            answer: val, 
+            answer: val || 'No answer', 
             type: qType, 
             fileData: (['audio', 'video', 'doc'].includes(qType) ? val : null),
-            fileName: (['audio', 'video', 'doc'].includes(qType) ? `submission_${qType}.${qType === 'video' ? 'mp4' : 'mp3'}` : null)
+            fileName: (['audio', 'video', 'doc'].includes(qType) ? `submission_${qType}_${dayNum}` : null)
         });
     }
 
     if (hasMissingAnswers) {
-        alert("Please complete all fields and attach or record required media before submitting.");
+        alert("Please answer all required question prompts and attach required media before submitting.");
         if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
         return;
     }
-
-    if (btn) btn.innerHTML = '<i class="fas fa-satellite-dish fa-pulse mr-2"></i> Transmitting to Make.com...';
 
     let foundMediaUrl = null;
     answers.forEach(ans => {
@@ -2622,52 +2644,45 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
         calculatedPoints = parseInt(dayConfig.lcOnTime) || 33;
     }
 
-    const webhookPayload = {
+    const payload = {
         userId: currentUser._id,
+        fanId: currentUser._id,
         userName: currentUser.name || 'Learner',
         userEmail: currentUser.email || '',
         userPhone: currentUser.phone || '',
         milestoneId: activeMilestoneId || 1,
         moduleType: normalizedType,
-        sessionDay: dayNum,
-        lcReward: calculatedPoints,
-        responses: answers,
-        mediaUrl: foundMediaUrl, 
-        timestamp: new Date().toISOString(),
-        status: 'evaluating' // STRICTLY EVALUATING (NO PREMATURE LC CREDIT)
-    };
-
-    // 1. Send to Make.com Webhook
-    if (typeof sendToKVM1Database === 'function') {
-        sendToKVM1Database(webhookPayload).catch(() => {});
-    }
-
-    // 2. Save Locally as 'evaluating'
-    const newSubmission = {
-        userId: currentUser._id,
-        userName: currentUser.name || 'Learner',
-        userEmail: currentUser.email || '',
-        milestoneId: activeMilestoneId || 1,
         type: normalizedType,
+        sessionDay: dayNum,
         day: dayNum,
         date: dateKey,
-        responses: answers,
-        submittedAt: webhookPayload.timestamp,
         lcReward: calculatedPoints,
-        status: 'evaluating'
+        mediaUrl: foundMediaUrl || '',
+        audioUrl: foundMediaUrl || '',
+        videoUrl: foundMediaUrl || '',
+        answers: answers,
+        responses: answers,
+        status: 'evaluating', // PENDING MAKE.COM EVALUATION
+        submittedAt: new Date().toISOString()
     };
 
+    // 1. Send to Make.com Webhook (Bridged cleanly)
+    if (typeof sendToKVM1Database === 'function') {
+        sendToKVM1Database(payload).catch(e => console.error('Make.com webhook error:', e));
+    }
+
+    // 2. Save Locally
     let allUserSubsDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     allUserSubsDB = allUserSubsDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === normalizedType && String(s.day) === String(dayNum)));
-    allUserSubsDB.push(newSubmission);
+    allUserSubsDB.push(payload);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
     
-    // 3. Sync to Backend Web Service
+    // 3. Sync to Render Backend Server
     fetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSubmission)
-    }).catch(e => console.error('Server sync submission error:', e));
+        body: JSON.stringify(payload)
+    }).catch(e => console.error('Server sync error:', e));
     
     const modal = document.getElementById('dynamicSubmissionModal');
     if (modal) modal.remove();
@@ -3544,8 +3559,15 @@ async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
         localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
     }
 
-    recordLevelUpReward(userId, type, msId, lcReward, `cMPLi ${type.toUpperCase()} Day ${day} Approved`);
+    const desc = `[Manual Approved] Milestone-${msId} Day-${day} ${type.toUpperCase()} Check-in`;
+    
+    // 1. Credit to local gamification ledger
+    recordLevelUpReward(userId, type, msId, lcReward, desc);
 
+    // 2. Credit to live TagMango In-Community Wallet (learn.cmplibe.com)
+    assignTagMangoPoints(userId, lcReward, desc);
+
+    // 3. Sync update to Render Web Service
     try {
         await fetch('/api/submissions', {
             method: 'POST',
@@ -3564,7 +3586,7 @@ async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
     }
 
     document.getElementById('viewSubmissionModalDynamic')?.remove();
-    alert(`🎉 Submission for Day ${day} approved! +${lcReward} LCs credited.`);
+    alert(`🎉 Submission for Day ${day} approved! +${lcReward} LCs credited to live TagMango Wallet.`);
     
     if (typeof renderAdminCohortSubmissions === 'function') {
         renderAdminCohortSubmissions();
@@ -5110,27 +5132,35 @@ async function sendToKVM1Database(customerData) {
 
 // --- CLOUDINARY DIRECT-TO-CLOUD UPLOAD ---
 async function uploadMediaToCloudinary(file) {
-    const cloudName = 'wkub1q4f'; // Get this from Cloudinary dashboard cloud name-wkub1q4f
-    const uploadPreset = 'cb_testing_gamification'; // Create this in Cloudinary Settings -> Upload --> cb_testing_gamification
+    if (!file) return null;
+    const cloudName = 'wkub1q4f';
+    const uploadPreset = 'cb_testing_gamification';
     
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', uploadPreset);
 
     try {
-        // Automatically handles Audio, Video, and Images
         const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
             method: 'POST',
             body: formData
         });
         
-        const data = await response.json();
-        return data.secure_url; // This returns the tiny, lightweight URL!
-        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.secure_url) return data.secure_url;
+        }
     } catch (error) {
-        console.error("Cloudinary Upload Failed:", error);
-        return null;
+        console.warn("Cloudinary upload fallback to dataURL:", error);
     }
+
+    // Fallback: convert to base64 Data URL so user never gets blocked
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve("#file_attached");
+        reader.readAsDataURL(file);
+    });
 }
 
 //API - Get User Data: https://hook.eu1.make.com/fgvswjo9sif61d79c2d5n1rwsycotau8
@@ -5261,13 +5291,15 @@ function openPodSessionModal(dayNum, dateKey) {
     if (oldModal) oldModal.remove();
 
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
-    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Insights`;
+    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Audio Session`;
     const audioUrl = dayConfig.audioUrl || '';
+    
+    // Pull Creator's uploaded questions or pool
     const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
         ? dayConfig.questions 
         : getPodQuestionsPool();
 
-    // Pick 3 random questions from the pool
+    // Pick 3 random questions from pool
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     activePodSessionQuestions = shuffled.slice(0, 3);
 
@@ -5280,21 +5312,21 @@ function openPodSessionModal(dayNum, dateKey) {
                     <div>
                         <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast"></i> cMPLi POD Day ${dayNum}</span>
                         <h3 class="text-2xl font-extrabold text-white font-heading">${audioTitle}</h3>
-                        <p class="text-xs text-slate-400 mt-1">Listen to the 4-5 minute audio session with earphones, then complete the quiz.</p>
+                        <p class="text-xs text-slate-400 mt-1">Listen to the podcast episode with earphones, then complete the comprehension quiz.</p>
                     </div>
                     <button onclick="document.getElementById('podSessionModal').remove()" class="text-slate-400 hover:text-white bg-slate-700/60 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <!-- Custom In-Browser Audio Player -->
+                <!-- In-Browser Podcast Audio Player -->
                 <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
                     <div class="flex items-center gap-4">
                         <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
                             <i class="fas fa-headphones-alt"></i>
                         </div>
                         <div class="overflow-hidden flex-1">
-                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Now Streaming</p>
+                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
                             <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
                             <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
                         </div>
@@ -5304,14 +5336,13 @@ function openPodSessionModal(dayNum, dateKey) {
                         ${audioUrl ? `
                             <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
                                 <source src="${audioUrl}" type="audio/mpeg">
+                                <source src="${audioUrl}" type="audio/mp3">
                                 Your browser does not support the audio element.
                             </audio>
                         ` : `
-                            <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 text-center">
-                                <p class="text-xs text-slate-300 font-semibold mb-2"><i class="fas fa-volume-up text-amber-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
-                                <audio controls class="w-full h-10 rounded-lg">
-                                    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-                                </audio>
+                            <div class="p-4 bg-slate-900/80 rounded-xl border border-amber-600/40 text-center">
+                                <p class="text-xs text-amber-300 font-semibold mb-1"><i class="fas fa-info-circle mr-1.5"></i>Creator has not uploaded a podcast audio file for ${activePodSessionDateKey} yet.</p>
+                                <p class="text-[11px] text-slate-400">You can still proceed with the comprehension quiz below.</p>
                             </div>
                         `}
                     </div>
@@ -5393,32 +5424,40 @@ async function submitPodSessionQuiz() {
     const calculatedPoints = 33;
     const subData = {
         userId: currentUser._id,
+        fanId: currentUser._id,
         userEmail: currentUser.email || '',
         userName: currentUser.name || 'Learner',
+        userPhone: currentUser.phone || '',
         milestoneId: activeMilestoneId || 1,
+        moduleType: 'pod',
         type: 'pod',
         day: activePodSessionDay,
+        sessionDay: activePodSessionDay,
         date: activePodSessionDateKey,
         submittedAt: new Date().toISOString(),
         lcReward: calculatedPoints,
         status: 'evaluating', // PENDING EVALUATION (NO PREMATURE POINTS)
+        answers: answers,
         responses: answers
     };
 
+    // 1. Send to Make.com Webhook
+    if (typeof sendToKVM1Database === 'function') {
+        sendToKVM1Database(subData).catch(e => console.error('Make.com error for POD:', e));
+    }
+
+    // 2. Save locally
     let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     localDB = localDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay)));
     localDB.push(subData);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
 
+    // 3. Sync to server
     fetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subData)
     }).catch(e => console.error('Server sync error for POD quiz:', e));
-
-    if (typeof sendToKVM1Database === 'function') {
-        sendToKVM1Database(subData).catch(() => {});
-    }
 
     document.getElementById('podSessionModal')?.remove();
     showPendingEvaluationPopup(calculatedPoints);
