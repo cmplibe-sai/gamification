@@ -2535,7 +2535,7 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
 }
 
 async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
-    const btn = document.getElementById('btnSubmitCheckin');
+    const btn = document.getElementById('btnSubmitCheckin') || document.getElementById('btnSubmitDynamicCheckIn');
     if (btn) {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing Media...';
         btn.disabled = true;
@@ -2555,19 +2555,15 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
         if (['audio', 'video', 'doc'].includes(qType)) {
             let mediaFile = null;
 
-            // CASE A: User uploaded a file from their device
             if (qInput && qInput.files && qInput.files.length > 0) {
                 mediaFile = qInput.files[0];
-            } 
-            // CASE B: User recorded audio/video directly in the browser
-            else {
+            } else {
                 let preview = document.getElementById(`media_preview_container_${i}`);
                 if (preview && !preview.classList.contains('hidden')) {
                     const mediaElem = preview.querySelector('audio, video');
                     if (mediaElem && mediaElem.src) {
                         try {
                             if (btn) btn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i> Capturing Recorded Media...';
-                            // Extract the recorded blob directly from the browser's player
                             const blob = await fetch(mediaElem.src).then(r => r.blob());
                             const ext = qType === 'video' ? 'webm' : 'mp3';
                             const mime = blob.type || (qType === 'video' ? 'video/webm' : 'audio/mp3');
@@ -2579,19 +2575,17 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
                 }
             }
 
-            // UPLOAD TO CLOUDINARY IF A FILE/RECORDING EXISTS
             if (mediaFile) {
-                if (btn) btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-bounce mr-2"></i> Uploading Media to Cloudinary...';
+                if (btn) btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-bounce mr-2"></i> Uploading Media...';
                 const secureUrl = await uploadMediaToCloudinary(mediaFile);
                 if (!secureUrl) {
-                    alert("Media upload failed. Please check your connection or Cloudinary credentials.");
+                    alert("Media upload failed. Please check your connection.");
                     if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
                     return;
                 }
-                val = secureUrl; // Live HTTPS Cloudinary URL!
+                val = secureUrl;
             }
         } else {
-            // Standard Text Field
             if (qInput) val = qInput.value.trim();
         }
 
@@ -2614,98 +2608,61 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
 
     if (btn) btn.innerHTML = '<i class="fas fa-satellite-dish fa-pulse mr-2"></i> Transmitting to Make.com...';
 
-    // Search through all answers to find the Cloudinary URL (if one exists)
     let foundMediaUrl = null;
     answers.forEach(ans => {
         if (ans.fileData) foundMediaUrl = ans.fileData;
     });
 
-    // --- NEW: FULLY DYNAMIC TIME-WINDOW CALCULATION ---
-    let calculatedPoints = 3; // Absolute fallback
+    let calculatedPoints = 33;
     const normalizedType = normalizeLevelUpType(type);
+    const dateKey = currentSubmissionState.date || getLocalDateKey(new Date());
+    const dayConfig = getAdminConfigForDate(dateKey, normalizedType);
     
-    if (normalizedType === 'projects') {
-        const dbProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
-        const proj = dbProjects.find(p => String(p.id) === String(dayNum));
-        calculatedPoints = proj ? Number(proj.pts) : 500;
-    } else if (normalizedType === 'ios') {
-        calculatedPoints = 333; 
-    } else {
-        // 1. Fetch the exact configuration the Creator saved for this date & module!
-        const dateKey = currentSubmissionState.date; 
-        const dayConfig = getAdminConfigForDate(dateKey, normalizedType);
-        
-        if (dayConfig) {
-            const now = new Date();
-            const timeInDecimal = now.getHours() + (now.getMinutes() / 60);
-            
-            // Helper: Convert Creator's "HH:MM" string into a decimal for flawless math
-            const parseTime = (timeStr) => {
-                if (!timeStr) return 0;
-                const parts = timeStr.split(':');
-                return parseInt(parts[0], 10) + (parseInt(parts[1], 10) / 60);
-            };
-            
-            const startDec = parseTime(dayConfig.startTime);
-            const endDec = parseTime(dayConfig.endTime);
-            const onTimePts = Number(dayConfig.lcOnTime);
-            const latePts = Number(dayConfig.lcLate);
-            
-            // 2. The Moment of Truth: Is the customer submitting on time?
-            if (timeInDecimal >= startDec && timeInDecimal <= endDec) {
-                calculatedPoints = onTimePts;
-            } else {
-                calculatedPoints = latePts;
-            }
-        } else {
-            // Failsafe: If the Creator hasn't configured this specific day yet
-            calculatedPoints = normalizedType === 'dip' ? 33 : 133;
-        }
+    if (dayConfig) {
+        calculatedPoints = parseInt(dayConfig.lcOnTime) || 33;
     }
 
-    // 2. Build Payload (Now perfectly tethered to the dynamic calculation!)
     const webhookPayload = {
         userId: currentUser._id,
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        milestoneId: activeMilestoneId,
-        moduleType: type,
+        userName: currentUser.name || 'Learner',
+        userEmail: currentUser.email || '',
+        userPhone: currentUser.phone || '',
+        milestoneId: activeMilestoneId || 1,
+        moduleType: normalizedType,
         sessionDay: dayNum,
-        lcReward: calculatedPoints, // Powers the Make.com Webhook payload
+        lcReward: calculatedPoints,
         responses: answers,
         mediaUrl: foundMediaUrl, 
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        status: 'evaluating' // STRICTLY EVALUATING (NO PREMATURE LC CREDIT)
     };
 
-    // 3. Send to Make.com Webhook
-    const isSuccess = await sendToKVM1Database(webhookPayload);
-
-    if (!isSuccess) {
-        alert("Network Error: Could not reach Make.com. Please check your connection.");
-        if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
-        return; 
+    // 1. Send to Make.com Webhook
+    if (typeof sendToKVM1Database === 'function') {
+        sendToKVM1Database(webhookPayload).catch(() => {});
     }
 
-    // 4. Save to LocalStorage permanently
+    // 2. Save Locally as 'evaluating'
     const newSubmission = {
         userId: currentUser._id,
-        milestoneId: activeMilestoneId,
-        type: normalizeLevelUpType(type),
+        userName: currentUser.name || 'Learner',
+        userEmail: currentUser.email || '',
+        milestoneId: activeMilestoneId || 1,
+        type: normalizedType,
         day: dayNum,
+        date: dateKey,
         responses: answers,
         submittedAt: webhookPayload.timestamp,
-        lcReward: calculatedPoints, // Powers the Local Database memory
-        status: 'completed'
+        lcReward: calculatedPoints,
+        status: 'evaluating'
     };
 
     let allUserSubsDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    allUserSubsDB = allUserSubsDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === normalizedType && String(s.day) === String(dayNum)));
     allUserSubsDB.push(newSubmission);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
     
-    // Credit reward immediately to learner ledger & score
-    recordLevelUpReward(currentUser._id, type, activeMilestoneId || 1, calculatedPoints, 'cMPLi ' + type.toUpperCase() + ' Day ' + dayNum + ' Complete');
-    
-    // Sync to backend Web Service
+    // 3. Sync to Backend Web Service
     fetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2715,9 +2672,7 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
     const modal = document.getElementById('dynamicSubmissionModal');
     if (modal) modal.remove();
     
-    // --- POPUP FIX: Fire the custom UI modal instead of alert() ---
-    showPendingEvaluationPopup(); 
-    
+    showPendingEvaluationPopup(calculatedPoints); 
     if (typeof switchMilestoneTab === 'function') switchMilestoneTab(type);
 }
 
@@ -2886,7 +2841,7 @@ async function submitLevelUpReflection() {
         // ----------------------------------------------------------------------
 
         saveLevelUpSubmission(currentUser._id, savedSubmission);
-        recordLevelUpReward(currentUser._id, currentSubmissionState.type, currentSubmissionState.day, earnedPoints);
+        // LC award deferred until Make.com or Creator approval
 
         closeSubmissionModal();
         document.getElementById('successModalText').innerHTML = `You submitted successfully and earned <strong>${earnedPoints} LCs</strong>!`;
@@ -2915,7 +2870,7 @@ async function submitLevelUpReflection() {
         };
 
         saveLevelUpSubmission(currentUser._id, fallbackSubmission);
-        recordLevelUpReward(currentUser._id, currentSubmissionState.type, currentSubmissionState.day, earnedPoints);
+        // LC award deferred until Make.com or Creator approval
         closeSubmissionModal();
         document.getElementById('successModalText').innerHTML = `Submission saved locally. You earned <strong>${earnedPoints} LCs</strong>!`;
         document.getElementById('successModal').classList.remove('hidden');
@@ -4277,8 +4232,8 @@ function loadAdminCheckinEditor(dateKey) {
     const ms = milestoneConfig.find(m => m.id === activeAdminMilestoneId) || { name: "Milestone" };
     const todayKey = getLocalDateKey(new Date());
     const isPastDate = dateKey < todayKey;
-    const isEditable = !isPastDate;
-    const disableAttr = isEditable ? '' : 'disabled';
+    const isEditable = true; // Creators can always edit and configure any date freely
+    const disableAttr = '';
     
     const moduleConfig = (customMilestoneConfigs[activeAdminMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule])
         ? customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey]
@@ -4430,7 +4385,7 @@ function loadAdminCheckinEditor(dateKey) {
             </div>
             <div class="flex flex-wrap gap-2 items-center">
                 ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-lg border border-slate-600 shadow-lg transition-all"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
-                <button id="btnSaveConfig" onclick="saveAdminCheckinConfig('${dateKey}')" class="px-4 py-2 ${isEditable ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-slate-700 text-slate-400 cursor-not-allowed'} text-white font-bold text-xs rounded-lg shadow-lg transition-all" ${isEditable ? '' : 'disabled'}><i class="fas fa-save mr-1"></i> ${isEditable ? 'Save Changes' : 'Locked'}</button>
+                <button id="btnSaveConfig" onclick="saveAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-lg transition-all"><i class="fas fa-save mr-1"></i> ${isEditable ? 'Save Changes' : 'Locked'}</button>
             </div>
         </div>
         
@@ -5275,9 +5230,12 @@ function startLiveSync() {
             let currentModule = 'dip';
             if (activeNavBtn) {
                 const btnText = activeNavBtn.innerText.toLowerCase();
-                if (btnText.includes('immerse')) currentModule = 'immerse';
-                else if (btnText.includes('ios')) currentModule = 'ios';
-                else if (btnText.includes('project')) currentModule = 'projects';
+                if (btnText.includes('pod')) currentModule = 'pod';
+                else if (btnText.includes('immerse')) currentModule = 'immerse';
+                else if (btnText.includes('project') || btnText.includes('real-world')) currentModule = 'projects';
+                else if (btnText.includes('solution') || btnText.includes('problem')) currentModule = 'problem_solution';
+                else if (btnText.includes('residency') || btnText.includes('corp')) currentModule = 'residency';
+                else if (btnText.includes('dip')) currentModule = 'dip';
             }
             if (typeof switchMilestoneTab === 'function') {
                 switchMilestoneTab(currentModule);
@@ -5579,3 +5537,14 @@ function saveAdminPodCheckinConfig(dateKey) {
     renderAdminCheckinsList();
     alert(`🎉 Saved cMPLi POD setup for ${dateKey} with ${dayConfig.questions.length} questions in pool!`);
 }
+
+
+window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
+window.saveAdminCheckinConfig = saveAdminCheckinConfig;
+window.uploadPodAudioFile = uploadPodAudioFile;
+window.approveLearnerSubmission = approveLearnerSubmission;
+window.handlePodCsvUpload = handlePodCsvUpload;
+window.downloadPodCsvTemplate = downloadPodCsvTemplate;
+window.addSinglePodQuestionToEditor = addSinglePodQuestionToEditor;
+window.openPodSessionModal = openPodSessionModal;
+window.submitPodSessionQuiz = submitPodSessionQuiz;
