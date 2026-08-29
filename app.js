@@ -2323,21 +2323,39 @@ function getAdminConfigForDate(dateKey, moduleName = 'dip') {
         dateKey,
         (typeof parseToIsoDate === 'function' ? parseToIsoDate(dateKey) : null),
         getLocalDateKey(new Date(dateKey)),
+        String(dateKey).trim(),
         getLocalDateKey(new Date())
     ].filter(Boolean);
 
+    // 1. Direct search in current milestone & module
     for (const key of possibleKeys) {
         if (customConfigs[msId] && customConfigs[msId][moduleName] && customConfigs[msId][moduleName][key]) {
             return customConfigs[msId][moduleName][key];
         }
-        for (const id in customConfigs) {
-            if (customConfigs[id] && customConfigs[id][moduleName] && customConfigs[id][moduleName][key]) {
-                return customConfigs[id][moduleName][key];
+    }
+
+    // 2. Search across any milestone for this module and date
+    for (const id in customConfigs) {
+        if (customConfigs[id] && customConfigs[id][moduleName]) {
+            for (const key of possibleKeys) {
+                if (customConfigs[id][moduleName][key]) {
+                    return customConfigs[id][moduleName][key];
+                }
             }
         }
     }
+
+    // 3. Fallback: If pod module has only one configured date, return that config so student is never stuck
+    if (moduleName === 'pod') {
+        const podConfigs = (customConfigs[msId] && customConfigs[msId]['pod']) ? customConfigs[msId]['pod'] : {};
+        const configKeys = Object.keys(podConfigs);
+        if (configKeys.length > 0) {
+            // Find most recent configured POD setup
+            return podConfigs[configKeys[configKeys.length - 1]];
+        }
+    }
     
-    // Fallback for legacy format
+    // 4. Legacy format fallback
     if (customConfigs[msId] && customConfigs[msId][dateKey]) {
         return customConfigs[msId][dateKey];
     }
@@ -4097,23 +4115,24 @@ function downloadPodCsvTemplate() {
 }
 
 function parseCsvQuestions(text) {
-    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length < 2) return [];
+    if (!text || typeof text !== 'string') return [];
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return [];
 
     const questions = [];
-    // Skip header line 0
-    for (let i = 1; i < lines.length; i++) {
-        // Parse CSV row respecting quoted values
+    const startIdx = (lines[0].toLowerCase().includes('question') || lines[0].toLowerCase().includes('option') || lines[0].toLowerCase().includes('prompt')) ? 1 : 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i];
         const row = [];
         let inQuotes = false;
         let currentValue = '';
-        const line = lines[i];
 
         for (let j = 0; j < line.length; j++) {
             const char = line[j];
             if (char === '"' && line[j + 1] === '"') {
                 currentValue += '"';
-                j++; // skip escaped quote
+                j++;
             } else if (char === '"') {
                 inQuotes = !inQuotes;
             } else if (char === ',' && !inQuotes) {
@@ -4125,22 +4144,50 @@ function parseCsvQuestions(text) {
         }
         row.push(currentValue.trim());
 
-        if (row.length >= 7) {
-            const prompt = row[1] || row[0];
-            const optA = row[2] || 'Option A';
-            const optB = row[3] || 'Option B';
-            const optC = row[4] || 'Option C';
-            const optD = row[5] || 'Option D';
-            const correctLetter = (row[6] || 'A').toUpperCase().trim();
-            const correctOption = correctLetter === 'B' ? 1 : (correctLetter === 'C' ? 2 : (correctLetter === 'D' ? 3 : 0));
-            const pts = parseInt(row[7], 10) || 11;
+        if (row.length >= 5) {
+            let prompt = '';
+            let optA = '';
+            let optB = '';
+            let optC = '';
+            let optD = '';
+            let correctOption = 0;
+            let pts = 11;
 
-            if (prompt) {
+            if (row.length >= 7 && !isNaN(row[0]) && isNaN(row[1])) {
+                // Format: [Question Number, Prompt, Option A, Option B, Option C, Option D, Correct, Points?]
+                prompt = row[1];
+                optA = row[2];
+                optB = row[3];
+                optC = row[4];
+                optD = row[5];
+                const rawCorrect = (row[6] || 'A').toUpperCase().trim();
+                correctOption = (rawCorrect === 'B' || rawCorrect === '1' || rawCorrect === '2') ? (rawCorrect === '2' ? 2 : 1) : ((rawCorrect === 'C' || rawCorrect === '3') ? 2 : ((rawCorrect === 'D' || rawCorrect === '4') ? 3 : 0));
+                if (rawCorrect === 'B') correctOption = 1;
+                else if (rawCorrect === 'C') correctOption = 2;
+                else if (rawCorrect === 'D') correctOption = 3;
+                else if (rawCorrect === 'A') correctOption = 0;
+                pts = parseInt(row[7], 10) || 11;
+            } else {
+                // Format: [Prompt, Option A, Option B, Option C, Option D, Correct?, Points?]
+                prompt = row[0];
+                optA = row[1];
+                optB = row[2];
+                optC = row[3];
+                optD = row[4];
+                const rawCorrect = (row[5] || 'A').toUpperCase().trim();
+                if (rawCorrect === 'B') correctOption = 1;
+                else if (rawCorrect === 'C') correctOption = 2;
+                else if (rawCorrect === 'D') correctOption = 3;
+                else if (rawCorrect === 'A') correctOption = 0;
+                pts = parseInt(row[6], 10) || 11;
+            }
+
+            if (prompt && (optA || optB)) {
                 questions.push({
                     id: 'q_' + i + '_' + Date.now(),
                     title: prompt,
                     type: 'mcq',
-                    options: [optA, optB, optC, optD],
+                    options: [optA || 'Option A', optB || 'Option B', optC || 'Option C', optD || 'Option D'],
                     correctOption: correctOption,
                     pts: pts
                 });
@@ -5533,7 +5580,6 @@ function saveAdminPodCheckinConfig(passedDateKey) {
         const optInputs = item.querySelectorAll('.pod-q-opt');
         const options = Array.from(optInputs).map(inp => inp.value.trim() || 'Option');
         
-        // Find which radio is checked inside this specific question card
         const checkedRadio = item.querySelector('input[type="radio"]:checked');
         const correctOption = checkedRadio ? parseInt(checkedRadio.value, 10) : 0;
         const pts = parseInt(item.dataset.pts, 10) || 11;
@@ -5568,20 +5614,26 @@ function saveAdminPodCheckinConfig(passedDateKey) {
         questions: questions
     };
 
+    // Save under primary date key
     customMilestoneConfigs[msId]['pod'][dateKey] = dayConfig;
+    
+    // Also save under normalized keys and active date key for guaranteed matching
+    const isoKey = (typeof parseToIsoDate === 'function') ? parseToIsoDate(dateKey) : dateKey;
+    if (isoKey) customMilestoneConfigs[msId]['pod'][isoKey] = dayConfig;
+
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
 
-    // Update button visual state
+    // Button visual state
     const btn = document.getElementById('btnSaveConfig');
     if (btn) {
-        btn.innerHTML = '<i class="fas fa-check mr-1.5"></i> Saved!';
+        btn.innerHTML = '<i class="fas fa-check-circle mr-1.5 text-emerald-300"></i> Setup Saved & Published!';
         btn.className = 'btn-primary py-2 px-4 text-xs bg-emerald-600 border-emerald-500 shadow-lg';
         setTimeout(() => {
             if (btn) {
                 btn.innerHTML = '<i class="fas fa-save mr-1.5"></i> Save POD Day Setup';
                 btn.className = 'btn-primary py-2 px-4 text-xs';
             }
-        }, 2000);
+        }, 2500);
     }
 
     // Push to backend server
@@ -5596,11 +5648,11 @@ function saveAdminPodCheckinConfig(passedDateKey) {
             allConfigs: customMilestoneConfigs
         })
     }).then(r => r.json()).then(data => {
-        console.log('✅ POD Day Setup saved & synced to server:', data);
+        console.log('✅ POD Setup saved & synced to server:', data);
     }).catch(e => console.error('Server sync error for POD:', e));
 
     renderAdminCheckinsList();
-    alert(`🎉 Successfully Saved cMPLi POD Setup for ${dateKey}!\n• Questions in Pool: ${dayConfig.questions.length}\n• Audio Stream: ${dayConfig.audioUrl ? 'Configured' : 'Not attached'}`);
+    alert(`🎉 cMPLi POD Setup Published for ${dateKey}!\n• Audio Episode: ${dayConfig.audioTitle}\n• Audio Stream: ${dayConfig.audioUrl ? 'Attached' : 'None'}\n• Questions Pool: ${dayConfig.questions.length} questions\n\nStudents on ${dateKey} will now see your exact episode and questions!`);
 }
 
 
