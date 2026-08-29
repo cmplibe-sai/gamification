@@ -7,7 +7,230 @@ async function initApp() {
 window.initApp = initApp;
 
 
-function toggleMediaMenu(btn) {
+var actualUsers = (typeof window !== 'undefined' && window.actualUsers) ? window.actualUsers : [
+    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: 'usr_chandra_01', name: 'Chandra', email: 'chandrasai349@gmail.com', phone: '9845421644', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: 'usr_saichandu_02', name: 'SaiChandu', email: 'britencloud@gmail.com', phone: '9988776655', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: 'usr_saimaruthi_03', name: 'SaiMaruthi', email: 'cvs.cmplifutureadi@gmail.com', phone: '9123456789', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
+];
+var TEST_EMAILS = ['test@learner.com', 'vip@student.com', 'sai@cmplibe.com', 'test@test.com', 'saiyedamala02@gmail.com'];
+
+var realtimeCustomer = null;
+
+// ================= CORE PLATFORM MODULES & 4 MILESTONES =================
+const ALL_PLATFORM_MODULES = [
+    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
+    { code: 'pod', name: 'cMPLi Pod', icon: 'fa-podcast text-indigo-400' },
+    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
+    { code: 'ios', name: 'Industry Oriented Session (IOS)', icon: 'fa-chalkboard-teacher text-emerald-400' },
+    { code: 'projects', name: 'Real-World (cMPLi-ai) Projects', icon: 'fa-briefcase text-purple-400' },
+    { code: 'corporate', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
+];
+
+const milestoneConfig = [
+    {
+        id: 1,
+        name: 'Milestone 1: Simply Challenge Embracer',
+        desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
+        defaultModules: ['dip', 'pod'],
+        modules: ['dip', 'pod']
+    },
+    {
+        id: 2,
+        name: 'Milestone 2: Emerging Professional',
+        desc: '30-day deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
+        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
+        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
+    },
+    {
+        id: 3,
+        name: 'Milestone 3: Industry Ready Candidate',
+        desc: 'Advanced sector projects, mentor coaching reviews, and corporate readiness training.',
+        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
+        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
+    },
+    {
+        id: 4,
+        name: 'Milestone 4: Corporate Residency / Placement',
+        desc: 'Full corporate immersion, live client project delivery, and final portfolio defense.',
+        defaultModules: ['corporate', 'projects'],
+        modules: ['corporate', 'projects']
+    }
+];
+
+if (typeof window !== 'undefined') {
+    window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
+    window.milestoneConfig = milestoneConfig;
+}
+
+
+// ================= TOP-LEVEL GLOBAL STATE DECLARATIONS =================
+var currentUser = null;
+var currentScoreObj = null;
+var currentView = 'sector';
+var currentFilter = 'All';
+var customerProjectFilter = 'All';
+var selectedProject = null;
+var isAdminLogin = false;
+var isCampusPartner = false;
+var partnerAllowedMangoes = [];
+var activeAdminMilestoneId = 1;
+var activeMilestoneId = 1;
+var activeAdminModule = 'dip';
+var tempLoginId = '';
+var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || ['6a168e4213e4e9a10984b164'];
+var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
+var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
+var allAdminMangos = [
+    { _id: '6a168e4213e4e9a10984b164', title: 'cMPLi Standard Level-Up Cohort', amount: 0, isPaid: false },
+    { _id: '6682734e120c766a6e5af59c', title: 'cMPLi Executive Track', amount: 4999, isPaid: true }
+];
+var adminRealtimeUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? [...actualUsers] : [];
+var activeSubmissionFilter = {};
+var currentSubmissionState = {};
+var activePodSessionQuestions = [];
+var activePodSessionDay = 1;
+var activePodSessionDateKey = '';
+var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
+var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
+var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+
+function getEnabledModulesForMilestone(msId) {
+    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
+        return saved[msId].filter(m => m && m !== 'undefined');
+    }
+    if (typeof milestoneConfig !== 'undefined' && Array.isArray(milestoneConfig)) {
+        const ms = milestoneConfig.find(m => m.id === Number(msId));
+        if (ms && ms.defaultModules) return [...ms.defaultModules];
+    }
+    return ['dip', 'pod'];
+}
+
+function toggleMilestoneModuleAccess(msId, moduleCode) {
+    let saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    let current = getEnabledModulesForMilestone(msId);
+    if (current.includes(moduleCode)) {
+        if (current.length === 1) {
+            alert('At least one module must remain active in this milestone.');
+            return;
+        }
+        current = current.filter(m => m !== moduleCode);
+    } else {
+        current.push(moduleCode);
+    }
+    saved[msId] = current;
+    localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
+    
+    if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
+    if (typeof openAdminMilestone === 'function' && activeAdminMilestoneId === msId) openAdminMilestone(msId);
+}
+
+window.getEnabledModulesForMilestone = getEnabledModulesForMilestone;
+window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
+
+
+async function syncGlobalServerData() {
+    try {
+        const [subsRes, configsRes, projectsRes, accessRes] = await Promise.allSettled([
+            fetch('/api/submissions').then(r => r.json()),
+            fetch('/api/milestone-configs').then(r => r.json()),
+            fetch('/api/projects').then(r => r.json()),
+            fetch('/api/levelup-access').then(r => r.json())
+        ]);
+
+        // 1. Milestone Configs Sync (Bidirectional Safe Merge)
+        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
+            const serverConfigs = configsRes.value.data;
+            let localConfigs = {};
+            try {
+                localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+            } catch(e) {}
+
+            const mergedConfigs = { ...serverConfigs, ...localConfigs };
+            for (const msId in serverConfigs) {
+                mergedConfigs[msId] = { ...(serverConfigs[msId] || {}), ...(localConfigs[msId] || {}) };
+                for (const mod in serverConfigs[msId]) {
+                    mergedConfigs[msId][mod] = { ...((serverConfigs[msId] && serverConfigs[msId][mod]) || {}), ...((localConfigs[msId] && localConfigs[msId][mod]) || {}) };
+                }
+            }
+            customMilestoneConfigs = mergedConfigs;
+            try {
+                localStorage.setItem('customMilestoneConfigs', JSON.stringify(mergedConfigs));
+            } catch(e) {}
+
+            if (Object.keys(localConfigs).length > 0 && Object.keys(serverConfigs).length === 0) {
+                fetch('/api/milestone-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allConfigs: mergedConfigs })
+                }).catch(() => {});
+            }
+        }
+
+        // 2. Submissions Sync (Bidirectional Safe Merge & Cross-Browser Live Refresh)
+        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
+            const serverData = subsRes.value.data;
+            let localData = [];
+            try {
+                localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            } catch(e) {}
+
+            serverData.forEach(s => {
+                const idx = localData.findIndex(l => (
+                    (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
+                    String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
+                    normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
+                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
+                ));
+
+                if (idx > -1) {
+                    const prevStatus = localData[idx].status;
+                    localData[idx] = { ...localData[idx], ...s };
+
+                    if (prevStatus === 'evaluating' && s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
+                        if (typeof recordLevelUpReward === 'function') {
+                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
+                        }
+                    }
+                } else {
+                    localData.push(s);
+                    if (s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
+                        if (typeof recordLevelUpReward === 'function') {
+                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
+                        }
+                    }
+                }
+            });
+            try {
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
+            } catch(e) {}
+
+            // Auto-refresh active views if currently visible
+            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable') && !document.getElementById('adminCompletionView')?.classList.contains('hidden')) {
+                renderAdminCohortSubmissions();
+            }
+            if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
+                renderLearnerTimeline();
+            }
+        }
+
+        // 3. Level-Up Access Sync
+        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
+            levelUpAccessConfig = accessRes.value.data;
+            try {
+                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+            } catch(e) {}
+        }
+    } catch (e) {
+        console.warn('Server sync offline mode:', e);
+    }
+}
+window.syncGlobalServerData = syncGlobalServerData;
+
+
+async function toggleMediaMenu(btn) {
     const parent = btn.closest('.relative');
     const menu = parent ? parent.querySelector('.media-dropdown-menu') : null;
     if (menu) {
@@ -76,9 +299,7 @@ async function downloadMediaDirectly(url, filename) {
 syncGlobalServerData();
 setInterval(syncGlobalServerData, 3000); // Live poll every 3 seconds for real-time cross-browser harmony // Live poll every 5 seconds for cross-browser sync
 
-let campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
-    'campus@partners.com': ['6a168e4213e4e9a10984b164'    ] // We will use this to test!
-};
+// campusPartnersDB already declared
 
 function getAllDynamicProjects() {
     const stored = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
@@ -188,7 +409,7 @@ function getUserCompletionPercentage(userId) {
 }
 
 // Safely load local mock ledgers
-let localLedgers = {};
+// localLedgers already declared
 try {
     localLedgers = JSON.parse(localStorage.getItem('tagmangoLedgerMock')) || {};
 } catch(e) {
@@ -258,7 +479,7 @@ async function fetchLivePoints(userId) {
 // ================= AUTHENTICATION LOGIC (UPGRADED) =================
 
 // Store the fetched real-time user globally between Step 1 and Step 2
-let realtimeCustomer = null; 
+// realtimeCustomer declared at top 
 
 async function requestOTP() {
     const rawInput = (document.getElementById('loginId')?.value || '').trim();
@@ -385,7 +606,7 @@ async function verifyOTP() {
                 // Open Creator Level-Up Command Center by default for instant productivity
                 switchTab('adminLevelUpTab');
                 loadGlobalSettings().catch(() => {});
-                initAdminApp().catch(e => console.warn('Admin init:', e));
+                if (typeof initAdminApp === "function") { Promise.resolve(initAdminApp()).catch(e => console.warn("Admin init:", e)); }
             } else {
                 currentUser = realtimeCustomer || (Array.isArray(actualUsers) ? actualUsers[0] : {
                     _id: 'usr_' + Date.now(),
@@ -403,7 +624,7 @@ async function verifyOTP() {
                 // Open Learner Level-Up Hub by default
                 switchTab('levelUpTab');
                 loadGlobalSettings().catch(() => {});
-                initApp().catch(e => console.warn('App init:', e));
+                if (typeof initApp === "function") { Promise.resolve(initApp()).catch(e => console.warn("App init:", e)); }
 
                 // Fetch live points in background
                 fetchLivePoints(currentUser._id).then(liveScoreData => {
@@ -809,22 +1030,7 @@ function updateDashboardUI() {
 
 // Store real-time subscribers globally for the admin view
 // --- GLOBAL ADMIN FILTER STATE ---
-let allAdminMangos = (function() {
-    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
-        return coursesData.result.subscriptions.map(s => ({
-            _id: s.mangoId,
-            id: s.mangoId,
-            title: s.mangoTitle,
-            name: s.mangoTitle,
-            amount: s.count > 0 ? 1 : 0,
-            price: s.count > 0 ? 1 : 0,
-            isPaid: s.count > 0,
-            subscribersCount: s.count
-        }));
-    }
-    return [];
-})();
-let adminRealtimeUsers = (typeof actualUsers !== 'undefined' && actualUsers.length > 0) ? [...actualUsers] : [];
+// Admin data variables declared at top
 
 async function initAdminApp() {
     const courseSelect = document.getElementById('courseSelect');
@@ -864,12 +1070,12 @@ async function initAdminApp() {
     // 4. HIDE "Level-Up Solution Access" entirely for Partners in Level-Up Tab
     const toggleSearch = document.getElementById('adminLevelUpSearch');
     if (toggleSearch) {
-        const accessBox = toggleSearch.closest('.glass') || toggleSearch.parentElement.parentElement;
+        const accessBox = toggleSearch.closest?.(".glass") || toggleSearch.parentElement?.parentElement;
         if (accessBox) accessBox.style.display = isCampusPartner ? 'none' : '';
     }
     const toggleContainer = document.getElementById('adminMangoToggles');
     if (toggleContainer) {
-        const wrapper = toggleContainer.closest('.glass') || toggleContainer.parentElement;
+        const wrapper = toggleContainer.closest?.(".glass") || toggleContainer.parentElement;
         if (wrapper) wrapper.style.display = isCampusPartner ? 'none' : '';
     }
 
@@ -1853,7 +2059,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Global track for active submission filter per container
-let activeSubmissionFilter = {};
+activeSubmissionFilter = {};
 
 // --- AUTOMATED REAL-TIME COURSE FETCHING & REPORTING ---
 async function loadCourseCompletions(userId, containerId = 'courseCompletionsContainer') {
@@ -2024,7 +2230,7 @@ function switchLevelMenu(menuName) {
 // ================= LEVEL-UP TIMELINE & SUBMISSION LOGIC =================
 
 // State tracking for the modal
-let currentSubmissionState = { type: '', day: 0, points: 0, title: '' };
+currentSubmissionState = { type: '', day: 0, points: 0, title: '' };
 
 // Generates the Timeline UI
 function renderTimelines() {
@@ -3610,7 +3816,7 @@ async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
 
 // ================= ADMIN LEVEL-UP ENGINE =================
 
-let activeAdminMilestoneId = null;
+activeAdminMilestoneId = null;
 
 function renderAdminMilestoneGrid() {
     const grid = document.getElementById('adminMilestoneGridContainer');
@@ -3673,7 +3879,7 @@ function populateAdminCohortFilters() {
 }
 
 // Global State for Admin Tabs
-let activeAdminModule = 'dip';
+activeAdminModule = 'dip';
 
 function openAdminMilestone(id) {
     activeAdminMilestoneId = Number(id) || 1;
@@ -3906,7 +4112,7 @@ function closeAdminMilestoneView() {
 }
 
 // --- Global store for mock approvals ---
-let mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
+// mockApprovedCertificates already declared
 
 // Update the Cohort Renderer to respect the active module
 function renderAdminCohortSubmissions() {
@@ -4084,7 +4290,7 @@ function renderAdminCohortSubmissions() {
     table.innerHTML = theadHtml + tbodyHtml;
 }   
 
-let customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+// customMilestoneConfigs already declared
 
 
 // ==============================================================
@@ -4725,7 +4931,7 @@ function getUserMilestoneLcs(userId, milestoneId) {
 
 // --- ADMIN PROJECT BUILDER ARCHITECTURE ---
 
-let customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+// customProjectsDB already declared
 let activeAdminProjectId = null;
 
 function renderAdminProjectsList() {
@@ -5324,9 +5530,9 @@ startLiveSync();
 // ==============================================================
 // LEARNER cMPLi POD AUDIO PLAYER + RANDOMIZED 3-QUESTION QUIZ
 // ==============================================================
-let activePodSessionQuestions = [];
-let activePodSessionDay = 1;
-let activePodSessionDateKey = null;
+activePodSessionQuestions = [];
+activePodSessionDay = 1;
+activePodSessionDateKey = null;
 
 function openPodSessionModal(dayNum, dateKey) {
     activePodSessionDay = dayNum;
@@ -5745,7 +5951,7 @@ window.submitPodSessionQuiz = submitPodSessionQuiz;
 window.openAdminMilestone = openAdminMilestone;
 window.switchAdminMilestoneTab = switchAdminMilestoneTab;
 window.switchAdminModuleTab = switchAdminModuleTab;
-window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
+
 window.selectAdminConfigDate = selectAdminConfigDate;
 window.loadAdminCheckinEditor = loadAdminCheckinEditor;
 window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
