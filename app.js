@@ -1,4 +1,21 @@
 
+var ALL_PLATFORM_MODULES = (typeof window !== 'undefined' && window.ALL_PLATFORM_MODULES) ? window.ALL_PLATFORM_MODULES : [
+    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
+    { code: 'pod', name: 'cMPLi Pod', icon: 'fa-podcast text-indigo-400' },
+    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
+    { code: 'ios', name: 'Industry Oriented Session (IOS)', icon: 'fa-chalkboard-teacher text-emerald-400' },
+    { code: 'projects', name: 'Real-World (cMPLi-ai) Projects', icon: 'fa-briefcase text-purple-400' },
+    { code: 'corporate', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
+];
+
+var milestoneConfig = (typeof window !== 'undefined' && window.milestoneConfig) ? window.milestoneConfig : [
+    { id: 1, name: 'Milestone 1: Simply Challenge Embracer', desc: 'Build daily discipline.', defaultModules: ['dip', 'pod'], modules: ['dip', 'pod'] },
+    { id: 2, name: 'Milestone 2: Emerging Professional', desc: 'Deep dive into industry sessions.', defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'], modules: ['dip', 'pod', 'immerse', 'ios', 'projects'] },
+    { id: 3, name: 'Milestone 3: Industry Ready Candidate', desc: 'Advanced sector projects.', defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'], modules: ['dip', 'pod', 'immerse', 'ios', 'projects'] },
+    { id: 4, name: 'Milestone 4: Corporate Residency', desc: 'Corporate immersion.', defaultModules: ['corporate', 'projects'], modules: ['corporate', 'projects'] }
+];
+
+
 // ================= GLOBAL STATE =================
 var currentUser = null;
 var currentScoreObj = null;
@@ -742,7 +759,7 @@ function renderMilestoneGrid() {
     const gridContainer = document.getElementById('milestoneGridContainer'); 
     if (!gridContainer) return;
 
-    let hasAccess = false;
+    let hasAccess = true; // Default access to Level-Up milestones
     if (currentUser && currentUser.subscribedMangoes && levelUpAccessConfig) {
         hasAccess = currentUser.subscribedMangoes.some(mangoId => levelUpAccessConfig.includes(mangoId));
     }
@@ -5865,3 +5882,12 @@ window.requestOTP = requestOTP;
 window.verifyOTP = verifyOTP;
 window.logout = logout;
 window.switchTab = switchTab;
+
+
+window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
+window.milestoneConfig = milestoneConfig;
+window.renderAdminMilestoneGrid = renderAdminMilestoneGrid;
+window.renderMilestoneGrid = renderMilestoneGrid;
+window.openAdminMilestone = openAdminMilestone;
+window.openMilestone = openMilestone;
+window.closeMilestoneView = closeMilestoneView;
