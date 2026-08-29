@@ -161,7 +161,7 @@ function processBuiltinAiEvaluation(submissionRecord) {
             if (!currentSub || currentSub.status !== 'evaluating') return;
 
             const modType = (currentSub.type || 'dip').toUpperCase();
-            const earnedLcs = Number(currentSub.lcReward) || 33;
+            const earnedLcs = (currentSub.lcReward !== undefined && currentSub.lcReward !== null) ? Number(currentSub.lcReward) : 33;
             const description = `[AI Approved] Milestone-${currentSub.milestoneId || 1} Day-${currentSub.day} ${modType} Check-in`;
 
             // Finalize status
@@ -283,7 +283,7 @@ app.post('/api/submissions/approve', async (req, res) => {
             (String(s.day) === String(day) || String(s.date) === String(day))
         );
 
-        const earnedLcs = Number(lcReward) || (match ? Number(match.lcReward) : 33);
+        const earnedLcs = (lcReward !== undefined && lcReward !== null) ? Number(lcReward) : (match && match.lcReward !== undefined ? Number(match.lcReward) : 33);
         const description = `[Manual Approved] Milestone-${subMsId} Day-${day} ${subType.toUpperCase()} Check-in`;
 
         if (match) {

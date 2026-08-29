@@ -1,4 +1,38 @@
 
+async function downloadMediaDirectly(url, filename) {
+    if (!url) return;
+    try {
+        if (url.startsWith('data:')) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename || 'download_reflection';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            return;
+        }
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename || 'download_reflection';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (e) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'download_reflection';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+}
+window.downloadMediaDirectly = downloadMediaDirectly;
+
+
 // ==============================================================
 // TAGMANGO LIVE IN-COMMUNITY WALLET API SYNC
 // ==============================================================
@@ -5386,22 +5420,24 @@ function openPodSessionModal(dayNum, dateKey) {
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 3);
 
-    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER!
+    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER
     activePodSessionQuestions = selected.map(q => {
         const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
         const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
         const correctText = originalOptions[correctIndex];
 
-        // Shuffle options
         const jumbled = [...originalOptions].sort(() => 0.5 - Math.random());
         const newCorrectIndex = jumbled.indexOf(correctText);
 
         return {
             ...q,
             options: jumbled,
-            correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0
+            correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
+            pts: q.pts || 11
         };
     });
+
+    const hasAudio = !!audioUrl;
 
     const modalHtml = `
         <div id="podSessionModal" class="fixed inset-0 z-[150] flex items-center justify-center">
@@ -5419,50 +5455,54 @@ function openPodSessionModal(dayNum, dateKey) {
                     </button>
                 </div>
 
-                <!-- In-Browser Podcast Audio Player -->
-                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
-                                <i class="fas fa-headphones-alt"></i>
-                            </div>
-                            <div class="overflow-hidden">
-                                <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
-                                <h4 class="text-sm font-bold text-white truncate max-w-xs">${audioTitle}</h4>
-                                <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
-                            </div>
+                <!-- Secure In-Browser Podcast Audio Player (No customer download) -->
+                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 space-y-4 shadow-lg">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
+                            <i class="fas fa-headphones-alt"></i>
                         </div>
-
-                        ${audioUrl ? `
-                            <a href="${audioUrl}" download="${audioTitle}.mp3" target="_blank" class="btn-secondary py-2 px-3 text-xs flex items-center gap-1 text-indigo-300 hover:text-white shrink-0">
-                                <i class="fas fa-download"></i> Download
-                            </a>
-                        ` : ''}
+                        <div class="overflow-hidden flex-1">
+                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
+                            <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Listen to the complete episode to unlock the comprehension quiz</p>
+                        </div>
                     </div>
 
                     <div class="pt-2">
-                        ${audioUrl ? `
-                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${audioUrl}"></audio>
-                        ` : (dayConfig.audioUrl ? `
-                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${dayConfig.audioUrl}"></audio>
+                        ${hasAudio ? `
+                            <audio id="podAudioPlayerElement" controls controlsList="nodownload" oncontextmenu="return false;" class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${audioUrl}"></audio>
+                            <div class="flex justify-between items-center text-[11px] text-slate-400 pt-2 px-1">
+                                <span id="podAudioStatusText"><i class="fas fa-play-circle text-indigo-400 mr-1"></i> Press Play to Begin</span>
+                                <span id="podAudioProgressPercent" class="font-bold text-indigo-300">0% Listened</span>
+                            </div>
                         ` : `
                             <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
-                                <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded. Listen with earphones and complete the quiz below.</p>
+                                <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
                             </div>
-                        `)}
+                        `}
                     </div>
                 </div>
 
-                <!-- 3 Randomized & Jumbled Questions Section -->
-                <div class="space-y-6">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-700">
-                        <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                            <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
-                        </h4>
-                        <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
-                    </div>
+                <!-- Quiz Gated Container -->
+                <div id="podQuizContainer" class="space-y-6">
+                    ${hasAudio ? `
+                        <div id="podQuizLockedNotice" class="p-6 bg-slate-900/90 rounded-2xl border border-amber-500/40 text-center space-y-2">
+                            <div class="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl border border-amber-500/40">
+                                <i class="fas fa-lock"></i>
+                            </div>
+                            <h5 class="text-sm font-bold text-white">Comprehension Quiz Locked</h5>
+                            <p class="text-xs text-slate-400 max-w-sm mx-auto">Please finish listening to the podcast audio episode above. The quiz will automatically unlock once the playback completes.</p>
+                        </div>
+                    ` : ''}
 
-                    <div id="podQuizQuestionsArea" class="space-y-5">
+                    <div id="podQuizQuestionsArea" class="${hasAudio ? 'hidden' : ''} space-y-5">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                            <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
+                            </h4>
+                            <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
+                        </div>
+
                         ${activePodSessionQuestions.map((q, qIdx) => `
                             <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
                                 <div class="flex justify-between items-center">
@@ -5487,7 +5527,7 @@ function openPodSessionModal(dayNum, dateKey) {
                     <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
                         Cancel
                     </button>
-                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
+                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs ${hasAudio ? 'opacity-50 cursor-not-allowed' : ''}" ${hasAudio ? 'disabled' : ''}>
                         <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
                     </button>
                 </div>
@@ -5496,6 +5536,49 @@ function openPodSessionModal(dayNum, dateKey) {
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Attach Audio Gating Listener
+    if (hasAudio) {
+        setTimeout(() => {
+            const player = document.getElementById('podAudioPlayerElement');
+            const lockedNotice = document.getElementById('podQuizLockedNotice');
+            const questionsArea = document.getElementById('podQuizQuestionsArea');
+            const submitBtn = document.getElementById('btnSubmitPodSession');
+            const statusText = document.getElementById('podAudioStatusText');
+            const progressPercent = document.getElementById('podAudioProgressPercent');
+
+            if (player) {
+                player.addEventListener('timeupdate', () => {
+                    if (player.duration) {
+                        const pct = Math.round((player.currentTime / player.duration) * 100);
+                        if (progressPercent) progressPercent.innerText = `${pct}% Listened`;
+                        if (statusText) statusText.innerHTML = `<i class="fas fa-volume-up text-emerald-400 mr-1"></i> Listening to Episode...`;
+                        
+                        // Unlock if finished or reached 95%
+                        if (pct >= 95 || player.ended) {
+                            if (lockedNotice) lockedNotice.classList.add('hidden');
+                            if (questionsArea) questionsArea.classList.remove('hidden');
+                            if (submitBtn) {
+                                submitBtn.disabled = false;
+                                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                            }
+                            if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                        }
+                    }
+                });
+
+                player.addEventListener('ended', () => {
+                    if (lockedNotice) lockedNotice.classList.add('hidden');
+                    if (questionsArea) questionsArea.classList.remove('hidden');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                    if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                });
+            }
+        }, 100);
+    }
 }
 
 async function submitPodSessionQuiz() {
@@ -5511,22 +5594,31 @@ async function submitPodSessionQuiz() {
         } else {
             const selectedIdx = parseInt(selected.value, 10);
             const isCorrect = (q.correctOption !== undefined) ? (selectedIdx === q.correctOption) : true;
+            const pts = q.pts || 11;
             answers.push({
                 question: q.title,
                 answer: (q.options && q.options[selectedIdx]) || `Option ${selectedIdx + 1}`,
                 type: 'mcq',
+                options: q.options || [],
                 selectedOption: selectedIdx,
                 correctOption: q.correctOption,
-                isCorrect: isCorrect
+                isCorrect: isCorrect,
+                pts: isCorrect ? pts : 0,
+                maxPts: pts
             });
         }
     });
 
     if (!allAnswered) {
-        return alert("Please answer all 3 comprehension questions before submitting.");
+        return alert("Please answer all comprehension questions before submitting.");
     }
 
-    const calculatedPoints = 33;
+    // STRICT ACCURACY CALCULATION (e.g. 1/3 = 11, 2/3 = 22, 3/3 = 33)
+    let calculatedPoints = 0;
+    answers.forEach(a => {
+        if (a.isCorrect) calculatedPoints += (a.pts || 11);
+    });
+
     const subData = {
         userId: currentUser._id,
         fanId: currentUser._id,
@@ -5540,29 +5632,24 @@ async function submitPodSessionQuiz() {
         sessionDay: activePodSessionDay,
         date: activePodSessionDateKey,
         submittedAt: new Date().toISOString(),
-        lcReward: calculatedPoints,
-        status: 'evaluating', // PENDING EVALUATION (NO PREMATURE POINTS)
+        lcReward: calculatedPoints, // EXACT GRADED SCORE
+        status: 'evaluating',
         answers: answers,
         responses: answers
     };
 
-    // 1. Send to Make.com Webhook
-    if (typeof sendToKVM1Database === 'function') {
-        sendToKVM1Database(subData).catch(e => console.error('Make.com error for POD:', e));
-    }
+    // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
+    fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subData)
+    }).catch(e => console.error('Server sync error for POD quiz:', e));
 
     // 2. Save locally
     let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     localDB = localDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay)));
     localDB.push(subData);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-
-    // 3. Sync to server
-    fetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subData)
-    }).catch(e => console.error('Server sync error for POD quiz:', e));
 
     document.getElementById('podSessionModal')?.remove();
     showPendingEvaluationPopup(calculatedPoints);
