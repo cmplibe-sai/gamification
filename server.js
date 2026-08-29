@@ -41,7 +41,10 @@ function loadStore() {
         customProjectsDB: {},
         levelUpAccessConfig: [],
         milestoneStartDates: { 1: '2026-07-31', 2: '2026-08-21', 3: '2026-11-21' },
-        campusPartnersDB: {}
+        campusPartnersDB: {},
+        coachingSessions: [],
+        coachingActionItems: [],
+        courseProgress: {}
     };
 }
 
@@ -295,6 +298,163 @@ app.post('/api/milestone-start-dates', (req, res) => {
         store.milestoneStartDates = req.body.dates || store.milestoneStartDates;
         saveStore();
         res.json({ success: true, message: 'Start dates updated', data: store.milestoneStartDates });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// COACHING & MENTORSHIP API
+// -------------------------------------------------------------
+
+// Get coaching sessions (filtered by student or all for coach)
+app.get('/api/coaching/sessions', (req, res) => {
+    let list = store.coachingSessions || [];
+    const { userId, userEmail } = req.query;
+    if (userId || userEmail) {
+        list = list.filter(s => 
+            (userId && String(s.userId) === String(userId)) || 
+            (userEmail && s.userEmail && s.userEmail.toLowerCase() === userEmail.toLowerCase())
+        );
+    }
+    res.json({ success: true, count: list.length, data: list });
+});
+
+// Book / Create a coaching session
+app.post('/api/coaching/sessions', (req, res) => {
+    try {
+        const session = req.body;
+        if (!session.userId && !session.userEmail) {
+            return res.status(400).json({ success: false, error: 'User identifier required' });
+        }
+        if (!store.coachingSessions) store.coachingSessions = [];
+
+        const newSession = {
+            id: session.id || `coach_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            userId: session.userId,
+            userEmail: session.userEmail || '',
+            userName: session.userName || 'Student',
+            topic: session.topic || 'General Strategy & Goal Alignment',
+            date: session.date || new Date().toISOString().split('T')[0],
+            timeSlot: session.timeSlot || '10:00 AM - 10:45 AM',
+            status: session.status || 'scheduled', // 'scheduled', 'completed', 'cancelled'
+            meetingLink: session.meetingLink || 'https://meet.google.com/cmp-learn-coach',
+            coachNotes: session.coachNotes || '',
+            studentGoals: session.studentGoals || '',
+            lcBonus: Number(session.lcBonus) || 50,
+            createdAt: new Date().toISOString()
+        };
+
+        store.coachingSessions.push(newSession);
+        saveStore();
+        res.status(201).json({ success: true, message: 'Coaching session scheduled', data: newSession });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Update coach feedback on a session
+app.post('/api/coaching/sessions/update-feedback', (req, res) => {
+    try {
+        const { sessionId, coachNotes, status } = req.body;
+        if (!store.coachingSessions) store.coachingSessions = [];
+        const idx = store.coachingSessions.findIndex(s => String(s.id) === String(sessionId));
+        if (idx > -1) {
+            if (coachNotes !== undefined) store.coachingSessions[idx].coachNotes = coachNotes;
+            if (status !== undefined) store.coachingSessions[idx].status = status;
+            store.coachingSessions[idx].updatedAt = new Date().toISOString();
+            saveStore();
+            res.json({ success: true, message: 'Session feedback updated', data: store.coachingSessions[idx] });
+        } else {
+            res.status(404).json({ success: false, error: 'Session not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get Action Items / Goals
+app.get('/api/coaching/action-items', (req, res) => {
+    let list = store.coachingActionItems || [];
+    const { userId, userEmail } = req.query;
+    if (userId || userEmail) {
+        list = list.filter(item => 
+            (userId && String(item.userId) === String(userId)) || 
+            (userEmail && item.userEmail && item.userEmail.toLowerCase() === userEmail.toLowerCase())
+        );
+    }
+    res.json({ success: true, count: list.length, data: list });
+});
+
+// Create an Action Item
+app.post('/api/coaching/action-items', (req, res) => {
+    try {
+        const item = req.body;
+        if (!store.coachingActionItems) store.coachingActionItems = [];
+        const newItem = {
+            id: item.id || `act_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            userId: item.userId,
+            userEmail: item.userEmail || '',
+            title: item.title || 'Complete weekly action task',
+            deadline: item.deadline || new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            completed: !!item.completed,
+            lcReward: Number(item.lcReward) || 25,
+            assignedBy: item.assignedBy || 'Coach',
+            createdAt: new Date().toISOString()
+        };
+        store.coachingActionItems.push(newItem);
+        saveStore();
+        res.status(201).json({ success: true, message: 'Action item created', data: newItem });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Toggle Action Item completion
+app.post('/api/coaching/action-items/toggle', (req, res) => {
+    try {
+        const { itemId, completed } = req.body;
+        if (!store.coachingActionItems) store.coachingActionItems = [];
+        const idx = store.coachingActionItems.findIndex(i => String(i.id) === String(itemId));
+        if (idx > -1) {
+            store.coachingActionItems[idx].completed = (completed !== undefined ? !!completed : !store.coachingActionItems[idx].completed);
+            store.coachingActionItems[idx].completedAt = store.coachingActionItems[idx].completed ? new Date().toISOString() : null;
+            saveStore();
+            res.json({ success: true, message: 'Action item toggled', data: store.coachingActionItems[idx] });
+        } else {
+            res.status(404).json({ success: false, error: 'Item not found' });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// COURSE PROGRESS & LESSON COMPLETION API
+// -------------------------------------------------------------
+app.get('/api/courses/progress', (req, res) => {
+    const { userId, userEmail } = req.query;
+    if (!store.courseProgress) store.courseProgress = {};
+    const key = userId || userEmail || 'default';
+    res.json({ success: true, data: store.courseProgress[key] || {} });
+});
+
+app.post('/api/courses/progress', (req, res) => {
+    try {
+        const { userId, userEmail, courseId, lessonId, completed, lcsEarned } = req.body;
+        if (!store.courseProgress) store.courseProgress = {};
+        const key = userId || userEmail || 'default';
+        if (!store.courseProgress[key]) store.courseProgress[key] = {};
+        if (!store.courseProgress[key][courseId]) store.courseProgress[key][courseId] = { completedLessons: [], lcsEarned: 0 };
+        
+        const cObj = store.courseProgress[key][courseId];
+        if (completed && !cObj.completedLessons.includes(lessonId)) {
+            cObj.completedLessons.push(lessonId);
+            cObj.lcsEarned = (cObj.lcsEarned || 0) + (Number(lcsEarned) || 20);
+        }
+        store.courseProgress[key][courseId].lastUpdated = new Date().toISOString();
+        saveStore();
+        res.json({ success: true, message: 'Course progress saved', data: store.courseProgress[key][courseId] });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

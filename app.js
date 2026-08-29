@@ -4781,3 +4781,393 @@ function startLiveSync() {
     }, 4000); // 4-second live bi-directional sync
 }
 startLiveSync();
+
+
+// ==============================================================
+// COURSES & LESSON PLAYER ENGINE
+// ==============================================================
+
+let activePlayingCourseId = null;
+let activePlayingLessonId = null;
+
+const DEFAULT_COURSES_CATALOG = [
+    {
+        id: 'course_dip',
+        title: 'cMPLi Dip: Foundation of High Performance',
+        desc: 'Master the core disciplines of self-awareness, daily habits, and foundational learning systems.',
+        lessonsCount: 21,
+        thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
+        tags: ['Foundations', 'High Performance', 'Daily Habits'],
+        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+    },
+    {
+        id: 'course_immerse',
+        title: 'cMPLi Immerse: Advanced Execution Mastery',
+        desc: 'Deep-dive frameworks for deep work, industry communication, and strategic problem-solving.',
+        lessonsCount: 39,
+        thumbnail: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&auto=format&fit=crop&q=80',
+        tags: ['Advanced', 'Strategy', 'Deep Work'],
+        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+    },
+    {
+        id: 'course_ios',
+        title: 'cMPLi iOS: Industry Orientation & Specialization',
+        desc: 'Bridge academic theory with real-world industry domains across Tech, Marketing, Finance & HR.',
+        lessonsCount: 12,
+        thumbnail: 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=600&auto=format&fit=crop&q=80',
+        tags: ['Industry', 'Projects', 'Career Launch'],
+        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+    }
+];
+
+async function renderCoursesCatalog(searchTerm = '') {
+    const container = document.getElementById('coursesCatalogContainer');
+    if (!container) return;
+
+    let coursesList = [...DEFAULT_COURSES_CATALOG];
+    
+    // Supplement from TagMango coursesData if available
+    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
+        coursesData.result.subscriptions.slice(0, 6).forEach(mango => {
+            if (!coursesList.some(c => c.id === mango.mangoId)) {
+                coursesList.push({
+                    id: mango.mangoId,
+                    title: mango.mangoTitle,
+                    desc: 'Comprehensive learning module tailored for academic & career acceleration.',
+                    lessonsCount: mango.count || 10,
+                    thumbnail: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&auto=format&fit=crop&q=80',
+                    tags: ['Core Module'],
+                    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+                });
+            }
+        });
+    }
+
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        coursesList = coursesList.filter(c => c.title.toLowerCase().includes(term) || c.desc.toLowerCase().includes(term));
+    }
+
+    // Fetch user course progress
+    let userProgress = {};
+    if (currentUser) {
+        try {
+            const progRes = await fetch('/api/courses/progress?userId=' + encodeURIComponent(currentUser._id) + '&userEmail=' + encodeURIComponent(currentUser.email || '')).then(r => r.json());
+            if (progRes.success) userProgress = progRes.data || {};
+        } catch (e) {}
+    }
+
+    container.innerHTML = coursesList.map(course => {
+        const cData = userProgress[course.id] || { completedLessons: [], lcsEarned: 0 };
+        const completedCount = (cData.completedLessons || []).length;
+        const pct = Math.min(100, Math.round((completedCount / Math.max(1, course.lessonsCount)) * 100));
+
+        return `
+        <div class="glass-card overflow-hidden border-slate-800 flex flex-col justify-between group">
+            <div>
+                <div class="relative h-44 overflow-hidden">
+                    <img src="${course.thumbnail}" alt="${course.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+                    <div class="absolute top-3 left-3 flex gap-2">
+                        ${course.tags.map(t => `<span class="badge-pill badge-indigo">${t}</span>`).join('')}
+                    </div>
+                </div>
+                <div class="p-6">
+                    <h3 class="text-lg font-bold text-white font-heading group-hover:text-indigo-300 transition-colors line-clamp-1">${course.title}</h3>
+                    <p class="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">${course.desc}</p>
+                    
+                    <div class="mt-5 pt-4 border-t border-slate-800/80">
+                        <div class="flex justify-between items-center text-xs mb-2">
+                            <span class="text-slate-400">${completedCount}/${course.lessonsCount} Lessons</span>
+                            <span class="font-bold text-emerald-400">${pct}% Done</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-6 pt-0">
+                <button onclick="openLessonPlayer('${course.id}', 1)" class="btn-primary w-full py-2.5 text-xs">
+                    <i class="fas fa-play"></i> ${completedCount > 0 ? 'Resume Lesson' : 'Start Learning'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function filterCourseCatalog() {
+    const input = document.getElementById('courseSearchInput');
+    const term = input ? input.value : '';
+    renderCoursesCatalog(term);
+}
+
+function openLessonPlayer(courseId, lessonNum = 1) {
+    const modal = document.getElementById('lessonPlayerModal');
+    if (!modal) return;
+
+    activePlayingCourseId = courseId;
+    activePlayingLessonId = 'lesson_' + lessonNum;
+
+    const course = DEFAULT_COURSES_CATALOG.find(c => c.id === courseId) || {
+        title: 'cMPLi Interactive Learning Lesson',
+        desc: 'Dive into this curated learning module. Focus on practical insights and apply reflections in your daily Level-Up quests.',
+        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+    };
+
+    document.getElementById('playerLessonBadge').innerText = 'Lesson ' + lessonNum;
+    document.getElementById('playerLessonTitle').innerText = course.title + ' - Session ' + lessonNum;
+    document.getElementById('playerLessonDesc').innerText = course.desc;
+    document.getElementById('playerIframe').src = course.videoUrl;
+
+    modal.classList.remove('hidden');
+}
+
+function closeLessonPlayer() {
+    const modal = document.getElementById('lessonPlayerModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.getElementById('playerIframe').src = '';
+    }
+}
+
+async function markCurrentLessonComplete() {
+    if (!currentUser || !activePlayingCourseId) return;
+
+    try {
+        const res = await fetch('/api/courses/progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: currentUser._id,
+                userEmail: currentUser.email || '',
+                courseId: activePlayingCourseId,
+                lessonId: activePlayingLessonId || 'lesson_1',
+                completed: true,
+                lcsEarned: 20
+            })
+        }).then(r => r.json());
+
+        if (res.success) {
+            recordLevelUpReward(currentUser._id, 'course', 1, 20, 'Course Lesson Complete');
+            alert('🎉 Lesson completed! +20 LCs added to your wallet.');
+            closeLessonPlayer();
+            renderCoursesCatalog();
+        }
+    } catch (e) {
+        alert('Lesson marked completed locally! +20 LCs awarded.');
+        recordLevelUpReward(currentUser._id, 'course', 1, 20, 'Course Lesson Complete');
+        closeLessonPlayer();
+    }
+}
+
+
+// ==============================================================
+// 1-ON-1 COACHING & MENTORSHIP ENGINE
+// ==============================================================
+
+async function loadCoachingData() {
+    if (!currentUser && !isAdminLogin) return;
+
+    const userParam = currentUser ? '&userId=' + encodeURIComponent(currentUser._id) + '&userEmail=' + encodeURIComponent(currentUser.email || '') : '';
+    
+    // 1. Fetch Sessions
+    try {
+        const sessRes = await fetch('/api/coaching/sessions?' + userParam).then(r => r.json());
+        const sessions = sessRes.data || [];
+        renderCoachingSessions(sessions);
+    } catch (e) {
+        renderCoachingSessions([]);
+    }
+
+    // 2. Fetch Action Items
+    try {
+        const actRes = await fetch('/api/coaching/action-items?' + userParam).then(r => r.json());
+        const actionItems = actRes.data || [];
+        renderCoachingActionItems(actionItems);
+    } catch (e) {
+        renderCoachingActionItems([]);
+    }
+}
+
+function renderCoachingSessions(sessions) {
+    const list = document.getElementById('coachingSessionsList');
+    const feedbackArea = document.getElementById('coachFeedbackNotesArea');
+    if (!list) return;
+
+    if (sessions.length === 0) {
+        list.innerHTML = `
+            <div class="p-8 text-center bg-slate-900/40 rounded-2xl border border-slate-800">
+                <i class="fas fa-calendar-alt text-3xl text-slate-600 mb-2"></i>
+                <p class="text-xs text-slate-400">No 1-on-1 coaching sessions scheduled yet.</p>
+                <button onclick="openCoachingBookingModal()" class="btn-primary mt-4 py-2 px-4 text-xs bg-emerald-600 border-emerald-500">
+                    <i class="fas fa-calendar-plus"></i> Book Your First Session (+50 LCs)
+                </button>
+            </div>`;
+        if (feedbackArea) feedbackArea.innerHTML = '<p class="text-xs text-slate-500 italic">No coach feedback notes recorded yet.</p>';
+        return;
+    }
+
+    list.innerHTML = sessions.map(sess => {
+        const isCompleted = sess.status === 'completed';
+        return `
+        <div class="glass-card p-5 border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-indigo-500/40">
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <span class="badge-pill ${isCompleted ? 'badge-emerald' : 'badge-indigo'}">${isCompleted ? 'Completed' : 'Upcoming'}</span>
+                    <span class="text-xs font-bold text-slate-300">${sess.date} • ${sess.timeSlot}</span>
+                </div>
+                <h4 class="text-sm font-bold text-white mt-1">${sess.topic}</h4>
+                <p class="text-xs text-slate-400">Goal: ${sess.studentGoals || 'Milestone strategy & feedback'}</p>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                ${!isCompleted ? `
+                    <a href="${sess.meetingLink || 'https://meet.google.com'}" target="_blank" class="btn-primary py-2 px-4 text-xs bg-gradient-to-r from-indigo-600 to-cyan-600">
+                        <i class="fas fa-video"></i> Join Call
+                    </a>
+                ` : ''}
+                ${isAdminLogin ? `
+                    <button onclick="openCoachFeedbackModal('${sess.id}')" class="btn-secondary py-2 px-3 text-xs">
+                        <i class="fas fa-edit"></i> Coach Feedback
+                    </button>
+                ` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    if (feedbackArea) {
+        const feedbackSessions = sessions.filter(s => s.coachNotes);
+        if (feedbackSessions.length === 0) {
+            feedbackArea.innerHTML = '<p class="text-xs text-slate-500 italic">Your coach will provide feedback here after your 1-on-1 strategy call.</p>';
+        } else {
+            feedbackArea.innerHTML = feedbackSessions.map(s => `
+                <div class="p-4 bg-slate-900/60 rounded-xl border border-emerald-500/20">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">${s.date} - ${s.topic}</span>
+                        <span class="text-[10px] text-slate-500"><i class="fas fa-check-circle text-emerald-400"></i> Approved</span>
+                    </div>
+                    <p class="text-xs text-slate-200 mt-1 whitespace-pre-wrap leading-relaxed">${s.coachNotes}</p>
+                </div>
+            `).join('');
+        }
+    }
+}
+
+function renderCoachingActionItems(items) {
+    const list = document.getElementById('coachingActionItemsList');
+    if (!list) return;
+
+    if (items.length === 0) {
+        items = [
+            { id: 'act_demo_1', title: 'Complete Day 2 Reflection & Upload Deliverable', deadline: '2026-08-30', completed: false, lcReward: 25 },
+            { id: 'act_demo_2', title: 'Schedule 1-on-1 Strategy Call with Mentor', deadline: '2026-08-31', completed: false, lcReward: 25 }
+        ];
+    }
+
+    list.innerHTML = items.map(item => `
+        <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3 hover:border-indigo-500/30 transition-colors">
+            <label class="flex items-center gap-3 cursor-pointer flex-1">
+                <input type="checkbox" ${item.completed ? 'checked' : ''} onchange="toggleActionItem('${item.id}', this.checked)" class="w-4 h-4 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer">
+                <span class="text-xs ${item.completed ? 'line-through text-slate-500' : 'text-slate-200 font-medium'}">${item.title}</span>
+            </label>
+            <span class="badge-pill ${item.completed ? 'badge-emerald' : 'badge-amber'} flex-shrink-0">+${item.lcReward || 25} LCs</span>
+        </div>
+    `).join('');
+}
+
+async function toggleActionItem(itemId, isChecked) {
+    try {
+        await fetch('/api/coaching/action-items/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemId, completed: isChecked })
+        });
+        if (isChecked && currentUser) {
+            recordLevelUpReward(currentUser._id, 'coaching_task', 1, 25, 'Growth Action Task Complete');
+        }
+    } catch (e) {}
+    loadCoachingData();
+}
+
+function openCoachingBookingModal() {
+    const modal = document.getElementById('coachingBookingModal');
+    if (modal) {
+        document.getElementById('coachBookingDate').value = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeCoachingBookingModal() {
+    const modal = document.getElementById('coachingBookingModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function confirmCoachingBooking() {
+    const topic = document.getElementById('coachBookingTopic').value.trim() || 'Milestone Strategy Alignment';
+    const date = document.getElementById('coachBookingDate').value;
+    const timeSlot = document.getElementById('coachBookingSlot').value;
+    const goal = document.getElementById('coachBookingGoal').value.trim();
+
+    if (!currentUser) return alert('Please log in to book a session.');
+
+    try {
+        const res = await fetch('/api/coaching/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: currentUser._id,
+                userEmail: currentUser.email || '',
+                userName: currentUser.name || 'Student',
+                topic,
+                date,
+                timeSlot,
+                studentGoals: goal,
+                lcBonus: 50
+            })
+        }).then(r => r.json());
+
+        if (res.success) {
+            alert('🎉 Coaching Session Booked! A Google Meet link has been generated.');
+            closeCoachingBookingModal();
+            loadCoachingData();
+        }
+    } catch (e) {
+        alert('Session booked!');
+        closeCoachingBookingModal();
+    }
+}
+
+function openCoachFeedbackModal(sessionId) {
+    const modal = document.getElementById('coachFeedbackModal');
+    if (modal) {
+        document.getElementById('coachFeedbackSessionId').value = sessionId;
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeCoachFeedbackModal() {
+    const modal = document.getElementById('coachFeedbackModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function submitCoachFeedback() {
+    const sessionId = document.getElementById('coachFeedbackSessionId').value;
+    const notes = document.getElementById('coachFeedbackNotes').value.trim();
+    const status = document.getElementById('coachFeedbackStatus').value;
+
+    try {
+        await fetch('/api/coaching/sessions/update-feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, coachNotes: notes, status })
+        });
+        alert('Coach feedback saved and status updated!');
+        closeCoachFeedbackModal();
+        loadCoachingData();
+    } catch (e) {
+        alert('Feedback updated!');
+        closeCoachFeedbackModal();
+    }
+}

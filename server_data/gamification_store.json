@@ -58,5 +58,33 @@
     "2": "2026-08-21",
     "3": "2026-11-21"
   },
-  "campusPartnersDB": {}
+  "campusPartnersDB": {},
+  "coachingSessions": [
+    {
+      "id": "coach_1787983982921_m7a69",
+      "userId": "test_sai_01",
+      "userEmail": "engineersai02@gmail.com",
+      "userName": "Sai Yedamala",
+      "topic": "High Performance & Goal Alignment",
+      "date": "2026-08-30",
+      "timeSlot": "10:00 AM - 10:45 AM",
+      "status": "scheduled",
+      "meetingLink": "https://meet.google.com/cmp-learn-coach",
+      "coachNotes": "",
+      "studentGoals": "Mastering consistency on Level-Up",
+      "lcBonus": 50,
+      "createdAt": "2026-08-29T06:13:02.921Z"
+    }
+  ],
+  "courseProgress": {
+    "test_sai_01": {
+      "course_dip": {
+        "completedLessons": [
+          "lesson_1"
+        ],
+        "lcsEarned": 20,
+        "lastUpdated": "2026-08-29T06:13:02.940Z"
+      }
+    }
+  }
 }

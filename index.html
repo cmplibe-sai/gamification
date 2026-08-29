@@ -3,502 +3,673 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cMPLi Be | Gamification Platform</title>
+    <title>cMPLi Be | Gamified Student Learning & Coaching Platform</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
+    
+    <!-- Modern Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Tailwind CSS (for layout utilities) & Custom Minimalist Design System -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen custom-scrollbar">
 
-    <!-- LOGIN GATEKEEPER -->
-    <div id="loginScreen" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#070d19]/90 backdrop-blur-xl">
-        <div class="glass p-10 rounded-3xl w-full max-w-md border border-slate-700/60 shadow-2xl text-center">
-            <div class="flex justify-center mb-6">
-                <img src="assets/logo.png" alt="cMPLi Be" class="h-12 w-auto object-contain drop-shadow-md">
+    <!-- 1. LOGIN SCREEN (Minimalist Glassmorphic Card) -->
+    <div id="loginScreen" class="fixed inset-0 z-[100] flex items-center justify-center bg-[#070c16]/95 backdrop-blur-2xl p-4">
+        <div class="glass p-8 md:p-10 rounded-3xl w-full max-w-md border border-slate-800 shadow-2xl text-center relative overflow-hidden">
+            <div class="absolute -top-24 -left-24 w-48 h-48 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="flex justify-center mb-5">
+                <img src="assets/logo.png" alt="cMPLi Be" class="h-10 w-auto object-contain drop-shadow-lg">
             </div>
-            <h2 class="text-2xl font-extrabold mb-1 text-white">Student & Creator Portal</h2>
-            <p class="text-slate-400 text-sm mb-6">Enter your registered email or phone to access.</p>
+            <h2 class="text-2xl font-extrabold text-white mb-1 tracking-tight font-heading">Student & Coach Portal</h2>
+            <p class="text-slate-400 text-xs mb-6">Enter your registered email or phone to access your journey.</p>
             
             <div id="step1">
-                <input type="text" id="loginId" onkeypress="if(event.key === 'Enter') requestOTP()" placeholder="Email or Phone Number" class="w-full bg-slate-900/80 border border-slate-600/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-colors">
-                <button onclick="requestOTP()" class="w-full py-3.5 bg-gradient-to-r from-[#00a2e8] to-[#0047bb] rounded-xl font-bold text-white hover:opacity-95 transition-all shadow-lg shadow-cyan-500/20">Send OTP</button>
+                <div class="relative mb-4">
+                    <i class="fas fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                    <input type="text" id="loginId" onkeypress="if(event.key === 'Enter') requestOTP()" placeholder="Email or Phone Number" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-11 pr-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-500">
+                </div>
+                <button onclick="requestOTP()" class="btn-primary w-full py-3.5 text-sm">
+                    <span>Request OTP</span> <i class="fas fa-arrow-right text-xs"></i>
+                </button>
             </div>
             
             <div id="step2" class="hidden">
-                <p class="text-xs text-cyan-400 mb-4 font-semibold">OTP sent to your contact details.</p>
-                <input type="text" id="otpCode" onkeypress="if(event.key === 'Enter') verifyOTP()" placeholder="Enter OTP (Hint: 1234)" class="w-full bg-slate-900/80 border border-slate-600/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 tracking-widest text-center text-lg transition-colors">
-                <button onclick="verifyOTP()" class="w-full py-3.5 bg-emerald-600 rounded-xl font-bold text-white hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">Verify & Login</button>
+                <div class="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl mb-4 text-xs text-indigo-300 font-medium">
+                    <i class="fas fa-shield-alt mr-1.5"></i> One-Time Password sent.
+                </div>
+                <input type="text" id="otpCode" onkeypress="if(event.key === 'Enter') verifyOTP()" placeholder="Enter OTP (Hint: 1234)" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 tracking-widest text-center text-lg font-bold">
+                <button onclick="verifyOTP()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30 shadow-emerald-600/30">
+                    <i class="fas fa-check-circle mr-1"></i> Verify & Enter Platform
+                </button>
+            </div>
+
+            <div class="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-500">
+                <i class="fas fa-lock"></i> Secured by cMPLi Be Gamification
             </div>
         </div>
     </div>
 
-    <!-- MAIN APPLICATION -->
-    <div id="mainApp" class="hidden">
-        <nav class="fixed top-0 w-full z-50 glass border-b border-slate-800/80">
-            <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <img src="assets/logo.png" alt="cMPLi Be" class="h-9 w-auto object-contain">
+    <!-- 2. MAIN APPLICATION -->
+    <div id="mainApp" class="hidden min-h-screen flex flex-col">
+        
+        <!-- Navigation Header -->
+        <nav class="fixed top-0 w-full z-50 glass border-b border-slate-800/90">
+            <div class="max-w-7xl mx-auto px-4 md:px-8 h-20 flex items-center justify-between">
+                
+                <!-- Brand Logo -->
+                <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
+                    <img src="assets/logo.png" alt="cMPLi Be" class="h-8 md:h-9 w-auto object-contain">
+                    <span class="hidden sm:inline-block text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">Hub</span>
                 </div>
                 
-                <!-- Learner Navigation -->
-                <div id="learnerNav" class="flex items-center gap-6 hidden">
-                    <button onclick="switchTab('dashboardTab')" class="font-semibold text-slate-300 hover:text-cyan-400 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-home"></i> Home</button>
-                    <button onclick="switchTab('levelUpTab')" class="font-semibold text-cyan-300 hover:text-cyan-400 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-layer-group"></i> Level-Up</button>
-                    <button onclick="switchTab('leaderboardTab')" class="font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-trophy"></i> Leaderboard</button>
-                    <div class="bg-slate-900/70 px-4 py-1.5 rounded-full border border-slate-700/80 flex items-center gap-2.5 ml-2 shadow-inner">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">LC:</span>
-                        <span id="userPoints" class="text-cyan-400 font-extrabold text-sm">0</span>
+                <!-- Learner Navigation Tabs -->
+                <div id="learnerNav" class="hidden flex items-center gap-1 md:gap-2">
+                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden md:inline">Dashboard</span></button>
+                    <button onclick="switchTab('coursesTab')" id="nav-coursesTab" class="nav-tab-btn"><i class="fas fa-graduation-cap"></i> <span class="hidden md:inline">Courses</span></button>
+                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span class="hidden md:inline">Level-Up</span></button>
+                    <button onclick="switchTab('coachingTab')" id="nav-coachingTab" class="nav-tab-btn"><i class="fas fa-user-friends"></i> <span class="hidden md:inline">1-on-1 Coaching</span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
+                    
+                    <!-- LC Currency Pill -->
+                    <div class="bg-slate-900/90 px-3.5 py-1.5 rounded-full border border-amber-500/30 flex items-center gap-2 ml-2 shadow-inner shadow-black">
+                        <i class="fas fa-coins text-amber-400 text-xs"></i>
+                        <span id="userPoints" class="text-amber-400 font-extrabold text-xs md:text-sm">0</span>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold">LCs</span>
                     </div>
-                    <button onclick="logout()" class="ml-2 w-9 h-9 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center border border-red-500/20" title="Logout"><i class="fas fa-sign-out-alt text-sm"></i></button>
+
+                    <!-- Logout -->
+                    <button onclick="logout()" class="ml-2 w-8 h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700" title="Logout">
+                        <i class="fas fa-sign-out-alt text-xs"></i>
+                    </button>
                 </div>
 
-                <!-- Admin Navigation -->
-                <div id="adminNav" class="flex items-center gap-6 hidden">
-                    <button onclick="switchTab('adminTab')" class="font-semibold text-slate-300 hover:text-cyan-400 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-home"></i> Home</button>
-                    <button onclick="switchTab('adminLevelUpTab')" class="font-semibold text-cyan-300 hover:text-cyan-400 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-layer-group"></i> Level-Up</button>
-                    <button onclick="switchTab('leaderboardTab')" class="font-semibold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-2 text-sm"><i class="fas fa-trophy"></i> Leaderboard</button>
-                    <div class="bg-emerald-950/40 px-3.5 py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-2 text-emerald-400 ml-3">
-                        <i class="fas fa-shield-alt text-xs"></i> <span class="text-xs font-extrabold tracking-wider uppercase">Creator Hub</span>
+                <!-- Admin Navigation Tabs -->
+                <div id="adminNav" class="hidden flex items-center gap-2 md:gap-3">
+                    <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active"><i class="fas fa-chart-line"></i> <span class="hidden md:inline">Overview</span></button>
+                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span class="hidden md:inline">Level-Up Matrix</span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
+                    
+                    <div class="bg-emerald-950/40 px-3.5 py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-extrabold tracking-wider uppercase ml-2">
+                        <i class="fas fa-shield-alt"></i> <span class="hidden sm:inline">Creator Command</span>
                     </div>
-                    <button onclick="logout()" class="ml-2 w-9 h-9 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center border border-red-500/20" title="Logout"><i class="fas fa-sign-out-alt text-sm"></i></button>
+
+                    <!-- Logout -->
+                    <button onclick="logout()" class="ml-2 w-8 h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700" title="Logout">
+                        <i class="fas fa-sign-out-alt text-xs"></i>
+                    </button>
                 </div>
             </div>
         </nav>
 
-        <main class="pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <!-- Main Content Area -->
+        <main class="pt-28 pb-20 px-4 md:px-8 max-w-7xl mx-auto w-full flex-1">
             
-            <!-- ================= LEARNER VIEWS ================= -->
-            
-            <!-- Tab 1: Learner Home / Dashboard (DEFAULT VIEW) -->
-            <section id="dashboardTab" class="hidden">
-                <div class="mb-8">
-                    <h2 class="text-4xl font-extrabold">Learner <span class="gradient-text">Performance</span></h2>
-                </div>
+            <!-- ==============================================================
+                 1. STUDENT / LEARNER DASHBOARD TAB
+                 ============================================================== -->
+            <section id="dashboardTab" class="hidden space-y-8 animate-fade-in">
                 
-                <!-- The Two Main Boxes -->
-                <div class="report-container">
-                    <div class="box" style="display: block;">
-                        <h2>Learner Details</h2>
-                        <div id="userDetailsContent"></div>
+                <!-- Hero Welcome & Quick Stats -->
+                <div class="glass-card p-6 md:p-8 relative overflow-hidden border-indigo-500/30 bg-gradient-to-r from-slate-900/90 via-indigo-950/20 to-slate-900/90">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="badge-pill badge-indigo"><i class="fas fa-sparkles"></i> Welcome Back</span>
+                                <span id="dashStreakBadge" class="badge-pill badge-amber flame-pulse"><i class="fas fa-fire"></i> 3-Day Streak</span>
+                            </div>
+                            <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading" id="dashWelcomeName">Student Portal</h2>
+                            <p class="text-slate-400 text-sm mt-1">Track your coaching progress, complete daily quests, and level up your skills.</p>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-3">
+                            <button onclick="switchTab('levelUpTab')" class="btn-primary text-xs md:text-sm">
+                                <i class="fas fa-bolt"></i> Continue Level-Up
+                            </button>
+                            <button onclick="switchTab('coachingTab')" class="btn-secondary text-xs md:text-sm">
+                                <i class="fas fa-calendar-check text-indigo-400"></i> Coaching Hub
+                            </button>
+                        </div>
                     </div>
-                    <div class="box" style="display: block;">
-                        <h2>cMPLi Learning Currencies</h2>
+                </div>
+
+                <!-- 3-Column Performance Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Box 1: Learner Profile Details -->
+                    <div class="glass-card p-6 border-slate-800">
+                        <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
+                            <span><i class="fas fa-id-badge mr-2"></i> Student Details</span>
+                        </h3>
+                        <div id="userDetailsContent" class="space-y-3 text-sm"></div>
+                    </div>
+
+                    <!-- Box 2: Total LCs & Wallet -->
+                    <div class="glass-card p-6 border-slate-800">
+                        <h3 class="text-base font-bold text-amber-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
+                            <span><i class="fas fa-wallet mr-2"></i> Learning Currencies</span>
+                        </h3>
                         <div id="pointsContent"></div>
                     </div>
+
+                    <!-- Box 3: Quick Action Goals -->
+                    <div class="glass-card p-6 border-slate-800">
+                        <h3 class="text-base font-bold text-emerald-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
+                            <span><i class="fas fa-bullseye mr-2"></i> Active Targets</span>
+                            <span class="text-[10px] text-slate-400 uppercase font-bold">This Week</span>
+                        </h3>
+                        <div class="space-y-3 text-xs">
+                            <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-white">Daily Check-in Quest</p>
+                                    <p class="text-[11px] text-slate-400">Complete before 05:00 PM</p>
+                                </div>
+                                <span class="badge-pill badge-indigo">+33 LCs</span>
+                            </div>
+                            <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-white">1-on-1 Coaching Session</p>
+                                    <p class="text-[11px] text-slate-400">Review weekly reflection</p>
+                                </div>
+                                <span class="badge-pill badge-emerald">+50 LCs</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- ONLY KEEP THIS SINGLE DIV FOR COURSES -->
-                <div id="courseCompletionsContainer" class="w-full mt-8 mb-4"></div>
-
-                <!-- Submissions & Monthly Grid -->
-                <div class="glass p-8 rounded-2xl border border-slate-700 mt-8 mb-8">
-                    <h3 class="text-xl font-bold mb-6 text-indigo-400"><i class="fas fa-tasks mr-2"></i> Your Submissions & Reflections</h3>
-                    <div id="myProjects" class="space-y-4"></div>
+                <!-- Submissions & Reflection Timeline -->
+                <div class="glass-card p-6 md:p-8 border-slate-800">
+                    <div class="flex justify-between items-center mb-6 pb-3 border-b border-slate-800">
+                        <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
+                            <i class="fas fa-tasks text-indigo-400"></i> Your Submissions & Reflections
+                        </h3>
+                    </div>
+                    <div id="myProjects" class="space-y-3"></div>
                 </div>
 
-                <div style="width: 100%; margin: 40px auto 0 auto;">
-                    <h2 class="text-2xl font-bold mb-6 border-b border-slate-700 pb-3"><i class="fas fa-calendar-check text-indigo-400 mr-2"></i> Monthly Completion %</h2>
+                <!-- Monthly Completion Matrix -->
+                <div class="glass-card p-6 md:p-8 border-slate-800">
+                    <h3 class="text-xl font-bold mb-6 pb-3 border-b border-slate-800 text-white font-heading flex items-center gap-2">
+                        <i class="fas fa-calendar-check text-emerald-400"></i> Monthly Compliance & Completion
+                    </h3>
                     <div id="completionGrid" class="completion-grid"></div>
                 </div>
             </section>
 
-            <!-- Tab 2: LEVEL-UP ARCHITECTURE (2x3 GRID & MILESTONES) -->
-            <section id="levelUpTab" class="hidden">
-                <div class="mb-8 flex justify-between items-end">
+
+            <!-- ==============================================================
+                 2. COURSES & LESSON PLAYER TAB
+                 ============================================================== -->
+            <section id="coursesTab" class="hidden space-y-8 animate-fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-slate-800">
                     <div>
-                        <h2 class="text-4xl font-extrabold mb-2">cMPLi <span class="gradient-text">Level-Up</span></h2>
-                        <p class="text-slate-400">Master the journey. Fail a milestone, and you start it over.</p>
+                        <span class="badge-pill badge-indigo mb-2"><i class="fas fa-graduation-cap"></i> Curriculum Hub</span>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Courses & Lessons</h2>
+                        <p class="text-slate-400 text-sm mt-1">Engage with guided modules, watch lessons, and earn LCs on completion.</p>
                     </div>
-                    <button id="btnBackToGrid" onclick="closeMilestoneView()" class="hidden px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-all font-bold text-sm border border-slate-600"><i class="fas fa-arrow-left mr-2"></i> Back to Milestones</button>
-                </div>
-
-                <!-- NO ACCESS MESSAGE -->
-                <div id="levelUpNoAccess" class="hidden glass p-10 rounded-2xl border border-red-500/30 text-center">
-                    <div class="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/50">
-                        <i class="fas fa-lock text-4xl text-red-400"></i>
+                    <div class="w-full md:w-72">
+                        <input type="text" id="courseSearchInput" onkeyup="filterCourseCatalog()" placeholder="Search modules & topics..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
                     </div>
-                    <h3 class="text-2xl font-bold text-white mb-2">Access Restricted</h3>
-                    <p class="text-slate-400">Your current subscriptions do not include access to the Level-Up journey. Please enroll in an eligible cMPLi Solution to begin.</p>
                 </div>
 
-                <!-- 2x3 MILESTONE GRID (Main View) -->
-                <div id="milestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Populated by JS -->
+                <!-- Course Cards Grid -->
+                <div id="coursesCatalogContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Populated dynamically by JS -->
                 </div>
 
-                <!-- MILESTONE DETAIL VIEW (Hidden by default) -->
-                <div id="milestoneDetailContainer" class="hidden">
-                    <div class="glass p-6 rounded-2xl border border-indigo-500/50 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-indigo-900/10">
-                        <div>
-                            <h3 id="activeMilestoneTitle" class="text-2xl font-extrabold text-white"></h3>
-                            <p id="activeMilestoneDesc" class="text-sm text-slate-300 mt-1"></p>
+                <!-- Lesson Player Modal / Inline Container -->
+                <div id="lessonPlayerModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+                    <div class="glass w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
+                        <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                            <div>
+                                <span id="playerLessonBadge" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">Lesson Player</span>
+                                <h3 id="playerLessonTitle" class="text-lg font-bold text-white mt-1"></h3>
+                            </div>
+                            <button onclick="closeLessonPlayer()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                                <i class="fas fa-times text-sm"></i>
+                            </button>
                         </div>
-                        <div class="flex gap-3">
-                            <button onclick="openTermsModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-all font-bold text-xs border border-slate-600 shadow-lg"><i class="fas fa-file-contract mr-1"></i> View T&Cs</button>
-                            <button id="btnApplyCert" onclick="applyForCertificate()" class="hidden px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-all font-bold text-xs shadow-lg shadow-emerald-500/20"><i class="fas fa-award mr-1"></i> Apply for Certificate</button>
+                        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                            <!-- Video Embed or Responsive Container -->
+                            <div class="video-responsive rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
+                                <iframe id="playerIframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                            </div>
+                            
+                            <!-- Lesson Summary & Takeaways -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="md:col-span-2 space-y-4">
+                                    <h4 class="text-sm font-bold text-indigo-300 uppercase tracking-wider">Lesson Overview & Key Takeaways</h4>
+                                    <p id="playerLessonDesc" class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap"></p>
+                                </div>
+                                <div class="glass-card p-5 border-slate-700 space-y-4">
+                                    <div class="text-center pb-3 border-b border-slate-800">
+                                        <p class="text-xs text-slate-400 font-medium">Completion Reward</p>
+                                        <p class="text-2xl font-extrabold text-amber-400 mt-1">+20 LCs</p>
+                                    </div>
+                                    <button id="btnCompleteLesson" onclick="markCurrentLessonComplete()" class="btn-primary w-full py-3 text-xs">
+                                        <i class="fas fa-check-circle"></i> Mark Lesson Complete
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-
-                    <!-- Dynamic Sub-Navigation -->
-                    <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-800 pb-2" id="milestoneSubNav">
-                        <!-- Populated by JS based on Milestone -->
-                    </div>
-
-                    <!-- Dynamic Timelines Container -->
-                    <div id="milestoneTimelinesContent" class="glass p-6 rounded-2xl border border-slate-700 min-h-[400px]">
-                        <!-- JS injects timelines here -->
                     </div>
                 </div>
             </section>
 
-<!-- Tab 3: Admin Reports (Now Home) -->
-            <section id="adminTab" class="hidden">
-                <div class="mb-8">
-                    <h2 class="text-4xl font-extrabold">Creator <span class="gradient-text">Home</span></h2>
-                    <p class="text-slate-400 mt-2">Filter and view performance metrics across all learners.</p>
+
+            <!-- ==============================================================
+                 3. LEVEL-UP ARENA TAB (6 Milestones + Dip, Immerse, iOS, Projects)
+                 ============================================================== -->
+            <section id="levelUpTab" class="hidden space-y-8 animate-fade-in">
+                <div class="flex justify-between items-end pb-4 border-b border-slate-800">
+                    <div>
+                        <span class="badge-pill badge-cyan mb-2"><i class="fas fa-fire"></i> Gamified Journey</span>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">cMPLi Level-Up</h2>
+                        <p class="text-slate-400 text-sm mt-1">Master consecutive daily check-ins. Maintain strict compliance to avoid a milestone reset.</p>
+                    </div>
+                    <button id="btnBackToGrid" onclick="closeMilestoneView()" class="hidden btn-secondary text-xs">
+                        <i class="fas fa-arrow-left"></i> Back to Milestones
+                    </button>
+                </div>
+
+                <!-- NO ACCESS MESSAGE -->
+                <div id="levelUpNoAccess" class="hidden glass-card p-10 rounded-2xl border-red-500/30 text-center">
+                    <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                        <i class="fas fa-lock text-3xl text-red-400"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-2 font-heading">Access Restricted</h3>
+                    <p class="text-slate-400 text-sm max-w-md mx-auto">Your current subscriptions do not include access to the Level-Up journey. Please enroll in an eligible cMPLi Solution to begin.</p>
+                </div>
+
+                <!-- 2x3 MILESTONE GRID -->
+                <div id="milestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+                <!-- MILESTONE DETAIL CONTAINER -->
+                <div id="milestoneDetailContainer" class="hidden space-y-6">
+                    <div class="glass-card p-6 border-indigo-500/40 bg-gradient-to-r from-slate-900/90 to-indigo-950/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 id="activeMilestoneTitle" class="text-2xl font-extrabold text-white font-heading"></h3>
+                            <p id="activeMilestoneDesc" class="text-xs text-slate-300 mt-1"></p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="openTermsModal()" class="btn-secondary text-xs"><i class="fas fa-file-contract"></i> Rules</button>
+                            <button id="btnApplyCert" onclick="applyForCertificate()" class="hidden btn-primary text-xs bg-emerald-600 border-emerald-500"><i class="fas fa-award"></i> Claim Certificate</button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Module Sub-Nav (Dip, Immerse, iOS, Projects) -->
+                    <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="milestoneSubNav"></div>
+
+                    <!-- Dynamic Timelines Container -->
+                    <div id="milestoneTimelinesContent" class="glass-card p-6 md:p-8 border-slate-800 min-h-[400px]"></div>
+                </div>
+            </section>
+
+
+            <!-- ==============================================================
+                 4. 1-ON-1 COACHING & MENTORSHIP TAB
+                 ============================================================== -->
+            <section id="coachingTab" class="hidden space-y-8 animate-fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-slate-800">
+                    <div>
+                        <span class="badge-pill badge-emerald mb-2"><i class="fas fa-user-friends"></i> 1-on-1 Mentorship</span>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Coaching & Action Plans</h2>
+                        <p class="text-slate-400 text-sm mt-1">Book personalized 1-on-1 strategy sessions and track your personal growth action items.</p>
+                    </div>
+                    <button onclick="openCoachingBookingModal()" class="btn-primary text-xs md:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30">
+                        <i class="fas fa-calendar-plus"></i> Book 1-on-1 Session
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Left 2 Cols: Scheduled Sessions & Coach Feedback -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <div class="glass-card p-6 md:p-8 border-slate-800">
+                            <h3 class="text-lg font-bold text-white font-heading mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
+                                <span><i class="fas fa-video text-indigo-400 mr-2"></i> Scheduled 1-on-1 Sessions</span>
+                                <span class="badge-pill badge-indigo">Live Calls</span>
+                            </h3>
+                            <div id="coachingSessionsList" class="space-y-4">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-6 md:p-8 border-slate-800">
+                            <h3 class="text-lg font-bold text-white font-heading mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
+                                <span><i class="fas fa-comment-dots text-emerald-400 mr-2"></i> Coach Feedback & Direct Guidance</span>
+                            </h3>
+                            <div id="coachFeedbackNotesArea" class="space-y-4 text-sm text-slate-300">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Col: Growth Action Items Checklist -->
+                    <div class="space-y-6">
+                        <div class="glass-card p-6 border-slate-800">
+                            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
+                                <h3 class="text-base font-bold text-white font-heading flex items-center gap-2">
+                                    <i class="fas fa-check-double text-cyan-400"></i> Action Checklist
+                                </h3>
+                                <span class="text-[10px] text-amber-400 font-bold bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40">+25 LCs / Task</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mb-4">Complete weekly habits assigned by your mentor to advance your score.</p>
+                            <div id="coachingActionItemsList" class="space-y-2.5">
+                                <!-- Populated dynamically by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Mentorship Guidelines Card -->
+                        <div class="glass-card p-6 border-indigo-500/20 bg-indigo-950/10">
+                            <h4 class="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2"><i class="fas fa-info-circle mr-1"></i> Mentorship Protocol</h4>
+                            <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside">
+                                <li>Sessions are 45 minutes focused on strategy & implementation.</li>
+                                <li>Please prepare your reflections 24 hours prior to the call.</li>
+                                <li>Action tasks must be completed within 7 days.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ==============================================================
+                 5. LEADERBOARD & ARENA TAB
+                 ============================================================== -->
+            <section id="leaderboardTab" class="hidden space-y-8 animate-fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-4 border-b border-slate-800">
+                    <div>
+                        <span class="badge-pill badge-amber mb-2"><i class="fas fa-trophy"></i> Rankings</span>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Leaderboard Arena</h2>
+                        <p class="text-slate-400 text-sm mt-1">See how you rank against fellow students across all cohorts.</p>
+                    </div>
+                    <div class="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800">
+                        <button onclick="setLbTab(this, 'all')" class="lb-tab active px-4 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all" data-time="all">All Time</button>
+                        <button onclick="setLbTab(this, 'month')" class="lb-tab px-4 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all" data-time="month">Month</button>
+                        <button onclick="setLbTab(this, 'week')" class="lb-tab px-4 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all" data-time="week">Week</button>
+                    </div>
                 </div>
                 
-                <!-- Pricing & Cohort Filter Dropdown -->
-                <div class="flex flex-col md:flex-row gap-3 mb-4">
-                    <div class="w-full md:w-1/2">
-                        <label class="block text-xs text-slate-400 font-bold mb-1">1. Solution Type</label>
-                        <select id="pricingFilter" onchange="filterMangosByPricing()" class="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 font-medium text-sm">
+                <div id="leaderboardList" class="space-y-3 max-w-4xl mx-auto"></div>
+                <button id="viewAllLbBtn" onclick="viewAllLeaderboard()" class="w-full max-w-4xl mx-auto mt-4 py-3 glass-card text-indigo-400 font-bold text-xs hover:text-indigo-300 transition-all hidden block">View Complete Ranking</button>
+            </section>
+
+
+            <!-- ==============================================================
+                 6. CREATOR / COACH COMMAND CENTER
+                 ============================================================== -->
+            <!-- Creator Home Overview -->
+            <section id="adminTab" class="hidden space-y-8 animate-fade-in">
+                <div class="pb-4 border-b border-slate-800">
+                    <span class="badge-pill badge-emerald mb-2"><i class="fas fa-chart-pie"></i> Coach Analytics</span>
+                    <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Creator Command Hub</h2>
+                    <p class="text-slate-400 text-sm mt-1">Monitor real-time cohort engagement, student compliance health, and performance.</p>
+                </div>
+                
+                <!-- Filter Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 font-bold mb-1.5">1. Solution Filter</label>
+                        <select id="pricingFilter" onchange="filterMangosByPricing()" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
                             <option value="all">All Solutions (Paid & Free)</option>
                             <option value="paid">Paid Solutions Only</option>
                             <option value="free">Free Solutions Only</option>
                         </select>
                     </div>
-                    <div class="w-full md:w-1/2">
-                        <label class="block text-xs text-slate-400 font-bold mb-1">2. Select Mango / Cohort</label>
-                        <select id="courseSelect" onchange="renderAdminCustomerGrid()" class="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-700 font-medium text-sm">
+                    <div>
+                        <label class="block text-xs text-slate-400 font-bold mb-1.5">2. Select Mango / Cohort</label>
+                        <select id="courseSelect" onchange="renderAdminCustomerGrid()" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
                             <option value="">-- Select Mango / Solution --</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- 3. Status Button & Categories -->
-                <div class="mb-6 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-sm font-bold text-white"><i class="fas fa-heartbeat text-indigo-400 mr-2"></i>3. Customer Health Status</h3>
-                        <span id="userCounter" class="text-xs font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded-full border border-slate-700"></span>
+                <!-- Customer Health Filter Box -->
+                <div class="glass-card p-5 border-slate-800 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider"><i class="fas fa-heartbeat text-indigo-400 mr-2"></i> Student Compliance Health</h3>
+                        <span id="userCounter" class="text-xs font-bold text-slate-400 bg-slate-900 px-2.5 py-0.5 rounded-full border border-slate-800"></span>
                     </div>
-                    <div class="flex flex-wrap gap-2 mb-4" id="adminStatusFilters">
-                        <button onclick="filterAdminCustomersByStatus('All', this)" class="status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all shadow-md">All Customers</button>
-                        <button onclick="filterAdminCustomersByStatus('High', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-700 text-emerald-400 hover:bg-slate-600 font-bold text-xs transition-all border border-slate-600">High (>81%)</button>
-                        <button onclick="filterAdminCustomersByStatus('Moderate', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-700 text-amber-400 hover:bg-slate-600 font-bold text-xs transition-all border border-slate-600">Moderate (50-80%)</button>
-                        <button onclick="filterAdminCustomersByStatus('Low', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-700 text-red-400 hover:bg-slate-600 font-bold text-xs transition-all border border-slate-600">Low (<50%)</button>
+                    <div class="flex flex-wrap gap-2" id="adminStatusFilters">
+                        <button onclick="filterAdminCustomersByStatus('All', this)" class="status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs">All Customers</button>
+                        <button onclick="filterAdminCustomersByStatus('High', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-emerald-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">High (>81%)</button>
+                        <button onclick="filterAdminCustomersByStatus('Moderate', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-amber-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Moderate (50-80%)</button>
+                        <button onclick="filterAdminCustomersByStatus('Low', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-red-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Low (<50%)</button>
                     </div>
-                    <!-- NEW: Search Customer by Name/Email -->
                     <div class="relative">
-                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-                        <input type="text" id="adminCustomerSearch" onkeyup="renderAdminCustomerGrid()" placeholder="Search customer by name or email ID..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-12 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                        <input type="text" id="adminCustomerSearch" onkeyup="renderAdminCustomerGrid()" placeholder="Search customer by name or email ID..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
                     </div>
                 </div>
 
                 <!-- Customer Grid -->
-                <div id="adminCustomerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                    <!-- Populated dynamically by JS -->
-                </div>
+                <div id="adminCustomerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[420px] overflow-y-auto custom-scrollbar pr-2"></div>
 
-                <!-- The SINGLE Admin Report Container -->
-                <div id="adminReportContainer" class="hidden border-t-2 border-slate-700 pt-8 mt-4">
-                    <div class="report-container">
-                        <div class="box" style="display: block;">
-                            <h2>Learner Details</h2>
-                            <div id="adminUserDetailsContent"></div>
+                <!-- Detailed Learner Report Container -->
+                <div id="adminReportContainer" class="hidden border-t border-slate-800 pt-8 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="glass-card p-6 border-slate-800">
+                            <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800">Learner Overview</h3>
+                            <div id="adminUserDetailsContent" class="space-y-2 text-xs"></div>
                         </div>
-                        <div class="box" style="display: block;">
-                            <h2>cMPLi Learning Currencies</h2>
+                        <div class="glass-card p-6 border-slate-800">
+                            <h3 class="text-base font-bold text-amber-400 mb-4 pb-2 border-b border-slate-800">Currencies Ledger</h3>
                             <div id="adminPointsContent"></div>
                         </div>
                     </div>
-                    
-                    <!-- Admin Course Container -->
-                    <div id="adminCourseCompletionsContainer" class="w-full mt-6 mb-6"></div>
-                    
-                    <div class="glass p-8 rounded-2xl border border-slate-700 mt-8 mb-8">
-                        <h3 class="text-xl font-bold mb-6 text-indigo-400"><i class="fas fa-tasks mr-2"></i> Learner's Submissions & Reflections</h3>
-                        <div id="adminLearnerProjects" class="space-y-4"></div>
-                    </div>
-
-                    <div style="width: 100%; margin: 40px auto 0 auto;">
-                        <h2 class="text-2xl font-bold mb-6 border-b border-slate-700 pb-3"><i class="fas fa-calendar-check text-indigo-400 mr-2"></i> Monthly Completion %</h2>
-                        <div id="adminCompletionGrid" class="completion-grid"></div>
+                    <div class="glass-card p-6 border-slate-800">
+                        <h3 class="text-lg font-bold text-white mb-4 pb-2 border-b border-slate-800 flex items-center gap-2">
+                            <i class="fas fa-tasks text-indigo-400"></i> Learner's Submissions & Proofs
+                        </h3>
+                        <div id="adminLearnerProjects" class="space-y-3"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- NEW TAB: Admin Level-Up Hub -->
-            <section id="adminLevelUpTab" class="hidden">
-                <div class="mb-8">
-                    <h2 class="text-4xl font-extrabold">Level-Up <span class="gradient-text">Command Center</span></h2>
-                    <p class="text-slate-400 mt-2">Manage access, monitor cohort progress, and approve certifications.</p>
+            <!-- Creator Level-Up Matrix & Configurator -->
+            <section id="adminLevelUpTab" class="hidden space-y-8 animate-fade-in">
+                <div class="pb-4 border-b border-slate-800">
+                    <span class="badge-pill badge-indigo mb-2"><i class="fas fa-sliders-h"></i> Level-Up Controls</span>
+                    <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Level-Up Command Center</h2>
+                    <p class="text-slate-400 text-sm mt-1">Manage solution access, evaluate submissions in real-time, and configure check-in questions.</p>
                 </div>
 
-                <!-- Admin Level-Up Access Control (Moved from Home) -->
-                <div class="glass p-6 rounded-2xl border border-indigo-500/30 mb-8 bg-indigo-900/10">
-                    <div class="flex items-center justify-between mb-4 border-b border-indigo-500/20 pb-3">
+                <!-- Solution Access Toggles Box -->
+                <div class="glass-card p-6 border-indigo-500/30 bg-indigo-950/10 space-y-4">
+                    <div class="flex justify-between items-center pb-3 border-b border-indigo-500/20">
                         <div>
-                            <h3 class="text-xl font-bold text-indigo-400"><i class="fas fa-sliders-h mr-2"></i> Level-Up Solution Access</h3>
-                            <p class="text-xs text-slate-400 mt-1">Enable or disable the Level-Up feature for specific Mangoes.</p>
+                            <h3 class="text-base font-bold text-indigo-400"><i class="fas fa-toggle-on mr-2"></i> Level-Up Solution Access</h3>
+                            <p class="text-xs text-slate-400 mt-0.5">Enable or disable Level-Up access for specific Mango cohorts.</p>
                         </div>
                     </div>
-                    
-                    <!-- NEW: Search and Pricing Filter for Toggles -->
-                    <div class="flex flex-col md:flex-row gap-4 mb-4">
-                        <div class="w-full md:w-2/3 relative">
-                            <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-                            <input type="text" id="adminLevelUpSearch" onkeyup="renderAdminMangoToggles()" placeholder="Search Solution/Mango name..." class="w-full bg-slate-800 border border-slate-600 rounded-xl pl-12 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="md:col-span-2 relative">
+                            <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                            <input type="text" id="adminLevelUpSearch" onkeyup="renderAdminMangoToggles()" placeholder="Search Solution / Mango name..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
                         </div>
-                        <div class="w-full md:w-1/3">
-                            <select id="adminLevelUpPricing" onchange="renderAdminMangoToggles()" class="w-full bg-slate-800 text-white px-4 py-2.5 rounded-xl border border-slate-600 font-medium text-sm focus:border-indigo-500 outline-none transition-colors">
+                        <div>
+                            <select id="adminLevelUpPricing" onchange="renderAdminMangoToggles()" class="w-full bg-slate-900 text-white px-4 py-2.5 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
                                 <option value="all">All Solutions</option>
                                 <option value="paid">Paid Only</option>
                                 <option value="free">Free Only</option>
                             </select>
                         </div>
                     </div>
-
                     <div id="adminMangoToggles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto custom-scrollbar pr-2"></div>
                 </div>
 
                 <!-- Admin 2x3 Milestone Grid -->
-                <div id="adminMilestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <!-- Populated by JS -->
-                </div>
+                <div id="adminMilestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
 
-<!-- Admin Milestone Detail & Cohort View -->
-                <div id="adminMilestoneDetailContainer" class="hidden glass p-6 rounded-2xl border border-slate-700">
-                    <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
+                <!-- Admin Milestone Detail & Tabular Matrix View -->
+                <div id="adminMilestoneDetailContainer" class="hidden glass-card p-6 md:p-8 border-slate-800 space-y-6">
+                    <div class="flex justify-between items-start pb-4 border-b border-slate-800">
                         <div>
-                            <h3 id="adminActiveMilestoneTitle" class="text-2xl font-bold text-white mb-1"></h3>
-                            <div class="flex gap-4 mt-2" id="adminMsStatsBar">
-                                <!-- Populated by JS -->
-                            </div>
+                            <h3 id="adminActiveMilestoneTitle" class="text-2xl font-bold text-white font-heading mb-1"></h3>
+                            <div class="flex gap-4 mt-2" id="adminMsStatsBar"></div>
                         </div>
-                        <button onclick="closeAdminMilestoneView()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-all font-bold text-sm border border-slate-600 shadow-lg"><i class="fas fa-arrow-left mr-2"></i> Back</button>
+                        <button onclick="closeAdminMilestoneView()" class="btn-secondary text-xs"><i class="fas fa-arrow-left"></i> Back</button>
                     </div>
 
-                    <!-- NEW: Admin Module Sub Navigation (Dip, Immerse, iOS, Projects) -->
-                    <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-800 pb-2" id="adminMilestoneSubNav">
-                        <!-- Populated dynamically by JS -->
+                    <!-- Module Sub Nav -->
+                    <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="adminMilestoneSubNav"></div>
+
+                    <!-- 50:50 View Switcher -->
+                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-md">
+                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins Setup</button>
+                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Completion Grid</button>
                     </div>
 
-                    <!-- 50:50 View Toggle -->
-                    <div class="flex bg-slate-900/80 p-1 rounded-xl mb-6 border border-slate-700 max-w-md">
-                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins Setup</button>
-                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white">Completion Grid</button>
-                    </div>
-
-                    <!-- VIEW 1: CHECK-INS CONFIGURATOR -->
+                    <!-- VIEW 1: Checkins Configurator -->
                     <div id="adminCheckinsConfigView">
-                        <div class="flex justify-between items-center mb-4">
-                            <p class="text-sm text-slate-400">Configure daily requirements, LCs, time windows, and required file uploads.</p>
-                        </div>
-                        
                         <div class="flex flex-col md:flex-row gap-6">
-                            <!-- Day Selector List -->
-                            <div class="w-full md:w-1/3 glass p-2 rounded-xl border border-slate-700 max-h-[500px] overflow-y-auto custom-scrollbar" id="adminCheckinDaysList">
-                                <!-- Populated by JS -->
-                            </div>
-                            <!-- Day Editor Form -->
-                            <div class="w-full md:w-2/3 glass p-6 rounded-xl border border-slate-700" id="adminCheckinEditor">
-                                <!-- Populated by JS -->
-                            </div>
+                            <div class="w-full md:w-1/3 glass-card p-2 border-slate-800 max-h-[500px] overflow-y-auto custom-scrollbar" id="adminCheckinDaysList"></div>
+                            <div class="w-full md:w-2/3 glass-card p-6 border-slate-800" id="adminCheckinEditor"></div>
                         </div>
                     </div>
 
-                    <!-- VIEW 2: TABULAR COMPLETION GRID -->
-                    <div id="adminCompletionView" class="hidden">
-                        <!-- Cohort Filter (60:40 Ratio) & Search -->
-                        <div class="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 shadow-inner">
-                            <div class="flex flex-col md:flex-row gap-4 mb-4">
-                                <div class="w-full md:w-[60%]">
-                                    <label class="block text-xs text-slate-400 font-bold mb-2">Filter Cohort by Solution/Mango:</label>
-                                    <select id="adminCohortFilter" onchange="renderAdminCohortSubmissions()" class="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-600 font-medium text-sm focus:border-indigo-500 outline-none transition-colors">
-                                        <option value="all">-- All Level-Up Solutions --</option>
+                    <!-- VIEW 2: Real-time Completion Grid -->
+                    <div id="adminCompletionView" class="hidden space-y-4">
+                        <div class="glass-card p-4 border-slate-800 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Filter by Cohort / Solution:</label>
+                                    <select id="adminCohortFilter" onchange="renderAdminCohortSubmissions()" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
+                                        <option value="all">-- All Allowed Customers --</option>
                                     </select>
                                 </div>
-                                <div class="w-full md:w-[40%]">
-                                    <label class="block text-xs text-slate-400 font-bold mb-2">Approval Status:</label>
-                                    <select id="adminStatusFilter" onchange="renderAdminCohortSubmissions()" class="w-full bg-slate-800 text-white p-3 rounded-xl border border-slate-600 font-medium text-sm focus:border-indigo-500 outline-none transition-colors">
+                                <div>
+                                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Approval Status:</label>
+                                    <select id="adminStatusFilter" onchange="renderAdminCohortSubmissions()" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
                                         <option value="all">All Customers</option>
                                         <option value="pending">Pending Approvals</option>
                                         <option value="approved">Approved Certifications</option>
                                     </select>
                                 </div>
                             </div>
-                            <div>
-                                <div class="relative">
-                                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-                                    <input type="text" id="adminSearchUser" onkeyup="renderAdminCohortSubmissions()" placeholder="Search by learner name, email, or phone..." class="w-full bg-slate-800 border border-slate-600 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors shadow-inner">
-                                </div>
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                                <input type="text" id="adminSearchUser" onkeyup="renderAdminCohortSubmissions()" placeholder="Search by learner name, email, or phone..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
                             </div>
                         </div>
 
-                        <!-- Tabular Matrix Container -->
-                        <div class="glass rounded-xl border border-slate-700 overflow-hidden relative">
+                        <!-- Real-time Matrix Table -->
+                        <div class="glass-card rounded-2xl border-slate-800 overflow-hidden">
                             <div class="overflow-x-auto custom-scrollbar">
-                                <table class="w-full text-left border-collapse whitespace-nowrap" id="adminCompletionTable">
-                                    <!-- Populated by JS -->
-                                </table>
+                                <table class="w-full text-left border-collapse whitespace-nowrap text-xs" id="adminCompletionTable"></table>
                             </div>
                         </div>
-                    </div>
-                </div> 
-            </section>
-
-            <!-- ================= SHARED LEADERBOARD VIEW ================= -->
-            
-            <!-- Tab 4: Leaderboard -->
-            <section id="leaderboardTab" class="hidden">
-                <div class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                    <div>
-                        <h2 class="text-4xl font-extrabold">Top <span class="gradient-text">Performers</span></h2>
-                        <p class="text-slate-400 mt-2">See how you stack up against the platform's best.</p>
-                    </div>
-                    <div class="flex bg-slate-800 p-1 rounded-xl">
-                        <button onclick="setLbTab(this, 'all')" class="lb-tab active px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-sm transition-all" data-time="all">All Time</button>
-                        <button onclick="setLbTab(this, 'month')" class="lb-tab px-4 py-2 rounded-lg text-slate-400 font-bold text-sm hover:text-white transition-all" data-time="month">Month</button>
-                        <button onclick="setLbTab(this, 'week')" class="lb-tab px-4 py-2 rounded-lg text-slate-400 font-bold text-sm hover:text-white transition-all" data-time="week">Week</button>
                     </div>
                 </div>
-                
-                <div id="leaderboardList" class="space-y-3"></div>
-                <button id="viewAllLbBtn" onclick="viewAllLeaderboard()" class="w-full mt-6 py-3 glass border border-slate-700 rounded-xl text-indigo-400 font-bold hover:bg-slate-800 transition-all hidden">View All Leaderboard</button>
             </section>
 
         </main>
     </div>
 
-    <!-- Project Detail Modal -->
-    <div id="modal" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 hidden">
-        <div class="glass w-full max-w-5xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col modal-enter">
-            <div class="p-8 border-b border-slate-800 flex justify-between items-start">
-                <div><h2 id="modalTitle" class="text-3xl font-extrabold"></h2></div>
-                <button onclick="closeModal()" class="w-10 h-10 rounded-full glass flex items-center justify-center hover:bg-red-500/20 transition-all"><i class="fas fa-times"></i></button>
+    <!-- ==============================================================
+         7. INTERACTIVE MODALS
+         ============================================================== -->
+
+    <!-- Coaching Booking Modal -->
+    <div id="coachingBookingModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-lg rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
+                    <i class="fas fa-calendar-check text-emerald-400"></i> Book 1-on-1 Coaching
+                </h3>
+                <button onclick="closeCoachingBookingModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
             </div>
-            <div class="p-8 overflow-y-auto custom-scrollbar flex-1">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-2 space-y-8">
-                        <div>
-                            <h3 class="text-lg font-bold text-indigo-400 mb-3">The Objective</h3>
-                            <p id="modalDesc" class="text-slate-300 leading-relaxed"></p>
-                        </div>
+            <div class="p-6 space-y-4 text-xs">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">Session Topic</label>
+                    <input type="text" id="coachBookingTopic" placeholder="e.g., Weekly Project Review & Strategy" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1.5">Preferred Date</label>
+                        <input type="date" id="coachBookingDate" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
                     </div>
-                    <div class="space-y-6">
-                        <div class="p-5 glass rounded-2xl border-slate-700">
-                            <h4 class="font-bold mb-4">Submit Your Work</h4>
-                            <div class="mb-4">
-                                <label class="block mb-2 text-sm font-medium text-slate-300">Briefly explain your findings (Required):</label>
-                                <textarea id="projectReflection" rows="3" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm text-white focus:outline-none focus:border-indigo-500" placeholder="Type your answer here..."></textarea>
-                            </div>
-                            <div id="uploadArea" class="mb-6">
-                                <label class="block mb-2 text-sm font-medium text-slate-300" for="file_input">Upload Deliverable:</label>
-                                <input class="block w-full text-sm text-slate-400 border border-slate-600 rounded-lg cursor-pointer bg-slate-800 focus:outline-none file:mr-4 file:py-2 file:px-4 file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white" id="file_input" type="file">
-                            </div>
-                            <button id="submitBtn" onclick="submitProject()" class="w-full py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20">Submit & Claim Points</button>
-                        </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1.5">Time Slot</label>
+                        <select id="coachBookingSlot" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
+                            <option value="10:00 AM - 10:45 AM">10:00 AM - 10:45 AM</option>
+                            <option value="02:00 PM - 02:45 PM">02:00 PM - 02:45 PM</option>
+                            <option value="05:30 PM - 06:15 PM">05:30 PM - 06:15 PM</option>
+                            <option value="08:00 PM - 08:45 PM">08:00 PM - 08:45 PM</option>
+                        </select>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- LEVEL-UP SUBMISSION MODAL -->
-<div id="submissionModal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
-    <div class="glass max-w-2xl w-full rounded-2xl border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <!-- Close Button -->
-        <button onclick="closeSubmissionModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
-            <i class="fas fa-times text-xl"></i>
-        </button>
-        
-        <div class="p-8">
-            <div class="mb-6">
-                <span id="modalBadge" class="px-3 py-1 text-xs font-bold rounded-full mb-3 inline-block">Day 1</span>
-                <h3 id="modalTitle" class="text-2xl font-bold text-white">Daily Check-In</h3>
-                <p id="modalDate" class="text-slate-400 text-sm mt-1"></p>
-            </div>
-
-            <!-- Dynamic Form Container -->
-            <div id="modalFormContainer" class="space-y-4"></div>
-
-            <!-- Error/Validation Message -->
-            <div id="modalError" class="hidden mt-4 p-3 bg-red-500/20 border border-red-500/50 text-red-400 rounded-lg text-sm font-bold flex items-center gap-2">
-                <i class="fas fa-exclamation-circle"></i> <span id="modalErrorText"></span>
-            </div>
-
-            <!-- Submit Button -->
-            <button id="modalSubmitBtn" onclick="submitLevelUpReflection()" class="mt-8 w-full py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 transition-all text-white flex justify-center items-center gap-2">
-                <i class="fas fa-paper-plane"></i> Submit & Claim LCs
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- VIEW SUBMISSION MODAL (Read Only) -->
-<div id="viewSubmissionModal" class="fixed inset-0 bg-black/80 z-[80] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-    <div class="glass max-w-2xl w-full rounded-2xl border border-slate-700 shadow-2xl relative max-h-[90vh] flex flex-col">
-        <div class="p-6 border-b border-slate-800 flex justify-between items-center">
-            <div>
-                <span id="viewModalBadge" class="px-3 py-1 text-[10px] font-black tracking-widest uppercase rounded-full mb-2 inline-block bg-indigo-900/50 text-indigo-300 border border-indigo-700/50"></span>
-                <h3 id="viewModalTitle" class="text-xl font-bold text-white"></h3>
-            </div>
-            <button onclick="document.getElementById('viewSubmissionModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500/20 transition-all"><i class="fas fa-times"></i></button>
-        </div>
-        
-        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4" id="viewModalAnswersArea">
-            <!-- Dynamically populated by JS based on Dip/Immerse fields -->
-        </div>
-        
-        <div class="p-6 border-t border-slate-800 bg-slate-900/50 rounded-b-2xl">
-            <div id="viewModalFileArea" class="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30 flex items-center justify-between">
-                <div class="overflow-hidden pr-4">
-                    <p class="text-[10px] font-black tracking-widest uppercase text-indigo-400 mb-1">Attached Media</p>
-                    <p id="viewModalFileName" class="text-sm text-white truncate font-medium"></p>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">What is your primary goal for this session?</label>
+                    <textarea id="coachBookingGoal" rows="3" placeholder="Describe the challenges or milestones you want to address..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"></textarea>
                 </div>
-                <a id="viewModalDownloadBtn" href="#" download class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg flex-shrink-0"><i class="fas fa-download mr-2"></i> Download</a>
+                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-medium">
+                    <i class="fas fa-coins mr-1"></i> Completing this session earns you <strong>+50 LCs</strong>.
+                </div>
+                <button onclick="confirmCoachingBooking()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500">
+                    <i class="fas fa-check-circle"></i> Confirm Booking
+                </button>
             </div>
         </div>
     </div>
-</div>
 
-<!-- SUCCESS POP-UP MODAL -->
-<div id="successModal" class="fixed inset-0 bg-black/80 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-    <div class="glass max-w-sm w-full rounded-2xl border border-emerald-500/50 shadow-2xl p-8 text-center">
-        <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/50">
-            <i class="fas fa-check text-4xl text-emerald-400"></i>
+    <!-- Coach Feedback / Note Modal -->
+    <div id="coachFeedbackModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-md rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <h3 class="text-lg font-bold text-white font-heading">Submit Coach Feedback</h3>
+                <button onclick="closeCoachFeedbackModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 text-xs">
+                <input type="hidden" id="coachFeedbackSessionId">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">Coach Evaluation Notes</label>
+                    <textarea id="coachFeedbackNotes" rows="4" placeholder="Provide actionable feedback and praise for the student..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">Mark Status</label>
+                    <select id="coachFeedbackStatus" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
+                        <option value="completed">Completed & Approved (+50 LCs)</option>
+                        <option value="scheduled">Keep Scheduled</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <button onclick="submitCoachFeedback()" class="btn-primary w-full py-3 text-sm">
+                    <i class="fas fa-paper-plane"></i> Save Feedback & Award LCs
+                </button>
+            </div>
         </div>
-        <h3 class="text-2xl font-bold text-white mb-2">Success!</h3>
-        <p class="text-slate-300 mb-6" id="successModalText">You have successfully submitted your reflection and earned LCs.</p>
-        <button onclick="document.getElementById('successModal').classList.add('hidden')" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all border border-slate-600">
-            Awesome!
-        </button>
     </div>
-</div>
 
-<!-- TERMS & CONDITIONS MODAL -->
-<div id="termsModal" class="fixed inset-0 bg-black/80 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-sm">
-    <div class="glass max-w-2xl w-full rounded-2xl border border-indigo-500/50 shadow-2xl relative max-h-[90vh] flex flex-col">
-        <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-2xl">
-            <h3 class="text-2xl font-bold text-white flex items-center gap-2"><i class="fas fa-balance-scale text-indigo-400"></i> Rules & Regulations</h3>
-            <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="text-slate-400 hover:text-white transition-colors"><i class="fas fa-times text-xl"></i></button>
-        </div>
-        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6 text-sm text-slate-300" id="termsContent">
-            <!-- Populated by JS -->
-        </div>
-        <div class="p-6 border-t border-slate-700 bg-slate-900/50 rounded-b-2xl">
-            <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 transition-all shadow-lg">I Understand & Agree</button>
+    <!-- Rules & Regulations Modal -->
+    <div id="termsModal" class="fixed inset-0 bg-black/85 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="glass max-w-2xl w-full rounded-3xl border border-indigo-500/40 shadow-2xl relative max-h-[90vh] flex flex-col modal-enter">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/60 rounded-t-3xl">
+                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2"><i class="fas fa-balance-scale text-indigo-400"></i> Platform Rules & Regulations</h3>
+                <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"><i class="fas fa-times text-sm"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs text-slate-300 leading-relaxed" id="termsContent"></div>
+            <div class="p-6 border-t border-slate-800 bg-slate-900/60 rounded-b-3xl">
+                <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="btn-primary w-full py-3 text-sm">I Understand & Agree</button>
+            </div>
         </div>
     </div>
-</div>
 
     <!-- Scripts -->
     <script src="data.js"></script>
     <script src="timeline.js"></script>
+    <script src="courses.js"></script>
     <script src="api.js"></script>
     <script src="app.js"></script>
 </body>
