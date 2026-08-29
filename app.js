@@ -4153,41 +4153,40 @@ function parseCsvQuestions(text) {
             let correctOption = 0;
             let pts = 11;
 
-            if (row.length >= 7 && !isNaN(row[0]) && isNaN(row[1])) {
-                // Format: [Question Number, Prompt, Option A, Option B, Option C, Option D, Correct, Points?]
-                prompt = row[1];
-                optA = row[2];
-                optB = row[3];
-                optC = row[4];
-                optD = row[5];
+            // Pattern 1 (Img-2): [QNum, QuestionPrompt, Option A, Option B, Option C, Option D, Correct, Points?]
+            if (row.length >= 7) {
+                prompt = row[1] || row[0];
+                optA = row[2] || 'Option A';
+                optB = row[3] || 'Option B';
+                optC = row[4] || 'Option C';
+                optD = row[5] || 'Option D';
                 const rawCorrect = (row[6] || 'A').toUpperCase().trim();
-                correctOption = (rawCorrect === 'B' || rawCorrect === '1' || rawCorrect === '2') ? (rawCorrect === '2' ? 2 : 1) : ((rawCorrect === 'C' || rawCorrect === '3') ? 2 : ((rawCorrect === 'D' || rawCorrect === '4') ? 3 : 0));
-                if (rawCorrect === 'B') correctOption = 1;
-                else if (rawCorrect === 'C') correctOption = 2;
-                else if (rawCorrect === 'D') correctOption = 3;
-                else if (rawCorrect === 'A') correctOption = 0;
+                if (rawCorrect === 'B' || rawCorrect === '2') correctOption = 1;
+                else if (rawCorrect === 'C' || rawCorrect === '3') correctOption = 2;
+                else if (rawCorrect === 'D' || rawCorrect === '4') correctOption = 3;
+                else correctOption = 0;
                 pts = parseInt(row[7], 10) || 11;
             } else {
-                // Format: [Prompt, Option A, Option B, Option C, Option D, Correct?, Points?]
+                // Pattern 2: [QuestionPrompt, Option A, Option B, Option C, Option D, Correct?]
                 prompt = row[0];
-                optA = row[1];
-                optB = row[2];
-                optC = row[3];
-                optD = row[4];
+                optA = row[1] || 'Option A';
+                optB = row[2] || 'Option B';
+                optC = row[3] || 'Option C';
+                optD = row[4] || 'Option D';
                 const rawCorrect = (row[5] || 'A').toUpperCase().trim();
-                if (rawCorrect === 'B') correctOption = 1;
-                else if (rawCorrect === 'C') correctOption = 2;
-                else if (rawCorrect === 'D') correctOption = 3;
-                else if (rawCorrect === 'A') correctOption = 0;
+                if (rawCorrect === 'B' || rawCorrect === '2') correctOption = 1;
+                else if (rawCorrect === 'C' || rawCorrect === '3') correctOption = 2;
+                else if (rawCorrect === 'D' || rawCorrect === '4') correctOption = 3;
+                else correctOption = 0;
                 pts = parseInt(row[6], 10) || 11;
             }
 
-            if (prompt && (optA || optB)) {
+            if (prompt && prompt.length > 1) {
                 questions.push({
                     id: 'q_' + i + '_' + Date.now(),
                     title: prompt,
                     type: 'mcq',
-                    options: [optA || 'Option A', optB || 'Option B', optC || 'Option C', optD || 'Option D'],
+                    options: [optA, optB, optC, optD],
                     correctOption: correctOption,
                     pts: pts
                 });
@@ -5338,19 +5337,32 @@ function openPodSessionModal(dayNum, dateKey) {
     if (oldModal) oldModal.remove();
 
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
-    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Audio Session`;
+    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Insights`;
     const audioUrl = dayConfig.audioUrl || '';
-    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions)) ? dayConfig.questions : [];
+    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
+        ? dayConfig.questions 
+        : getPodQuestionsPool();
 
-    const isConfigured = (pool.length > 0 || !!audioUrl);
+    // 1. Pick 3 randomized questions from Creator's pool
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 3);
 
-    // If Creator has configured questions, pick 3 randomized from their pool
-    if (pool.length > 0) {
-        const shuffled = [...pool].sort(() => 0.5 - Math.random());
-        activePodSessionQuestions = shuffled.slice(0, 3);
-    } else {
-        activePodSessionQuestions = [];
-    }
+    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER!
+    activePodSessionQuestions = selected.map(q => {
+        const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
+        const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
+        const correctText = originalOptions[correctIndex];
+
+        // Shuffle options
+        const jumbled = [...originalOptions].sort(() => 0.5 - Math.random());
+        const newCorrectIndex = jumbled.indexOf(correctText);
+
+        return {
+            ...q,
+            options: jumbled,
+            correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0
+        };
+    });
 
     const modalHtml = `
         <div id="podSessionModal" class="fixed inset-0 z-[150] flex items-center justify-center">
@@ -5368,85 +5380,76 @@ function openPodSessionModal(dayNum, dateKey) {
                     </button>
                 </div>
 
-                ${!isConfigured ? `
-                    <div class="p-8 bg-slate-900/90 rounded-2xl border border-amber-600/40 text-center space-y-3 mb-6">
-                        <div class="w-14 h-14 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
-                            <i class="fas fa-hourglass-half fa-spin"></i>
-                        </div>
-                        <h4 class="text-lg font-bold text-white">Check-in Setup in Progress</h4>
-                        <p class="text-xs text-slate-400 max-w-md mx-auto">The Creator is currently preparing the podcast episode and comprehension quiz for <strong class="text-amber-400">${activePodSessionDateKey}</strong>. Please check back shortly once published.</p>
-                        <button onclick="document.getElementById('podSessionModal').remove()" class="btn-primary py-2 px-6 text-xs mt-2">
-                            Got it
-                        </button>
-                    </div>
-                ` : `
-                    <!-- In-Browser Podcast Audio Player -->
-                    <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
+                <!-- In-Browser Podcast Audio Player -->
+                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
+                    <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
                                 <i class="fas fa-headphones-alt"></i>
                             </div>
-                            <div class="overflow-hidden flex-1">
+                            <div class="overflow-hidden">
                                 <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
-                                <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
+                                <h4 class="text-sm font-bold text-white truncate max-w-xs">${audioTitle}</h4>
                                 <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
                             </div>
                         </div>
 
-                        <div class="pt-2">
-                            ${audioUrl ? `
-                                <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
-                                    <source src="${audioUrl}" type="audio/mpeg">
-                                    <source src="${audioUrl}" type="audio/mp3">
-                                    Your browser does not support the audio element.
-                                </audio>
-                            ` : `
-                                <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
-                                    <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
+                        ${audioUrl ? `
+                            <a href="${audioUrl}" download="${audioTitle}.mp3" target="_blank" class="btn-secondary py-2 px-3 text-xs flex items-center gap-1 text-indigo-300 hover:text-white shrink-0">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        ` : ''}
+                    </div>
+
+                    <div class="pt-2">
+                        ${audioUrl ? `
+                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${audioUrl}"></audio>
+                        ` : `
+                            <div class="p-3.5 bg-slate-900/80 rounded-xl border border-amber-500/30 text-center">
+                                <p class="text-xs text-amber-300 font-semibold"><i class="fas fa-info-circle mr-1.5"></i>Audio episode is streaming. Complete the comprehension quiz below.</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- 3 Randomized & Jumbled Questions Section -->
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                        <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
+                        </h4>
+                        <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
+                    </div>
+
+                    <div id="podQuizQuestionsArea" class="space-y-5">
+                        ${activePodSessionQuestions.map((q, qIdx) => `
+                            <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
+                                    <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
                                 </div>
-                            `}
-                        </div>
-                    </div>
-
-                    <!-- 3 Randomized Questions Section -->
-                    <div class="space-y-6">
-                        <div class="flex items-center justify-between pb-2 border-b border-slate-700">
-                            <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
-                            </h4>
-                            <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
-                        </div>
-
-                        <div id="podQuizQuestionsArea" class="space-y-5">
-                            ${activePodSessionQuestions.map((q, qIdx) => `
-                                <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
-                                    <div class="flex justify-between items-center">
-                                        <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
-                                        <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
-                                    </div>
-                                    <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
-                                    <div class="space-y-2 pt-1">
-                                        ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
-                                            <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
-                                                <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
-                                                <span class="text-xs text-slate-200 font-medium">${opt}</span>
-                                            </label>
-                                        `).join('')}
-                                    </div>
+                                <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
+                                <div class="space-y-2 pt-1">
+                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
+                                        <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
+                                            <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
+                                            <span class="text-xs text-slate-200 font-medium">${opt}</span>
+                                        </label>
+                                    `).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
+                            </div>
+                        `).join('')}
                     </div>
+                </div>
 
-                    <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
-                        <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
-                            Cancel
-                        </button>
-                        <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
-                            <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
-                        </button>
-                    </div>
-                `}
+                <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
+                        Cancel
+                    </button>
+                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
+                        <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -5609,24 +5612,28 @@ function saveAdminPodCheckinConfig(passedDateKey) {
         lcLate: lateInput ? (parseInt(lateInput.value, 10) || 3) : 3,
         startTime: startInput ? (startInput.value || '05:00') : '05:00',
         endTime: endInput ? (endInput.value || '17:00') : '17:00',
-        audioTitle: audioTitleInput ? (audioTitleInput.value.trim() || 'cMPLi POD Audio') : 'cMPLi POD Audio',
+        audioTitle: audioTitleInput ? (audioTitleInput.value.trim() || 'cMPLi POD Morning Insights') : 'cMPLi POD Morning Insights',
         audioUrl: audioUrlInput ? (audioUrlInput.value.trim() || '') : '',
         questions: questions
     };
 
-    // Save under primary date key
+    // Save in memory
     customMilestoneConfigs[msId]['pod'][dateKey] = dayConfig;
     
-    // Also save under normalized keys and active date key for guaranteed matching
     const isoKey = (typeof parseToIsoDate === 'function') ? parseToIsoDate(dateKey) : dateKey;
     if (isoKey) customMilestoneConfigs[msId]['pod'][isoKey] = dayConfig;
 
-    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    // Safe LocalStorage save (handles quota exceeded gracefully)
+    try {
+        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    } catch (quotaErr) {
+        console.warn("LocalStorage quota reached, relying on server sync for audio data:", quotaErr);
+    }
 
     // Button visual state
     const btn = document.getElementById('btnSaveConfig');
     if (btn) {
-        btn.innerHTML = '<i class="fas fa-check-circle mr-1.5 text-emerald-300"></i> Setup Saved & Published!';
+        btn.innerHTML = '<i class="fas fa-check-circle mr-1.5 text-emerald-300"></i> Published!';
         btn.className = 'btn-primary py-2 px-4 text-xs bg-emerald-600 border-emerald-500 shadow-lg';
         setTimeout(() => {
             if (btn) {
@@ -5636,7 +5643,7 @@ function saveAdminPodCheckinConfig(passedDateKey) {
         }, 2500);
     }
 
-    // Push to backend server
+    // Sync to backend server
     fetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5652,7 +5659,7 @@ function saveAdminPodCheckinConfig(passedDateKey) {
     }).catch(e => console.error('Server sync error for POD:', e));
 
     renderAdminCheckinsList();
-    alert(`🎉 cMPLi POD Setup Published for ${dateKey}!\n• Audio Episode: ${dayConfig.audioTitle}\n• Audio Stream: ${dayConfig.audioUrl ? 'Attached' : 'None'}\n• Questions Pool: ${dayConfig.questions.length} questions\n\nStudents on ${dateKey} will now see your exact episode and questions!`);
+    alert(`🎉 cMPLi POD Setup Published for ${dateKey}!\n• Episode: ${dayConfig.audioTitle}\n• Audio Stream: ${dayConfig.audioUrl ? 'Attached & Playable' : 'No audio attached'}\n• Questions Pool: ${dayConfig.questions.length} questions loaded\n\nCustomers will now see your exact episode and randomized/jumbled quiz!`);
 }
 
 
