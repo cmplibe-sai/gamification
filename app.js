@@ -78,12 +78,22 @@ const milestoneConfig = [
 
 const ALL_PLATFORM_MODULES = [
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
-    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Randomized Comprehension Quiz' },
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Daily Audio Insights + Comprehension Quiz' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-moon text-cyan-400', desc: 'Evening Deep-Dive Reflections (06:30 PM - 07:00 PM)' },
     { code: 'projects', name: 'cMPLi Real-world (cMPLi-ai)', icon: 'fa-robot text-purple-400', desc: 'Industry Challenges & Execution Projects' },
     { code: 'problem_solution', name: 'cMPLi Problem-Solution', icon: 'fa-brain text-emerald-400', desc: 'Insight Engine & Analytical Problem Solving' },
     { code: 'residency', name: 'cMPLi Corporate Residency', icon: 'fa-building text-blue-400', desc: 'Corporate Placement & Industry Immersion' }
 ];
+
+function getEnabledModulesForMilestone(msId) {
+    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
+        // Filter out any undefined or empty strings
+        return saved[msId].filter(m => m && m !== 'undefined');
+    }
+    const ms = milestoneConfig.find(m => m.id === msId);
+    return (ms && ms.defaultModules) ? [...ms.defaultModules] : ['dip', 'pod'];
+}
 
 // Helper to get enabled modules for a milestone (configured by Creator)
 function getEnabledModulesForMilestone(msId) {
@@ -628,28 +638,25 @@ function handleLockedClick(id, isUnlocked) {
 async function openMilestone(id) {
     await syncGlobalServerData();
     activeMilestoneId = id;
-    const ms = milestoneConfig.find(m => m.id === id);
+    const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
     
     if (!userMilestoneState[currentUser._id]) {
         userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
     }
     
-    // --- BULLETPROOF START DATE ---
+    // Anchor start date from Day 1 submission
     const userSubs = getUserSubmissionsByUserId(currentUser._id).filter(s => normalizeLevelUpType(s.type) === 'dip');
     const day1Sub = userSubs.find(s => String(s.day) === '1');
     
     if (day1Sub) {
-        // If Day 1 is submitted, lock calendar to that exact date
         const rawTime = day1Sub.dateKey || day1Sub.date || day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt;
         if (rawTime) {
             userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date(rawTime));
         }
     } else {
-        // If Day 1 is MISSING, force the calendar to start TODAY
         userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date());
     }
     localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
-    // ------------------------------
 
     if (!userMilestoneState[currentUser._id].viewedTerms) {
         userMilestoneState[currentUser._id].viewedTerms = [];
@@ -661,38 +668,38 @@ async function openMilestone(id) {
         localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
     }
     
-    document.getElementById('milestoneGridContainer').classList.add('hidden');
-    const btnBack = document.getElementById('btnBackToGrid');
-    if(btnBack) btnBack.classList.remove('hidden');
-    
-    const detailContainer = document.getElementById('milestoneDetailContainer');
-    if(detailContainer) detailContainer.classList.remove('hidden');
+    document.getElementById('milestoneGridContainer')?.classList.add('hidden');
+    document.getElementById('btnBackToGrid')?.classList.remove('hidden');
+    document.getElementById('milestoneDetailContainer')?.classList.remove('hidden');
 
     const titleEl = document.getElementById('activeMilestoneTitle');
     if(titleEl) titleEl.innerText = ms.name;
     
     const descEl = document.getElementById('activeMilestoneDesc');
-    if(descEl) descEl.innerText = "Must maintain strict compliance to avoid a complete reset.";
+    if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
     
-    const navHtml = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).map((mod, i) => {
-        const labels = { dip: 'cMPLi Dip', immerse: 'cMPLi Immerse', ios: 'cMPLi iOS', projects: 'Projects' };
-        const icons = { dip: 'fa-sun', immerse: 'fa-moon', ios: 'fa-mobile-alt', projects: 'fa-briefcase' };
-        const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-        return `<button onclick="switchMilestoneTab('${mod}', this)" class="milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all ${activeClass}"><i class="fas ${icons[mod]} mr-2"></i>${labels[mod]}</button>`;
-    }).join('');
-    
+    // Get ONLY enabled modules configured by Creator
+    const activeMods = getEnabledModulesForMilestone(id);
+
     const subNavEl = document.getElementById('milestoneSubNav');
-    if(subNavEl) subNavEl.innerHTML = navHtml;
+    if(subNavEl) {
+        subNavEl.innerHTML = activeMods.map((modCode, i) => {
+            const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
+            const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+            return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
+                <i class="fas ${modObj.icon}"></i> ${modObj.name}
+            </button>`;
+        }).join('');
+    }
     
-    // --- REVEAL AND RENAME THE CREDENTIAL BUTTON ---
     const btnCert = document.getElementById('btnApplyCert');
     if (btnCert) {
         btnCert.classList.remove('hidden');
         btnCert.innerHTML = '<i class="fas fa-award mr-1"></i> Claim My Credential';
     }
     
-    if ((ms.modules || getEnabledModulesForMilestone(ms.id) || []).length > 0 && typeof switchMilestoneTab === 'function') {
-        switchMilestoneTab((ms.modules || getEnabledModulesForMilestone(ms.id) || [])[0]);
+    if (activeMods.length > 0 && typeof switchMilestoneTab === 'function') {
+        switchMilestoneTab(activeMods[0]);
     }
 }
 
@@ -3011,30 +3018,30 @@ function showRewardPopup(title, reward) {
 // COMPLEX TIMELINE & RULES GENERATION
 // ---------------------------------------------------------
 function switchMilestoneTab(moduleName, btnElement = null) {
+    if (!moduleName || moduleName === 'undefined') moduleName = 'dip';
+
     if (btnElement) {
         document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
-            btn.className = 'milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all text-slate-400 hover:bg-slate-800 hover:text-white';
+            btn.className = 'milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all text-slate-400 hover:bg-slate-800 hover:text-white flex items-center gap-2';
         });
-        btnElement.className = 'milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500';
+        btnElement.className = 'milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500 flex items-center gap-2';
     }
 
-    const ms = milestoneConfig.find(m => m.id === activeMilestoneId);
+    const ms = milestoneConfig.find(m => m.id === activeMilestoneId) || milestoneConfig[0];
     const container = document.getElementById('milestoneTimelinesContent');
-    const multiplier = ms.id === 3 ? 2 : 1; 
+    if (!container) return;
+
     const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
 
-    // --- BULLETPROOF START DATE & SANITY CHECK ---
+    // --- BULLETPROOF START DATE ---
     let startDate = new Date();
     const allUserSubs = getUserSubmissionsByUserId(currentUser);
-    
-    // Find the absolute first submission for MS1 Day 1 to perfectly anchor the calendar
     const day1Sub = allUserSubs.find(s => normalizeLevelUpType(s.type) === 'dip' && String(s.day) === '1' && String(s.milestoneId || 1) === '1');
 
     if (day1Sub) {
         const rawTime = day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt || day1Sub.date || day1Sub.dateKey;
         if (rawTime) {
             const parsedDate = new Date(rawTime);
-            // Ensure the date is valid and didn't glitch to 2001
             if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() >= 2023) {
                 startDate = parsedDate;
             }
@@ -3042,50 +3049,16 @@ function switchMilestoneTab(moduleName, btnElement = null) {
     }
     startDate.setHours(0,0,0,0);
 
-    // --- DYNAMIC MILESTONE OFFSETS ---
-    // Calculate the absolute start date of THIS specific milestone
     let milestoneStartDate = new Date(startDate);
-    const msOffsets = { 1: 0, 2: 21, 3: 111, 4: 201, 5: 291, 6: 381 };
+    const msOffsets = { 1: 0, 2: 21, 3: 141, 4: 261 };
     milestoneStartDate.setDate(milestoneStartDate.getDate() + (msOffsets[activeMilestoneId] || 0));
     milestoneStartDate.setHours(0,0,0,0);
 
     const today = new Date(); today.setHours(0,0,0,0);
-    let daysSinceMsStart = Math.floor((today - milestoneStartDate) / (1000 * 60 * 60 * 24)) + 1;
     
     let html = ''; 
 
-    // 1. ========================================================
-    // THE GATEKEEPER: UNIVERSAL MODULE LOCKING (MS2 through MS6)
-    // ========================================================
-    if (activeMilestoneId >= 2) {
-        if (moduleName === 'ios' && daysSinceMsStart < 31 && !testModeOverrides['ios']) {
-            container.innerHTML = `
-                <div class="flex flex-col items-center justify-center p-12 text-center">
-                    <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
-                        <i class="fas fa-lock text-3xl text-slate-500"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold text-white mb-2">cMPLi iOS is Locked</h3>
-                    <p class="text-slate-400 max-w-sm mb-4">This module unlocks in <span class="text-indigo-400 font-bold">Month 2</span> of this milestone (Day 31).</p>
-                    ${testMode ? `<button onclick="forceUnlockModule('ios')" class="px-4 py-2 bg-amber-600/20 text-amber-400 border border-amber-500/50 rounded-lg text-xs font-bold transition-all hover:bg-amber-600/40"><i class="fas fa-flask mr-1"></i> Test Override: Unlock</button>` : ''}
-                </div>`;
-            return; 
-        } else if (moduleName === 'projects' && daysSinceMsStart < 61 && !testModeOverrides['projects']) {
-            container.innerHTML = `
-                <div class="flex flex-col items-center justify-center p-12 text-center">
-                    <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
-                        <i class="fas fa-lock text-3xl text-slate-500"></i>
-                    </div>
-                    <h3 class="text-2xl font-bold text-white mb-2">Projects are Locked</h3>
-                    <p class="text-slate-400 max-w-sm mb-4">This module unlocks in <span class="text-indigo-400 font-bold">Month 3</span> of this milestone (Day 61).</p>
-                    ${testMode ? `<button onclick="forceUnlockModule('projects')" class="px-4 py-2 bg-amber-600/20 text-amber-400 border border-amber-500/50 rounded-lg text-xs font-bold transition-all hover:bg-amber-600/40"><i class="fas fa-flask mr-1"></i> Test Override: Unlock</button>` : ''}
-                </div>`;
-            return; 
-        }
-    }
-
-    // 2. ========================================================
     // PROJECTS MODULE RENDERING
-    // ========================================================
     if (moduleName === 'projects') {
         customerProjectFilter = 'All';
         const dbProjects = getDynamicProjectsForActiveMilestone();
@@ -3108,105 +3081,106 @@ function switchMilestoneTab(moduleName, btnElement = null) {
         return; 
     }
 
-    // --- DYNAMIC RULES BANNER ---
+    // DYNAMIC RULES BANNER
     const banners = {
-        dip: { title: "cMPLi Dip Rules", desc: "Mon-Sat (6 days/week). Complete between 05:00 AM - 05:00 PM for full LCs.", icon: "fa-sun", color: "text-amber-400" },
-        immerse: { title: "cMPLi Immerse Rules", desc: "Mon-Wed-Fri (3 days/week). Complete between 06:30 PM - 07:00 PM.", icon: "fa-moon", color: "text-indigo-400" },
-        ios: { title: "cMPLi iOS Rules", desc: "1 Check-in per week. Submit any day Mon-Sat between 01:00 PM - 06:00 PM.", icon: "fa-mobile-alt", color: "text-cyan-400" },
-        projects: { title: "Real-World Applications", desc: "Choose a project based on your sector/specialization. Collect data, analyze, and submit your findings.", icon: "fa-briefcase", color: "text-emerald-400" }
+        dip: { title: "cMPLi Dip Rules", desc: "Mon-Sat (6 days/week). Complete daily morning reflections between 05:00 AM - 05:00 PM for full LCs.", icon: "fa-sun text-amber-400" },
+        pod: { title: "cMPLi POD Audio & Quiz Rules", desc: "Mon-Sat (6 days/week). Listen to the 4-5 minute audio episode with earphones, then complete the 3-question quiz.", icon: "fa-podcast text-indigo-400" },
+        immerse: { title: "cMPLi Immerse Rules", desc: "Mon-Wed-Fri (3 days/week). Complete evening deep-dives between 06:30 PM - 07:00 PM.", icon: "fa-moon text-cyan-400" },
+        problem_solution: { title: "cMPLi Problem-Solution Briefing", desc: "Analyze real-world business case studies and submit your executive recommendations.", icon: "fa-brain text-emerald-400" },
+        residency: { title: "cMPLi Corporate Residency", desc: "Corporate capstone deliverables and industry immersion milestones.", icon: "fa-building text-blue-400" }
     };
     const banner = banners[moduleName] || banners['dip'];
     
     html += `
-    <div class="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 flex items-start gap-4 shadow-inner">
-        <div class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-700 shrink-0">
-            <i class="fas ${banner.icon} ${banner.color} text-lg"></i>
+    <div class="glass-card p-6 border-slate-800 rounded-2xl mb-8 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl shrink-0">
+            <i class="fas ${banner.icon}"></i>
         </div>
         <div>
-            <h4 class="font-bold text-white mb-1">${banner.title}</h4>
-            <p class="text-xs text-slate-400">${banner.desc}</p>
+            <h3 class="text-lg font-bold text-white font-heading">${banner.title}</h3>
+            <p class="text-xs text-slate-400 mt-0.5">${banner.desc}</p>
         </div>
-    </div>`;
+    </div>
+    <div class="space-y-4 relative pl-8 border-l-2 border-slate-800 ml-4">
+    `;
 
-    // --- TIMELINE GENERATION ---
-    html += `<div class="space-y-4 border-l-2 border-slate-700 pl-4 ml-2">`;
-    
-    // STRICT FILTER: Match exactly by module AND current Milestone ID (Fallback to MS1 for old test data)
-    const typeSubs = getUserSubmissionsByUserId(currentUser).filter(s => {
-        const subMsId = s.milestoneId || 1; 
-        return normalizeLevelUpType(s.type) === moduleName && String(subMsId) === String(activeMilestoneId);
-    });
-    
-    let totalSessions = 0;
-    if (moduleName === 'dip') totalSessions = (activeMilestoneId === 1) ? 21 : 78;
-    if (moduleName === 'immerse') totalSessions = 39;
-    if (moduleName === 'ios') totalSessions = 12; 
-    
-    let calendarDate = new Date(milestoneStartDate);
+    const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId));
+
+    let totalSessions = (activeMilestoneId === 1) ? 21 : 60;
     let sessionCount = 1;
-    
+    let calendarDate = new Date(milestoneStartDate);
+
     while (sessionCount <= totalSessions) {
         const dayOfWeek = calendarDate.getDay(); 
         let shouldRender = false;
-        let nodeLabel = `${sessionCount}`;
-        let maxPts = 33;
         let configuredWindow = "05:00 AM - 05:00 PM";
+        let maxPts = 33;
 
-        if (moduleName === 'dip' && dayOfWeek !== 0) { 
-            shouldRender = true;
-            maxPts = (activeMilestoneId === 1 ? 33 : 66) * multiplier;
-        } else if (moduleName === 'immerse' && (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5)) { 
-            shouldRender = true;
-            maxPts = 133 * multiplier;
-            configuredWindow = "06:30 PM - 07:00 PM";
-        } else if (moduleName === 'ios' && dayOfWeek === 6) { 
-            const elapsedForIos = Math.floor((calendarDate - milestoneStartDate) / (1000 * 60 * 60 * 24));
-            if (elapsedForIos >= 30) {
+        if (moduleName === 'dip' || moduleName === 'pod') {
+            if (dayOfWeek !== 0) shouldRender = true; // Mon-Sat
+        } else if (moduleName === 'immerse') {
+            if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) { // Mon, Wed, Fri
                 shouldRender = true;
-                nodeLabel = `Week ${sessionCount}`;
-                maxPts = 333 * multiplier;
-                configuredWindow = "01:00 PM - 06:00 PM (Anyday Mon-Sat)";
+                maxPts = 133;
+                configuredWindow = "06:30 PM - 07:00 PM";
             }
+        } else {
+            if (dayOfWeek !== 0) shouldRender = true;
         }
 
         if (shouldRender) {
             calendarDate.setHours(0,0,0,0);
             const isPast = calendarDate < today;
             const isToday = calendarDate.getTime() === today.getTime();
-            
             const dateStr = calendarDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            const isoDate = getLocalDateKey(calendarDate);
             
-            const existingSub = typeSubs.find(s => String(s.day) === String(sessionCount) || String(s.day) === nodeLabel);
-            
-            let finalPts = existingSub ? (existingSub.lcReward || existingSub.earnedPoints || maxPts) : maxPts;
-            let windowStr = existingSub ? `${(existingSub.timeWindow || configuredWindow).replace(' (Locked)', '')} (Locked)` : configuredWindow;
-            
+            const existingSub = typeSubs.find(s => String(s.day) === String(sessionCount) || s.date === isoDate);
+            let finalPts = existingSub ? (existingSub.lcReward || maxPts) : maxPts;
+            let isEvaluating = existingSub && existingSub.status === 'evaluating';
+
             let buttonHtml = '';
             if (existingSub) {
-                buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View</button>`;
+                if (isEvaluating) {
+                    buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
+                } else {
+                    buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
+                }
             } else if (isToday) {
-                buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                if (moduleName === 'pod') {
+                    buttonHtml = `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
+                } else {
+                    buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                }
             } else if (isPast) {
-                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                if (moduleName === 'pod') {
+                    buttonHtml = testMode ? `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                } else {
+                    buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                }
             } else {
-                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
+                if (moduleName === 'pod') {
+                    buttonHtml = testMode ? `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
+                } else {
+                    buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
+                }
             }
 
-            const iconClass = existingSub ? 'fa-check-circle text-emerald-400' : (isToday ? 'fa-play-circle text-emerald-500' : (isPast ? 'fa-times-circle text-red-400' : 'fa-flask text-indigo-400'));
-            const borderClass = existingSub ? 'border-emerald-500/30' : (isToday ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : (isPast ? 'border-amber-500/30' : 'border-slate-700'));
+            const iconClass = existingSub ? (isEvaluating ? 'fa-hourglass-half text-amber-400' : 'fa-check-circle text-emerald-400') : (isToday ? 'fa-play-circle text-emerald-500' : (isPast ? 'fa-times-circle text-red-400' : 'fa-flask text-indigo-400'));
+            const borderClass = existingSub ? (isEvaluating ? 'border-amber-500/50 bg-amber-950/20' : 'border-emerald-500/30') : (isToday ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : (isPast ? 'border-amber-500/30' : 'border-slate-700'));
 
             html += `
             <div class="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl border ${borderClass} relative mb-3 hover:bg-slate-800 transition-colors">
                 <div class="absolute -left-7 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center z-10">
-                    <div class="w-2 h-2 rounded-full ${existingSub ? 'bg-emerald-400' : (isToday ? 'bg-emerald-500' : 'bg-slate-600')}"></div>
+                    <div class="w-2 h-2 rounded-full ${existingSub ? (isEvaluating ? 'bg-amber-400' : 'bg-emerald-400') : (isToday ? 'bg-emerald-500' : 'bg-slate-600')}"></div>
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-600 shrink-0 shadow-inner">
                         <i class="fas ${iconClass}"></i>
                     </div>
                     <div>
-                        <h4 class="text-white font-bold text-sm">${moduleName === 'ios' ? 'Week' : 'Day'} ${sessionCount} <span class="text-slate-500 text-xs font-normal ml-2">• ${dateStr}</span></h4>
-                        <p class="text-[10px] text-amber-400 font-bold mt-1">Max: ${finalPts} LCs | Window: ${windowStr}</p>
+                        <h4 class="text-white font-bold text-sm">Day ${sessionCount} <span class="text-slate-500 text-xs font-normal ml-2">• ${dateStr}</span></h4>
+                        <p class="text-[10px] text-amber-400 font-bold mt-1">Max: ${finalPts} LCs | Window: ${configuredWindow}</p>
                     </div>
                 </div>
                 <div>${buttonHtml}</div>
@@ -3216,8 +3190,7 @@ function switchMilestoneTab(moduleName, btnElement = null) {
         }
         
         calendarDate.setDate(calendarDate.getDate() + 1);
-        
-        if (Math.floor((calendarDate - startDate) / (1000 * 60 * 60 * 24)) > 1000) break; 
+        if (Math.floor((calendarDate - startDate) / (1000 * 60 * 60 * 24)) > 500) break; 
     }
 
     html += `</div>`;
@@ -4319,6 +4292,21 @@ function loadAdminCheckinEditor(dateKey) {
                             </label>
                         </div>
                     </div>
+                </div>
+                <div id="podAudioStatus" class="pt-1">
+                    ${savedConfig.audioUrl ? '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Audio Stream Configured & Ready for Playback</span>' : '<span class="text-xs text-slate-500"><i class="fas fa-info-circle mr-1"></i> No custom audio uploaded yet (default stream will play).</span>'}
+                </div>
+                <div id="podAudioPreviewPlayer">
+                    ${savedConfig.audioUrl ? `
+                        <div class="mt-2 p-3 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                                <i class="fas fa-play text-xs"></i>
+                            </div>
+                            <div class="flex-1">
+                                <audio controls class="w-full h-8 rounded-lg" src="${savedConfig.audioUrl}"></audio>
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
             </div>
 
@@ -5443,4 +5431,102 @@ async function submitPodSessionQuiz() {
             updateDashboardUI();
         }
     }, 18000);
+}
+
+
+// ==============================================================
+// POD AUDIO UPLOADER & CONFIG SAVER
+// ==============================================================
+function uploadPodAudioFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('podAudioStatus');
+    if (statusEl) statusEl.innerHTML = '<span class="text-xs text-amber-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Uploading audio...</span>';
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        const urlInput = document.getElementById('podAudioUrl');
+        if (urlInput) urlInput.value = dataUrl;
+        
+        const previewContainer = document.getElementById('podAudioPreviewPlayer');
+        if (previewContainer) {
+            previewContainer.innerHTML = `
+                <div class="mt-3 p-3.5 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                        <i class="fas fa-play text-xs"></i>
+                    </div>
+                    <div class="flex-1">
+                        <audio controls class="w-full h-8 rounded-lg" src="${dataUrl}"></audio>
+                    </div>
+                </div>`;
+        }
+
+        if (statusEl) statusEl.innerHTML = '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Audio Uploaded & Ready for Playback</span>';
+        alert('🎉 Podcast Audio uploaded successfully! You can listen to the preview above.');
+    };
+    reader.readAsDataURL(file);
+}
+
+function saveAdminPodCheckinConfig(dateKey) {
+    const msId = activeAdminMilestoneId || 1;
+    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+    if (!customMilestoneConfigs[msId]['pod']) customMilestoneConfigs[msId]['pod'] = {};
+
+    const questions = [];
+    const questionItems = document.querySelectorAll('#adminPodQuestionsContainer .pod-q-item');
+    
+    questionItems.forEach((item, idx) => {
+        const promptInput = item.querySelector('.pod-q-title');
+        const prompt = promptInput ? promptInput.value.trim() : '';
+        const optInputs = item.querySelectorAll('.pod-q-opt');
+        const options = Array.from(optInputs).map(inp => inp.value.trim() || 'Option');
+        const checkedRadio = item.querySelector(`input[name="correct_pod_q_${idx}"]:checked`);
+        const correctOption = checkedRadio ? parseInt(checkedRadio.value, 10) : 0;
+        const pts = parseInt(item.dataset.pts, 10) || 11;
+
+        if (prompt) {
+            questions.push({
+                id: 'q_' + idx + '_' + Date.now(),
+                title: prompt,
+                type: 'mcq',
+                options: options.length === 4 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
+                correctOption: correctOption,
+                pts: pts
+            });
+        }
+    });
+
+    const dayConfig = {
+        date: dateKey,
+        lcOnTime: parseInt(document.getElementById('configLcOnTime')?.value, 10) || 33,
+        lcLate: parseInt(document.getElementById('configLcLate')?.value, 10) || 3,
+        startTime: document.getElementById('configStartTime')?.value || '05:00',
+        endTime: document.getElementById('configEndTime')?.value || '17:00',
+        audioTitle: document.getElementById('podAudioTitle')?.value.trim() || 'cMPLi POD Audio',
+        audioUrl: document.getElementById('podAudioUrl')?.value.trim() || '',
+        questions: questions.length > 0 ? questions : getPodQuestionsPool()
+    };
+
+    customMilestoneConfigs[msId]['pod'][dateKey] = dayConfig;
+    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+
+    // Sync to backend Web Service
+    fetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: msId,
+            moduleName: 'pod',
+            dateKey: dateKey,
+            config: dayConfig,
+            allConfigs: customMilestoneConfigs
+        })
+    }).then(r => r.json()).then(data => {
+        console.log('✅ POD Day Setup saved & synced to server:', data);
+    }).catch(e => console.error('Server sync error for POD:', e));
+
+    renderAdminCheckinsList();
+    alert(`🎉 Saved cMPLi POD setup for ${dateKey} with ${dayConfig.questions.length} questions in pool!`);
 }
