@@ -4060,39 +4060,320 @@ function renderAdminCohortSubmissions() {
 
 let customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 
+
+// ==============================================================
+// cMPLi POD: CSV TEMPLATE DOWNLOAD & UPLOAD ENGINE
+// ==============================================================
+function downloadPodCsvTemplate() {
+    const headers = ["Question Number", "Question Prompt", "Option A", "Option B", "Option C", "Option D", "Correct Option (A/B/C/D)", "Points"];
+    const rows = [
+        ["1", "What is the #1 driver of consistent habit formation discussed in today's podcast?", "Intrinsic Motivation & Identity Shift", "External Pressure only", "Random Motivation Spikes", "Waiting for Perfect Timing", "A", "11"],
+        ["2", "What core strategy was recommended for handling unexpected daily schedule disruptions?", "If-Then Implementation Intentions", "Giving up until next week", "Ignoring the problem", "Immediate Escalation", "A", "11"],
+        ["3", "Which mindset distinguishes a Challenge Embracer from a passive learner?", "Viewing friction as growth feedback", "Avoiding all difficult tasks", "Seeking quick shortcuts", "Focusing solely on outcomes", "A", "11"],
+        ["4", "How long is the ideal daily morning focus window recommended in the session?", "60-90 minutes of uninterrupted work", "10 minutes while multitasking", "5 hours without breaks", "20 minutes with frequent notifications", "A", "11"],
+        ["5", "What is the role of continuous micro-reflections in mastery?", "Consolidates neural pathways and self-awareness", "Wastes valuable time", "Only useful for exams", "Creates unnecessary friction", "A", "11"]
+    ];
+
+    let csvContent = "data:text/csv;charset=utf-8," 
+        + headers.map(h => `"${h}"`).join(",") + "\n"
+        + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "cmpli_pod_quiz_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function parseCsvQuestions(text) {
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length < 2) return [];
+
+    const questions = [];
+    // Skip header line 0
+    for (let i = 1; i < lines.length; i++) {
+        // Parse CSV row respecting quoted values
+        const row = [];
+        let inQuotes = false;
+        let currentValue = '';
+        const line = lines[i];
+
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"' && line[j + 1] === '"') {
+                currentValue += '"';
+                j++; // skip escaped quote
+            } else if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                row.push(currentValue.trim());
+                currentValue = '';
+            } else {
+                currentValue += char;
+            }
+        }
+        row.push(currentValue.trim());
+
+        if (row.length >= 7) {
+            const prompt = row[1] || row[0];
+            const optA = row[2] || 'Option A';
+            const optB = row[3] || 'Option B';
+            const optC = row[4] || 'Option C';
+            const optD = row[5] || 'Option D';
+            const correctLetter = (row[6] || 'A').toUpperCase().trim();
+            const correctOption = correctLetter === 'B' ? 1 : (correctLetter === 'C' ? 2 : (correctLetter === 'D' ? 3 : 0));
+            const pts = parseInt(row[7], 10) || 11;
+
+            if (prompt) {
+                questions.push({
+                    id: 'q_' + i + '_' + Date.now(),
+                    title: prompt,
+                    type: 'mcq',
+                    options: [optA, optB, optC, optD],
+                    correctOption: correctOption,
+                    pts: pts
+                });
+            }
+        }
+    }
+    return questions;
+}
+
+function handlePodCsvUpload(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const parsed = parseCsvQuestions(text);
+        if (parsed.length === 0) {
+            alert("No valid questions found in CSV. Please ensure you use the template format.");
+            return;
+        }
+
+        // Add to active POD questions container
+        renderAdminPodQuestionsInEditor(parsed);
+        alert(`🎉 Successfully loaded ${parsed.length} questions from CSV! 3 will be randomly served to each student.`);
+    };
+    reader.readAsText(file);
+}
+
+function renderAdminPodQuestionsInEditor(questionsList) {
+    const container = document.getElementById('adminPodQuestionsContainer');
+    if (!container) return;
+
+    container.innerHTML = questionsList.map((q, idx) => {
+        const correctOpt = q.correctOption !== undefined ? q.correctOption : 0;
+        return `
+        <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 group space-y-3 animation-fade-in pod-q-item" data-pts="${q.pts || 11}">
+            <div class="flex justify-between items-start">
+                <span class="badge-pill badge-indigo text-[10px]">Question ${idx + 1}</span>
+                <button type="button" onclick="this.closest('.pod-q-item').remove(); updatePodPoolCountBadge();" class="text-red-400 hover:text-red-300 text-xs font-bold transition-colors">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-400 mb-1">Question Prompt</label>
+                <input type="text" value="${q.title || ''}" placeholder="Enter question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                ${[0, 1, 2, 3].map(i => {
+                    const letter = String.fromCharCode(65 + i);
+                    const optText = (q.options && q.options[i]) || `Option ${letter}`;
+                    const isChecked = correctOpt === i;
+                    return `
+                    <div class="flex items-center gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                        <input type="radio" name="correct_pod_q_${idx}" value="${i}" ${isChecked ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
+                        <input type="text" value="${optText}" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }).join('');
+
+    updatePodPoolCountBadge();
+}
+
+function updatePodPoolCountBadge() {
+    const items = document.querySelectorAll('.pod-q-item');
+    const badge = document.getElementById('podPoolCountBadge');
+    if (badge) {
+        badge.innerText = `${items.length} Questions in Pool`;
+    }
+}
+
+function addSinglePodQuestionToEditor() {
+    const container = document.getElementById('adminPodQuestionsContainer');
+    if (!container) return;
+
+    const idx = document.querySelectorAll('.pod-q-item').length;
+    const newHtml = `
+    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 group space-y-3 animation-fade-in pod-q-item" data-pts="11">
+        <div class="flex justify-between items-start">
+            <span class="badge-pill badge-indigo text-[10px]">Question ${idx + 1}</span>
+            <button type="button" onclick="this.closest('.pod-q-item').remove(); updatePodPoolCountBadge();" class="text-red-400 hover:text-red-300 text-xs font-bold transition-colors">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+        <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Question Prompt</label>
+            <input type="text" placeholder="Enter podcast question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+            ${[0, 1, 2, 3].map(i => {
+                const letter = String.fromCharCode(65 + i);
+                return `
+                <div class="flex items-center gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                    <input type="radio" name="correct_pod_q_${idx}" value="${i}" ${i === 0 ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
+                    <input type="text" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
+
+    container.insertAdjacentHTML('beforeend', newHtml);
+    updatePodPoolCountBadge();
+}
+
 function loadAdminCheckinEditor(dateKey) {
     activeAdminDateKey = dateKey;
     renderAdminCheckinsList(); // Refresh list to show active state
     
     const ms = milestoneConfig.find(m => m.id === activeAdminMilestoneId) || { name: "Milestone" };
-    
-    // FIX: Timezone-Safe Date Comparison using our YYYY-MM-DD string keys
     const todayKey = getLocalDateKey(new Date());
-    const isPastDate = dateKey < todayKey; // Simple, bulletproof alphabetical string comparison
+    const isPastDate = dateKey < todayKey;
     const isEditable = !isPastDate;
     const disableAttr = isEditable ? '' : 'disabled';
     
     const moduleConfig = (customMilestoneConfigs[activeAdminMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule])
         ? customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey]
         : null;
-    const legacyConfig = (customMilestoneConfigs[activeAdminMilestoneId] || {})[dateKey];
     
-    const savedConfig = moduleConfig || legacyConfig || {
+    const savedConfig = moduleConfig || {
         lcOnTime: activeAdminMilestoneId === 1 ? 33 : 133,
         lcLate: 3,
         startTime: '05:00',
-        endTime: activeAdminMilestoneId === 1 ? '17:00' : '19:00',
-        questions: [
+        endTime: '17:00',
+        audioUrl: '',
+        audioTitle: 'cMPLi POD Morning Insights',
+        questions: (activeAdminModule === 'pod') ? [
+            { title: "What is the #1 driver of long-term habit consistency?", type: "mcq", options: ["Intrinsic Identity Shift & Daily Micro-actions", "External Pressure only", "Random Motivation Spikes", "Waiting for perfect conditions"], correctOption: 0, pts: 11 },
+            { title: "What primary method was recommended for handling unexpected schedule disruptions?", type: "mcq", options: ["If-Then Implementation Intentions", "Abandoning the week goal", "Skipping without reflection", "Immediate panic"], correctOption: 0, pts: 11 },
+            { title: "Which mindset separates a Challenge Embracer from a passive student?", type: "mcq", options: ["Viewing friction & feedback as fuel for growth", "Avoiding all challenging tasks", "Seeking quick shortcuts", "Focusing solely on certificates"], correctOption: 0, pts: 11 }
+        ] : [
             { title: 'The Sector is about', type: 'text' },
             { title: 'Upload Proof of Work', type: 'audio' }
         ]
     };
 
-    // Format for display only
     const displayDateObj = new Date(dateKey);
-    const displayDate = displayDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    
+    const displayDate = !isNaN(displayDateObj.getTime()) ? displayDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : dateKey;
     const editor = document.getElementById('adminCheckinEditor');
+    if (!editor) return;
+
+    // --- CASE A: cMPLi POD MODULE (AUDIO UPLOAD + CSV QUIZ POOL BUILDER) ---
+    if (activeAdminModule === 'pod') {
+        const poolQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions)) ? savedConfig.questions : [];
+        editor.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="badge-pill badge-indigo text-[10px]"><i class="fas fa-podcast"></i> cMPLi POD Setup</span>
+                        <span id="podPoolCountBadge" class="badge-pill bg-slate-800 text-slate-300 text-[10px]">${poolQuestions.length} Questions in Pool</span>
+                    </div>
+                    <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                    <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
+                    <p class="text-xs mt-1.5 text-slate-400">Upload podcast audio & question pool. 3 randomized questions will be served to each student.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="btn-secondary py-2 px-3 text-xs"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
+                    <button id="btnSaveConfig" onclick="saveAdminPodCheckinConfig('${dateKey}')" class="btn-primary py-2 px-4 text-xs">
+                        <i class="fas fa-save mr-1.5"></i> Save POD Day Setup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Audio Upload & URL Section -->
+            <div class="glass-card p-5 border-slate-800 mb-6 space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-volume-up text-indigo-400"></i> Daily Podcast Audio Stream
+                    </h5>
+                    <span class="text-[10px] text-slate-400 font-semibold">Listened in-browser with earphones</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Audio Episode Title</label>
+                        <input type="text" id="podAudioTitle" value="${savedConfig.audioTitle || 'cMPLi POD Daily Audio'}" placeholder="e.g. Episode 3: Identity-Based Habits" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr} />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Podcast Audio URL or File</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="podAudioUrl" value="${savedConfig.audioUrl || ''}" placeholder="https://... or select file ->" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr} />
+                            <label class="btn-secondary py-2 px-3 text-xs cursor-pointer flex items-center shrink-0">
+                                <i class="fas fa-upload mr-1"></i> Upload MP3
+                                <input type="file" accept="audio/*" class="hidden" onchange="uploadPodAudioFile(this)" ${disableAttr} />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rewards & Time Window Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
+                    <input type="number" id="configLcOnTime" value="${savedConfig.lcOnTime || 33}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (Late)</label>
+                    <input type="number" id="configLcLate" value="${savedConfig.lcLate || 3}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Start Time</label>
+                    <input type="time" id="configStartTime" value="${savedConfig.startTime || '05:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">End Time</label>
+                    <input type="time" id="configEndTime" value="${savedConfig.endTime || '17:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+            </div>
+
+            <!-- CSV Bulk Upload & Questions Pool Builder -->
+            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700 pb-3">
+                <div>
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-list-ol text-emerald-400"></i> POD Quiz Questions Pool
+                    </h5>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Upload a CSV containing 10-50 questions or add them manually.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="downloadPodCsvTemplate()" class="btn-secondary py-1.5 px-3 text-xs text-indigo-300 hover:text-white">
+                        <i class="fas fa-file-csv mr-1.5 text-emerald-400"></i> Download CSV Template
+                    </button>
+                    <label class="btn-primary py-1.5 px-3 text-xs cursor-pointer flex items-center">
+                        <i class="fas fa-file-upload mr-1.5"></i> Upload CSV
+                        <input type="file" accept=".csv" class="hidden" onchange="handlePodCsvUpload(this)" ${disableAttr} />
+                    </label>
+                    <button type="button" onclick="addSinglePodQuestionToEditor()" class="btn-secondary py-1.5 px-3 text-xs">
+                        <i class="fas fa-plus mr-1"></i> Add Question
+                    </button>
+                </div>
+            </div>
+
+            <div id="adminPodQuestionsContainer" class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-1"></div>
+        `;
+
+        setTimeout(() => {
+            renderAdminPodQuestionsInEditor(poolQuestions);
+        }, 50);
+        return;
+    }
+
+    // --- CASE B: DIP & IMMERSE (STANDARD CHECK-IN EDITOR) ---
     editor.innerHTML = `
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
             <div>
@@ -4958,3 +5239,208 @@ function startLiveSync() {
     }, 4000); // 4-second live bi-directional sync
 }
 startLiveSync();
+
+
+// ==============================================================
+// LEARNER cMPLi POD AUDIO PLAYER + RANDOMIZED 3-QUESTION QUIZ
+// ==============================================================
+let activePodSessionQuestions = [];
+let activePodSessionDay = 1;
+let activePodSessionDateKey = null;
+
+function openPodSessionModal(dayNum, dateKey) {
+    activePodSessionDay = dayNum;
+    activePodSessionDateKey = dateKey || getLocalDateKey(new Date());
+
+    const oldModal = document.getElementById('podSessionModal');
+    if (oldModal) oldModal.remove();
+
+    const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
+    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Insights`;
+    const audioUrl = dayConfig.audioUrl || '';
+    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
+        ? dayConfig.questions 
+        : getPodQuestionsPool();
+
+    // Pick 3 random questions from the pool
+    const shuffled = [...pool].sort(() => 0.5 - Math.random());
+    activePodSessionQuestions = shuffled.slice(0, 3);
+
+    const modalHtml = `
+        <div id="podSessionModal" class="fixed inset-0 z-[150] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md" onclick="document.getElementById('podSessionModal').remove()"></div>
+            <div class="relative bg-slate-800 rounded-3xl border border-indigo-500/40 shadow-2xl p-6 md:p-8 m-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
+                
+                <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
+                    <div>
+                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast"></i> cMPLi POD Day ${dayNum}</span>
+                        <h3 class="text-2xl font-extrabold text-white font-heading">${audioTitle}</h3>
+                        <p class="text-xs text-slate-400 mt-1">Listen to the 4-5 minute audio session with earphones, then complete the quiz.</p>
+                    </div>
+                    <button onclick="document.getElementById('podSessionModal').remove()" class="text-slate-400 hover:text-white bg-slate-700/60 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Custom In-Browser Audio Player -->
+                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
+                            <i class="fas fa-headphones-alt"></i>
+                        </div>
+                        <div class="overflow-hidden flex-1">
+                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Now Streaming</p>
+                            <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        ${audioUrl ? `
+                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
+                                <source src="${audioUrl}" type="audio/mpeg">
+                                Your browser does not support the audio element.
+                            </audio>
+                        ` : `
+                            <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 text-center">
+                                <p class="text-xs text-slate-300 font-semibold mb-2"><i class="fas fa-volume-up text-amber-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
+                                <audio controls class="w-full h-10 rounded-lg">
+                                    <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+                                </audio>
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- 3 Randomized Questions Section -->
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                        <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (3 Questions)
+                        </h4>
+                        <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
+                    </div>
+
+                    <div id="podQuizQuestionsArea" class="space-y-5">
+                        ${activePodSessionQuestions.map((q, qIdx) => `
+                            <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of 3</span>
+                                    <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
+                                </div>
+                                <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
+                                <div class="space-y-2 pt-1">
+                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
+                                        <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
+                                            <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
+                                            <span class="text-xs text-slate-200 font-medium">${opt}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
+                        Cancel
+                    </button>
+                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
+                        <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function submitPodSessionQuiz() {
+    if (!currentUser) return alert('Please login first.');
+
+    const answers = [];
+    let allAnswered = true;
+
+    activePodSessionQuestions.forEach((q, idx) => {
+        const selected = document.querySelector(`input[name="pod_session_q_${idx}"]:checked`);
+        if (!selected) {
+            allAnswered = false;
+        } else {
+            const selectedIdx = parseInt(selected.value, 10);
+            const isCorrect = (q.correctOption !== undefined) ? (selectedIdx === q.correctOption) : true;
+            answers.push({
+                question: q.title,
+                answer: (q.options && q.options[selectedIdx]) || `Option ${selectedIdx + 1}`,
+                type: 'mcq',
+                selectedOption: selectedIdx,
+                correctOption: q.correctOption,
+                isCorrect: isCorrect
+            });
+        }
+    });
+
+    if (!allAnswered) {
+        return alert("Please answer all 3 comprehension questions before submitting.");
+    }
+
+    const calculatedPoints = 33;
+    const subData = {
+        userId: currentUser._id,
+        userEmail: currentUser.email || '',
+        userName: currentUser.name || 'Learner',
+        milestoneId: activeMilestoneId || 1,
+        type: 'pod',
+        day: activePodSessionDay,
+        date: activePodSessionDateKey,
+        submittedAt: new Date().toISOString(),
+        lcReward: calculatedPoints,
+        status: 'evaluating', // 18s lag time evaluation
+        responses: answers
+    };
+
+    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    localDB = localDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay)));
+    localDB.push(subData);
+    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+
+    fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subData)
+    }).catch(e => console.error('Server sync error for POD quiz:', e));
+
+    document.getElementById('podSessionModal')?.remove();
+    showPendingEvaluationPopup(calculatedPoints);
+
+    if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
+
+    // 18-second automatic evaluation lag
+    setTimeout(async () => {
+        subData.status = 'completed';
+        recordLevelUpReward(currentUser._id, 'pod', activeMilestoneId || 1, calculatedPoints, `cMPLi POD Day ${activePodSessionDay} Quiz Passed`);
+
+        let currentDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+        const idx = currentDB.findIndex(s => s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay));
+        if (idx > -1) {
+            currentDB[idx].status = 'completed';
+            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(currentDB));
+        }
+
+        try {
+            await fetch('/api/submissions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subData)
+            });
+        } catch (e) {}
+
+        if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
+            switchMilestoneTab('pod');
+        }
+        if (typeof updateDashboardUI === 'function') {
+            updateDashboardUI();
+        }
+    }, 18000);
+}
