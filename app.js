@@ -37,7 +37,7 @@ const milestoneConfig = [
         subtitle: "Foundation Phase (~21 Days)", 
         durationDays: 21, 
         desc: "Strictly 21 Days continuous baseline. Form morning reflection habits with cMPLi Dip and explore audio insights with cMPLi POD.", 
-        modules: ['dip', 'pod'], 
+        defaultModules: ['dip', 'pod'], 
         rules: "Completion % must be >90%. Complete daily cMPLi Dip (05:00 AM - 05:00 PM, 33 LCs) and cMPLi POD audio quizzes (33 LCs) to qualify for promotion." 
     },
     { 
@@ -47,7 +47,7 @@ const milestoneConfig = [
         subtitle: "Exploration Phase (~4 Months)", 
         durationDays: 120, 
         desc: "~4 Months adaptive journey. Broaden perspectives, continue daily Dip & POD, and unlock cMPLi Immerse deep-dives.", 
-        modules: ['dip', 'pod', 'immerse'], 
+        defaultModules: ['dip', 'pod', 'immerse'], 
         rules: "Continuous Dip (6 days/week) & POD Quizzes. cMPLi Immerse deep-dives unlock upon satisfying activity criteria. Minimum benchmark LCs required to advance." 
     },
     { 
@@ -57,7 +57,7 @@ const milestoneConfig = [
         subtitle: "Execution Phase (~4 Months)", 
         durationDays: 120, 
         desc: "~4 Months adaptive execution. Execute cMPLi-ai real-world challenges, continue Dip, POD, and Immerse deep dives.", 
-        modules: ['dip', 'pod', 'immerse', 'projects'], 
+        defaultModules: ['dip', 'pod', 'immerse', 'projects'], 
         rules: "Consistent Dip & POD + Real-world execution projects. Achieve required benchmark LCs for capstone eligibility." 
     },
     { 
@@ -67,10 +67,50 @@ const milestoneConfig = [
         subtitle: "Capstone & Corporate Phase (~4-5 Months)", 
         durationDays: 150, 
         desc: "Final frontier of leadership. Engage in Corporate Residency, Problem-Solution Insight Engine, and daily Dip & POD mastery.", 
-        modules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'], 
+        defaultModules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'], 
         rules: "Complete Corporate Residency immersion and Problem-Solution capstone deliverables to attain the ultimate cMPLi futureREadi credential." 
     }
 ];
+
+// Module registry across platform
+const ALL_PLATFORM_MODULES = [
+    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Randomized Comprehension Quiz' },
+    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-moon text-cyan-400', desc: 'Evening Deep-Dive Reflections (06:30 PM - 07:00 PM)' },
+    { code: 'projects', name: 'cMPLi Real-world (cMPLi-ai)', icon: 'fa-robot text-purple-400', desc: 'Industry Challenges & Execution Projects' },
+    { code: 'problem_solution', name: 'cMPLi Problem-Solution', icon: 'fa-brain text-emerald-400', desc: 'Insight Engine & Analytical Problem Solving' },
+    { code: 'residency', name: 'cMPLi Corporate Residency', icon: 'fa-building text-blue-400', desc: 'Corporate Placement & Industry Immersion' }
+];
+
+// Helper to get enabled modules for a milestone (configured by Creator)
+function getEnabledModulesForMilestone(msId) {
+    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
+        return saved[msId];
+    }
+    const ms = milestoneConfig.find(m => m.id === msId);
+    return ms ? [...ms.defaultModules] : ['dip', 'pod'];
+}
+
+function toggleMilestoneModuleAccess(msId, moduleCode) {
+    let saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    let current = getEnabledModulesForMilestone(msId);
+    if (current.includes(moduleCode)) {
+        if (current.length === 1) {
+            alert('At least one module must remain active in this milestone.');
+            return;
+        }
+        current = current.filter(m => m !== moduleCode);
+    } else {
+        current.push(moduleCode);
+    }
+    saved[msId] = current;
+    localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
+    
+    // Re-render admin views
+    if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
+    if (typeof openAdminMilestone === 'function' && activeAdminMilestoneId === msId) openAdminMilestone(msId);
+}
 
 // --- Global State Management ---
 let currentUser = null;
@@ -558,39 +598,61 @@ async function switchTab(tab) {
 // ---------------------------------------------------------
 function renderAdminMilestoneGrid() {
     const grid = document.getElementById('adminMilestoneGridContainer');
-    document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
+    if (!grid) return;
+    
+    document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
     grid.classList.remove('hidden');
 
     // Campus Partner Management Button for Creators ONLY
     let partnerManageBtn = '';
-    if (isAdminLogin && !isCampusPartner) {
+    if (!isCampusPartner) {
         partnerManageBtn = `
-        <div class="col-span-full mb-6 flex justify-end">
-            <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
-                <i class="fas fa-university mr-2"></i> Manage Campus Partners
+        <div class="col-span-1 md:col-span-2 mb-2 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg font-bold text-white font-heading">Level-Up Milestones & Cohort Pathways</h3>
+                <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and project rubrics.</p>
+            </div>
+            <button onclick="openPartnerManagementModal()" class="btn-secondary py-2 px-4 text-xs">
+                <i class="fas fa-handshake text-emerald-400 mr-1.5"></i> Manage Campus Partners
             </button>
         </div>`;
     }
 
     const gridCards = milestoneConfig.map(ms => {
-        const isBlank = ms.modules.length === 0;
-        const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
+        const enabledMods = getEnabledModulesForMilestone(ms.id);
+        const studentCount = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === ms.id).length;
+
         return `
-        <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
-            <div onclick="${isBlank ? '' : `openAdminMilestone(${ms.id})`}">
+        <div class="glass-card p-6 md:p-8 border-slate-800 hover:border-indigo-500/50 flex flex-col justify-between transition-all duration-300 cursor-pointer group" onclick="openAdminMilestone(${ms.id})">
+            <div>
                 <div class="flex justify-between items-start mb-3">
-                    <span class="text-[10px] font-black tracking-widest uppercase text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-700/50">Milestone ${ms.id}</span>
-                    ${!isBlank ? '<i class="fas fa-users text-slate-500 bg-slate-800 p-2 rounded-lg group-hover:text-indigo-400 transition-colors"></i>' : ''}
+                    <span class="badge-pill badge-indigo">Milestone ${ms.id}</span>
+                    <span class="text-xs font-bold text-slate-400 group-hover:text-indigo-400 transition-colors">
+                        <i class="fas fa-users mr-1"></i> ${studentCount} Students
+                    </span>
                 </div>
-                <h4 class="font-bold text-lg text-white mb-2">${ms.name}</h4>
-                <p class="text-xs text-slate-400 line-clamp-2">${ms.desc}</p>
+                
+                <h4 class="font-bold text-xl text-white font-heading mb-1 group-hover:text-indigo-300 transition-colors">${ms.name}</h4>
+                <p class="text-xs text-indigo-400 font-semibold mb-2">${ms.subtitle}</p>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4 line-clamp-2">${ms.desc}</p>
+
+                <div class="pt-3 border-t border-slate-800/80">
+                    <div class="flex justify-between items-center text-[11px] text-slate-400 mb-2">
+                        <span class="font-bold uppercase tracking-wider text-slate-500">Active Modules for Students:</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        ${ALL_PLATFORM_MODULES.map(mObj => {
+                            const isEnabled = enabledMods.includes(mObj.code);
+                            return `<span class="text-[10px] font-bold px-2 py-0.5 rounded ${isEnabled ? 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300' : 'bg-slate-900 border border-slate-800 text-slate-600 line-through'}">${mObj.name}</span>`;
+                        }).join('')}
+                    </div>
+                </div>
             </div>
             
-            ${!isBlank ? `
-            <div class="mt-5 pt-4 border-t border-slate-700/50 flex items-center justify-between">
-                <span onclick="openAdminMilestone(${ms.id})" class="text-xs font-bold text-indigo-400 hover:text-white transition-colors cursor-pointer">View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
-                ${!isCampusPartner ? `<button onclick="alert('Admin Config: Edit rules, LC assignments, and time-windows for ${ms.name}')" class="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"><i class="fas fa-cog mr-1"></i> Edit Settings</button>` : ''}
-            </div>` : '<div class="mt-5 pt-4 border-t border-slate-800"><span class="text-xs text-slate-600 font-bold uppercase">Locked / Setup Pending</span></div>'}
+            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="text-xs font-bold text-indigo-400 group-hover:text-white transition-colors">Setup Modules & View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
+                <span class="text-xs text-slate-500">${ms.durationDays} Days</span>
+            </div>
         </div>`;
     }).join('');
 
@@ -601,7 +663,7 @@ function handleLockedClick(id, isUnlocked) {
     if (!isUnlocked) alert(`You need to complete Milestone ${id - 1} to join this milestone.`);
 }
 
-// Function for Learner to enter a milestone
+// Function to let the learner enter the milestone view (UPDATED WITH START DATE)
 function openMilestone(id) {
     activeMilestoneId = id;
     const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
@@ -647,40 +709,26 @@ function openMilestone(id) {
     const descEl = document.getElementById('activeMilestoneDesc');
     if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
     
-    const labels = {
-        dip: 'cMPLi Dip',
-        pod: 'cMPLi POD',
-        immerse: 'cMPLi Immerse',
-        projects: 'cMPLi Real-world (cMPLi-ai)',
-        problem_solution: 'cMPLi Problem-Solution',
-        residency: 'cMPLi Corporate Residency'
-    };
-    const icons = {
-        dip: 'fa-sun text-amber-400',
-        pod: 'fa-podcast text-indigo-400',
-        immerse: 'fa-moon text-cyan-400',
-        projects: 'fa-robot text-purple-400',
-        problem_solution: 'fa-brain text-emerald-400',
-        residency: 'fa-building text-blue-400'
-    };
+    // ONLY GET MODULES ENABLED BY CREATOR FOR THIS MILESTONE
+    const activeMods = getEnabledModulesForMilestone(id);
 
     const subNavEl = document.getElementById('milestoneSubNav');
     if(subNavEl) {
-        subNavEl.innerHTML = ms.modules.map((mod, i) => {
+        subNavEl.innerHTML = activeMods.map((modCode, i) => {
+            const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode, icon: 'fa-cube' };
             const activeClass = i === 0 ? 'border-indigo-500 text-indigo-400 bg-indigo-950/40' : 'text-slate-400';
-            return `<button id="btnNav_${mod}" onclick="switchMilestoneTab('${mod}')" class="milestone-nav-btn px-4 py-2 rounded-xl font-bold text-xs border border-transparent transition-all ${activeClass} flex items-center gap-2">
-                <i class="fas ${icons[mod]}"></i> ${labels[mod]}
+            return `<button id="btnNav_${modCode}" onclick="switchMilestoneTab('${modCode}')" class="milestone-nav-btn px-4 py-2 rounded-xl font-bold text-xs border border-transparent transition-all ${activeClass} flex items-center gap-2">
+                <i class="fas ${modObj.icon}"></i> ${modObj.name}
             </button>`;
         }).join('');
     }
 
-    // Default to the first module
-    if (ms.modules && ms.modules.length > 0) {
-        switchMilestoneTab(ms.modules[0]);
+    // Default to the first enabled module
+    if (activeMods.length > 0) {
+        switchMilestoneTab(activeMods[0]);
     }
 }
 
-// Function for Creator / Admin to open a milestone view
 function openAdminMilestone(id) {
     activeAdminMilestoneId = id;
     const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
@@ -688,43 +736,46 @@ function openAdminMilestone(id) {
     const gridContainer = document.getElementById('adminMilestoneGridContainer');
     if(gridContainer) gridContainer.classList.add('hidden');
     
-    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.parentElement;
+    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
     if (togglesArea) togglesArea.style.display = 'none';
 
     const detailContainer = document.getElementById('adminMilestoneDetailContainer');
     if(detailContainer) detailContainer.classList.remove('hidden');
 
     const titleEl = document.getElementById('adminActiveMilestoneTitle');
-    if(titleEl) titleEl.innerText = ms.name + " - Creator View";
+    if(titleEl) titleEl.innerText = ms.name + " - Creator Setup";
 
-    // All 6 modules available for Creator configuration
-    const allCreatorModules = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
-    const labels = {
-        dip: 'cMPLi Dip',
-        pod: 'cMPLi POD',
-        immerse: 'cMPLi Immerse',
-        projects: 'cMPLi Real-world (cMPLi-ai)',
-        problem_solution: 'cMPLi Problem-Solution',
-        residency: 'cMPLi Corporate Residency'
-    };
-    const icons = {
-        dip: 'fa-sun text-amber-400',
-        pod: 'fa-podcast text-indigo-400',
-        immerse: 'fa-moon text-cyan-400',
-        projects: 'fa-robot text-purple-400',
-        problem_solution: 'fa-brain text-emerald-400',
-        residency: 'fa-building text-blue-400'
-    };
+    // Stats bar showing student counts
+    const statsBar = document.getElementById('adminMsStatsBar');
+    if (statsBar) {
+        let inThisMs = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === id).length;
+        statsBar.innerHTML = `
+            <span class="badge-pill badge-indigo text-xs"><i class="fas fa-users mr-1"></i> ${inThisMs} Students in Milestone ${id}</span>
+            <span class="badge-pill bg-slate-800 text-slate-300 text-xs"><i class="fas fa-globe mr-1"></i> ${actualUsers.length} Total Students</span>
+        `;
+    }
 
+    // Module Sub-Navigation for Creator (ALL 6 MODULES with ON/OFF switch)
     const subNavEl = document.getElementById('adminMilestoneSubNav');
     if(subNavEl) {
-        subNavEl.innerHTML = allCreatorModules.map((mod, i) => {
+        const enabledForStudents = getEnabledModulesForMilestone(id);
+        
+        subNavEl.innerHTML = ALL_PLATFORM_MODULES.map((mObj, i) => {
+            const isEnabledForStudents = enabledForStudents.includes(mObj.code);
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-            return `<button onclick="switchAdminModuleTab('${mod}', this)" class="admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all ${activeClass}"><i class="fas ${icons[mod]} mr-2"></i>${labels[mod]}</button>`;
+            return `
+            <div class="flex items-center gap-1.5 ${activeClass} px-3 py-2 rounded-t-xl font-bold text-xs transition-all">
+                <button onclick="switchAdminModuleTab('${mObj.code}', this.parentElement)" class="admin-module-btn flex items-center gap-2">
+                    <i class="fas ${mObj.icon}"></i> ${mObj.name}
+                </button>
+                <button onclick="event.stopPropagation(); toggleMilestoneModuleAccess(${id}, '${mObj.code}')" title="${isEnabledForStudents ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)'}" class="ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabledForStudents ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
+                    ${isEnabledForStudents ? 'ON' : 'OFF'}
+                </button>
+            </div>`;
         }).join('');
     }
 
-    activeAdminModule = allCreatorModules[0];
+    activeAdminModule = ALL_PLATFORM_MODULES[0].code;
 
     // --- CAMPUS PARTNER RESTRICTIONS ---
     const btnCheckins = document.getElementById('btnTabCheckins');
@@ -733,7 +784,7 @@ function openAdminMilestone(id) {
         switchAdminMilestoneTab('completion');
     } else {
         if (btnCheckins) btnCheckins.style.display = 'block';
-        renderAdminCohortSubmissions();
+        renderAdminCheckinsList();
     }
 }
 
@@ -810,31 +861,75 @@ function updateCohortStartDate() {
 // --- 3. UPGRADED: Render Configs by Active Module ---
 function renderAdminCheckinsList() {
     const list = document.getElementById('adminCheckinDaysList');
-    
-    // IF PROJECTS: Reroute to the new Project Builder Architecture!
+    const editor = document.getElementById('adminCheckinEditor');
+    if (!list || !editor) return;
+
+    // 1. IF POD: Route to POD Question Pool & Quiz Setup
+    if (activeAdminModule === 'pod') {
+        renderAdminPodQuestionsList();
+        return;
+    }
+
+    // 2. IF PROJECTS / REAL-WORLD EXECUTION: Route to Project Builder
     if (activeAdminModule === 'projects') {
         renderAdminProjectsList();
-        
-        // Trigger the initial editor load for projects without causing an infinite loop
         const projectsList = customProjectsDB[activeAdminMilestoneId] || [];
         if (activeAdminProjectId) {
             loadAdminProjectEditor(activeAdminProjectId);
         } else if (projectsList.length > 0) {
             loadAdminProjectEditor(projectsList[0].id);
         } else {
-            document.getElementById('adminCheckinEditor').innerHTML = `
+            editor.innerHTML = `
                 <div class="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl">
                     <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
                         <i class="fas fa-folder-plus text-2xl text-emerald-500"></i>
                     </div>
-                    <h4 class="text-lg font-bold text-white mb-2">No Projects Yet</h4>
-                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application.</p>
+                    <h4 class="text-lg font-bold text-white mb-2">No Projects Configured</h4>
+                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application challenge.</p>
                 </div>`;
         }
         return;
     }
 
-    // Ensure database paths exist for date-based modules
+    // 3. IF ADVANCED CAPSTONE (PROBLEM-SOLUTION OR CORPORATE RESIDENCY)
+    if (activeAdminModule === 'problem_solution' || activeAdminModule === 'residency') {
+        const isRes = activeAdminModule === 'residency';
+        list.innerHTML = `
+            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
+                <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">${isRes ? 'Residency Placement' : 'Insight Engine Setup'}</h4>
+                <p class="text-[11px] text-slate-400">Configure deliverables, partner assignments, and evaluation criteria for Milestone 4.</p>
+            </div>
+        `;
+        editor.innerHTML = `
+            <div class="space-y-4 text-xs">
+                <div class="pb-3 border-b border-slate-800">
+                    <h3 class="text-sm font-bold text-white font-heading">${isRes ? 'Corporate Residency Immersion Brief' : 'Problem-Solution Insight Challenge'}</h3>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">Challenge Objective & Guidelines</label>
+                    <textarea rows="4" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 focus:outline-none" placeholder="Provide instructions for students..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1.5">Total LC Reward</label>
+                        <input type="number" value="1000" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 font-bold mb-1.5">Submission Format</label>
+                        <select class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500">
+                            <option value="pdf_deck">Executive PDF Deck + Loom Video</option>
+                            <option value="report">Written Capstone Report</option>
+                            <option value="code">GitHub Repo / Live Deployment</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="alert('Capstone module brief saved!')" class="btn-primary w-full py-3 text-xs mt-4"><i class="fas fa-save mr-1"></i> Save Module Brief</button>
+            </div>
+        `;
+        return;
+    }
+
+    // 4. FOR DIP & IMMERSE (CALENDAR-BASED DAILY CHECK-IN SETUP)
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
@@ -1964,404 +2059,21 @@ startLiveSync();
 
 
 // ==============================================================
-// COURSES & LESSON PLAYER ENGINE
+// POD QUIZ ENGINE & QUESTION POOL BUILDER
 // ==============================================================
-
-let activePlayingCourseId = null;
-let activePlayingLessonId = null;
-
-const DEFAULT_COURSES_CATALOG = [
-    {
-        id: 'course_dip',
-        title: 'cMPLi Dip: Foundation of High Performance',
-        desc: 'Master the core disciplines of self-awareness, daily habits, and foundational learning systems.',
-        lessonsCount: 21,
-        thumbnail: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
-        tags: ['Foundations', 'High Performance', 'Daily Habits'],
-        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    },
-    {
-        id: 'course_immerse',
-        title: 'cMPLi Immerse: Advanced Execution Mastery',
-        desc: 'Deep-dive frameworks for deep work, industry communication, and strategic problem-solving.',
-        lessonsCount: 39,
-        thumbnail: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&auto=format&fit=crop&q=80',
-        tags: ['Advanced', 'Strategy', 'Deep Work'],
-        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    },
-    {
-        id: 'course_ios',
-        title: 'cMPLi iOS: Industry Orientation & Specialization',
-        desc: 'Bridge academic theory with real-world industry domains across Tech, Marketing, Finance & HR.',
-        lessonsCount: 12,
-        thumbnail: 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=600&auto=format&fit=crop&q=80',
-        tags: ['Industry', 'Projects', 'Career Launch'],
-        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    }
-];
-
-async function renderCoursesCatalog(searchTerm = '') {
-    const container = document.getElementById('coursesCatalogContainer');
-    if (!container) return;
-
-    let coursesList = [...DEFAULT_COURSES_CATALOG];
-    
-    // Supplement from TagMango coursesData if available
-    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
-        coursesData.result.subscriptions.slice(0, 6).forEach(mango => {
-            if (!coursesList.some(c => c.id === mango.mangoId)) {
-                coursesList.push({
-                    id: mango.mangoId,
-                    title: mango.mangoTitle,
-                    desc: 'Comprehensive learning module tailored for academic & career acceleration.',
-                    lessonsCount: mango.count || 10,
-                    thumbnail: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&auto=format&fit=crop&q=80',
-                    tags: ['Core Module'],
-                    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-                });
-            }
-        });
-    }
-
-    if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        coursesList = coursesList.filter(c => c.title.toLowerCase().includes(term) || c.desc.toLowerCase().includes(term));
-    }
-
-    // Fetch user course progress
-    let userProgress = {};
-    if (currentUser) {
-        try {
-            const progRes = await fetch('/api/courses/progress?userId=' + encodeURIComponent(currentUser._id) + '&userEmail=' + encodeURIComponent(currentUser.email || '')).then(r => r.json());
-            if (progRes.success) userProgress = progRes.data || {};
-        } catch (e) {}
-    }
-
-    container.innerHTML = coursesList.map(course => {
-        const cData = userProgress[course.id] || { completedLessons: [], lcsEarned: 0 };
-        const completedCount = (cData.completedLessons || []).length;
-        const pct = Math.min(100, Math.round((completedCount / Math.max(1, course.lessonsCount)) * 100));
-
-        return `
-        <div class="glass-card overflow-hidden border-slate-800 flex flex-col justify-between group">
-            <div>
-                <div class="relative h-44 overflow-hidden">
-                    <img src="${course.thumbnail}" alt="${course.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-                    <div class="absolute top-3 left-3 flex gap-2">
-                        ${course.tags.map(t => `<span class="badge-pill badge-indigo">${t}</span>`).join('')}
-                    </div>
-                </div>
-                <div class="p-6">
-                    <h3 class="text-lg font-bold text-white font-heading group-hover:text-indigo-300 transition-colors line-clamp-1">${course.title}</h3>
-                    <p class="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">${course.desc}</p>
-                    
-                    <div class="mt-5 pt-4 border-t border-slate-800/80">
-                        <div class="flex justify-between items-center text-xs mb-2">
-                            <span class="text-slate-400">${completedCount}/${course.lessonsCount} Lessons</span>
-                            <span class="font-bold text-emerald-400">${pct}% Done</span>
-                        </div>
-                        <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="p-6 pt-0">
-                <button onclick="openLessonPlayer('${course.id}', 1)" class="btn-primary w-full py-2.5 text-xs">
-                    <i class="fas fa-play"></i> ${completedCount > 0 ? 'Resume Lesson' : 'Start Learning'}
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function filterCourseCatalog() {
-    const input = document.getElementById('courseSearchInput');
-    const term = input ? input.value : '';
-    renderCoursesCatalog(term);
-}
-
-function openLessonPlayer(courseId, lessonNum = 1) {
-    const modal = document.getElementById('lessonPlayerModal');
-    if (!modal) return;
-
-    activePlayingCourseId = courseId;
-    activePlayingLessonId = 'lesson_' + lessonNum;
-
-    const course = DEFAULT_COURSES_CATALOG.find(c => c.id === courseId) || {
-        title: 'cMPLi Interactive Learning Lesson',
-        desc: 'Dive into this curated learning module. Focus on practical insights and apply reflections in your daily Level-Up quests.',
-        videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-    };
-
-    document.getElementById('playerLessonBadge').innerText = 'Lesson ' + lessonNum;
-    document.getElementById('playerLessonTitle').innerText = course.title + ' - Session ' + lessonNum;
-    document.getElementById('playerLessonDesc').innerText = course.desc;
-    document.getElementById('playerIframe').src = course.videoUrl;
-
-    modal.classList.remove('hidden');
-}
-
-function closeLessonPlayer() {
-    const modal = document.getElementById('lessonPlayerModal');
-    if (modal) {
-        modal.classList.add('hidden');
-        document.getElementById('playerIframe').src = '';
-    }
-}
-
-async function markCurrentLessonComplete() {
-    if (!currentUser || !activePlayingCourseId) return;
-
-    try {
-        const res = await fetch('/api/courses/progress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: currentUser._id,
-                userEmail: currentUser.email || '',
-                courseId: activePlayingCourseId,
-                lessonId: activePlayingLessonId || 'lesson_1',
-                completed: true,
-                lcsEarned: 20
-            })
-        }).then(r => r.json());
-
-        if (res.success) {
-            recordLevelUpReward(currentUser._id, 'course', 1, 20, 'Course Lesson Complete');
-            alert('🎉 Lesson completed! +20 LCs added to your wallet.');
-            closeLessonPlayer();
-            renderCoursesCatalog();
-        }
-    } catch (e) {
-        alert('Lesson marked completed locally! +20 LCs awarded.');
-        recordLevelUpReward(currentUser._id, 'course', 1, 20, 'Course Lesson Complete');
-        closeLessonPlayer();
-    }
-}
-
-
-// ==============================================================
-// 1-ON-1 COACHING & MENTORSHIP ENGINE
-// ==============================================================
-
-async function loadCoachingData() {
-    if (!currentUser && !isAdminLogin) return;
-
-    const userParam = currentUser ? '&userId=' + encodeURIComponent(currentUser._id) + '&userEmail=' + encodeURIComponent(currentUser.email || '') : '';
-    
-    // 1. Fetch Sessions
-    try {
-        const sessRes = await fetch('/api/coaching/sessions?' + userParam).then(r => r.json());
-        const sessions = sessRes.data || [];
-        renderCoachingSessions(sessions);
-    } catch (e) {
-        renderCoachingSessions([]);
-    }
-
-    // 2. Fetch Action Items
-    try {
-        const actRes = await fetch('/api/coaching/action-items?' + userParam).then(r => r.json());
-        const actionItems = actRes.data || [];
-        renderCoachingActionItems(actionItems);
-    } catch (e) {
-        renderCoachingActionItems([]);
-    }
-}
-
-function renderCoachingSessions(sessions) {
-    const list = document.getElementById('coachingSessionsList');
-    const feedbackArea = document.getElementById('coachFeedbackNotesArea');
-    if (!list) return;
-
-    if (sessions.length === 0) {
-        list.innerHTML = `
-            <div class="p-8 text-center bg-slate-900/40 rounded-2xl border border-slate-800">
-                <i class="fas fa-calendar-alt text-3xl text-slate-600 mb-2"></i>
-                <p class="text-xs text-slate-400">No 1-on-1 coaching sessions scheduled yet.</p>
-                <button onclick="openCoachingBookingModal()" class="btn-primary mt-4 py-2 px-4 text-xs bg-emerald-600 border-emerald-500">
-                    <i class="fas fa-calendar-plus"></i> Book Your First Session (+50 LCs)
-                </button>
-            </div>`;
-        if (feedbackArea) feedbackArea.innerHTML = '<p class="text-xs text-slate-500 italic">No coach feedback notes recorded yet.</p>';
-        return;
-    }
-
-    list.innerHTML = sessions.map(sess => {
-        const isCompleted = sess.status === 'completed';
-        return `
-        <div class="glass-card p-5 border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-indigo-500/40">
-            <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                    <span class="badge-pill ${isCompleted ? 'badge-emerald' : 'badge-indigo'}">${isCompleted ? 'Completed' : 'Upcoming'}</span>
-                    <span class="text-xs font-bold text-slate-300">${sess.date} • ${sess.timeSlot}</span>
-                </div>
-                <h4 class="text-sm font-bold text-white mt-1">${sess.topic}</h4>
-                <p class="text-xs text-slate-400">Goal: ${sess.studentGoals || 'Milestone strategy & feedback'}</p>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                ${!isCompleted ? `
-                    <a href="${sess.meetingLink || 'https://meet.google.com'}" target="_blank" class="btn-primary py-2 px-4 text-xs bg-gradient-to-r from-indigo-600 to-cyan-600">
-                        <i class="fas fa-video"></i> Join Call
-                    </a>
-                ` : ''}
-                ${isAdminLogin ? `
-                    <button onclick="openCoachFeedbackModal('${sess.id}')" class="btn-secondary py-2 px-3 text-xs">
-                        <i class="fas fa-edit"></i> Coach Feedback
-                    </button>
-                ` : ''}
-            </div>
-        </div>`;
-    }).join('');
-
-    if (feedbackArea) {
-        const feedbackSessions = sessions.filter(s => s.coachNotes);
-        if (feedbackSessions.length === 0) {
-            feedbackArea.innerHTML = '<p class="text-xs text-slate-500 italic">Your coach will provide feedback here after your 1-on-1 strategy call.</p>';
-        } else {
-            feedbackArea.innerHTML = feedbackSessions.map(s => `
-                <div class="p-4 bg-slate-900/60 rounded-xl border border-emerald-500/20">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">${s.date} - ${s.topic}</span>
-                        <span class="text-[10px] text-slate-500"><i class="fas fa-check-circle text-emerald-400"></i> Approved</span>
-                    </div>
-                    <p class="text-xs text-slate-200 mt-1 whitespace-pre-wrap leading-relaxed">${s.coachNotes}</p>
-                </div>
-            `).join('');
-        }
-    }
-}
-
-function renderCoachingActionItems(items) {
-    const list = document.getElementById('coachingActionItemsList');
-    if (!list) return;
-
-    if (items.length === 0) {
-        items = [
-            { id: 'act_demo_1', title: 'Complete Day 2 Reflection & Upload Deliverable', deadline: '2026-08-30', completed: false, lcReward: 25 },
-            { id: 'act_demo_2', title: 'Schedule 1-on-1 Strategy Call with Mentor', deadline: '2026-08-31', completed: false, lcReward: 25 }
-        ];
-    }
-
-    list.innerHTML = items.map(item => `
-        <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between gap-3 hover:border-indigo-500/30 transition-colors">
-            <label class="flex items-center gap-3 cursor-pointer flex-1">
-                <input type="checkbox" ${item.completed ? 'checked' : ''} onchange="toggleActionItem('${item.id}', this.checked)" class="w-4 h-4 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer">
-                <span class="text-xs ${item.completed ? 'line-through text-slate-500' : 'text-slate-200 font-medium'}">${item.title}</span>
-            </label>
-            <span class="badge-pill ${item.completed ? 'badge-emerald' : 'badge-amber'} flex-shrink-0">+${item.lcReward || 25} LCs</span>
-        </div>
-    `).join('');
-}
-
-async function toggleActionItem(itemId, isChecked) {
-    try {
-        await fetch('/api/coaching/action-items/toggle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ itemId, completed: isChecked })
-        });
-        if (isChecked && currentUser) {
-            recordLevelUpReward(currentUser._id, 'coaching_task', 1, 25, 'Growth Action Task Complete');
-        }
-    } catch (e) {}
-    loadCoachingData();
-}
-
-function openCoachingBookingModal() {
-    const modal = document.getElementById('coachingBookingModal');
-    if (modal) {
-        document.getElementById('coachBookingDate').value = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-        modal.classList.remove('hidden');
-    }
-}
-
-function closeCoachingBookingModal() {
-    const modal = document.getElementById('coachingBookingModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function confirmCoachingBooking() {
-    const topic = document.getElementById('coachBookingTopic').value.trim() || 'Milestone Strategy Alignment';
-    const date = document.getElementById('coachBookingDate').value;
-    const timeSlot = document.getElementById('coachBookingSlot').value;
-    const goal = document.getElementById('coachBookingGoal').value.trim();
-
-    if (!currentUser) return alert('Please log in to book a session.');
-
-    try {
-        const res = await fetch('/api/coaching/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: currentUser._id,
-                userEmail: currentUser.email || '',
-                userName: currentUser.name || 'Student',
-                topic,
-                date,
-                timeSlot,
-                studentGoals: goal,
-                lcBonus: 50
-            })
-        }).then(r => r.json());
-
-        if (res.success) {
-            alert('🎉 Coaching Session Booked! A Google Meet link has been generated.');
-            closeCoachingBookingModal();
-            loadCoachingData();
-        }
-    } catch (e) {
-        alert('Session booked!');
-        closeCoachingBookingModal();
-    }
-}
-
-function openCoachFeedbackModal(sessionId) {
-    const modal = document.getElementById('coachFeedbackModal');
-    if (modal) {
-        document.getElementById('coachFeedbackSessionId').value = sessionId;
-        modal.classList.remove('hidden');
-    }
-}
-
-function closeCoachFeedbackModal() {
-    const modal = document.getElementById('coachFeedbackModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function submitCoachFeedback() {
-    const sessionId = document.getElementById('coachFeedbackSessionId').value;
-    const notes = document.getElementById('coachFeedbackNotes').value.trim();
-    const status = document.getElementById('coachFeedbackStatus').value;
-
-    try {
-        await fetch('/api/coaching/sessions/update-feedback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, coachNotes: notes, status })
-        });
-        alert('Coach feedback saved and status updated!');
-        closeCoachFeedbackModal();
-        loadCoachingData();
-    } catch (e) {
-        alert('Feedback updated!');
-        closeCoachFeedbackModal();
-    }
-}
-
-
-// --- cMPLi POD RANDOMIZED QUIZ ENGINE ---
 let currentPodActiveQuestions = [];
 let currentPodDay = 1;
+let activeAdminPodQuestionId = null;
 
 function getPodQuestionsPool() {
-    let pool = (typeof window !== 'undefined' && window.defaultPodQuestionsPool) ? window.defaultPodQuestionsPool : [];
     let customPool = JSON.parse(localStorage.getItem('customPodQuestionsPool')) || [];
     if (customPool.length > 0) return customPool;
-    return pool;
+    if (typeof window !== 'undefined' && window.defaultPodQuestionsPool) return window.defaultPodQuestionsPool;
+    return [
+        { id: 'pod_q1', title: 'According to today’s POD audio, what is the core driver of long-term habit consistency?', type: 'mcq', options: ['Intrinsic Identity Shift & Daily Micro-actions', 'External Pressure only', 'Random Motivation Spikes', 'Waiting for perfect conditions'], correctOption: 0, pts: 11 },
+        { id: 'pod_q2', title: 'What primary method was recommended for handling unexpected daily schedule disruptions?', type: 'mcq', options: ['Implementation Intentions (If-Then Planning)', 'Abandoning the week goal', 'Skipping without reflection', 'Immediate panic'], correctOption: 0, pts: 11 },
+        { id: 'pod_q3', title: 'Which mindset separates a Challenge Embracer from a passive student?', type: 'mcq', options: ['Viewing friction & feedback as fuel for growth', 'Avoiding all challenging tasks', 'Seeking quick shortcuts', 'Focusing solely on certificates'], correctOption: 0, pts: 11 }
+    ];
 }
 
 function openPodQuizModal(dayNum) {
@@ -2371,7 +2083,6 @@ function openPodQuizModal(dayNum) {
     currentPodDay = dayNum;
     document.getElementById('podQuizDayBadge').innerText = 'cMPLi POD Day ' + dayNum;
     
-    // Select 3 random questions from the pool
     const pool = [...getPodQuestionsPool()];
     const shuffled = pool.sort(() => 0.5 - Math.random());
     currentPodActiveQuestions = shuffled.slice(0, 3);
@@ -2457,15 +2168,12 @@ async function submitPodQuiz() {
         answers: answers
     };
 
-    // Save to local storage
     let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     localDB.push(subData);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
 
-    // Award LCs in wallet
     recordLevelUpReward(currentUser._id, 'pod', activeMilestoneId || 1, 33, 'cMPLi POD Day ' + currentPodDay + ' Quiz Complete');
 
-    // Post to server
     try {
         await fetch('/api/submissions', {
             method: 'POST',
@@ -2482,10 +2190,6 @@ async function submitPodQuiz() {
         switchMilestoneTab('pod');
     }
 }
-
-
-// --- POD QUESTION POOL BUILDER (CREATOR HUB) ---
-let activeAdminPodQuestionId = null;
 
 function renderAdminPodQuestionsList() {
     const list = document.getElementById('adminCheckinDaysList');
@@ -2562,7 +2266,7 @@ function loadAdminPodQuestionEditor(qId) {
     editor.innerHTML = `
         <div class="space-y-4 text-xs">
             <div class="flex justify-between items-center pb-3 border-b border-slate-800">
-                <h3 class="text-sm font-bold text-white font-heading">Edit POD Question</h3>
+                <h3 class="text-sm font-bold text-white font-heading">Edit POD Quiz Question</h3>
                 <button onclick="deletePodQuestion('${q.id}')" class="text-red-400 hover:text-red-300 text-xs font-bold">
                     <i class="fas fa-trash mr-1"></i> Delete
                 </button>
@@ -2648,7 +2352,6 @@ function deletePodQuestion(qId) {
     renderAdminPodQuestionsList();
 }
 
-
 // --- LEARNER 4-MILESTONES GRID RENDERER ---
 function renderMilestoneGrid() {
     const gridContainer = document.getElementById('milestoneGridContainer');
@@ -2667,15 +2370,7 @@ function renderMilestoneGrid() {
     gridContainer.innerHTML = milestoneConfig.map(ms => {
         const isUnlocked = isGodMode || isAdminLogin || ms.id <= highestUnlocked;
         const isCurrent = ms.id === highestUnlocked;
-        
-        const labels = {
-            dip: 'cMPLi Dip',
-            pod: 'cMPLi POD',
-            immerse: 'cMPLi Immerse',
-            projects: 'cMPLi Real-world',
-            problem_solution: 'Problem-Solution',
-            residency: 'Corporate Residency'
-        };
+        const activeMods = getEnabledModulesForMilestone(ms.id);
 
         return `
         <div class="glass-card p-6 md:p-8 border-slate-800 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${isUnlocked ? 'hover:border-indigo-500/50 hover:shadow-2xl cursor-pointer' : 'opacity-60 bg-slate-950/60'}" onclick="${isUnlocked ? `openMilestone(${ms.id})` : `alert('Complete Milestone ${ms.id - 1} to unlock ${ms.name}')`}">
@@ -2695,7 +2390,10 @@ function renderMilestoneGrid() {
                 <p class="text-xs text-slate-400 leading-relaxed mb-4">${ms.desc}</p>
 
                 <div class="flex flex-wrap gap-1.5 pt-2">
-                    ${ms.modules.map(mod => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300">${labels[mod] || mod}</span>`).join('')}
+                    ${activeMods.map(mCode => {
+                        const mObj = ALL_PLATFORM_MODULES.find(m => m.code === mCode) || { name: mCode, icon: 'fa-cube' };
+                        return `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300"><i class="fas ${mObj.icon} mr-1"></i>${mObj.name}</span>`;
+                    }).join('')}
                 </div>
             </div>
 
@@ -2714,8 +2412,7 @@ function closeMilestoneView() {
     renderMilestoneGrid();
 }
 
-
-// --- STUDENT PROMOTION ENGINE (CREATOR HUB) ---
+// --- STUDENT PROMOTION ENGINE ---
 function openPromoteModal(userId, userName) {
     const modal = document.getElementById('promoteStudentModal');
     if (!modal) return;
