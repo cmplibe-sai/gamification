@@ -1,70 +1,5 @@
 
-async function initApp() {
-    if (!currentUser) return;
-    if (typeof updateDashboardUI === 'function') updateDashboardUI();
-    if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-}
-window.initApp = initApp;
-
-
-var actualUsers = (typeof window !== 'undefined' && window.actualUsers) ? window.actualUsers : [
-    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
-    { _id: 'usr_chandra_01', name: 'Chandra', email: 'chandrasai349@gmail.com', phone: '9845421644', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
-    { _id: 'usr_saichandu_02', name: 'SaiChandu', email: 'britencloud@gmail.com', phone: '9988776655', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
-    { _id: 'usr_saimaruthi_03', name: 'SaiMaruthi', email: 'cvs.cmplifutureadi@gmail.com', phone: '9123456789', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
-];
-var TEST_EMAILS = ['test@learner.com', 'vip@student.com', 'sai@cmplibe.com', 'test@test.com', 'saiyedamala02@gmail.com'];
-
-var realtimeCustomer = null;
-
-// ================= CORE PLATFORM MODULES & 4 MILESTONES =================
-const ALL_PLATFORM_MODULES = [
-    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
-    { code: 'pod', name: 'cMPLi Pod', icon: 'fa-podcast text-indigo-400' },
-    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
-    { code: 'ios', name: 'Industry Oriented Session (IOS)', icon: 'fa-chalkboard-teacher text-emerald-400' },
-    { code: 'projects', name: 'Real-World (cMPLi-ai) Projects', icon: 'fa-briefcase text-purple-400' },
-    { code: 'corporate', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
-];
-
-const milestoneConfig = [
-    {
-        id: 1,
-        name: 'Milestone 1: Simply Challenge Embracer',
-        desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
-        defaultModules: ['dip', 'pod'],
-        modules: ['dip', 'pod']
-    },
-    {
-        id: 2,
-        name: 'Milestone 2: Emerging Professional',
-        desc: '30-day deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
-        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
-        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
-    },
-    {
-        id: 3,
-        name: 'Milestone 3: Industry Ready Candidate',
-        desc: 'Advanced sector projects, mentor coaching reviews, and corporate readiness training.',
-        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
-        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
-    },
-    {
-        id: 4,
-        name: 'Milestone 4: Corporate Residency / Placement',
-        desc: 'Full corporate immersion, live client project delivery, and final portfolio defense.',
-        defaultModules: ['corporate', 'projects'],
-        modules: ['corporate', 'projects']
-    }
-];
-
-if (typeof window !== 'undefined') {
-    window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
-    window.milestoneConfig = milestoneConfig;
-}
-
-
-// ================= TOP-LEVEL GLOBAL STATE DECLARATIONS =================
+// ================= GLOBAL STATE =================
 var currentUser = null;
 var currentScoreObj = null;
 var currentView = 'sector';
@@ -95,6 +30,65 @@ var activePodSessionDateKey = '';
 var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
 var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+
+
+async function syncGlobalServerData() {
+    try {
+        const [subsRes, configsRes, accessRes] = await Promise.allSettled([
+            fetch('/api/submissions').then(r => r.json()),
+            fetch('/api/milestone-configs').then(r => r.json()),
+            fetch('/api/levelup-access').then(r => r.json())
+        ]);
+
+        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
+            const serverData = subsRes.value.data;
+            let localData = [];
+            try {
+                localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            } catch(e) {}
+
+            serverData.forEach(s => {
+                const idx = localData.findIndex(l => (
+                    (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
+                    String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
+                    normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
+                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
+                ));
+
+                if (idx > -1) {
+                    localData[idx] = { ...localData[idx], ...s };
+                } else {
+                    localData.push(s);
+                }
+            });
+
+            try {
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
+            } catch(e) {}
+
+            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                renderAdminCohortSubmissions();
+            }
+            if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
+                renderLearnerTimeline();
+            }
+        }
+    } catch(e) {
+        console.warn('Sync offline mode:', e);
+    }
+}
+window.syncGlobalServerData = syncGlobalServerData;
+
+
+var actualUsers = (typeof window !== 'undefined' && window.actualUsers) ? window.actualUsers : [
+    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
+];
+var TEST_EMAILS = ['test@learner.com', 'vip@student.com', 'sai@cmplibe.com', 'test@test.com', 'saiyedamala02@gmail.com'];
+
+
+// Safe global state declarations
+currentUser = currentUser || null;
+isAdminLogin = isAdminLogin || false;
 
 function getEnabledModulesForMilestone(msId) {
     const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
@@ -131,106 +125,7 @@ window.getEnabledModulesForMilestone = getEnabledModulesForMilestone;
 window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
 
 
-async function syncGlobalServerData() {
-    try {
-        const [subsRes, configsRes, projectsRes, accessRes] = await Promise.allSettled([
-            fetch('/api/submissions').then(r => r.json()),
-            fetch('/api/milestone-configs').then(r => r.json()),
-            fetch('/api/projects').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json())
-        ]);
-
-        // 1. Milestone Configs Sync (Bidirectional Safe Merge)
-        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
-            const serverConfigs = configsRes.value.data;
-            let localConfigs = {};
-            try {
-                localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
-            } catch(e) {}
-
-            const mergedConfigs = { ...serverConfigs, ...localConfigs };
-            for (const msId in serverConfigs) {
-                mergedConfigs[msId] = { ...(serverConfigs[msId] || {}), ...(localConfigs[msId] || {}) };
-                for (const mod in serverConfigs[msId]) {
-                    mergedConfigs[msId][mod] = { ...((serverConfigs[msId] && serverConfigs[msId][mod]) || {}), ...((localConfigs[msId] && localConfigs[msId][mod]) || {}) };
-                }
-            }
-            customMilestoneConfigs = mergedConfigs;
-            try {
-                localStorage.setItem('customMilestoneConfigs', JSON.stringify(mergedConfigs));
-            } catch(e) {}
-
-            if (Object.keys(localConfigs).length > 0 && Object.keys(serverConfigs).length === 0) {
-                fetch('/api/milestone-configs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ allConfigs: mergedConfigs })
-                }).catch(() => {});
-            }
-        }
-
-        // 2. Submissions Sync (Bidirectional Safe Merge & Cross-Browser Live Refresh)
-        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
-            const serverData = subsRes.value.data;
-            let localData = [];
-            try {
-                localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            } catch(e) {}
-
-            serverData.forEach(s => {
-                const idx = localData.findIndex(l => (
-                    (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
-                    String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
-                    normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
-                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
-                ));
-
-                if (idx > -1) {
-                    const prevStatus = localData[idx].status;
-                    localData[idx] = { ...localData[idx], ...s };
-
-                    if (prevStatus === 'evaluating' && s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
-                        if (typeof recordLevelUpReward === 'function') {
-                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
-                        }
-                    }
-                } else {
-                    localData.push(s);
-                    if (s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
-                        if (typeof recordLevelUpReward === 'function') {
-                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
-                        }
-                    }
-                }
-            });
-            try {
-                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
-            } catch(e) {}
-
-            // Auto-refresh active views if currently visible
-            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable') && !document.getElementById('adminCompletionView')?.classList.contains('hidden')) {
-                renderAdminCohortSubmissions();
-            }
-            if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
-                renderLearnerTimeline();
-            }
-        }
-
-        // 3. Level-Up Access Sync
-        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
-            levelUpAccessConfig = accessRes.value.data;
-            try {
-                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-            } catch(e) {}
-        }
-    } catch (e) {
-        console.warn('Server sync offline mode:', e);
-    }
-}
-window.syncGlobalServerData = syncGlobalServerData;
-
-
-async function toggleMediaMenu(btn) {
+function toggleMediaMenu(btn) {
     const parent = btn.closest('.relative');
     const menu = parent ? parent.querySelector('.media-dropdown-menu') : null;
     if (menu) {
@@ -296,10 +191,12 @@ async function downloadMediaDirectly(url, filename) {
         console.warn('Server sync offline mode:', e);
     }
 }
-syncGlobalServerData();
-setInterval(syncGlobalServerData, 3000); // Live poll every 3 seconds for real-time cross-browser harmony // Live poll every 5 seconds for cross-browser sync
+if (typeof syncGlobalServerData === "function") syncGlobalServerData().catch(()=>{});
+setInterval(() => { if (typeof syncGlobalServerData === "function") syncGlobalServerData().catch(()=>{}); }, 3000); // Live poll every 3 seconds for real-time cross-browser harmony // Live poll every 5 seconds for cross-browser sync
 
-// campusPartnersDB already declared
+campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
+    'campus@partners.com': ['6a168e4213e4e9a10984b164'    ] // We will use this to test!
+};
 
 function getAllDynamicProjects() {
     const stored = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
@@ -409,7 +306,7 @@ function getUserCompletionPercentage(userId) {
 }
 
 // Safely load local mock ledgers
-// localLedgers already declared
+localLedgers = {};
 try {
     localLedgers = JSON.parse(localStorage.getItem('tagmangoLedgerMock')) || {};
 } catch(e) {
@@ -479,179 +376,166 @@ async function fetchLivePoints(userId) {
 // ================= AUTHENTICATION LOGIC (UPGRADED) =================
 
 // Store the fetched real-time user globally between Step 1 and Step 2
-// realtimeCustomer declared at top 
+var realtimeCustomer = null; 
 
 async function requestOTP() {
-    const rawInput = (document.getElementById('loginId')?.value || '').trim();
+    const rawInput = document.getElementById('loginId').value.trim();
     const loginId = rawInput.toLowerCase();
     const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
     if (!loginId) return alert("Please enter email or phone number.");
     
     const btn = document.querySelector('#step1 button');
     if (btn) {
-        btn.innerText = "Verifying...";
+        btn.innerText = "Searching TagMango...";
         btn.disabled = true;
     }
 
-    try {
-        // 1. SAFE ADMIN & PARTNER CHECK
-        const defaultAdmins = [
-            'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
-            '6309764212', '9845421644', 'admin@cmplibe.com', 'saikumaryadiki@gmail.com'
-        ];
-        const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
-        
-        isAdminLogin = adminEmails.some(e => {
-            const normE = String(e).toLowerCase().trim();
-            return normE === loginId || (cleanPhone && normE === cleanPhone) || (cleanPhone && normE.endsWith(cleanPhone)) || loginId.includes('cmplibesai') || loginId.includes('admin');
-        });
-        
-        isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
-        if (isCampusPartner) {
-            partnerAllowedMangoes = campusPartnersDB[loginId] || campusPartnersDB[cleanPhone] || [];
-        }
+    // 1. SAFE ADMIN & PARTNER CHECK
+    const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
+    const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
+    
+    isAdminLogin = adminEmails.some(e => {
+        const normE = String(e).toLowerCase().trim();
+        return normE === loginId || (cleanPhone && normE === cleanPhone) || (cleanPhone && normE.endsWith(cleanPhone));
+    });
+    
+    isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
+    if (isCampusPartner) {
+        partnerAllowedMangoes = campusPartnersDB[loginId] || campusPartnersDB[cleanPhone] || [];
+    }
 
-        // 2. CUSTOMER LOGIN FLOW (WITH FAILSAFE)
-        if (!isAdminLogin && !isCampusPartner) {
-            let foundUser = null;
+    // 2. CUSTOMER / TESTER LOGIN FLOW
+    if (!isAdminLogin && !isCampusPartner) {
+        try {
+            if (typeof window.fetchTagMango !== 'function') throw new Error("fetchTagMango not defined");
 
-            // Attempt TagMango lookup with strict 3.5s timeout
-            try {
-                if (typeof window.fetchTagMango === 'function' && window.TagMangoAPI?.Users?.lookup) {
-                    const isEmail = loginId.includes('@');
-                    const payload = isEmail ? { email: loginId } : { phone: cleanPhone || loginId };
-                    
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3500);
-                    
-                    const response = await window.fetchTagMango(window.TagMangoAPI.Users.lookup, 'GET', payload, controller.signal);
-                    clearTimeout(timeoutId);
-                    foundUser = response.result || response.user || (Array.isArray(response) ? response[0] : null);
-                }
-            } catch (apiErr) {
-                console.warn("TagMango API lookup bypassed/timed out:", apiErr.message);
+            const isEmail = loginId.includes('@');
+            const payload = isEmail ? { email: loginId } : { phone: cleanPhone || loginId };
+            
+            const response = await window.fetchTagMango(window.TagMangoAPI.Users.lookup, 'GET', payload);
+            realtimeCustomer = response.result || response.user || response[0] || null;
+            
+            if (!realtimeCustomer || !realtimeCustomer._id) {
+                throw new Error("User ID missing from API response");
             }
+        } catch (error) {
+            console.warn("API Lookup Error, utilizing smart fallbacks:", error);
 
-            // Fallback to local actualUsers if TagMango lookup didn't resolve
-            if (!foundUser || !foundUser._id) {
+            // GOD MODE / TEST ACCOUNTS BYPASS
+            if (TEST_EMAILS.includes(loginId) || (cleanPhone && TEST_EMAILS.includes(cleanPhone))) {
+                console.log("Test Account Detected: Bypassing strict API checks.");
+                realtimeCustomer = {
+                    _id: 'test_' + Date.now(),
+                    name: 'cMPLi Test Account',
+                    email: loginId,
+                    phone: cleanPhone || '9999999999',
+                    subscribedMangoes: levelUpAccessConfig || [] 
+                };
+            } else {
+                // REGULAR FALLBACK FOR DUMMY / LOCAL DATA
                 if (Array.isArray(actualUsers) && actualUsers.length > 0) {
-                    foundUser = actualUsers.find(u =>
+                    realtimeCustomer = actualUsers.find(u =>
                         (u.email && u.email.toLowerCase() === loginId) ||
                         (u.phone && String(u.phone).trim() === loginId) ||
                         (cleanPhone && u.phone && String(u.phone).includes(cleanPhone)) ||
                         (u._id && String(u._id) === loginId)
-                    );
+                    ) || null;
                 }
             }
 
-            // Auto-synthesize customer record so NO customer is ever locked out
-            if (!foundUser || !foundUser._id) {
-                const isEmail = loginId.includes('@');
-                foundUser = {
-                    _id: 'usr_' + Math.abs(loginId.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16),
-                    name: isEmail ? loginId.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : `Learner ${cleanPhone}`,
-                    email: isEmail ? loginId : `${cleanPhone}@learn.cmplibe.com`,
-                    phone: cleanPhone || loginId,
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
-                };
+            if (!realtimeCustomer || !realtimeCustomer._id) {
+                if (btn) {
+                    btn.innerText = "Request OTP";
+                    btn.disabled = false;
+                }
+                return alert("Account not found. Ensure your email/phone is correct.");
             }
-
-            realtimeCustomer = foundUser;
         }
+    }
 
-        // 3. TRANSITION TO OTP SCREEN (CODE 1234)
-        document.getElementById('step1')?.classList.add('hidden');
-        document.getElementById('step2')?.classList.remove('hidden');
-        tempLoginId = loginId;
-
-    } catch (err) {
-        console.error("Login initialization error:", err);
-        // Guaranteed fallback to OTP screen
-        document.getElementById('step1')?.classList.add('hidden');
-        document.getElementById('step2')?.classList.remove('hidden');
-        tempLoginId = loginId;
-    } finally {
-        if (btn) {
-            btn.innerText = "Request OTP";
-            btn.disabled = false;
-        }
+    // 3. SUCCESS: Transition to OTP Screen
+    document.getElementById('step1').classList.add('hidden');
+    document.getElementById('step2').classList.remove('hidden');
+    tempLoginId = loginId;
+    
+    if (btn) {
+        btn.innerText = "Request OTP";
+        btn.disabled = false;
     }
 }
 
 async function verifyOTP() {
-    const otpInput = document.getElementById('otpCode')?.value.trim();
+    const otp = document.getElementById('otpCode').value;
     const btn = document.querySelector('#step2 button');
 
-    if (otpInput === "1234" || otpInput.length === 4) { 
-        if (btn) {
-            btn.innerText = "Entering Dashboard...";
-            btn.disabled = true;
-        }
+    if(otp === "1234") { 
+        btn.innerText = "Authenticating & Fetching Data...";
+        btn.disabled = true;
 
-        try {
-            // 1. Reveal main app interface immediately
-            const loginScreen = document.getElementById('loginScreen');
-            const mainApp = document.getElementById('mainApp');
-            const learnerNav = document.getElementById('learnerNav');
-            const adminNav = document.getElementById('adminNav');
+        await loadGlobalSettings();
 
-            if (loginScreen) loginScreen.style.display = 'none';
-            if (mainApp) mainApp.classList.remove('hidden');
-
-            // 2. Route Creator vs Learner
-            if (isAdminLogin || isCampusPartner) {
-                if (learnerNav) learnerNav.classList.add('hidden');
-                if (adminNav) adminNav.classList.remove('hidden');
+        if(isAdminLogin || isCampusPartner) {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('learnerNav').classList.add('hidden');
+            document.getElementById('adminNav').classList.remove('hidden');
+            
+            switchTab('adminTab');
+            initAdminApp(); // This fetches live Mangos!
+        } else {
+            // Assign the LIVE user we found in requestOTP
+            currentUser = realtimeCustomer || (Array.isArray(actualUsers) && actualUsers.length > 0 ? actualUsers[0] : {
+        _id: 'usr_' + Date.now(),
+        name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
+        email: tempLoginId || 'learner@cmplibe.com',
+        subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+    }); 
+            if(!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
+            
+            // --- ROCK-SOLID ACCESS FIX: Match user against main subscription ledger ---
+            try {
+                // Fetch the master subscriber list (same as Admin uses)
+                const subRes = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
+                const subUsers = subRes.result || subRes.users || actualUsers || [];
                 
-                // Open Creator Level-Up Command Center by default for instant productivity
-                switchTab('adminLevelUpTab');
-                loadGlobalSettings().catch(() => {});
-                if (typeof initAdminApp === "function") { Promise.resolve(initAdminApp()).catch(e => console.warn("Admin init:", e)); }
-            } else {
-                currentUser = realtimeCustomer || (Array.isArray(actualUsers) ? actualUsers[0] : {
-                    _id: 'usr_' + Date.now(),
-                    name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
-                    email: tempLoginId || 'learner@cmplibe.com',
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
-                });
-
-                if (learnerNav) learnerNav.classList.remove('hidden');
-                if (adminNav) adminNav.classList.add('hidden');
-
-                if (!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
-                currentScoreObj = { totalScore: 0, points: [], displayScore: 0 };
-
-                // Open Learner Level-Up Hub by default
-                switchTab('levelUpTab');
-                loadGlobalSettings().catch(() => {});
-                if (typeof initApp === "function") { Promise.resolve(initApp()).catch(e => console.warn("App init:", e)); }
-
-                // Fetch live points in background
-                fetchLivePoints(currentUser._id).then(liveScoreData => {
-                    if (liveScoreData) {
-                        currentScoreObj = liveScoreData;
-                        let localPointsSum = (localLedgers[currentUser._id] || []).reduce((sum, item) => sum + item.score, 0);
-                        currentScoreObj.displayScore = (currentScoreObj.totalScore || 0) + localPointsSum;
-                        if (typeof updateDashboardUI === 'function') updateDashboardUI();
-                    }
-                }).catch(() => {});
+                // Find our current user in that master list via ID, Email, or Phone
+                const fullDetail = subUsers.find(u => 
+                    String(u._id) === String(currentUser._id) || 
+                    (u.email && u.email === currentUser.email) || 
+                    (u.phone && String(u.phone) === String(currentUser.phone))
+                );
+                
+                if (fullDetail && fullDetail.subscribedMangoes) {
+                    currentUser.subscribedMangoes = fullDetail.subscribedMangoes;
+                } else {
+                    currentUser.subscribedMangoes = [];
+                }
+            } catch(e) {
+                console.warn("Using fallback for subscriptions.");
+                currentUser.subscribedMangoes = currentUser.subscribedMangoes || [];
             }
-        } catch (e) {
-            console.error("Login transition error:", e);
-            document.getElementById('loginScreen')?.style.setProperty('display', 'none', 'important');
-            document.getElementById('mainApp')?.classList.remove('hidden');
-        } finally {
-            if (btn) {
-                btn.innerText = "Verify & Login";
-                btn.disabled = false;
-            }
+            // --------------------------------------------------------------------------
+
+            // Fetch live data directly from TagMango API
+            const liveScoreData = await fetchLivePoints(currentUser._id);
+            currentScoreObj = liveScoreData;
+            
+            let localPointsSum = localLedgers[currentUser._id].reduce((sum, item) => sum + item.score, 0);
+            currentScoreObj.displayScore = currentScoreObj.totalScore + localPointsSum;
+
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('learnerNav').classList.remove('hidden');
+            document.getElementById('adminNav').classList.add('hidden');
+            
+            switchTab('dashboardTab');
+            initApp();
         }
+
+        btn.innerText = "Verify & Login";
+        btn.disabled = false;
     } else { 
         alert("Invalid OTP. Hint: Use 1234"); 
-        if (btn) {
-            btn.innerText = "Verify & Login";
-            btn.disabled = false;
-        }
     }
 }
 
@@ -673,49 +557,49 @@ function logout() {
 }
 
 async function switchTab(tab) {
-    syncGlobalServerData().catch(e => console.warn(e));
+    if (typeof syncGlobalServerData === "function") { syncGlobalServerData().catch(e => console.warn(e)); }
+    document.getElementById('dashboardTab').classList.add('hidden');
+    document.getElementById('adminTab').classList.add('hidden');
+    document.getElementById('adminLevelUpTab').classList.add('hidden');
+    document.getElementById('leaderboardTab').classList.add('hidden');
     
-    // Hide all tab sections
-    ['dashboardTab', 'adminTab', 'adminLevelUpTab', 'leaderboardTab', 'levelUpTab'].forEach(tId => {
-        const el = document.getElementById(tId);
-        if (el) el.classList.add('hidden');
-    });
+    const levelUpElement = document.getElementById('levelUpTab');
+    if(levelUpElement) levelUpElement.classList.add('hidden');
     
-    // Unhide the requested tab section
-    const targetEl = document.getElementById(tab);
-    if (targetEl) targetEl.classList.remove('hidden');
+    document.getElementById(tab).classList.remove('hidden');
+    
+    if(tab === 'dashboardTab' && currentUser) updateDashboardUI();
+    if(tab === 'leaderboardTab') renderLeaderboard('all'); 
+    
+    // --- AUTO-FETCH LATEST GLOBAL SETTINGS FROM SCENARIO-B ---
+    if(tab === 'adminLevelUpTab' || tab === 'levelUpTab') {
+        await loadGlobalSettings();
+    }
 
-    // Update active nav button state
-    document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
-    const activeNavBtn = document.getElementById('nav-' + tab) || document.getElementById('nav-admin' + tab.charAt(0).toUpperCase() + tab.slice(1));
-    if (activeNavBtn) activeNavBtn.classList.add('active');
-    
-    if (tab === 'dashboardTab' && currentUser) {
-        updateDashboardUI();
-    }
-    if (tab === 'leaderboardTab') {
-        renderLeaderboard('all'); 
-    }
-    if (tab === 'adminTab') {
-        initAdminApp();
-    }
-    if (tab === 'adminLevelUpTab') {
-        document.getElementById('adminMilestoneGridContainer')?.classList.remove('hidden');
-        document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
+    if(tab === 'adminLevelUpTab') {
+        document.getElementById('adminMilestoneGridContainer').classList.remove('hidden');
+        document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
+        
+        const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
+        if (togglesArea) togglesArea.style.display = '';
+        const searchArea = document.getElementById('adminLevelUpSearch')?.closest('.glass') || document.getElementById('adminLevelUpSearch')?.parentElement;
+        if (searchArea) searchArea.style.display = '';
+
         renderAdminMilestoneGrid();
         populateAdminCohortFilters();
-        renderAdminMangoToggles();
+        renderAdminMangoToggles(); // Re-render toggles with latest DB state
     }
-    if (tab === 'levelUpTab') {
+    
+    if(tab === 'levelUpTab') {
         const hasAccess = isAdminLogin || (currentUser && currentUser.subscribedMangoes && currentUser.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId)));
-        if (!hasAccess && !(typeof isTestUser === 'function' && isTestUser())) {
-            document.getElementById('levelUpNoAccess')?.classList.remove('hidden');
-            document.getElementById('milestoneGridContainer')?.classList.add('hidden');
-            document.getElementById('milestoneDetailContainer')?.classList.add('hidden');
+        
+        if (!hasAccess) {
+            document.getElementById('levelUpNoAccess').classList.remove('hidden');
+            document.getElementById('milestoneGridContainer').classList.add('hidden');
+            document.getElementById('milestoneDetailContainer').classList.add('hidden');
         } else {
-            document.getElementById('levelUpNoAccess')?.classList.add('hidden');
-            document.getElementById('milestoneGridContainer')?.classList.remove('hidden');
-            document.getElementById('milestoneDetailContainer')?.classList.add('hidden');
+            document.getElementById('levelUpNoAccess').classList.add('hidden');
+            document.getElementById('milestoneGridContainer').classList.remove('hidden');
             renderMilestoneGrid();
         }
     }
@@ -1030,7 +914,22 @@ function updateDashboardUI() {
 
 // Store real-time subscribers globally for the admin view
 // --- GLOBAL ADMIN FILTER STATE ---
-// Admin data variables declared at top
+allAdminMangos = (function() {
+    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
+        return coursesData.result.subscriptions.map(s => ({
+            _id: s.mangoId,
+            id: s.mangoId,
+            title: s.mangoTitle,
+            name: s.mangoTitle,
+            amount: s.count > 0 ? 1 : 0,
+            price: s.count > 0 ? 1 : 0,
+            isPaid: s.count > 0,
+            subscribersCount: s.count
+        }));
+    }
+    return [];
+})();
+adminRealtimeUsers = (typeof actualUsers !== 'undefined' && actualUsers.length > 0) ? [...actualUsers] : [];
 
 async function initAdminApp() {
     const courseSelect = document.getElementById('courseSelect');
@@ -1070,12 +969,12 @@ async function initAdminApp() {
     // 4. HIDE "Level-Up Solution Access" entirely for Partners in Level-Up Tab
     const toggleSearch = document.getElementById('adminLevelUpSearch');
     if (toggleSearch) {
-        const accessBox = toggleSearch.closest?.(".glass") || toggleSearch.parentElement?.parentElement;
+        const accessBox = toggleSearch.closest('.glass') || (toggleSearch.parentElement ? toggleSearch.parentElement.parentElement : null);
         if (accessBox) accessBox.style.display = isCampusPartner ? 'none' : '';
     }
     const toggleContainer = document.getElementById('adminMangoToggles');
     if (toggleContainer) {
-        const wrapper = toggleContainer.closest?.(".glass") || toggleContainer.parentElement;
+        const wrapper = toggleContainer.closest('.glass') || (toggleContainer.parentElement ? toggleContainer.parentElement : null);
         if (wrapper) wrapper.style.display = isCampusPartner ? 'none' : '';
     }
 
@@ -4112,7 +4011,7 @@ function closeAdminMilestoneView() {
 }
 
 // --- Global store for mock approvals ---
-// mockApprovedCertificates already declared
+mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 
 // Update the Cohort Renderer to respect the active module
 function renderAdminCohortSubmissions() {
@@ -4290,7 +4189,7 @@ function renderAdminCohortSubmissions() {
     table.innerHTML = theadHtml + tbodyHtml;
 }   
 
-// customMilestoneConfigs already declared
+customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 
 
 // ==============================================================
@@ -4931,7 +4830,7 @@ function getUserMilestoneLcs(userId, milestoneId) {
 
 // --- ADMIN PROJECT BUILDER ARCHITECTURE ---
 
-// customProjectsDB already declared
+customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
 let activeAdminProjectId = null;
 
 function renderAdminProjectsList() {
@@ -5951,7 +5850,7 @@ window.submitPodSessionQuiz = submitPodSessionQuiz;
 window.openAdminMilestone = openAdminMilestone;
 window.switchAdminMilestoneTab = switchAdminMilestoneTab;
 window.switchAdminModuleTab = switchAdminModuleTab;
-
+window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
 window.selectAdminConfigDate = selectAdminConfigDate;
 window.loadAdminCheckinEditor = loadAdminCheckinEditor;
 window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
@@ -5962,39 +5861,7 @@ window.viewMySubmission = viewMySubmission;
 window.renderSubmissionDetailModal = renderSubmissionDetailModal;
 window.closeAdminMilestoneView = closeAdminMilestoneView;
 
-
-// ================= EXPLICIT GLOBAL WINDOW BINDINGS =================
 window.requestOTP = requestOTP;
 window.verifyOTP = verifyOTP;
 window.logout = logout;
 window.switchTab = switchTab;
-window.openMilestone = openMilestone;
-window.closeMilestoneView = closeMilestoneView;
-window.openAdminMilestone = openAdminMilestone;
-window.switchAdminMilestoneTab = switchAdminMilestoneTab;
-window.switchAdminModuleTab = switchAdminModuleTab;
-window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
-window.renderAdminCheckinsList = renderAdminCheckinsList;
-window.loadAdminCheckinEditor = loadAdminCheckinEditor;
-window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
-window.saveAdminCheckinConfig = saveAdminCheckinConfig;
-window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;
-window.viewCustomerSubmission = viewCustomerSubmission;
-window.viewMySubmission = viewMySubmission;
-window.renderSubmissionDetailModal = renderSubmissionDetailModal;
-window.filterMangosByPricing = filterMangosByPricing;
-window.renderAdminCustomerGrid = renderAdminCustomerGrid;
-window.filterAdminCustomersByStatus = filterAdminCustomersByStatus;
-window.displayAdminLearnerDataById = displayAdminLearnerDataById;
-window.openPartnerManagementModal = openPartnerManagementModal;
-window.saveCampusPartner = saveCampusPartner;
-window.deleteCampusPartner = deleteCampusPartner;
-window.submitPodSessionQuiz = submitPodSessionQuiz;
-window.submitDynamicCheckIn = submitDynamicCheckIn;
-window.openSubmissionModal = openSubmissionModal;
-window.downloadMediaDirectly = downloadMediaDirectly;
-window.toggleMediaMenu = toggleMediaMenu;
-window.playEmbeddedMedia = playEmbeddedMedia;
-window.initApp = initApp;
-window.initAdminApp = initAdminApp;
-window.syncGlobalServerData = syncGlobalServerData;

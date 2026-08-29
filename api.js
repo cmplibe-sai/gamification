@@ -57,7 +57,7 @@ window.TagMangoAPI = {
 };
 
 // --- AUTOMATED FETCH WRAPPER ---
-window.fetchTagMango = async function(endpoint, method = 'GET', body = null, signal = null) {
+window.fetchTagMango = async function(endpoint, method = 'GET', body = null) {
     const options = {
         method,
         headers: {
@@ -66,13 +66,10 @@ window.fetchTagMango = async function(endpoint, method = 'GET', body = null, sig
             'x-whitelabel-host': window.APP_CONFIG.hostUrl
         }
     };
-
-    if (signal) {
-        options.signal = signal;
-    }
     
     if (body) {
         if (method.toUpperCase() === 'GET') {
+            // Browsers block GET requests with bodies. Convert body to query string (e.g. ?email=...)
             const params = new URLSearchParams(body).toString();
             endpoint += `?${params}`;
         } else {
