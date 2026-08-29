@@ -529,7 +529,9 @@ async function fetchLivePoints(userId) {
 let realtimeCustomer = null; 
 
 async function requestOTP() {
-    const loginId = document.getElementById('loginId').value.trim().toLowerCase();
+    const rawInput = document.getElementById('loginId').value.trim();
+    const loginId = rawInput.toLowerCase();
+    const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
     if (!loginId) return alert("Please enter email or phone number.");
     
     const btn = document.querySelector('#step1 button');
@@ -539,22 +541,26 @@ async function requestOTP() {
     }
 
     // 1. SAFE ADMIN & PARTNER CHECK
-    const adminEmails = window.ADMIN_EMAILS || [];
-    isAdminLogin = adminEmails.includes(loginId);
+    const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
+    const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
     
-    isCampusPartner = !!campusPartnersDB[loginId];
+    isAdminLogin = adminEmails.some(e => {
+        const normE = String(e).toLowerCase().trim();
+        return normE === loginId || (cleanPhone && normE === cleanPhone) || (cleanPhone && normE.endsWith(cleanPhone));
+    });
+    
+    isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
     if (isCampusPartner) {
-        partnerAllowedMangoes = campusPartnersDB[loginId];
+        partnerAllowedMangoes = campusPartnersDB[loginId] || campusPartnersDB[cleanPhone] || [];
     }
 
     // 2. CUSTOMER / TESTER LOGIN FLOW
-    // FIX: Bypass TagMango check if it's an Admin OR a Campus Partner
     if (!isAdminLogin && !isCampusPartner) {
         try {
             if (typeof window.fetchTagMango !== 'function') throw new Error("fetchTagMango not defined");
 
             const isEmail = loginId.includes('@');
-            const payload = isEmail ? { email: loginId } : { phone: loginId };
+            const payload = isEmail ? { email: loginId } : { phone: cleanPhone || loginId };
             
             const response = await window.fetchTagMango(window.TagMangoAPI.Users.lookup, 'GET', payload);
             realtimeCustomer = response.result || response.user || response[0] || null;
@@ -563,31 +569,30 @@ async function requestOTP() {
                 throw new Error("User ID missing from API response");
             }
         } catch (error) {
-            console.warn("API Lookup Error, utilizing smart fallbacks...");
+            console.warn("API Lookup Error, utilizing smart fallbacks:", error);
 
-            // --- GOD MODE / TEST ACCOUNTS BYPASS ---
-            if (TEST_EMAILS.includes(loginId)) {
+            // GOD MODE / TEST ACCOUNTS BYPASS
+            if (TEST_EMAILS.includes(loginId) || (cleanPhone && TEST_EMAILS.includes(cleanPhone))) {
                 console.log("Test Account Detected: Bypassing strict API checks.");
                 realtimeCustomer = {
                     _id: 'test_' + Date.now(),
                     name: 'cMPLi Test Account',
                     email: loginId,
-                    phone: '9999999999',
+                    phone: cleanPhone || '9999999999',
                     subscribedMangoes: levelUpAccessConfig || [] 
                 };
             } else {
-                // --- REGULAR FALLBACK FOR DUMMY DATA ---
+                // REGULAR FALLBACK FOR DUMMY / LOCAL DATA
                 if (Array.isArray(actualUsers) && actualUsers.length > 0) {
-                    const normalizedLogin = loginId.toLowerCase();
                     realtimeCustomer = actualUsers.find(u =>
-                        (u.email && u.email.toLowerCase() === normalizedLogin) ||
+                        (u.email && u.email.toLowerCase() === loginId) ||
                         (u.phone && String(u.phone).trim() === loginId) ||
+                        (cleanPhone && u.phone && String(u.phone).includes(cleanPhone)) ||
                         (u._id && String(u._id) === loginId)
                     ) || null;
                 }
             }
 
-            // If it's STILL not found, reject the login and reset the button
             if (!realtimeCustomer || !realtimeCustomer._id) {
                 if (btn) {
                     btn.innerText = "Request OTP";

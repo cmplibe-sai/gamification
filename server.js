@@ -103,11 +103,15 @@ app.get('/api/health', (req, res) => {
 
 // Dynamic configuration endpoint
 app.get('/api/config', (req, res) => {
+    const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
+    const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
+
     res.status(200).json({
         hostUrl: process.env.HOST_URL || 'learn.cmplibe.com',
         baseUrl: process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1',
         creatorId: process.env.CREATOR_ID || '6682734e120c766a6e5af59c',
-        adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
+        adminEmails: adminEmails,
         databaseConnected: isDbConnected
     });
 });
