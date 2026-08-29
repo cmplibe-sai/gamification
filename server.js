@@ -117,6 +117,22 @@ app.get('/api/config', (req, res) => {
 // Get all submissions or filter by user
 app.get('/api/submissions', (req, res) => {
     let list = store.submissions || [];
+    const now = Date.now();
+    let hasChanges = false;
+
+    // Automatic Evaluation Approval: If in 'evaluating' status for >= 18 seconds, finalize it!
+    list.forEach(s => {
+        if (s.status === 'evaluating') {
+            const subTime = new Date(s.submittedAt || s.timestamp || s.date || 0).getTime();
+            if (now - subTime >= 18000) { // 18 seconds
+                s.status = 'completed';
+                hasChanges = true;
+            }
+        }
+    });
+
+    if (hasChanges) saveStore();
+
     const { userId, milestoneId } = req.query;
     if (userId) {
         list = list.filter(s => String(s.userId) === String(userId));
@@ -140,7 +156,7 @@ app.post('/api/submissions', (req, res) => {
         // Check if submission already exists for this user, milestone, type, and day/reference
         const subMsId = subData.milestoneId || 1;
         const subType = (subData.type || '').toLowerCase().trim();
-        const subDay = String(subData.day || subData.date || '');
+        const subDay = String(subData.day !== undefined && subData.day !== null ? subData.day : (subData.date || ''));
 
         const existingIdx = store.submissions.findIndex(s => {
             const sameUser = String(s.userId) === String(subData.userId) || 
@@ -151,37 +167,43 @@ app.post('/api/submissions', (req, res) => {
             return sameUser && sameMs && sameType && sameDay;
         });
 
-        const record = {
-            id: subData.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-            userId: subData.userId,
-            userEmail: subData.userEmail || '',
-            userName: subData.userName || '',
-            userPhone: subData.userPhone || '',
-            milestoneId: subMsId,
-            type: subType,
-            day: subData.day,
-            date: subData.date || subData.dateKey,
-            title: subData.title || `Day ${subData.day} Check-in`,
-            responses: subData.responses || [],
-            summary: subData.summary || '',
-            media: subData.media || null,
-            mediaUrl: subData.mediaUrl || (subData.media ? subData.media.data : ''),
-            lcReward: Number(subData.lcReward) || Number(subData.earnedPoints) || 0,
-            status: subData.status || 'evaluating', // 'evaluating', 'completed', 'approved'
-            submittedAt: subData.submittedAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
         if (existingIdx > -1) {
-            store.submissions[existingIdx] = { ...store.submissions[existingIdx], ...record };
+            // MERGE SAFELY WITHOUT OVERWRITING RESPONSES OR DATES
+            store.submissions[existingIdx] = {
+                ...store.submissions[existingIdx],
+                ...subData,
+                responses: (subData.responses && Array.isArray(subData.responses) && subData.responses.length > 0)
+                    ? subData.responses
+                    : store.submissions[existingIdx].responses,
+                submittedAt: store.submissions[existingIdx].submittedAt || subData.submittedAt || new Date().toISOString()
+            };
         } else {
+            const record = {
+                id: subData.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+                userId: subData.userId,
+                userEmail: subData.userEmail || '',
+                userName: subData.userName || '',
+                userPhone: subData.userPhone || '',
+                milestoneId: subMsId,
+                type: subType,
+                day: subData.day,
+                date: subData.date || subData.dateKey || new Date().toISOString().split('T')[0],
+                title: subData.title || `Day ${subData.day} Check-in`,
+                responses: subData.responses || [],
+                summary: subData.summary || '',
+                media: subData.media || null,
+                mediaUrl: subData.mediaUrl || (subData.media ? subData.media.data : ''),
+                lcReward: Number(subData.lcReward) || Number(subData.earnedPoints) || 33,
+                status: subData.status || 'evaluating',
+                submittedAt: subData.submittedAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
             store.submissions.push(record);
         }
 
         saveStore();
-        res.status(201).json({ success: true, message: 'Submission synced successfully', data: record });
+        res.json({ success: true, message: 'Submission saved successfully', data: store.submissions });
     } catch (err) {
-        console.error('Error saving submission:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

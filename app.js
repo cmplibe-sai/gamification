@@ -133,75 +133,49 @@ let tempLoginId = '';
 // --- GLOBAL SERVER SYNCHRONIZATION ENGINE ---
 async function syncGlobalServerData() {
     try {
-        const [subsRes, configsRes, projectsRes, accessRes, datesRes] = await Promise.allSettled([
+        const [subsRes, configsRes, projectsRes, accessRes] = await Promise.allSettled([
             fetch('/api/submissions').then(r => r.json()),
             fetch('/api/milestone-configs').then(r => r.json()),
             fetch('/api/projects').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json()),
-            fetch('/api/milestone-start-dates').then(r => r.json())
+            fetch('/api/levelup-access').then(r => r.json())
         ]);
 
-        // 1. Sync Submissions
-        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
-            let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            const serverData = subsRes.value.data;
-            
-            serverData.forEach(sSub => {
-                const sDay = String(sSub.day !== undefined && sSub.day !== null ? sSub.day : (sSub.date || ''));
-                const sType = normalizeLevelUpType(sSub.type || 'dip');
-                const sMsId = String(sSub.milestoneId || 1);
-
-                const idx = localDB.findIndex(lSub => {
-                    const sameUser = (String(lSub.userId) === String(sSub.userId)) || 
-                        (lSub.userEmail && sSub.userEmail && lSub.userEmail.toLowerCase() === sSub.userEmail.toLowerCase());
-                    const sameMs = String(lSub.milestoneId || 1) === sMsId;
-                    const sameType = normalizeLevelUpType(lSub.type || 'dip') === sType;
-                    const sameDay = String(lSub.day !== undefined && lSub.day !== null ? lSub.day : (lSub.date || '')) === sDay;
-                    return sameUser && sameMs && sameType && sameDay;
-                });
-
-                if (idx > -1) {
-                    localDB[idx] = { ...localDB[idx], ...sSub };
-                } else {
-                    localDB.push(sSub);
-                }
-            });
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-        }
-
-        // 2. Sync Custom Milestone Configs (Cross-Browser Question Setup)
+        // 1. Authoritative Milestone Configs Sync (Cross-Browser Question Setup)
         if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
             const serverConfigs = configsRes.value.data;
-            let localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
-            
-            Object.keys(serverConfigs).forEach(msId => {
-                if (!localConfigs[msId]) localConfigs[msId] = {};
-                Object.keys(serverConfigs[msId]).forEach(mod => {
-                    if (!localConfigs[msId][mod]) localConfigs[msId][mod] = {};
-                    Object.assign(localConfigs[msId][mod], serverConfigs[msId][mod]);
-                });
-            });
-            
-            customMilestoneConfigs = localConfigs;
-            localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+            if (serverConfigs && typeof serverConfigs === 'object') {
+                customMilestoneConfigs = serverConfigs;
+                localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+            }
         }
 
-        // 3. Sync Level-Up Access
+        // 2. Submissions Sync
+        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
+            const serverData = subsRes.value.data;
+            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(serverData));
+            
+            // Check if any current user submission got approved on server
+            if (currentUser) {
+                serverData.forEach(s => {
+                    if (s.userId === currentUser._id && s.status === 'completed' && s.lcReward) {
+                        recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type} Day ${s.day} Complete`);
+                    }
+                });
+            }
+        }
+
+        // 3. Level-Up Access Sync
         if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
             levelUpAccessConfig = accessRes.value.data;
             localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
         }
 
-        // 4. Sync Dynamic Projects
-        if (projectsRes.status === 'fulfilled' && projectsRes.value && projectsRes.value.success && projectsRes.value.data) {
-            localStorage.setItem('customProjectsDB', JSON.stringify(projectsRes.value.data));
-        }
-
     } catch (e) {
-        console.warn('Server sync offline mode:', e);
+        console.warn('Server sync offline/error:', e);
     }
 }
 syncGlobalServerData();
+setInterval(syncGlobalServerData, 5000); // Live poll every 5 seconds for cross-browser sync
 
 let campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
     'campus@partners.com': ['6a168e4213e4e9a10984b164'    ] // We will use this to test!
@@ -651,7 +625,8 @@ function handleLockedClick(id, isUnlocked) {
 }
 
 // Function to let the learner enter the milestone view (UPDATED WITH START DATE)
-function openMilestone(id) {
+async function openMilestone(id) {
+    await syncGlobalServerData();
     activeMilestoneId = id;
     const ms = milestoneConfig.find(m => m.id === id);
     
@@ -3676,7 +3651,8 @@ function populateAdminCohortFilters() {
 // Global State for Admin Tabs
 let activeAdminModule = 'dip';
 
-function openAdminMilestone(id) {
+async function openAdminMilestone(id) {
+    await syncGlobalServerData();
     activeAdminMilestoneId = id;
     activeAdminModule = 'dip';
     const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
