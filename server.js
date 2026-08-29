@@ -286,6 +286,8 @@ app.post('/api/submissions/approve', async (req, res) => {
         const earnedLcs = (lcReward !== undefined && lcReward !== null) ? Number(lcReward) : (match && match.lcReward !== undefined ? Number(match.lcReward) : 33);
         const description = `[Manual Approved] Milestone-${subMsId} Day-${day} ${subType.toUpperCase()} Check-in`;
 
+        let alreadyCompleted = match && match.status === 'completed';
+
         if (match) {
             match.status = 'completed';
             match.lcReward = earnedLcs;
@@ -294,10 +296,15 @@ app.post('/api/submissions/approve', async (req, res) => {
 
         saveStore();
 
-        // Call TagMango API
-        const tmRes = await assignTagMangoPointsOnServer(userId, earnedLcs, description);
+        let tmRes = null;
+        // PREVENT DUPLICATE CREDIT: Only call TagMango API if not already completed by AI worker
+        if (!alreadyCompleted && earnedLcs > 0) {
+            tmRes = await assignTagMangoPointsOnServer(userId, earnedLcs, description);
+        } else {
+            console.log(`[TagMango Sync Skipped] Points already awarded earlier for user ${userId}.`);
+        }
 
-        res.json({ success: true, message: 'Submission approved and points assigned to TagMango wallet', tagmango: tmRes });
+        res.json({ success: true, message: 'Submission marked as approved', tagmango: tmRes, alreadyAwarded: alreadyCompleted });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
