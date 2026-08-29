@@ -3567,38 +3567,18 @@ function applyForCertificate() {
     }
 }
 
-function viewMySubmission(userId, dayLabel, type) {
-    const submissions = getUserSubmissionsByUserId(userId);
-    const normalizedType = normalizeLevelUpType(type);
-    const currentMsId = typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
 
-    let sub = submissions.find(s => {
-        const subMsId = s.milestoneId || 1;
-        return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, dayLabel) && String(subMsId) === String(currentMsId);
-    });
-
-    if (!sub) {
-        const fallbackLabel = typeof parseToIsoDate === 'function' ? parseToIsoDate(dayLabel) : dayLabel;
-        sub = submissions.find(s => {
-            const subMsId = s.milestoneId || 1;
-            return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, fallbackLabel) && String(subMsId) === String(currentMsId);
-        });
-    }
-    
-    if (!sub) {
-        sub = submissions.find(s => {
-            const subMsId = s.milestoneId || 1;
-            return normalizeLevelUpType(s.type) === normalizedType && String(s.day) === String(dayLabel) && String(subMsId) === String(currentMsId);
-        });
-    }
-    
+function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     if (!sub) return alert("No submission data found for this selection.");
 
-    const actualDay = sub.day || dayLabel;
+    const normalizedType = normalizeLevelUpType(type || sub.type || 'dip');
+    const isPod = normalizedType === 'pod';
     const isEvaluating = (sub.status === 'evaluating' || sub.status === 'pending');
-    const lcReward = sub.lcReward !== undefined ? sub.lcReward : 33;
-    
-    let displayTitle = sub.title || `Day ${actualDay} Response`;
+    const isCompleted = sub.status === 'completed';
+    const lcReward = (sub.lcReward !== undefined && sub.lcReward !== null) ? sub.lcReward : 33;
+    const actualDay = sub.day || sub.sessionDay || dayLabel || 1;
+
+    let displayTitle = sub.title || `Day ${actualDay} ${normalizedType.toUpperCase()} Check-In`;
     const subTime = sub.submittedAt || sub.timestamp || sub.date;
     let exactTimeStr = 'Recorded';
     if (subTime) {
@@ -3608,59 +3588,134 @@ function viewMySubmission(userId, dayLabel, type) {
         }
     }
 
-    let answersHtml = `<div class="space-y-4">`;
-    if (sub.responses && sub.responses.length > 0) {
-        sub.responses.forEach(response => {
-            answersHtml += `
-            <div>
-                <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">${response.question}</label>
-                <div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 shadow-inner">`;
-            
-            if (['audio', 'video', 'doc'].includes(response.type) && response.fileData) {
-                 const isMockFile = response.fileData === "#mock_file_uploaded_successfully";
-                 answersHtml += `<p class="mb-3 font-medium text-indigo-300"><i class="fas fa-file mr-2"></i>${response.fileName || response.answer || 'Uploaded Media'}</p>`;
-                 if (isMockFile) {
-                     answersHtml += `<span class="inline-flex items-center gap-2 text-amber-400 bg-amber-900/30 px-3 py-1.5 rounded-lg border border-amber-700/50 text-xs font-bold"><i class="fas fa-exclamation-triangle"></i> Mock File</span>`;
-                 } else {
-                     answersHtml += `<a href="${response.fileData}" download="${response.fileName || 'download'}" target="_blank" class="inline-flex items-center gap-2 text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg border border-indigo-500 shadow-md text-xs font-bold transition-all"><i class="fas fa-download"></i> Download File</a>`;
-                 }
-            } else {
-                answersHtml += `<div class="whitespace-pre-wrap leading-relaxed">${response.answer || 'No response provided.'}</div>`;
-            }
-            answersHtml += `</div></div>`;
-        });
+    let bodyHtml = '';
+
+    // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (MATCHES IMG-4 EXACTLY) ---
+    if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || r.options))) {
+        const responses = sub.responses || sub.answers || [];
+        
+        bodyHtml = `
+            <div class="space-y-6">
+                ${responses.map((q, qIdx) => {
+                    const opts = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
+                    const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : -1);
+                    const correctSel = q.correctOption !== undefined ? q.correctOption : 0;
+                    const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
+                    const questionPts = q.pts || 11;
+                    const earnedPts = isCorrect ? questionPts : 0;
+
+                    return `
+                    <div class="space-y-2.5 pb-4 border-b border-slate-700/60 last:border-0">
+                        <div class="flex items-start justify-between gap-4">
+                            <h5 class="text-xs sm:text-sm font-bold text-white leading-relaxed flex-1">
+                                ${qIdx + 1}. ${q.question || q.title || 'Comprehension Question'}
+                            </h5>
+                            <div class="flex items-center gap-3 shrink-0">
+                                <span class="text-[11px] font-bold text-slate-400">${questionPts} LC</span>
+                                <span class="text-xs font-black ${isCorrect ? 'text-emerald-400' : 'text-slate-500'}">${earnedPts}</span>
+                            </div>
+                        </div>
+
+                        <!-- Stacked 4 Options (Img-4 Style) -->
+                        <div class="space-y-2 pt-1">
+                            ${opts.map((opt, oIdx) => {
+                                const isUserChoice = (oIdx === userSel);
+                                const isRightAnswer = (oIdx === correctSel);
+                                
+                                let cardBorder = 'border-slate-800 bg-slate-950/60 text-slate-300';
+                                let iconMarkup = '';
+
+                                if (isRightAnswer) {
+                                    cardBorder = 'border-2 border-emerald-500 bg-emerald-500/10 text-emerald-300 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.15)]';
+                                    iconMarkup = '<i class="fas fa-check text-emerald-400 ml-auto font-bold text-sm"></i>';
+                                } else if (isUserChoice && !isRightAnswer) {
+                                    cardBorder = 'border-2 border-red-500 bg-red-500/10 text-red-300 font-semibold shadow-[0_0_15px_rgba(239,68,68,0.15)]';
+                                    iconMarkup = '<i class="fas fa-times text-red-400 ml-auto font-bold text-sm"></i>';
+                                }
+
+                                return `
+                                <div class="flex items-center justify-between p-3.5 rounded-xl border ${cardBorder} transition-all">
+                                    <span class="text-xs leading-relaxed">${opt}</span>
+                                    ${iconMarkup}
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
     } else {
-        answersHtml += `<div><label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Reflection Summary</label><div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 whitespace-pre-wrap shadow-inner leading-relaxed">${sub.summary || "No summary provided."}</div></div>`;
+        // --- CASE B: DIP & IMMERSE REFLECTIONS WITH IN-BROWSER PLAYER (FIXES IMG-3) ---
+        const responses = sub.responses || sub.answers || [];
+        bodyHtml = `
+            <div class="space-y-5">
+                ${responses.length > 0 ? responses.map((r, rIdx) => {
+                    const isMedia = ['audio', 'video', 'doc'].includes(r.type) || r.fileData || (r.answer && (r.answer.startsWith('http') || r.answer.startsWith('data:')));
+                    const fileUrl = r.fileData || r.answer || sub.mediaUrl || (sub.media && sub.media.data) || '';
+                    const fileName = r.fileName || `submission_${r.type || 'media'}_day_${actualDay}`;
+
+                    return `
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                            ${rIdx + 1}. ${r.question || 'Reflection Response'}
+                        </label>
+                        
+                        ${isMedia && fileUrl ? `
+                            <div class="p-4 bg-slate-900/90 rounded-2xl border border-indigo-500/40 space-y-3 shadow-inner">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center text-lg">
+                                            <i class="fas ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4')) ? 'fa-video' : 'fa-music'}"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-bold text-white">${fileName}</p>
+                                            <p class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Media Verified</p>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${fileName}')" class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 text-indigo-300 hover:text-white shadow-sm">
+                                        <i class="fas fa-download"></i> Download File
+                                    </button>
+                                </div>
+
+                                <!-- In-Browser Player (Play right inside modal!) -->
+                                <div class="pt-1">
+                                    ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm')) ? `
+                                        <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
+                                    ` : `
+                                        <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner" src="${fileUrl}"></audio>
+                                    `}
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 text-slate-200 text-xs leading-relaxed whitespace-pre-wrap shadow-inner">
+                                ${r.answer || 'No response provided.'}
+                            </div>
+                        `}
+                    </div>`;
+                }).join('') : `
+                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 text-slate-300 text-xs whitespace-pre-wrap leading-relaxed">
+                        ${sub.summary || 'Submission recorded.'}
+                    </div>
+                `}
+            </div>
+        `;
     }
-    answersHtml += `</div>`;
 
     const oldModal = document.getElementById('viewSubmissionModalDynamic');
     if (oldModal) oldModal.remove();
 
-    // Creator 1-Click Approval Action Button
-    let creatorActionBtn = '';
-    if (isAdminLogin && isEvaluating) {
-        creatorActionBtn = `
-            <button onclick="approveLearnerSubmission('${userId}', ${sub.milestoneId || 1}, '${normalizedType}', '${actualDay}', ${lcReward})" class="btn-primary py-2.5 px-4 text-xs">
-                <i class="fas fa-check-circle mr-1.5 text-emerald-300"></i> Approve & Finalize +${lcReward} LCs
-            </button>
-        `;
-    }
-
     const modalHtml = `
         <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center">
             <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
-            <div class="relative bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
+            <div class="relative bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
                 
                 <div class="flex items-start justify-between border-b border-slate-700 pb-4 mb-6">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <h3 class="text-xl font-bold text-white font-heading">${displayTitle}</h3>
-                            ${isEvaluating ? `
-                                <span class="badge-pill badge-amber text-[10px]"><i class="fas fa-hourglass-half fa-spin"></i> Evaluating...</span>
-                            ` : `
-                                <span class="badge-pill badge-emerald text-[10px]"><i class="fas fa-check-circle"></i> +${lcReward} LCs Awarded</span>
-                            `}
+                            <span id="modalStatusBadge" class="badge-pill ${isCompleted ? 'badge-emerald' : 'badge-amber'} text-[10px]">
+                                ${isCompleted ? `<i class="fas fa-check-circle mr-1"></i> +${lcReward} LCs Awarded` : '<i class="fas fa-hourglass-half fa-spin mr-1"></i> Evaluating...'}
+                            </span>
                         </div>
                         <p class="text-xs text-slate-400">Submitted on ${exactTimeStr}</p>
                     </div>
@@ -3669,29 +3724,68 @@ function viewMySubmission(userId, dayLabel, type) {
                     </button>
                 </div>
 
-                ${isEvaluating ? `
-                    <div class="mb-6 p-4 bg-amber-950/40 border border-amber-600/40 rounded-xl text-amber-200 text-xs flex items-center gap-3">
-                        <i class="fas fa-user-shield text-2xl text-amber-400 shrink-0"></i>
+                ${!isCompleted ? `
+                    <div id="modalEvaluationBanner" class="p-4 bg-amber-950/40 rounded-2xl border border-amber-500/40 mb-6 flex items-center gap-3 shadow-inner">
+                        <div class="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
                         <div>
-                            <p class="font-bold text-amber-300">Quality & Integrity Verification in Progress</p>
-                            <p class="text-slate-400 text-[11px] mt-0.5">This submission is undergoing strict quality verification. Expected Reward: <strong class="text-amber-400">+${lcReward} LCs</strong>.</p>
+                            <h5 class="text-xs font-bold text-amber-300">Quality & Integrity Verification in Progress</h5>
+                            <p class="text-[11px] text-slate-300">This submission is undergoing verification. Expected Reward: <strong class="text-amber-400">+${lcReward} LCs</strong>.</p>
                         </div>
                     </div>
                 ` : ''}
 
-                ${answersHtml}
+                ${bodyHtml}
 
                 <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
-                    ${creatorActionBtn}
-                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="btn-secondary py-2 px-4 text-xs ml-auto">
+                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="btn-secondary py-2.5 px-5 text-xs">
                         Close
                     </button>
+                    ${(isAdminLogin && isEvaluating) ? `
+                        <button onclick="approveLearnerSubmission('${userId || sub.userId}', ${sub.milestoneId || 1}, '${normalizedType}', '${actualDay}', ${lcReward})" class="btn-primary py-2.5 px-5 text-xs bg-emerald-600 border-emerald-500 shadow-lg">
+                            <i class="fas fa-check-circle mr-1.5"></i> Approve & Finalize +${lcReward} LCs
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         </div>
     `;
+
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
+
+function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
+    const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    const normalizedType = normalizeLevelUpType(type);
+    const msId = activeMilestoneId || activeAdminMilestoneId || 1;
+
+    let sub = allSubs.find(s => 
+        (s.userId === userId || s.userEmail === userId) && 
+        String(s.milestoneId || 1) === String(msId) && 
+        normalizeLevelUpType(s.type) === normalizedType && 
+        (String(s.day) === String(dayLabel) || s.date === dayLabel || String(s.sessionDay) === String(dayLabel))
+    );
+
+    if (!sub) {
+        sub = allSubs.find(s => 
+            (s.userId === userId || s.userEmail === userId) && 
+            normalizeLevelUpType(s.type) === normalizedType && 
+            (String(s.day) === String(dayLabel) || s.date === dayLabel)
+        );
+    }
+
+    renderSubmissionDetailModal(sub, userId, dayLabel, type);
+}
+
+function viewMySubmission(userId, dayLabel, type) {
+    viewCustomerSubmission(userId, dayLabel, type);
+}
+
+window.renderSubmissionDetailModal = renderSubmissionDetailModal;
+window.viewCustomerSubmission = viewCustomerSubmission;
+window.viewMySubmission = viewMySubmission;
+
 
 // 7. CREATOR 1-CLICK APPROVAL FUNCTION
 async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
