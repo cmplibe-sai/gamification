@@ -598,50 +598,43 @@ async function switchTab(tab) {
 // ---------------------------------------------------------
 function renderAdminMilestoneGrid() {
     const grid = document.getElementById('adminMilestoneGridContainer');
-    if (!grid) return;
-    
-    document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
+    document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
     grid.classList.remove('hidden');
 
+    // Campus Partner Management Button for Creators ONLY
+    let partnerManageBtn = '';
+    if (isAdminLogin && !isCampusPartner) {
+        partnerManageBtn = `
+        <div class="col-span-full mb-6 flex justify-end">
+            <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                <i class="fas fa-university mr-2"></i> Manage Campus Partners
+            </button>
+        </div>`;
+    }
+
     const gridCards = milestoneConfig.map(ms => {
-        const enabledMods = getEnabledModulesForMilestone(ms.id);
-        const studentCount = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === ms.id).length;
-
+        const isBlank = ms.modules.length === 0;
+        const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
         return `
-        <div class="glass-card p-6 md:p-8 border-slate-800 hover:border-indigo-500/50 flex flex-col justify-between transition-all duration-300 cursor-pointer group" onclick="openAdminMilestone(${ms.id})">
-            <div>
+        <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
+            <div onclick="${isBlank ? '' : `openAdminMilestone(${ms.id})`}">
                 <div class="flex justify-between items-start mb-3">
-                    <span class="badge-pill badge-indigo">Milestone ${ms.id}</span>
-                    <span class="text-xs font-bold text-slate-400 group-hover:text-indigo-400 transition-colors">
-                        <i class="fas fa-users mr-1"></i> ${studentCount} Students
-                    </span>
+                    <span class="text-[10px] font-black tracking-widest uppercase text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-700/50">Milestone ${ms.id}</span>
+                    ${!isBlank ? '<i class="fas fa-users text-slate-500 bg-slate-800 p-2 rounded-lg group-hover:text-indigo-400 transition-colors"></i>' : ''}
                 </div>
-                
-                <h4 class="font-bold text-xl text-white font-heading mb-1 group-hover:text-indigo-300 transition-colors">${ms.name}</h4>
-                <p class="text-xs text-indigo-400 font-semibold mb-2">${ms.subtitle}</p>
-                <p class="text-xs text-slate-400 leading-relaxed mb-4 line-clamp-2">${ms.desc}</p>
-
-                <div class="pt-3 border-t border-slate-800/80">
-                    <div class="flex justify-between items-center text-[11px] text-slate-400 mb-2">
-                        <span class="font-bold uppercase tracking-wider text-slate-500">Active Modules for Students:</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1.5">
-                        ${ALL_PLATFORM_MODULES.map(mObj => {
-                            const isEnabled = enabledMods.includes(mObj.code);
-                            return `<span class="text-[10px] font-bold px-2 py-0.5 rounded ${isEnabled ? 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-300' : 'bg-slate-900 border border-slate-800 text-slate-600 line-through'}">${mObj.name}</span>`;
-                        }).join('')}
-                    </div>
-                </div>
+                <h4 class="font-bold text-lg text-white mb-2">${ms.name}</h4>
+                <p class="text-xs text-slate-400 line-clamp-2">${ms.desc}</p>
             </div>
             
-            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                <span class="text-xs font-bold text-indigo-400 group-hover:text-white transition-colors">Setup Modules & View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
-                <span class="text-xs text-slate-500">${ms.durationDays} Days</span>
-            </div>
+            ${!isBlank ? `
+            <div class="mt-5 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                <span onclick="openAdminMilestone(${ms.id})" class="text-xs font-bold text-indigo-400 hover:text-white transition-colors cursor-pointer">View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
+                ${!isCampusPartner ? `<button onclick="alert('Admin Config: Edit rules, LC assignments, and time-windows for ${ms.name}')" class="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"><i class="fas fa-cog mr-1"></i> Edit Settings</button>` : ''}
+            </div>` : '<div class="mt-5 pt-4 border-t border-slate-800"><span class="text-xs text-slate-600 font-bold uppercase">Locked / Setup Pending</span></div>'}
         </div>`;
     }).join('');
 
-    grid.innerHTML = gridCards;
+    grid.innerHTML = partnerManageBtn + gridCards;
 }
 
 function handleLockedClick(id, isUnlocked) {
@@ -651,25 +644,28 @@ function handleLockedClick(id, isUnlocked) {
 // Function to let the learner enter the milestone view (UPDATED WITH START DATE)
 function openMilestone(id) {
     activeMilestoneId = id;
-    const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
+    const ms = milestoneConfig.find(m => m.id === id);
     
     if (!userMilestoneState[currentUser._id]) {
         userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
     }
     
-    // --- START DATE ANCHOR ---
-    const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => normalizeLevelUpType(s.type) === 'dip');
+    // --- BULLETPROOF START DATE ---
+    const userSubs = getUserSubmissionsByUserId(currentUser._id).filter(s => normalizeLevelUpType(s.type) === 'dip');
     const day1Sub = userSubs.find(s => String(s.day) === '1');
     
     if (day1Sub) {
+        // If Day 1 is submitted, lock calendar to that exact date
         const rawTime = day1Sub.dateKey || day1Sub.date || day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt;
         if (rawTime) {
             userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date(rawTime));
         }
     } else {
+        // If Day 1 is MISSING, force the calendar to start TODAY
         userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date());
     }
     localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+    // ------------------------------
 
     if (!userMilestoneState[currentUser._id].viewedTerms) {
         userMilestoneState[currentUser._id].viewedTerms = [];
@@ -692,53 +688,2953 @@ function openMilestone(id) {
     if(titleEl) titleEl.innerText = ms.name;
     
     const descEl = document.getElementById('activeMilestoneDesc');
-    if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
+    if(descEl) descEl.innerText = "Must maintain strict compliance to avoid a complete reset.";
     
-    // ONLY GET MODULES ENABLED BY CREATOR FOR THIS MILESTONE
-    const activeMods = getEnabledModulesForMilestone(id);
-
+    const navHtml = ms.modules.map((mod, i) => {
+        const labels = { dip: 'cMPLi Dip', immerse: 'cMPLi Immerse', ios: 'cMPLi iOS', projects: 'Projects' };
+        const icons = { dip: 'fa-sun', immerse: 'fa-moon', ios: 'fa-mobile-alt', projects: 'fa-briefcase' };
+        const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+        return `<button onclick="switchMilestoneTab('${mod}', this)" class="milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all ${activeClass}"><i class="fas ${icons[mod]} mr-2"></i>${labels[mod]}</button>`;
+    }).join('');
+    
     const subNavEl = document.getElementById('milestoneSubNav');
-    if(subNavEl) {
-        subNavEl.innerHTML = activeMods.map((modCode, i) => {
-            const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode, icon: 'fa-cube' };
-            const activeClass = i === 0 ? 'border-indigo-500 text-indigo-400 bg-indigo-950/40' : 'text-slate-400';
-            return `<button id="btnNav_${modCode}" onclick="switchMilestoneTab('${modCode}')" class="milestone-nav-btn px-4 py-2 rounded-xl font-bold text-xs border border-transparent transition-all ${activeClass} flex items-center gap-2">
-                <i class="fas ${modObj.icon}"></i> ${modObj.name}
-            </button>`;
-        }).join('');
+    if(subNavEl) subNavEl.innerHTML = navHtml;
+    
+    // --- REVEAL AND RENAME THE CREDENTIAL BUTTON ---
+    const btnCert = document.getElementById('btnApplyCert');
+    if (btnCert) {
+        btnCert.classList.remove('hidden');
+        btnCert.innerHTML = '<i class="fas fa-award mr-1"></i> Claim My Credential';
     }
-
-    // Default to the first enabled module
-    if (activeMods.length > 0) {
-        switchMilestoneTab(activeMods[0]);
+    
+    if (ms.modules.length > 0 && typeof switchMilestoneTab === 'function') {
+        switchMilestoneTab(ms.modules[0]);
     }
 }
 
+function closeMilestoneView() {
+    activeMilestoneId = null;
+    const gridContainer = document.getElementById('milestoneGridContainer');
+    const detailContainer = document.getElementById('milestoneDetailContainer');
+    const btnBack = document.getElementById('btnBackToGrid');
+
+    if (gridContainer) gridContainer.classList.remove('hidden');
+    if (detailContainer) detailContainer.classList.add('hidden');
+    if (btnBack) btnBack.classList.add('hidden');
+
+    renderMilestoneGrid();
+}
+
+// ---------------------------------------------------------
+// LEARNER MILESTONE GRID & ACCESS CHECK
+// ---------------------------------------------------------
+function renderMilestoneGrid() {
+    const gridContainer = document.getElementById('milestoneGridContainer'); 
+    if (!gridContainer) return;
+
+    let hasAccess = false;
+    if (currentUser && currentUser.subscribedMangoes && levelUpAccessConfig) {
+        hasAccess = currentUser.subscribedMangoes.some(mangoId => levelUpAccessConfig.includes(mangoId));
+    }
+
+    // CHECK FOR GOD MODE (TEST USERS)
+    const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
+
+    // Test Users bypass the access check
+    if (!hasAccess && !testMode) {
+        gridContainer.innerHTML = `
+            <div class="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col items-center justify-center p-12 bg-slate-900/50 rounded-2xl border border-slate-700 text-center">
+                <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-600 shadow-lg">
+                    <i class="fas fa-lock text-3xl text-slate-500"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-white mb-2">Level-Up Access Locked</h3>
+                <p class="text-slate-400 max-w-md">You need an active subscription to a qualifying cMPLi Solution to access this gamified module.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const userState = userMilestoneState[currentUser._id] || { highestUnlocked: 1 };
+    
+    gridContainer.innerHTML = milestoneConfig.map(ms => {
+        // --- GOD MODE OVERRIDE ---
+        // If testMode is true, ALL milestones are unlocked.
+        const isUnlocked = testMode || ms.id <= userState.highestUnlocked;
+        const isBlank = ms.modules.length === 0; 
+        
+        let cardClasses = "glass p-6 rounded-2xl border flex flex-col justify-between min-h-[200px] transition-all duration-300 relative overflow-hidden ";
+        
+        if (isBlank) {
+            cardClasses += "bg-slate-900 border-slate-800 opacity-50";
+        } else if (isUnlocked) {
+            cardClasses += "bg-slate-800/80 border-indigo-500/50 hover:border-indigo-400 hover:shadow-[0_10px_30px_-15px_rgba(99,102,241,0.5)] hover:-translate-y-1 cursor-pointer group";
+        } else {
+            cardClasses += "bg-slate-900/80 border-slate-700 opacity-70";
+        }
+
+        return `
+        <div class="${cardClasses}" ${isUnlocked && !isBlank ? `onclick="openMilestone(${ms.id})"` : ''}>
+            ${!isUnlocked && !isBlank ? '<div class="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] z-10 flex items-center justify-center"><i class="fas fa-lock text-3xl text-slate-600/80"></i></div>' : ''}
+            
+            <div>
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[10px] font-black tracking-widest uppercase ${isUnlocked ? 'text-indigo-400 bg-indigo-900/30 border-indigo-700/50' : 'text-slate-500 bg-slate-800 border-slate-700'} px-2 py-1 rounded border">Milestone ${ms.id}</span>
+                    ${testMode && !isBlank && ms.id > userState.highestUnlocked ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-1 rounded border border-amber-500/50 font-bold uppercase tracking-widest"><i class="fas fa-flask mr-1"></i>Test Mode</span>' : ''}
+                </div>
+                <h4 class="font-bold text-xl text-white mb-2 ${isUnlocked ? 'group-hover:text-indigo-300 transition-colors' : ''}">${ms.name}</h4>
+                <p class="text-xs text-slate-400 line-clamp-2">${ms.desc}</p>
+            </div>
+            
+            ${isUnlocked && !isBlank ? `
+            <div class="mt-6 pt-4 border-t border-slate-700/50 flex justify-between items-center">
+                <span class="text-xs font-bold text-emerald-400"><i class="fas fa-play-circle mr-1"></i> Start Challenge</span>
+                <i class="fas fa-arrow-right text-slate-500 group-hover:text-indigo-400 transform group-hover:translate-x-1 transition-all"></i>
+            </div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+// Calculates the user's active level and renders the progress bar
+function renderLevelProgression() {
+    const container = document.getElementById('levelProgressionBar');
+    if (!container) return;
+
+    // Retrieve live LC points. Default to 0 if not loaded yet.
+    let currentLC = currentScoreObj ? (currentScoreObj.displayScore || currentScoreObj.totalScore || 0) : 0;
+    
+    // MOCK Completion Percentage (In reality, this would require querying the course APIs)
+    let currentCompletion = 100; // Assuming 100% for testing. 
+
+    // Determine highest unlocked level (Admins see everything unlocked)
+    let activeLevel = 1;
+    if (!isAdminLogin) {
+        for (let i = levelConfig.length - 1; i >= 0; i--) {
+            if (currentLC >= levelConfig[i].reqLC && currentCompletion >= levelConfig[i].reqPercent) {
+                activeLevel = levelConfig[i].id;
+                break;
+            }
+        }
+    } else {
+        activeLevel = 6; // Admin bypass
+    }
+
+    // Render the UI Bar
+    let html = '';
+    levelConfig.forEach(lvl => {
+        const isUnlocked = lvl.id <= activeLevel;
+        const isActive = lvl.id === activeLevel;
+        
+        let colorClass = isUnlocked ? 'border-emerald-500/50 bg-emerald-900/20 text-emerald-400' : 'border-slate-700 bg-slate-800 text-slate-500 opacity-60';
+        if (isActive) colorClass = 'border-indigo-500 bg-indigo-900/40 text-indigo-400 shadow-lg shadow-indigo-500/20';
+
+        html += `
+        <div class="flex-1 p-4 rounded-xl border ${colorClass} min-w-[200px]">
+            <div class="flex justify-between items-start mb-2">
+                <span class="text-xs font-black tracking-widest uppercase">Level ${lvl.id}</span>
+                ${isUnlocked ? '<i class="fas fa-unlock text-xs"></i>' : '<i class="fas fa-lock text-xs"></i>'}
+            </div>
+            <h4 class="font-bold text-sm text-white mb-1 line-clamp-1">${lvl.name}</h4>
+            <div class="text-[10px] space-y-0.5 mt-2">
+                ${lvl.reqLC > 0 ? `<p>Req: >${lvl.reqPercent}% & ${lvl.reqLC} LCs</p>` : '<p>Entry Level</p>'}
+            </div>
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+
+    // Enforce UI Access Control for Learners
+    if (!isAdminLogin) {
+        document.getElementById('btnNavImmerse').style.display = activeLevel >= 2 ? 'block' : 'none';
+        document.getElementById('btnNavProjects').style.display = activeLevel >= 3 ? 'block' : 'none';
+        
+        // Force them back to Dip if they are on a locked tab
+        switchLevelMenu('dip');
+    } else {
+        document.getElementById('btnNavImmerse').style.display = 'block';
+        document.getElementById('btnNavProjects').style.display = 'block';
+    }
+}
+
+// ================= LEARNER LOGIC =================
+function initApp() {
+    try {
+        updateDashboardUI();
+        renderProjects('sector');
+        loadAIEvaluations(); // <--- ADD THIS LINE HERE
+    } catch(e) {
+        console.error("Error initializing app:", e);
+    }
+}
+
+function updateDashboardUI() {
+    document.getElementById('userPoints').innerText = currentScoreObj.displayScore;
+    
+    document.getElementById('userDetailsContent').innerHTML = `
+        <div class="profile-header">
+            <img src="${currentUser.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+            <div><h3 class="text-xl font-bold text-white">${currentUser.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${currentUser._id}</p></div>
+        </div>
+        <div class="user-info text-sm">
+            <p><span>Email:</span> ${currentUser.email || 'N/A'}</p>
+            <p><span>Phone:</span> ${currentUser.dialCode || ''} ${currentUser.phone || 'N/A'}</p>
+        </div>
+    `;
+
+    document.getElementById('pointsContent').innerHTML = buildPointsHtml(currentScoreObj);
+    
+    // Render the dashboard components
+    renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
+    renderTimelineGrid(currentUser.email, 'completionGrid');
+    
+    // THIS IS THE CRITICAL LINE FOR THE CUSTOMER VIEW:
+    loadCourseCompletions(currentUser._id, 'courseCompletionsContainer');
+}
+
+// ================= ADMINISTRATOR LOGIC (UPGRADED) =================
+
+// Store real-time subscribers globally for the admin view
+// --- GLOBAL ADMIN FILTER STATE ---
+let allAdminMangos = (function() {
+    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
+        return coursesData.result.subscriptions.map(s => ({
+            _id: s.mangoId,
+            id: s.mangoId,
+            title: s.mangoTitle,
+            name: s.mangoTitle,
+            amount: s.count > 0 ? 1 : 0,
+            price: s.count > 0 ? 1 : 0,
+            isPaid: s.count > 0,
+            subscribersCount: s.count
+        }));
+    }
+    return [];
+})();
+let adminRealtimeUsers = (typeof actualUsers !== 'undefined' && actualUsers.length > 0) ? [...actualUsers] : [];
+
+async function initAdminApp() {
+    const courseSelect = document.getElementById('courseSelect');
+    const pricingSelect = document.getElementById('pricingFilter');
+    
+    if (courseSelect) courseSelect.innerHTML = '<option value="">-- Fetching Live Mangoes... --</option>';
+    
+    // --- DYNAMIC UI ADJUSTMENT ---
+    if (typeof updateRoleBadge === 'function') updateRoleBadge();
+
+    // 1. Update Headings
+    const headings = document.querySelectorAll('#adminTab h1, #adminTab h2, .creator-home-title');
+    headings.forEach(h => {
+        if(h.innerText.includes('Creator') || h.innerText.includes('Partner') || h.innerText.includes('Home')) {
+            h.innerHTML = isCampusPartner ? 'Campus Partner <span class="text-indigo-400">Home</span>' : 'Creator <span class="text-indigo-400">Home</span>';
+        }
+    });
+
+    // 2. Remove Serial Numbers (1., 2., 3.) robustly by targeting text nodes only
+    document.querySelectorAll('label, h3, h4, h5, p, span').forEach(el => {
+        Array.from(el.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) { // Only touch the text, ignore the icons
+                let text = node.nodeValue;
+                if (text.includes('1. Solution Type')) node.nodeValue = text.replace('1. Solution Type', 'Solution Type');
+                if (text.includes('2. Select Mango')) node.nodeValue = text.replace('2. Select Mango / Cohort', 'Select Mango / Cohort');
+                if (text.includes('3. Customer Health Status')) node.nodeValue = text.replace('3. Customer Health Status', 'Customer Health Status');
+            }
+        });
+    });
+    
+    // 3. Hide Solution Type Dropdown for Partners
+    if (pricingSelect) {
+        const pricingContainer = pricingSelect.closest('div');
+        if (pricingContainer) pricingContainer.style.display = isCampusPartner ? 'none' : '';
+    }
+
+    // 4. HIDE "Level-Up Solution Access" entirely for Partners in Level-Up Tab
+    const toggleSearch = document.getElementById('adminLevelUpSearch');
+    if (toggleSearch) {
+        const accessBox = toggleSearch.closest('.glass') || toggleSearch.parentElement.parentElement;
+        if (accessBox) accessBox.style.display = isCampusPartner ? 'none' : '';
+    }
+    const toggleContainer = document.getElementById('adminMangoToggles');
+    if (toggleContainer) {
+        const wrapper = toggleContainer.closest('.glass') || toggleContainer.parentElement;
+        if (wrapper) wrapper.style.display = isCampusPartner ? 'none' : '';
+    }
+
+    // 5. Remove the old misplaced search bar (from Issue 1)
+    const oldSearch = document.getElementById('creatorSolutionSearchContainer');
+    if (oldSearch) oldSearch.remove();
+
+    // 6. Inject "Manage Campus Partners" Button safely into the DOM
+    let manageBtnContainer = document.getElementById('managePartnersBtnContainer');
+    if (!manageBtnContainer) {
+        const filtersRow = courseSelect ? courseSelect.closest('.grid') || courseSelect.parentElement.parentElement : null;
+        if (filtersRow && filtersRow.parentNode) {
+            manageBtnContainer = document.createElement('div');
+            manageBtnContainer.id = 'managePartnersBtnContainer';
+            manageBtnContainer.className = 'w-full flex justify-end mb-4';
+            filtersRow.parentNode.insertBefore(manageBtnContainer, filtersRow);
+        }
+    }
+    
+    if (manageBtnContainer) {
+        if (isAdminLogin && !isCampusPartner) {
+            manageBtnContainer.innerHTML = `
+                <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                    <i class="fas fa-university mr-2"></i> Manage Campus Partners
+                </button>`;
+        } else {
+            manageBtnContainer.innerHTML = ''; 
+        }
+    }
+
+    try {
+        if (window.fetchTagMango && window.TagMangoAPI) {
+            try {
+                const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
+                if (response && (response.result || response.mangos) && (response.result || response.mangos).length > 0) {
+                    allAdminMangos = response.result || response.mangos;
+                }
+                const subResponse = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
+                if (subResponse && (subResponse.result || subResponse.users) && (subResponse.result || subResponse.users).length > 0) {
+                    adminRealtimeUsers = subResponse.result || subResponse.users;
+                }
+            } catch (err) {
+                console.warn('TagMango live API offline/error, using embedded solutions data:', err);
+            }
+        }
+        
+        if (typeof filterMangosByPricing === 'function') filterMangosByPricing();
+        if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+        if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
+        if (typeof renderAdminCustomerGrid === 'function') renderAdminCustomerGrid();
+        
+    } catch (error) {
+        console.error("Failed to load admin filters:", error);
+        if (courseSelect) courseSelect.innerHTML = '<option value="">-- Error Loading Mangoes --</option>';
+        adminRealtimeUsers = [];
+    }
+    
+    if (typeof updateLearnerDropdown === 'function') updateLearnerDropdown();
+}
+
+// ---------------------------------------------------------
+// UPGRADED ADMIN TOGGLES (With Search & Pricing Filters)
+// ---------------------------------------------------------
+function renderAdminMangoToggles() {
+    const container = document.getElementById('adminMangoToggles');
+    const searchInput = document.getElementById('adminLevelUpSearch');
+    const pricingSelect = document.getElementById('adminLevelUpPricing');
+    
+    if (!container || allAdminMangos.length === 0) return;
+
+    // FIX: COMPLETELY HIDE CONFIGURATION TOOLS FROM PARTNERS
+    const parentBox = container.closest('.glass') || container.parentElement;
+    if (isCampusPartner) {
+        if (parentBox) parentBox.style.display = 'none';
+        if (pricingSelect) pricingSelect.style.display = 'none';
+        return; // Stop rendering toggles immediately
+    } else {
+        if (parentBox) parentBox.style.display = '';
+        if (pricingSelect) pricingSelect.style.display = '';
+    }
+
+    let filteredMangos = allAdminMangos;
+
+    // Apply Search Filter
+    if (searchInput && searchInput.value) {
+        const term = searchInput.value.toLowerCase();
+        filteredMangos = filteredMangos.filter(m => m.title && m.title.toLowerCase().includes(term));
+    }
+
+    // Apply Pricing Filter
+    if (pricingSelect && pricingSelect.value !== 'all') {
+        filteredMangos = filteredMangos.filter(m => {
+            const isPaid = (m.amount > 0 || m.price > 0 || m.isPaid || m.type === 'paid');
+            return pricingSelect.value === 'paid' ? isPaid : !isPaid;
+        });
+    }
+
+    container.innerHTML = filteredMangos.map(mango => {
+        const isEnabled = levelUpAccessConfig.includes(mango._id);
+        const priceLabel = (mango.amount > 0 || mango.price > 0) ? `<span class="text-[9px] text-amber-400 bg-amber-900/40 px-1.5 rounded border border-amber-700/50">PAID</span>` : `<span class="text-[9px] text-emerald-400 bg-emerald-900/40 px-1.5 rounded border border-emerald-700/50">FREE</span>`;
+
+        return `
+        <div class="flex items-center justify-between p-3 glass border border-slate-700 rounded-xl bg-slate-800/50 hover:border-indigo-500/50 transition-colors">
+            <div class="overflow-hidden pr-3">
+                <p class="text-sm font-bold text-white truncate" title="${mango.title}">${mango.title}</p>
+                <div class="flex items-center gap-2 mt-1">
+                    <p class="text-[10px] text-slate-400">ID: ${mango._id.substring(0,8)}...</p>
+                    ${priceLabel}
+                </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" class="sr-only peer" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mango._id}', this.checked)">
+                <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+        </div>`;
+    }).join('');
+}
+
+// --- ADMIN CUSTOMER HEALTH ENGINE ---
+let currentAdminStatusFilter = 'All';
+
+function calculateCustomerHealth(user) {
+    const subs = getUserSubmissionsByUserId(user._id) || [];
+    let earnedLcs = 0;
+    
+    // Sum all earned points from their submission history
+    subs.forEach(s => { earnedLcs += (Number(s.lcReward) || 0); });
+    
+    // Add any legacy/manually assigned LCs if they exist in the DB
+    earnedLcs += (Number(user.lcs) || 0);
+
+    const msState = userMilestoneState[user._id] || { highestUnlocked: 1 };
+    const highestMs = msState.highestUnlocked;
+
+    // Define the realistic expected LC targets based on the user's current milestone journey.
+    // (You can adjust these exact target numbers based on your final point configurations)
+    const msExpectedMap = {
+        1: 693,         // Example: 21 days * 33 LCs
+        2: 2693,        // Cumulative: MS1 + MS2 expected points
+        3: 5193,        // Cumulative: MS1 + MS2 + MS3 expected points
+        4: 7693,
+        5: 10193,
+        6: 12693
+    };
+
+    let expectedLcs = msExpectedMap[highestMs] || 1;
+    if (expectedLcs === 0) expectedLcs = 1; // Failsafe to prevent division by zero
+
+    let pct = Math.round((earnedLcs / expectedLcs) * 100);
+    
+    // STRICT CAP: Prevent percentages from exceeding 100%
+    if (pct > 100) pct = 100; 
+    
+    let label = 'Low';
+    if (pct >= 81) label = 'High';
+    else if (pct >= 50) label = 'Moderate';
+
+    return { 
+        earnedLcs: earnedLcs, 
+        expectedLcs: expectedLcs, 
+        healthPct: pct, 
+        label: label, 
+        highestMs: highestMs // Passed along for the UI badge!
+    };
+}
+
+function filterAdminCustomersByStatus(status, btnElement) {
+    currentAdminStatusFilter = status;
+    document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+        btn.classList.add('bg-slate-700');
+    });
+    btnElement.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+    btnElement.classList.remove('bg-slate-700');
+    renderAdminCustomerGrid();
+}
+
+function renderAdminCustomerGrid() {
+    const selectedCourseId = document.getElementById('courseSelect') ? document.getElementById('courseSelect').value : '';
+    const searchVal = document.getElementById('adminCustomerSearch') ? document.getElementById('adminCustomerSearch').value.toLowerCase() : '';
+    
+    const grid = document.getElementById('adminCustomerGrid');
+    if (!grid) return;
+
+    document.getElementById('adminReportContainer')?.classList.add('hidden');
+
+    let filteredUsers = adminRealtimeUsers;
+
+    if (isCampusPartner) {
+        filteredUsers = filteredUsers.filter(u => 
+            u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId))
+        );
+    }
+
+    if (selectedCourseId) {
+        filteredUsers = filteredUsers.filter(u => 
+            u.subscribedMangoes && u.subscribedMangoes.includes(selectedCourseId)
+        );
+    }
+    
+    if (searchVal) {
+        filteredUsers = filteredUsers.filter(u => 
+            (u.name && u.name.toLowerCase().includes(searchVal)) || 
+            (u.email && u.email.toLowerCase().includes(searchVal))
+        );
+    }
+
+    // --- NEW: MILESTONE DISTRIBUTION METRICS WIDGET ---
+    const msCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    filteredUsers.forEach(u => {
+        const highest = (userMilestoneState[u._id] || { highestUnlocked: 1 }).highestUnlocked;
+        if (msCounts[highest] !== undefined) msCounts[highest]++;
+    });
+
+    let statsBox = document.getElementById('dynamicMsStatsBox');
+    if (!statsBox) {
+        statsBox = document.createElement('div');
+        statsBox.id = 'dynamicMsStatsBox';
+        statsBox.className = 'mt-6'; // Adds breathing room
+
+        // EXACT PLACEMENT: Find the row with the dropdowns and insert right below it
+        const filterSelect = document.getElementById('courseSelect');
+        const filterRow = filterSelect ? (filterSelect.closest('.grid') || filterSelect.parentElement.parentElement) : null;
+
+        if (filterRow && filterRow.parentNode) {
+            // Insert immediately AFTER the filter row
+            filterRow.parentNode.insertBefore(statsBox, filterRow.nextSibling);
+        } else {
+            // Fallback just in case
+            grid.parentElement.insertBefore(statsBox, grid);
+        }
+    }
+
+    statsBox.innerHTML = `
+        <div class="mb-6 p-5 glass border border-slate-700 rounded-xl shadow-inner">
+            <h4 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex justify-between items-center">
+                <span><i class="fas fa-chart-pie text-indigo-400 mr-2"></i> Customers per Milestone</span>
+                <span class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-600">Filtered Total: ${filteredUsers.length}</span>
+            </h4>
+            <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+                ${[1,2,3,4,5,6].map(i => `
+                    <div class="bg-slate-900/80 border border-slate-700 p-3 rounded-xl text-center transition-all ${msCounts[i] > 0 ? 'border-b-4 border-b-indigo-500 shadow-md' : 'opacity-60'}">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Milestone ${i}</p>
+                        <p class="text-2xl font-black ${msCounts[i] > 0 ? 'text-indigo-400' : 'text-slate-600'}">${msCounts[i]}</p>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    // --------------------------------------------------
+
+    const usersWithHealth = filteredUsers.map(user => ({ ...user, health: calculateCustomerHealth(user) }));
+    
+    const finalUsers = currentAdminStatusFilter === 'All' 
+        ? usersWithHealth 
+        : usersWithHealth.filter(u => u.health.label === currentAdminStatusFilter);
+
+    const counter = document.getElementById('userCounter');
+    if (counter) counter.innerText = `Total: ${finalUsers.length}`;
+
+    if (finalUsers.length === 0) {
+        grid.innerHTML = '<div class="col-span-full p-6 text-center text-slate-500 glass rounded-xl border border-slate-700">No customers found matching these criteria.</div>';
+        return;
+    }
+
+    grid.innerHTML = finalUsers.map(u => {
+        const healthColor = u.health.label === 'High' ? 'text-emerald-400' : (u.health.label === 'Moderate' ? 'text-amber-400' : 'text-red-400');
+        const borderClass = u.health.label === 'High' ? 'border-emerald-500/50' : (u.health.label === 'Moderate' ? 'border-amber-500/50' : 'border-red-500/50');
+        const bgClass = u.health.label === 'High' ? 'bg-emerald-900/10' : (u.health.label === 'Moderate' ? 'bg-amber-900/10' : 'bg-red-900/10');
+        
+        return `
+        <div onclick='displayAdminLearnerDataById("${u._id}")' class="glass ${bgClass} p-4 rounded-xl border ${borderClass} hover:border-indigo-500 cursor-pointer transition-all hover:-translate-y-1 shadow-lg relative">
+            
+            <!-- NEW: Milestone Status Badge -->
+            <div class="absolute top-3 right-3 z-10">
+                <span class="text-[9px] font-black tracking-widest uppercase bg-indigo-900/80 text-indigo-300 px-2.5 py-1 rounded-md border border-indigo-700/50 shadow-sm shadow-indigo-900/20">
+                    MS ${u.health.highestMs}
+                </span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-4 border-b border-slate-700/50 pb-3 pr-12">
+                <img src="${u.profilePicUrl || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-slate-600 object-cover">
+                <div class="overflow-hidden">
+                    <p class="text-sm font-bold text-white truncate">${u.name || 'Unknown User'}</p>
+                    <p class="text-[10px] text-slate-400 truncate">${u.email || u.phone}</p>
+                </div>
+            </div>
+            <div class="flex justify-between items-end">
+                <div>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Health</p>
+                    <p class="text-lg font-black ${healthColor}">${u.health.healthPct}%</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Earned / Expected</p>
+                    <p class="text-xs font-bold text-indigo-400">${u.health.earnedLcs} / ${u.health.expectedLcs}</p>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleLevelUpAccess(mangoId, isEnabled) {
+    if (!Array.isArray(levelUpAccessConfig)) {
+        levelUpAccessConfig = [];
+    }
+
+    if (isEnabled && !levelUpAccessConfig.includes(mangoId)) {
+        levelUpAccessConfig.push(mangoId);
+    } else if (!isEnabled) {
+        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
+    }
+    
+    // 1. Save to local storage immediately
+    localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+    
+    // 2. Re-populate cohort dropdown filters
+    if (typeof populateAdminCohortFilters === 'function') {
+        populateAdminCohortFilters();
+    }
+
+    // 3. Save directly to Render server backend (Single Source of Truth)
+    fetch('/api/levelup-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: levelUpAccessConfig })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Level-Up Access saved to Render backend:', levelUpAccessConfig))
+    .catch(err => console.error('Error saving access to server:', err));
+}
+
+// 1. Filter Mangos by Pricing (All / Paid / Free)
+function filterMangosByPricing() {
+    const pricingFilter = document.getElementById('pricingFilter') ? document.getElementById('pricingFilter').value : 'all';
+    const searchInput = document.getElementById('adminSolutionSearch') ? document.getElementById('adminSolutionSearch').value.toLowerCase() : '';
+    const courseSelect = document.getElementById('courseSelect');
+    if (!courseSelect) return;
+
+    courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
+
+    let availableMangos = allAdminMangos;
+    if (isCampusPartner) {
+        availableMangos = availableMangos.filter(mango => partnerAllowedMangoes.includes(mango._id));
+    }
+
+    const filteredMangos = availableMangos.filter(mango => {
+        const isPaid = (mango.amount > 0 || mango.price > 0 || mango.isPaid || mango.type === 'paid');
+        const matchesPricing = pricingFilter === 'all' || (pricingFilter === 'paid' ? isPaid : !isPaid);
+        const matchesSearch = searchInput === '' || (mango.title && mango.title.toLowerCase().includes(searchInput));
+        
+        return matchesPricing && matchesSearch;
+    });
+
+    filteredMangos.forEach(mango => {
+        const option = document.createElement('option');
+        option.value = mango._id;
+        const priceLabel = (mango.amount > 0 || mango.price > 0) ? `(₹${mango.amount || mango.price})` : '(Free)';
+        option.textContent = `${mango.title || mango.name || 'Untitled Mango'} ${priceLabel}`;
+        courseSelect.appendChild(option);
+    });
+
+    updateLearnerDropdown();
+}
+
+// 2. Filter Learners by Selected Mango (Redirected to New Grid)
+function updateLearnerDropdown() {
+    renderAdminCustomerGrid();
+}
+
+async function displayAdminLearnerDataById(userId) {
+    const learner = adminRealtimeUsers.find(u => u._id === userId);
+    if (!learner) return;
+
+    document.getElementById('adminReportContainer').classList.remove('hidden');
+    document.getElementById('adminReportContainer').scrollIntoView({ behavior: 'smooth' });
+
+    // The rest is identical to the existing displayAdminLearnerData engine
+    document.getElementById('adminPointsContent').innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+    
+    const userState = userMilestoneState[learner._id] || { highestUnlocked: 1 };
+    const learnerSubs = levelUpSubmissions[learner._id] || [];
+    const ms1Subs = learnerSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+    const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3">
+            <p><span>Email:</span> ${learner.email || 'N/A'}</p>
+            <p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p>
+        </div>
+        <div class="user-info text-sm">
+            <p><span>Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked}</strong></p>
+            <p><span>MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}%</strong></p>
+        </div>
+    `;
+
+    const liveScoreData = await fetchLivePoints(learner._id);
+    let localPointsSum = (localLedgers[learner._id] || []).reduce((sum, item) => sum + item.score, 0);
+    liveScoreData.displayScore = liveScoreData.totalScore + localPointsSum;
+
+    document.getElementById('adminPointsContent').innerHTML = buildPointsHtml(liveScoreData);
+    renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
+    renderTimelineGrid(learner.email, 'adminCompletionGrid');
+    loadCourseCompletions(learner._id, 'adminCourseCompletionsContainer');
+}
+
+async function displayAdminLearnerData() {
+    const learnerSelect = document.getElementById('learnerSelect');
+    const selectedOption = learnerSelect.options[learnerSelect.selectedIndex];
+    if (!selectedOption.value) return document.getElementById('adminReportContainer').classList.add('hidden');
+
+    const learner = JSON.parse(selectedOption.dataset.learner);
+    document.getElementById('adminReportContainer').classList.remove('hidden');
+
+    // Loading State for points
+    document.getElementById('adminPointsContent').innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm"><p><span>Email:</span> ${learner.email || 'N/A'}</p><p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p></div>
+    `;
+
+    // --- NEW: Calculate and Display Milestone Progress ---
+    const userState = userMilestoneState[learner._id] || { highestUnlocked: 1 };
+    const learnerSubs = levelUpSubmissions[learner._id] || [];
+    const ms1Subs = learnerSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+    const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3">
+            <p><span>Email:</span> ${learner.email || 'N/A'}</p>
+            <p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p>
+        </div>
+        <div class="user-info text-sm">
+            <p><span>Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked}</strong></p>
+            <p><span>MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}%</strong></p>
+        </div>
+    `;
+    // ----------------------------------------------------
+
+    // Fetch live points
+    const liveScoreData = await fetchLivePoints(learner._id);
+    let localPointsSum = (localLedgers[learner._id] || []).reduce((sum, item) => sum + item.score, 0);
+    liveScoreData.displayScore = liveScoreData.totalScore + localPointsSum;
+
+    document.getElementById('adminPointsContent').innerHTML = buildPointsHtml(liveScoreData);
+    
+    // Render the three core admin components dynamically
+    renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
+    renderTimelineGrid(learner.email, 'adminCompletionGrid');
+    
+    // Call the newly indestructible course loader for the Admin View
+    loadCourseCompletions(learner._id, 'adminCourseCompletionsContainer');
+}
+
+// ================= SHARED UTILITIES =================
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function renderSubmissionsAndReflections(userId, containerId, filterMode = 'all') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    activeSubmissionFilter[containerId] = filterMode;
+    
+    // 1. Fetch ONLY project submissions for the dashboard
+    const projectCheckins = getUserSubmissionsByUserId(userId).filter(sub => normalizeLevelUpType(sub.type) === 'projects');
+
+    // Auto-rename the HTML header above this container to match your design
+    const parentHeader = container.previousElementSibling;
+    if (parentHeader && parentHeader.tagName === 'H3') {
+        parentHeader.innerHTML = '<i class="fas fa-briefcase mr-2 text-indigo-400"></i> Projects Completed';
+    }
+
+    if (projectCheckins.length === 0) {
+        container.innerHTML = `
+            <div class="glass p-8 rounded-xl border border-slate-700 text-center text-slate-500 shadow-inner">
+                <i class="fas fa-folder-open text-3xl mb-3 text-slate-600 block"></i>
+                <h4 class="font-bold text-white mb-1">No Projects Found</h4>
+                <p class="text-sm">You haven't submitted any Real-World Applications yet.</p>
+            </div>`;
+        return;
+    }
+
+    // Pull ALL projects across ALL milestones to resolve correct names and tags
+    let allProjects = [];
+    const db = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+    for (const ms in db) { 
+        db[ms].forEach(p => allProjects.push({...p, fallbackMs: ms})); 
+    }
+    if (typeof projects !== 'undefined') projects.forEach(p => allProjects.push({...p, fallbackMs: 'Legacy'}));
+    
+    // 2. Enrich data with Sector/Specialization & Milestone info
+    const enrichedSubmissions = projectCheckins.map(sub => {
+        const matchedProj = allProjects.find(p => String(p.id) === String(sub.day));
+        let fallbackTitle = matchedProj ? matchedProj.title : (sub.title || 'Project Submission');
+        if (!fallbackTitle.startsWith('Projects:')) fallbackTitle = sub.title || fallbackTitle; 
+        
+        return {
+            ...sub,
+            projectTitle: fallbackTitle,
+            sector: matchedProj ? matchedProj.sector : 'General Sector',
+            spec: matchedProj ? matchedProj.spec : 'General Spec',
+            // Default to the milestone ID saved during submission
+            milestoneId: sub.milestoneId || (matchedProj ? matchedProj.fallbackMs : 'Unknown')
+        };
+    });
+
+    // 3. Count categories for the dynamic metrics
+    const sectorCounts = {};
+    const specCounts = {};
+    enrichedSubmissions.forEach(sub => {
+        sectorCounts[sub.sector] = (sectorCounts[sub.sector] || 0) + 1;
+        if(sub.spec && sub.spec !== 'General Spec' && sub.spec.trim() !== '') {
+            specCounts[sub.spec] = (specCounts[sub.spec] || 0) + 1;
+        }
+    });
+
+    // 4. Apply Filters
+    let displayedSubmissions = enrichedSubmissions;
+    if (filterMode !== 'all') {
+        displayedSubmissions = enrichedSubmissions.filter(sub => 
+            filterMode.startsWith('sector:') ? sub.sector === filterMode.replace('sector:', '') :
+            filterMode.startsWith('spec:') ? sub.spec === filterMode.replace('spec:', '') : true
+        );
+    }
+
+    // 5. Build Unified Toolbar HTML (Filters Left, Metrics Right)
+    let toolbarHtml = `
+        <div class="mb-6 bg-slate-800/40 p-4 rounded-xl border border-slate-700 shadow-inner">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="renderSubmissionsAndReflections('${userId}', '${containerId}', 'all')" 
+                        class="px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-md ${filterMode === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700'}">
+                        All
+                    </button>`;
+
+    Object.entries(sectorCounts).forEach(([sectorName, count]) => {
+        const filterKey = `sector:${sectorName}`;
+        toolbarHtml += `
+            <button onclick="renderSubmissionsAndReflections('${userId}', '${containerId}', '${filterKey}')" 
+                class="px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-md ${filterMode === filterKey ? 'bg-indigo-600 text-white' : 'bg-slate-800 border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700'}">
+                ${sectorName}
+            </button>`;
+    });
+
+    toolbarHtml += `
+                </div>
+                <div class="flex flex-wrap gap-2 text-xs font-bold shrink-0 border-t lg:border-t-0 border-slate-700 pt-3 lg:pt-0">
+                    <span class="bg-indigo-900/40 text-indigo-300 border border-indigo-700/40 px-3 py-1.5 rounded-full shadow-sm">
+                        Total Done: ${enrichedSubmissions.length}
+                    </span>
+                    <span class="bg-emerald-900/40 text-emerald-300 border border-emerald-700/40 px-3 py-1.5 rounded-full shadow-sm">
+                        Sectors: ${Object.keys(sectorCounts).length}
+                    </span>
+                    <span class="bg-amber-900/40 text-amber-300 border border-amber-700/40 px-3 py-1.5 rounded-full shadow-sm">
+                        Specs: ${Object.keys(specCounts).length}
+                    </span>
+                </div>
+            </div>
+        </div>`;
+
+    // 6. Group Submissions Visually by Milestone
+    const grouped = {};
+    displayedSubmissions.forEach(sub => {
+        const msTitle = sub.milestoneId !== 'Unknown' && sub.milestoneId !== 'Legacy' ? `Milestone ${sub.milestoneId} Projects` : 'Other Projects';
+        if(!grouped[msTitle]) grouped[msTitle] = [];
+        grouped[msTitle].push(sub);
+    });
+
+    let cardsHtml = '';
+    if (displayedSubmissions.length === 0) {
+        cardsHtml = '<div class="glass p-6 rounded-xl border border-slate-700 text-center text-slate-500"><p>No projects match this filter.</p></div>';
+    } else {
+        Object.keys(grouped).sort().forEach(msName => {
+            cardsHtml += `
+                <div class="mb-8">
+                    <h5 class="text-sm font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-800 pb-2"><i class="fas fa-layer-group mr-2"></i>${msName}</h5>
+                    <div class="grid grid-cols-1 gap-4">
+            `;
+            grouped[msName].forEach(sub => {
+                const userLedger = localLedgers[userId] || [];
+                const matchedLedger = userLedger.find(l => l.description === sub.title || l.description === sub.projectTitle || (l.description && l.description.includes(sub.day)));
+                const reward = sub.lcReward || sub.earnedPoints || (matchedLedger ? matchedLedger.score : 0);
+                const submittedAt = sub.timestamp ? new Date(sub.timestamp).toLocaleString() : (sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : 'No timestamp');
+                
+                cardsHtml += `
+                    <div class="glass p-5 rounded-xl border-l-4 border-emerald-500 bg-slate-800/80 transition-all hover:translate-x-1 hover:border-indigo-400 shadow-md">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                            <div>
+                                <div class="flex flex-wrap gap-2 items-center mb-2">
+                                    <span class="text-[10px] font-bold text-indigo-400 bg-indigo-900/40 px-2 py-0.5 rounded border border-indigo-700/40">${sub.sector}</span>
+                                    ${sub.spec && sub.spec !== 'General Spec' ? `<span class="text-[10px] font-bold text-amber-400 bg-amber-900/40 px-2 py-0.5 rounded border border-amber-700/40">${sub.spec}</span>` : ''}
+                                </div>
+                                <p class="text-base font-bold text-white leading-snug">${sub.projectTitle}</p>
+                            </div>
+                            <span class="text-emerald-400 font-bold text-sm bg-emerald-900/30 border border-emerald-700/30 px-3 py-1.5 rounded-xl whitespace-nowrap shadow-inner shrink-0 text-center">
+                                +${reward} LCs
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between mt-4 pt-4 border-t border-slate-700/50">
+                            <p class="text-[10px] text-slate-500 font-medium"><i class="fas fa-clock mr-1"></i> Submitted: ${submittedAt}</p>
+                            <button onclick="viewMySubmission('${userId}', '${sub.day}', '${sub.type}')" class="text-xs font-bold uppercase tracking-[0.08em] bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg transition-all shadow-md shrink-0">
+                                View Responses
+                            </button>
+                        </div>
+                    </div>`;
+            });
+            cardsHtml += `</div></div>`;
+        });
+    }
+
+    container.innerHTML = toolbarHtml + cardsHtml;
+}
+
+function isProjectDone(projectId) {
+    if(!currentUser) return false;
+    const ledger = localLedgers[currentUser._id] || [];
+    const dynamicProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+    const allProjects = dynamicProjects.length > 0 ? dynamicProjects : (typeof projects !== 'undefined' ? projects : []);
+    const proj = allProjects.find(p => p.id === projectId);
+    if(!proj) return false;
+    return ledger.some(l => l.description.includes(proj.title));
+}
+
+function buildPointsHtml(scoreObject) {
+    let displayScore = scoreObject.displayScore || scoreObject.totalScore;
+    let html = `<div class="total-score">${displayScore} XP</div><ul class="points-list custom-scrollbar">`;
+    if (scoreObject.points && scoreObject.points.length > 0) {
+        scoreObject.points.forEach(point => {
+            // Updated to format camelCase keys from the real-time API
+            let cleanType = (point.type || "Activity").replace(/([A-Z])/g, ' $1').replace(/^./, function(str){ return str.toUpperCase(); }).replace(/-/g, ' '); 
+            html += `<li><span class="point-type">${cleanType}</span><span class="point-score">+${point.score}</span></li>`;
+        });
+    } else { html += `<li><span class="text-slate-500">No points data available.</span></li>`; }
+    return html + `</ul>`;
+}
+
+function renderTimelineGrid(learnerEmail, gridId) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+
+    const safeTimelineData = typeof timelineData !== 'undefined' ? timelineData.flat() : [];
+    const safeLearnerEmail = learnerEmail ? learnerEmail.trim().toLowerCase() : "";
+    const userTimeline = safeTimelineData.find(t => t.email && t.email.trim().toLowerCase() === safeLearnerEmail);
+
+    if (!userTimeline) return grid.innerHTML = '<p class="text-slate-500 col-span-full">No timeline data found for this user.</p>';
+    grid.innerHTML = ''; 
+
+    for (const [month, activities] of Object.entries(activeReferenceData)) {
+        let boxHtml = `<div class="month-card"><div class="month-title">${month}</div>`;
+        for (const [activityName, targetScore] of Object.entries(activities)) {
+            const jsonKey = `${month} - ${activityName}`;
+            let userScore = (userTimeline[jsonKey] !== undefined && userTimeline[jsonKey] !== "") ? userTimeline[jsonKey] : 0;
+            let scoreDisplay = targetScore === 0 ? `(Count: ${userScore})` : `(${userScore} / ${targetScore})`;
+            let progressBarHtml = "";
+
+            if (targetScore !== 0) {
+                let percentage = Math.min((userScore / targetScore) * 100, 100);
+                let barColor = percentage >= 100 ? '#34d399' : (percentage >= 50 ? '#fbbf24' : '#ef4444');
+                progressBarHtml = `<div class="progress-track mt-1"><div class="progress-fill" style="width: ${percentage}%; background-color: ${barColor};"></div></div>`;
+            }
+            boxHtml += `<div class="activity-container"><div class="activity-header"><span class="activity-name">${activityName}</span><span class="activity-score">${scoreDisplay}</span></div>${progressBarHtml}</div>`;
+        }
+        grid.innerHTML += boxHtml + `</div>`;
+    }
+}
+
+// ================= LEADERBOARD LOGIC =================
+let lbLimit = 10;
+
+function setLbTab(btnElement, timeframe) {
+    document.querySelectorAll('.lb-tab').forEach(el => { el.classList.remove('active', 'bg-indigo-600', 'text-white'); el.classList.add('text-slate-400'); });
+    btnElement.classList.remove('text-slate-400');
+    btnElement.classList.add('active', 'bg-indigo-600', 'text-white');
+    lbLimit = 10; 
+    renderLeaderboard(timeframe);
+}
+
+// ================= FIXED LEADERBOARD LOGIC =================
+function renderLeaderboard(timeframe) {
+    const lbContainer = document.getElementById('leaderboardList');
+    if (!lbContainer) return;
+
+    let usersToRank = [];
+
+    // 1. Compile the list of users based on whatever data is available in the session
+    if (typeof adminRealtimeUsers !== 'undefined' && adminRealtimeUsers.length > 0) {
+        usersToRank = [...adminRealtimeUsers]; // Use admin live data if available
+    } else if (typeof actualUsers !== 'undefined' && actualUsers.length > 0) {
+        usersToRank = [...actualUsers]; // Use legacy user list if available
+    } else if (typeof actualScores !== 'undefined' && actualScores.length > 0) {
+        // Fallback: Reconstruct user list from the legacy scores file
+        usersToRank = actualScores.map(s => ({
+            _id: s.user || s.userId,
+            name: s.name || 'cMPLi Learner',
+            profilePicUrl: 'https://ui-avatars.com/api/?name=C&background=random'
+        }));
+    }
+
+    // Ensure the CURRENT user is ALWAYS in the list to be ranked
+    if (currentUser) {
+        const isIncluded = usersToRank.some(u => String(u._id) === String(currentUser._id));
+        if (!isIncluded) usersToRank.push(currentUser);
+    }
+
+    // 2. Map Scores safely using actual earned LCs
+    let lbData = usersToRank.map(u => {
+        let earnedLcs = 0;
+        const ledgerEntries = localLedgers[u._id] || [];
+        earnedLcs = ledgerEntries.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+
+        if (earnedLcs === 0 && typeof actualScores !== 'undefined' && actualScores.length > 0) {
+            const legacyObj = actualScores.find(s => String(s.user) === String(u._id) || String(s.userId) === String(u._id));
+            if (legacyObj && legacyObj.totalScore !== undefined) {
+                earnedLcs = Number(legacyObj.totalScore) || 0;
+            }
+        }
+
+        if (currentUser && String(u._id) === String(currentUser._id)) {
+            if (typeof currentScoreObj !== 'undefined' && currentScoreObj && (currentScoreObj.totalScore !== undefined || currentScoreObj.displayScore !== undefined)) {
+                earnedLcs = Number(currentScoreObj.totalScore || currentScoreObj.displayScore || earnedLcs) || earnedLcs;
+            } else if (currentUser.lcs !== undefined) {
+                earnedLcs = Number(currentUser.lcs) || earnedLcs;
+            }
+        }
+
+        if (earnedLcs === 0 && u.lcs !== undefined) {
+            earnedLcs = Number(u.lcs) || earnedLcs;
+        }
+
+        const completionPct = getUserCompletionPercentage(u._id) || u.completionPct || u.progressPercent || 0;
+
+        return {
+            name: u.name || 'cMPLi Learner',
+            pic: u.profilePicUrl || u.profilePicUrlUncompressed || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'L')}&background=random`,
+            score: earnedLcs,
+            completionPct
+        };
+    }).sort((a,b) => {
+        if ((b.score || 0) !== (a.score || 0)) {
+            return (b.score || 0) - (a.score || 0);
+        }
+        return (b.completionPct || 0) - (a.completionPct || 0);
+    });
+
+    // 3. Render the HTML
+    if (lbData.length === 0) {
+        lbContainer.innerHTML = `<div class="p-4 text-center text-slate-500">No leaderboard data found.</div>`;
+        return;
+    }
+
+    let html = '';
+    lbData.slice(0, 10).forEach((user, index) => {
+        let rankClass = index === 0 ? 'text-yellow-400 text-2xl' : (index === 1 ? 'text-slate-300 text-xl' : (index === 2 ? 'text-amber-600 text-xl' : 'text-slate-500 font-bold'));
+        let rankIcon = index < 3 ? '<i class="fas fa-trophy"></i>' : `#${index + 1}`;
+
+        html += `
+        <div class="flex items-center justify-between p-4 glass rounded-xl border ${index < 3 ? 'border-indigo-500/30 bg-indigo-900/10' : 'border-slate-700'}">
+            <div class="flex items-center gap-4">
+                <div class="w-8 text-center ${rankClass}">${rankIcon}</div>
+                <img src="${user.pic}" class="w-10 h-10 rounded-full object-cover border border-slate-600" onerror="this.src='https://via.placeholder.com/80'">
+                <span class="font-bold text-white">${user.name}</span>
+            </div>
+            <div class="font-bold text-emerald-400">${user.score} LCs</div>
+        </div>`;
+    });
+    
+    lbContainer.innerHTML = html;
+}
+
+function viewAllLeaderboard() {
+    lbLimit = actualScores.length;
+    const activeTab = document.querySelector('.lb-tab.active');
+    renderLeaderboard(activeTab.dataset.time);
+}
+
+// ================= PROJECT LOGIC =================
+function renderProjects(mode) {
+    const dynamicProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+    const sourceProjects = dynamicProjects.length > 0 ? dynamicProjects : (typeof projects !== 'undefined' ? projects : []);
+    
+    // Safely grab elements
+    const grid = document.getElementById('projectGrid');
+    const filters = document.getElementById('filterBar');
+    const btnSector = document.getElementById('btnSector');
+    const btnSpec = document.getElementById('btnSpec');
+    
+    // THE SAFEGUARD: If these elements don't exist on the current screen, stop right here!
+    if (!grid || !filters || !btnSector || !btnSpec) return;
+
+    currentView = mode;
+    
+    // Update button classes safely
+    btnSector.className = mode === 'sector' ? 'px-6 py-3 rounded-xl bg-indigo-600 font-bold shadow-lg shadow-indigo-500/20' : 'px-6 py-3 rounded-xl glass font-bold hover:bg-slate-800 transition-all';
+    btnSpec.className = mode === 'spec' ? 'px-6 py-3 rounded-xl bg-indigo-600 font-bold shadow-lg shadow-indigo-500/20' : 'px-6 py-3 rounded-xl glass font-bold hover:bg-slate-800 transition-all';
+
+    const uniqueCats = mode === 'sector'
+        ? [...new Set(sourceProjects.map(p => p.sector).filter(Boolean))]
+        : [...new Set(sourceProjects.map(p => p.spec).filter(Boolean))];
+    
+    filters.innerHTML = `<button onclick="setFilter('All')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-all ${currentFilter === 'All' ? 'bg-indigo-500 text-white' : 'glass text-slate-400 hover:bg-slate-800'}">All</button>`;
+    
+    uniqueCats.forEach(cat => {
+        filters.innerHTML += `<button onclick="setFilter('${cat}')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-all ${currentFilter === cat ? 'bg-indigo-500 text-white' : 'glass text-slate-400 hover:bg-slate-800'}">${cat}</button>`;
+    });
+
+    const filtered = currentFilter === 'All'
+        ? sourceProjects
+        : sourceProjects.filter(p => (mode === 'sector' ? p.sector : p.spec) === currentFilter);
+    grid.innerHTML = filtered.map(p => createCard(p)).join('');
+}
+
+function createCard(p) {
+    const isDone = isProjectDone(p.id);
+    const badgeLabel = p.sector || p.code || '';
+    return `
+        <div onclick="openModal('${p.id}')" class="glass p-6 rounded-2xl border border-slate-800 card-hover cursor-pointer group flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[10px] font-bold tracking-widest text-indigo-400 uppercase bg-indigo-400/10 px-2 py-1 rounded border border-indigo-500/20">${badgeLabel}</span>
+                    <div class="flex gap-2">${isDone ? '<i class="fas fa-check-circle text-emerald-400 text-xl"></i>' : '<i class="far fa-clock text-slate-500 text-xl"></i>'}</div>
+                </div>
+                <h3 class="text-xl font-bold mb-2 group-hover:text-indigo-400 transition-colors line-clamp-2">${p.title}</h3>
+                <div class="flex items-center gap-4 text-xs text-slate-500 font-semibold mb-6">
+                    <span class="bg-slate-800/80 px-2 py-1 rounded"><i class="fas fa-layer-group mr-1"></i> ${p.diff}</span>
+                    <span class="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded"><i class="fas fa-bolt mr-1"></i> ${p.pts} XP</span>
+                </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-slate-700/50 pt-4 mt-auto">
+                <span class="text-xs text-slate-400"><i class="fas fa-calendar-alt mr-1"></i> ${p.duration}</span>
+                <span class="text-indigo-400 font-bold text-sm group-hover:translate-x-1 transition-transform">${isDone ? 'Review' : 'Enrol'} <i class="fas fa-arrow-right ml-1"></i></span>
+            </div>
+        </div>
+    `;
+}
+
+function setFilter(f) { currentFilter = f; renderProjects(currentView); }
+
+function openModal(id) {
+    const dynamicProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+    const allProjects = dynamicProjects.length > 0 ? dynamicProjects : (typeof projects !== 'undefined' ? projects : []);
+    selectedProject = allProjects.find(p => p.id === id);
+    if (!selectedProject) return;
+    const isDone = isProjectDone(id);
+
+    document.getElementById('modalTitle').innerText = selectedProject.title;
+    document.getElementById('modalDesc').innerText = selectedProject.desc;
+    
+    const submitBtn = document.getElementById('submitBtn');
+    const uploadArea = document.getElementById('uploadArea');
+    const reflectionArea = document.getElementById('projectReflection').parentElement;
+    
+    if(isDone) {
+        submitBtn.innerText = "Project Completed!";
+        submitBtn.className = "w-full py-3 bg-emerald-600 rounded-xl font-bold cursor-default shadow-lg shadow-emerald-600/20";
+        submitBtn.disabled = true;
+        uploadArea.classList.add('hidden');
+        reflectionArea.classList.add('hidden');
+    } else {
+        submitBtn.innerText = "Submit & Claim Points";
+        submitBtn.className = "w-full py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20";
+        submitBtn.disabled = false;
+        uploadArea.classList.remove('hidden');
+        reflectionArea.classList.remove('hidden');
+    }
+    document.getElementById('modal').classList.remove('hidden');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
+    document.getElementById('file_input').value = ""; 
+    document.getElementById('projectReflection').value = "";
+}
+
+async function submitProject() {
+    const fileInput = document.getElementById('file_input');
+    const reflection = document.getElementById('projectReflection').value;
+    
+    if(!selectedProject) return;
+    if(!reflection || fileInput.files.length === 0) return alert("Please answer the required question and upload a file.");
+    
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.innerText = "Submitting to Server...";
+    submitBtn.disabled = true;
+
+    // Read the uploaded file as base64 for local storage
+    const file = fileInput.files[0];
+    const fileData = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            resolve({
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                data: e.target.result
+            });
+        };
+        reader.readAsDataURL(file);
+    });
+
+    const payload = {
+        _id: "mock_" + Math.random().toString(36).substr(2, 9),
+        score: selectedProject.pts,
+        description: `For Completion of Real World Application: ${selectedProject.title}`,
+        type: "micro-Projects",
+        extraData: { reflection: reflection, file: fileData },
+        createdAt: new Date().toISOString()
+    };
+
+    try {
+        const response = await fetch('https://api-prod-new.tagmango.com/api/v1/external/gamification/points/assign', {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${APP_CONFIG.tagmangoKey}`, 
+                'x-whitelabel-host': APP_CONFIG.hostUrl 
+            },
+            body: JSON.stringify({ fanIds: [currentUser._id], score: payload.score, description: payload.description, type: payload.type, date: payload.createdAt, extraData: payload.extraData })
+        });
+
+        if (response.ok || response.status === 200) { 
+            // Added the success pop-up here!
+            alert(`🎉 Success! Deliverable uploaded and ${selectedProject.pts} points added!`);
+            saveSubmissionLocally(payload);
+        } else { 
+            throw new Error(`API Error: ${response.status}`); 
+        }
+    } catch (error) {
+        alert("Simulating success (API disconnected locally): Points awarded and reflection saved!");
+        saveSubmissionLocally(payload);
+    }
+}
+
+function saveSubmissionLocally(payload) {
+    if(!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
+    localLedgers[currentUser._id].unshift(payload); 
+    localStorage.setItem('tagmangoLedgerMock', JSON.stringify(localLedgers));
+    
+    currentScoreObj.displayScore += payload.score;
+    currentScoreObj.points.unshift({ type: payload.type, score: payload.score });
+    
+    updateDashboardUI();
+    renderProjects(currentView); 
+    closeModal();
+}
+
+// --- EVENT LISTENERS FOR LOGIN (ENTER KEY SUPPORT) ---
+document.addEventListener('DOMContentLoaded', () => {
+    const loginInput = document.getElementById('loginId');
+    const otpInput = document.getElementById('otpCode');
+    
+    // Listen for Enter key on Step 1 (Email/Phone)
+    if (loginInput) {
+        loginInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevents the page from refreshing
+                requestOTP();
+            }
+        });
+    }
+    
+    // Listen for Enter key on Step 2 (OTP)
+    if (otpInput) {
+        otpInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                verifyOTP();
+            }
+        });
+    }
+});
+
+// Global track for active submission filter per container
+let activeSubmissionFilter = {};
+
+// --- AUTOMATED REAL-TIME COURSE FETCHING & REPORTING ---
+async function loadCourseCompletions(userId, containerId = 'courseCompletionsContainer') {
+    const container = document.getElementById(containerId);
+    if (!container) return; 
+    
+    container.innerHTML = `
+        <div class="flex flex-col items-center justify-center p-8 text-indigo-400 font-semibold glass rounded-xl border border-indigo-500/20">
+            <i class="fas fa-circle-notch fa-spin text-3xl mb-3"></i> 
+            <p>Syncing live course progress...</p>
+        </div>`;
+
+    try {
+        // STEP 1: Fetch the exact courses the student has access to
+        const overviewRes = await window.fetchTagMango(window.TagMangoAPI.Courses.getStudentOverview(userId));
+        
+        // Target the exact array name from the JSON payload
+        const enrolledCourses = overviewRes.result?.courseVideoWatchTimes || [];
+
+        if (enrolledCourses.length === 0) {
+            container.innerHTML = `
+                <div class="glass p-6 rounded-xl border border-slate-800 text-center text-slate-500">
+                    <i class="fas fa-box-open text-2xl mb-2 text-slate-600 block"></i>
+                    No active course enrollments found for this account.
+                </div>`;
+            return;
+        }
+
+        const finalCourseData = [];
+
+        // STEP 2: Fetch the progress for each enrolled course
+        await Promise.all(enrolledCourses.map(async (course) => {
+            const courseId = course.courseId;
+            const title = course.courseTitle || "Enrolled Course";
+            
+            if (!courseId) return;
+
+            try {
+                // Ping the reporting students API for this specific course
+                const reportRes = await window.fetchTagMango(window.TagMangoAPI.Courses.getReportingStudents(courseId));
+                
+                // Target the exact data array from the JSON payload
+                const students = reportRes.result?.data || [];
+
+                // Find our specific user inside the reporting array
+                const studentData = students.find(s => String(s.userId) === String(userId));
+
+                // Extract progressPercent safely
+                const progress = studentData && studentData.progressPercent !== undefined 
+                    ? studentData.progressPercent 
+                    : 0;
+
+                finalCourseData.push({
+                    id: courseId,
+                    title: title,
+                    isPaid: 'Enrolled', // Assuming enrolled since it appeared in overview
+                    progress: Math.min(100, Math.max(0, Number(progress)))
+                });
+                
+            } catch (err) {
+                console.warn(`Could not fetch report for ${title}`);
+                // Still show the course even if reporting fails, just at 0%
+                finalCourseData.push({
+                    id: courseId,
+                    title: title,
+                    isPaid: 'Enrolled',
+                    progress: 0
+                });
+            }
+        }));
+
+        // STEP 3: Display results
+        let html = `
+            <div class="space-y-5">
+                <div class="flex items-center justify-between border-b border-slate-700/50 pb-2">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fas fa-satellite-dish text-indigo-400"></i> Course Progress
+                    </h3>
+                    <span class="text-xs font-bold text-slate-400 bg-slate-800 px-2 py-1 rounded">
+                        Active Courses: ${finalCourseData.length}
+                    </span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">`;
+        
+        finalCourseData.forEach(course => {
+            let barColor = course.progress >= 100 ? 'bg-emerald-500' : (course.progress >= 50 ? 'bg-amber-400' : 'bg-indigo-500');
+            let percentage = Number(course.progress).toFixed(1); // Keeps the decimal like 95.4%
+            
+            html += `
+                <div class="glass p-5 rounded-xl border border-slate-700/60 hover:border-indigo-500/40 transition-all group relative overflow-hidden">
+                    ${course.progress >= 100 ? '<div class="absolute inset-0 bg-emerald-500/5 z-0 pointer-events-none"></div>' : ''}
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-start mb-3 gap-2">
+                            <h4 class="font-bold text-sm text-white line-clamp-2" title="${course.title}">${course.title}</h4>
+                            <span class="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700/50">
+                                ${course.isPaid}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs text-slate-400 mb-1.5 font-bold">
+                            <span class="flex items-center gap-1">
+                                ${course.progress >= 100 ? '<i class="fas fa-check-circle text-emerald-400"></i> Completed' : '<i class="fas fa-tasks"></i> In Progress'}
+                            </span>
+                            <span class="${course.progress >= 100 ? 'text-emerald-400' : 'text-white'} text-sm">${percentage}%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700/80 shadow-inner">
+                            <div class="${barColor} h-2.5 rounded-full transition-all duration-1000 ease-out" style="width: ${course.progress}%;"></div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+        
+        html += `</div></div>`;
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error("Course Sync Error:", error);
+        container.innerHTML = `
+            <div class="p-4 glass rounded-xl border border-red-500/20 text-red-400 text-sm flex items-center gap-3">
+                <i class="fas fa-exclamation-triangle text-xl"></i>
+                <div>
+                    <strong>Data Sync Error</strong><br>
+                    <span class="text-xs opacity-80">Could not retrieve authorized course content.</span>
+                </div>
+            </div>`;
+    }
+}
+
+// ================= LEVEL-UP ARCHITECTURE LOGIC =================
+
+// The configuration rules for the 6 levels
+const levelConfig = [
+    { id: 1, name: "cMPLiBe 21 Days Challenge", milestone: "01", reqLC: 0, reqPercent: 0, access: ["dip"] },
+    { id: 2, name: "cMPLi Curious", milestone: "02", reqLC: 600, reqPercent: 90, access: ["dip", "immerse"] },
+    { id: 3, name: "cMPLi Committed", milestone: "03", reqLC: 2400, reqPercent: 90, access: ["dip", "immerse", "projects"] },
+    { id: 4, name: "Level 4 (Locked)", milestone: "04", reqLC: 99999, reqPercent: 100, access: [] },
+    { id: 5, name: "Level 5 (Locked)", milestone: "05", reqLC: 99999, reqPercent: 100, access: [] },
+    { id: 6, name: "Level 6 (Locked)", milestone: "06", reqLC: 99999, reqPercent: 100, access: [] }
+];
+
+// Handles switching between Dip, Immerse, and Projects inside the Level-Up tab
+function switchLevelMenu(menuName) {
+    // Reset buttons
+    ['btnNavDip', 'btnNavImmerse', 'btnNavProjects'].forEach(id => {
+        const btn = document.getElementById(id);
+        btn.className = "px-6 py-2 rounded-t-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all";
+    });
+    
+    // Reset active tabs
+    ['subTabDip', 'subTabImmerse', 'subTabProjects'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
+
+    // Activate selected
+    let activeBtn = '';
+    let activeTab = '';
+    
+    if (menuName === 'dip') { activeBtn = 'btnNavDip'; activeTab = 'subTabDip'; }
+    if (menuName === 'immerse') { activeBtn = 'btnNavImmerse'; activeTab = 'subTabImmerse'; }
+    if (menuName === 'projects') { activeBtn = 'btnNavProjects'; activeTab = 'subTabProjects'; }
+
+    const btnElement = document.getElementById(activeBtn);
+    btnElement.className = "px-6 py-2 rounded-t-xl bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500 font-bold transition-all";
+    document.getElementById(activeTab).classList.remove('hidden');
+
+    if (menuName === 'projects') renderProjects('sector');
+}
+
+// ================= LEVEL-UP TIMELINE & SUBMISSION LOGIC =================
+
+// State tracking for the modal
+let currentSubmissionState = { type: '', day: 0, points: 0, title: '' };
+
+// Generates the Timeline UI
+function renderTimelines() {
+    const dipContainer = document.getElementById('dipTimelineContainer');
+    const immerseContainer = document.getElementById('immerseTimelineContainer');
+    if (!dipContainer || !immerseContainer) return;
+
+    // Simulate start date (In reality, fetch user's enrollment date)
+    const startDate = new Date(); 
+    startDate.setDate(startDate.getDate() - 2); // Pretend they started 2 days ago for demo
+
+    // 1. Render Dip Timeline (21 Days)
+    let dipHtml = '';
+    for (let i = 1; i <= 21; i++) {
+        const checkDate = new Date(startDate);
+        checkDate.setDate(checkDate.getDate() + (i - 1));
+        dipHtml += createTimelineNode(i, checkDate, 'dip');
+    }
+    dipContainer.innerHTML = dipHtml;
+
+    // 2. Render Immerse Timeline (Mon-Wed-Fri for ~3 months, approx 39 sessions)
+    let immerseHtml = '';
+    let sessionCount = 1;
+    let currentDate = new Date(startDate);
+    
+    // Generate up to 12 sessions just for UI demonstration
+    while(sessionCount <= 12) {
+        const dayOfWeek = currentDate.getDay(); // 0=Sun, 1=Mon, 3=Wed, 5=Fri
+        if (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5) {
+            immerseHtml += createTimelineNode(sessionCount, currentDate, 'immerse');
+            sessionCount++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    immerseContainer.innerHTML = immerseHtml;
+}
+
+// Creates an individual Date Node for the timeline
+function createTimelineNode(dayNum, dateObj, type) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const nodeDate = new Date(dateObj);
+    nodeDate.setHours(0,0,0,0);
+
+    const isPast = nodeDate < today;
+    const isToday = nodeDate.getTime() === today.getTime();
+    const isFuture = nodeDate > today;
+
+    const dateKey = isoDateKey(nodeDate);
+    
+    // --- NEW: Fetch Dynamic Potential LCs ---
+    const dayConfig = getAdminConfigForDate(dateKey, type);
+    const maxPotential = dayConfig ? dayConfig.lcOnTime : (type === 'dip' ? 33 : 133);
+
+    const isCompleted = currentUser ? hasLevelUpSubmission(currentUser._id, type, dayNum, dateKey) : false;
+    const submissionDetails = isCompleted ? getLevelUpSubmission(currentUser._id, type, dayNum, dateKey) : null;
+    const earnedLcs = submissionDetails ? (submissionDetails.lcReward || submissionDetails.earnedPoints || 0) : null;
+    const submittedAt = submissionDetails ? (submissionDetails.submittedAt || submissionDetails.timestamp || submissionDetails.createdAt) : null;
+
+    let statusColor, icon, actionBtn, borderClass;
+    const dateStr = nodeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // --- NEW: Inject dynamic maxPotential ---
+    const earnedDisplay = earnedLcs !== null ? `<p class="text-xs font-bold mt-1 text-emerald-300">Earned: +${earnedLcs} LCs${submissionDetails?.onTime === false ? ' (Late)' : ''}</p>` : `<p class="text-xs font-bold mt-1 ${statusColor}">Potential: Up to ${maxPotential} LCs</p>`;
+    const submittedDisplay = submittedAt ? `<p class="text-[10px] text-slate-400 mt-1">Submitted: ${new Date(submittedAt).toLocaleString()}</p>` : '';
+
+    if (isCompleted) {
+        statusColor = 'text-emerald-400'; borderClass = 'border-emerald-500/50 bg-emerald-900/10';
+        icon = '<i class="fas fa-check-circle shadow-emerald"></i>';
+        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${type}', '${dateKey}')" class="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-4 py-1.5 rounded-full transition-all shadow-lg"><i class="fas fa-eye mr-1"></i> View Reflection</button>`;
+    } else if (isFuture) {
+        statusColor = 'text-slate-500'; borderClass = 'border-slate-700 bg-slate-800/50 opacity-60';
+        icon = '<i class="fas fa-lock"></i>';
+        actionBtn = `<span class="text-xs font-bold text-slate-500"><i class="fas fa-clock mr-1"></i> Opens later</span>`;
+    } else if (isToday) {
+        statusColor = 'text-indigo-400'; borderClass = 'border-indigo-500 bg-indigo-900/20 shadow-lg shadow-indigo-500/10';
+        icon = '<i class="fas fa-unlock-alt"></i>';
+        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${type}', '${dateKey}')" class="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 rounded-full transition-all shadow-lg"><i class="fas fa-pen mr-1"></i> Start Reflection</button>`;
+    } else {
+        statusColor = 'text-red-400'; borderClass = 'border-red-500/30 bg-red-900/10';
+        icon = '<i class="fas fa-times-circle"></i>';
+        actionBtn = `<span class="text-xs font-bold text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i> Missed</span>`;
+    }
+
+    return `
+    <div class="relative pl-6 pb-6 group">
+        <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 ${statusColor === 'text-emerald-400' ? 'border-emerald-500' : (statusColor === 'text-indigo-400' ? 'border-indigo-500' : 'border-slate-600')} flex items-center justify-center text-[8px] ${statusColor}">
+            ${icon}
+        </div>
+        <div class="glass p-4 rounded-xl border ${borderClass} flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all">
+            <div>
+                <h4 class="font-bold text-white flex items-center gap-2">Day ${dayNum} <span class="text-xs font-normal text-slate-400">• ${dateStr}</span></h4>
+                ${earnedDisplay}
+                ${submittedDisplay}
+            </div>
+            <div>
+                ${actionBtn}
+            </div>
+        </div>
+    </div>`;
+}
+
+// --- HELPER: Global Cohort Start Date ---
+let milestoneStartDates = JSON.parse(localStorage.getItem('milestoneStartDates')) || { 1: '2026-07-31', 2: '2026-08-21', 3: '2026-11-21' };
+
+function getMilestoneStartDate(msId) {
+    return new Date(milestoneStartDates[msId] || new Date().toISOString().split('T')[0]);
+}
+
+// --- 1. UPGRADED: Get Config with Module Isolation ---
+function getAdminConfigForDate(dateKey, moduleName = 'dip') {
+    const customConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+    
+    // Check for the new isolated structure first
+    if (activeMilestoneId && customConfigs[activeMilestoneId] && customConfigs[activeMilestoneId][moduleName]) {
+        return customConfigs[activeMilestoneId][moduleName][dateKey]; 
+    }
+    // Fallback for legacy configurations
+    if (activeMilestoneId && customConfigs[activeMilestoneId] && customConfigs[activeMilestoneId][dateKey]) {
+        return customConfigs[activeMilestoneId][dateKey];
+    }
+    return null;
+}
+
+function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
+    const normalizedType = normalizeLevelUpType(type);
+    const dateKey = referenceDate || getLocalDateKey(new Date()); 
+    
+    currentSubmissionState.type = normalizedType;
+    currentSubmissionState.day = dayNum;
+    currentSubmissionState.date = dateKey;
+
+    const userSubs = getUserSubmissionsByUserId(currentUser._id);
+
+    // FIX: Strict Milestone Check (Fallbacks to MS 1 for legacy test data)
+    const existingSub = userSubs.find(entry => {
+        if (normalizeLevelUpType(entry.type) !== normalizedType) return false;
+        
+        const subMsId = entry.milestoneId || 1;
+        if (String(subMsId) !== String(activeMilestoneId)) return false;
+
+        if (entry.day !== undefined && String(entry.day) === String(dayNum)) return true;
+        if (dateKey && isSameSubmissionReference(entry, dateKey)) return true;
+        return false;
+    });
+
+    let questionsToRender = [];
+    let isCompleted = !!existingSub;
+
+    if (isCompleted) {
+        if (existingSub.responses && existingSub.responses.length > 0) {
+            questionsToRender = existingSub.responses; 
+        } else {
+            questionsToRender = [];
+            if (existingSub.sector && existingSub.sector !== 'N/A') questionsToRender.push({ question: 'The Sector is about', answer: existingSub.sector, type: 'text' });
+            if (existingSub.strategy && existingSub.strategy !== 'N/A') questionsToRender.push({ question: 'Strategy Behind Story', answer: existingSub.strategy, type: 'text' });
+            if (existingSub.fact && existingSub.fact !== 'N/A') questionsToRender.push({ question: 'Fact from Story', answer: existingSub.fact, type: 'text' });
+            
+            if (existingSub.extraAnswers) {
+                Object.entries(existingSub.extraAnswers).forEach(([q, a]) => {
+                    if (a && a !== 'N/A') questionsToRender.push({ question: q, answer: a, type: 'text' });
+                });
+            }
+
+            if (existingSub.summary && existingSub.summary !== 'N/A') questionsToRender.push({ question: 'Summary / Reflection', answer: existingSub.summary, type: 'text' });
+            if (existingSub.general && existingSub.general !== 'N/A') questionsToRender.push({ question: 'General Question', answer: existingSub.general, type: 'text' });
+            
+            if (questionsToRender.length === 0) {
+                questionsToRender.push({ question: 'Submission Status', answer: 'Completed (Legacy Format)', type: 'text' });
+            }
+        }
+    } else {
+        if (normalizedType === 'projects') {
+            const dbProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+            const proj = dbProjects.find(p => p.id === dayNum); 
+            if (proj && proj.questions && proj.questions.length > 0) {
+                questionsToRender = proj.questions.map(q => ({ question: q.title, type: q.type, answer: '' }));
+            } else {
+                questionsToRender = [{ question: 'Upload Deliverable', type: 'doc', answer: '' }];
+            }
+        } else {
+            const dayConfig = getAdminConfigForDate(dateKey);
+            if (dayConfig && dayConfig.questions && dayConfig.questions.length > 0) {
+                questionsToRender = dayConfig.questions.map(q => ({ question: q.title, type: q.type, answer: '' }));
+            } else {
+                questionsToRender = [
+                    { question: 'The Sector is about', type: 'text', answer: '' },
+                    { question: 'Upload Proof of Work', type: 'audio', answer: '' }
+                ];
+            }
+        }
+    }
+
+    const oldModal = document.getElementById('dynamicSubmissionModal');
+    if (oldModal) oldModal.remove();
+
+    let headerHtml = `<h3 class="text-xl font-bold text-white">Day ${dayNum} Check-In</h3>`;
+    let projectRulesHtml = '';
+    let formWrapperStart = '';
+    let formWrapperEnd = '';
+
+    // --- NEW: DYNAMIC PROJECT 2-STEP WORKFLOW ---
+    if (normalizedType === 'projects') {
+        const dbProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+        const proj = dbProjects.find(p => p.id === dayNum);
+        const projTitle = proj ? proj.title : 'Project Submission';
+        const projDesc = proj ? proj.desc : '';
+        
+        headerHtml = `<h3 class="text-xl font-bold text-white flex items-center gap-2"><i class="fas fa-briefcase text-emerald-400"></i> <span class="line-clamp-2">${projTitle}</span></h3>`;
+        
+        if (!isCompleted && projDesc) {
+            projectRulesHtml = `
+                <div id="projectBriefStep" class="block animate-fade-in-up">
+                    <div class="mb-6 p-5 bg-slate-900 border border-slate-700 rounded-xl shadow-inner">
+                        <h4 class="text-sm font-black text-emerald-400 uppercase tracking-widest mb-3 border-b border-slate-700/50 pb-2"><i class="fas fa-scroll mr-1"></i> Project Brief & Rules</h4>
+                        <div class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">${projDesc}</div>
+                    </div>
+                    <button type="button" onclick="document.getElementById('projectBriefStep').classList.add('hidden'); document.getElementById('projectSubmitStep').classList.remove('hidden');" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg"><i class="fas fa-rocket mr-2"></i> Start Submitting</button>
+                </div>
+            `;
+            formWrapperStart = `<div id="projectSubmitStep" class="hidden animate-fade-in-up">`;
+            formWrapperEnd = `</div>`;
+        }
+    } else if (isCompleted) {
+        const subTime = existingSub.submittedAt || existingSub.timestamp || existingSub.createdAt || existingSub.date || existingSub.dateKey;
+        let exactTimeStr = 'Unknown Time';
+        if (subTime) {
+            const dObj = new Date(subTime);
+            if (!isNaN(dObj.getTime())) {
+                const dd = String(dObj.getDate()).padStart(2, '0');
+                const mm = String(dObj.getMonth() + 1).padStart(2, '0');
+                const yyyy = dObj.getFullYear();
+                let h = dObj.getHours();
+                const m = String(dObj.getMinutes()).padStart(2, '0');
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                h = h % 12 || 12;
+                exactTimeStr = `${dd}-${mm}-${yyyy} at ${String(h).padStart(2, '0')}:${m} ${ampm}`;
+            }
+        }
+        let lcReward = existingSub.lcReward !== undefined ? existingSub.lcReward : (existingSub.earnedPoints !== undefined ? existingSub.earnedPoints : null);
+        if (lcReward === null) {
+            const userLedger = localLedgers[currentUser._id] || [];
+            const ledgerMatch = userLedger.find(l => l.description && l.description.includes(`Day ${dayNum}`));
+            lcReward = ledgerMatch ? (Number(ledgerMatch.score) || 0) : 0;
+        }
+
+        headerHtml = `
+            <div>
+                <h3 class="text-xl font-bold text-white flex items-center flex-wrap gap-2">
+                    <i class="fas fa-file-alt text-indigo-400 mr-1"></i> Day ${dayNum} Check-In
+                    <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 px-3 py-1 rounded-full ml-1">+${lcReward} LCs</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-2"><i class="fas fa-clock mr-1"></i> Submitted: <span class="font-bold text-slate-300">${exactTimeStr}</span></p>
+            </div>`;
+    }
+
+    let contentHtml = '';
+    questionsToRender.forEach((q, index) => {
+        const letter = String.fromCharCode(97 + index); 
+        contentHtml += `<div class="mb-4">
+            <label class="block text-sm font-bold text-white mb-2">${letter}. ${q.question} ${!isCompleted ? '<span class="text-red-500">*</span>' : ''}</label>`;
+
+        if (isCompleted) {
+            if (['audio', 'video', 'doc'].includes(q.type)) {
+                const fileUrl = q.fileData || q.data || (existingSub.media && existingSub.media.data) || (existingSub.extraData && existingSub.extraData.file && existingSub.extraData.file.data) || '';
+                const downloadName = q.fileName || q.answer || 'download';
+                contentHtml += `<div class="p-3 bg-slate-900 rounded-lg text-emerald-400 text-sm border border-slate-700">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <span><i class="fas fa-check-circle mr-2"></i> ${q.answer || 'File Attached'}</span>
+                        ${fileUrl ? `<a href="${fileUrl}" download="${downloadName}" target="_blank" class="inline-flex items-center gap-2 text-indigo-300 hover:text-indigo-200 text-xs font-bold"><i class="fas fa-download"></i> Download</a>` : ''}
+                    </div>
+                </div>`;
+            } else {
+                contentHtml += `<div class="p-3 bg-slate-900 rounded-lg text-slate-300 text-sm border border-slate-700 whitespace-pre-wrap">${q.answer}</div>`;
+            }
+        } else {
+            if (q.type === 'text') {
+                contentHtml += `<textarea id="dynamic_input_${index}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-indigo-500 min-h-[80px]" required></textarea>`;
+            } else if (q.type === 'video' || q.type === 'audio') {
+                contentHtml += `
+                <div class="flex flex-col gap-3 p-4 bg-slate-900/50 border border-slate-700 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <button type="button" id="btn_record_${index}" onclick="startMediaRecording(${index}, '${q.type}')" class="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-bold transition-all shadow-md"><i class="fas fa-circle mr-2"></i> Record ${q.type === 'video' ? 'Camera' : 'Mic'}</button>
+                        <button type="button" id="btn_stop_${index}" onclick="stopMediaRecording(${index})" class="hidden px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-lg text-sm font-bold transition-all shadow-md"><i class="fas fa-stop mr-2"></i> Stop Recording</button>
+                    </div>
+                    <div id="media_preview_container_${index}" class="hidden mt-2"></div>
+                    
+                    <div class="mt-2 pt-3 border-t border-slate-700/50">
+                        <p class="text-[10px] text-slate-500 mb-2 uppercase tracking-widest font-bold">Or Upload File</p>
+                        <input type="file" id="dynamic_input_${index}" accept="${q.type}/*" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer">
+                    </div>
+                </div>`;
+            } else {
+                contentHtml += `<input type="file" id="dynamic_input_${index}" accept=".pdf,.doc,.docx,.xls,.xlsx" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-400 focus:border-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-700 file:text-white" required></input>`;
+            }
+            contentHtml += `<input type="hidden" id="dynamic_q_${index}" value="${q.type === 'doc' ? 'Upload Deliverable' : q.question}">`;
+            contentHtml += `<input type="hidden" id="dynamic_type_${index}" value="${q.type}">`;
+        }
+        contentHtml += `</div>`;
+    });
+
+    let buttonHtml = !isCompleted 
+        ? `<button id="btnSubmitCheckin" type="button" onclick="submitDynamicCheckIn('${dayNum}', ${questionsToRender.length}, '${type}')" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs</button>`
+        : `<div class="mt-6 text-center text-emerald-400 font-bold"><i class="fas fa-check-circle mr-2"></i> Completed & Locked</div>`;
+
+    let downloadHtml = '';
+    if (isCompleted) {
+        const fileHref = (existingSub.media && existingSub.media.data)
+            || (existingSub.extraData && existingSub.extraData.file && existingSub.extraData.file.data)
+            || (existingSub.responses && existingSub.responses.find(r => ['audio','video','doc'].includes(r.type) && r.fileData)?.fileData)
+            || '';
+        const fileName = (existingSub.media && existingSub.media.name)
+            || (existingSub.responses && existingSub.responses.find(r => ['audio','video','doc'].includes(r.type) && r.fileName)?.fileName)
+            || 'download';
+
+        if (fileHref) {
+            downloadHtml = `
+                <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4 mt-4">
+                    <p class="text-xs text-indigo-300 uppercase tracking-widest mb-2">Attached Proof</p>
+                    <a href="${fileHref}" download="${fileName}" target="_blank" class="inline-flex items-center gap-2 text-indigo-300 hover:text-indigo-200 transition-colors">
+                        <i class="fas fa-download"></i> Download ${fileName}
+                    </a>
+                </div>`;
+        }
+    }
+
+    const modalHtml = `
+        <div id="dynamicSubmissionModal" class="fixed inset-0 z-[100] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('dynamicSubmissionModal').remove()"></div>
+            <div class="relative w-full max-w-2xl bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div class="flex justify-between items-start mb-6 border-b border-slate-700 pb-4">
+                    ${headerHtml}
+                    <button type="button" onclick="document.getElementById('dynamicSubmissionModal').remove()" class="text-slate-400 hover:text-white transition-colors ml-4"><i class="fas fa-times"></i></button>
+                </div>
+                ${projectRulesHtml}
+                ${formWrapperStart}
+                    ${contentHtml}
+                    ${downloadHtml}
+                    ${buttonHtml}
+                ${formWrapperEnd}
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
+    const btn = document.getElementById('btnSubmitCheckin');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Processing Media...';
+        btn.disabled = true;
+    }
+
+    let answers = [];
+    let hasMissingAnswers = false;
+
+    // 1. Gather responses & handle both File Uploads AND In-Browser Media Recordings
+    for (let i = 0; i < totalQuestions; i++) {
+        const qInput = document.getElementById(`dynamic_input_${i}`);
+        const qTitle = document.getElementById(`dynamic_q_${i}`) ? document.getElementById(`dynamic_q_${i}`).value : `Question ${i+1}`;
+        const qType = document.getElementById(`dynamic_type_${i}`) ? document.getElementById(`dynamic_type_${i}`).value : 'text';
+        
+        let val = '';
+        
+        if (['audio', 'video', 'doc'].includes(qType)) {
+            let mediaFile = null;
+
+            // CASE A: User uploaded a file from their device
+            if (qInput && qInput.files && qInput.files.length > 0) {
+                mediaFile = qInput.files[0];
+            } 
+            // CASE B: User recorded audio/video directly in the browser
+            else {
+                let preview = document.getElementById(`media_preview_container_${i}`);
+                if (preview && !preview.classList.contains('hidden')) {
+                    const mediaElem = preview.querySelector('audio, video');
+                    if (mediaElem && mediaElem.src) {
+                        try {
+                            if (btn) btn.innerHTML = '<i class="fas fa-cog fa-spin mr-2"></i> Capturing Recorded Media...';
+                            // Extract the recorded blob directly from the browser's player
+                            const blob = await fetch(mediaElem.src).then(r => r.blob());
+                            const ext = qType === 'video' ? 'webm' : 'mp3';
+                            const mime = blob.type || (qType === 'video' ? 'video/webm' : 'audio/mp3');
+                            mediaFile = new File([blob], `recorded_${qType}_${Date.now()}.${ext}`, { type: mime });
+                        } catch (e) {
+                            console.error("Could not capture recorded media blob:", e);
+                        }
+                    }
+                }
+            }
+
+            // UPLOAD TO CLOUDINARY IF A FILE/RECORDING EXISTS
+            if (mediaFile) {
+                if (btn) btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-bounce mr-2"></i> Uploading Media to Cloudinary...';
+                const secureUrl = await uploadMediaToCloudinary(mediaFile);
+                if (!secureUrl) {
+                    alert("Media upload failed. Please check your connection or Cloudinary credentials.");
+                    if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
+                    return;
+                }
+                val = secureUrl; // Live HTTPS Cloudinary URL!
+            }
+        } else {
+            // Standard Text Field
+            if (qInput) val = qInput.value.trim();
+        }
+
+        if (!val) hasMissingAnswers = true;
+        
+        answers.push({ 
+            question: qTitle, 
+            answer: val, 
+            type: qType, 
+            fileData: (['audio', 'video', 'doc'].includes(qType) ? val : null),
+            fileName: (['audio', 'video', 'doc'].includes(qType) ? `submission_${qType}.${qType === 'video' ? 'mp4' : 'mp3'}` : null)
+        });
+    }
+
+    if (hasMissingAnswers) {
+        alert("Please complete all fields and attach or record required media before submitting.");
+        if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
+        return;
+    }
+
+    if (btn) btn.innerHTML = '<i class="fas fa-satellite-dish fa-pulse mr-2"></i> Transmitting to Make.com...';
+
+    // Search through all answers to find the Cloudinary URL (if one exists)
+    let foundMediaUrl = null;
+    answers.forEach(ans => {
+        if (ans.fileData) foundMediaUrl = ans.fileData;
+    });
+
+    // --- NEW: FULLY DYNAMIC TIME-WINDOW CALCULATION ---
+    let calculatedPoints = 3; // Absolute fallback
+    const normalizedType = normalizeLevelUpType(type);
+    
+    if (normalizedType === 'projects') {
+        const dbProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+        const proj = dbProjects.find(p => String(p.id) === String(dayNum));
+        calculatedPoints = proj ? Number(proj.pts) : 500;
+    } else if (normalizedType === 'ios') {
+        calculatedPoints = 333; 
+    } else {
+        // 1. Fetch the exact configuration the Creator saved for this date & module!
+        const dateKey = currentSubmissionState.date; 
+        const dayConfig = getAdminConfigForDate(dateKey, normalizedType);
+        
+        if (dayConfig) {
+            const now = new Date();
+            const timeInDecimal = now.getHours() + (now.getMinutes() / 60);
+            
+            // Helper: Convert Creator's "HH:MM" string into a decimal for flawless math
+            const parseTime = (timeStr) => {
+                if (!timeStr) return 0;
+                const parts = timeStr.split(':');
+                return parseInt(parts[0], 10) + (parseInt(parts[1], 10) / 60);
+            };
+            
+            const startDec = parseTime(dayConfig.startTime);
+            const endDec = parseTime(dayConfig.endTime);
+            const onTimePts = Number(dayConfig.lcOnTime);
+            const latePts = Number(dayConfig.lcLate);
+            
+            // 2. The Moment of Truth: Is the customer submitting on time?
+            if (timeInDecimal >= startDec && timeInDecimal <= endDec) {
+                calculatedPoints = onTimePts;
+            } else {
+                calculatedPoints = latePts;
+            }
+        } else {
+            // Failsafe: If the Creator hasn't configured this specific day yet
+            calculatedPoints = normalizedType === 'dip' ? 33 : 133;
+        }
+    }
+
+    // 2. Build Payload (Now perfectly tethered to the dynamic calculation!)
+    const webhookPayload = {
+        userId: currentUser._id,
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        milestoneId: activeMilestoneId,
+        moduleType: type,
+        sessionDay: dayNum,
+        lcReward: calculatedPoints, // Powers the Make.com Webhook payload
+        responses: answers,
+        mediaUrl: foundMediaUrl, 
+        timestamp: new Date().toISOString()
+    };
+
+    // 3. Send to Make.com Webhook
+    const isSuccess = await sendToKVM1Database(webhookPayload);
+
+    if (!isSuccess) {
+        alert("Network Error: Could not reach Make.com. Please check your connection.");
+        if (btn) { btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Claim LCs'; btn.disabled = false; }
+        return; 
+    }
+
+    // 4. Save to LocalStorage permanently
+    const newSubmission = {
+        userId: currentUser._id,
+        milestoneId: activeMilestoneId,
+        type: normalizeLevelUpType(type),
+        day: dayNum,
+        responses: answers,
+        submittedAt: webhookPayload.timestamp,
+        lcReward: calculatedPoints, // Powers the Local Database memory
+        status: 'evaluating' // Set initial state to evaluating
+    };
+
+    let allUserSubsDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    allUserSubsDB.push(newSubmission);
+    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
+    
+    const modal = document.getElementById('dynamicSubmissionModal');
+    if (modal) modal.remove();
+    
+    // --- POPUP FIX: Fire the custom UI modal instead of alert() ---
+    showPendingEvaluationPopup(); 
+    
+    if (typeof switchMilestoneTab === 'function') switchMilestoneTab(type);
+}
+
+// Add the Pending UI Pop-up
+function showPendingEvaluationPopup() {
+    const popupHtml = `
+        <div id="rewardPopup" class="fixed inset-0 z-[200] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('rewardPopup').remove()"></div>
+            <div class="relative bg-slate-800 rounded-2xl border border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)] p-8 m-4 text-center max-w-sm w-full animate-fade-in-up">
+                <div class="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500">
+                    <i class="fas fa-robot text-4xl text-indigo-400 fa-bounce"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Video Submitted!</h2>
+                <p class="text-slate-300 mb-6">Your reflection is being transcribed and evaluated by our AI.</p>
+                
+                <div class="bg-slate-900 rounded-xl p-4 mb-6 border border-slate-700">
+                    <span class="text-xs text-amber-400 uppercase tracking-wider block mb-1 font-bold"><i class="fas fa-circle-notch fa-spin mr-1"></i> Evaluation in Progress</span>
+                    <span class="text-sm text-slate-400">LCs will be credited to your wallet once approved.</span>
+                </div>
+                
+                <button onclick="document.getElementById('rewardPopup').remove()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl transition-all w-full shadow-lg">Got it</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', popupHtml);
+}
+
+function closeSubmissionModal() {
+    document.getElementById('submissionModal').classList.add('hidden');
+}
+
+// Validates the form, checks the time window, and fires the TagMango API
+async function submitLevelUpReflection() {
+    const errorBox = document.getElementById('modalError');
+    const errorText = document.getElementById('modalErrorText');
+    const submitBtn = document.getElementById('modalSubmitBtn');
+    errorBox.classList.add('hidden');
+
+    // 1. Word Count Validation
+    const summaryField = document.getElementById('frmSummary');
+    if (!summaryField || summaryField.value.trim() === '') {
+        showError("Summary field cannot be empty.");
+        return;
+    }
+    
+    const wordCount = summaryField.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+    const requiredWords = currentSubmissionState.type === 'dip' ? 30 : 50;
+    if (wordCount < requiredWords) {
+        showError(`Your summary is ${wordCount} words. A minimum of ${requiredWords} words is required.`);
+        return;
+    }
+
+    // 2. File Validation (Basic frontend check)
+    const fileField = currentSubmissionState.type === 'dip' ? document.getElementById('frmAudio') : document.getElementById('frmVideo');
+    if (!fileField.files || fileField.files.length === 0) {
+        showError("Please upload the required media file.");
+        return;
+    }
+
+    // 3. Time Window Points Calculation (DYNAMIC)
+    let earnedPoints = 3; // Absolute fallback
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+    const timeInDecimal = currentHour + (currentMin / 60);
+
+    const dateKey = currentSubmissionState.date; 
+    const normalizedType = currentSubmissionState.type;
+    const dayConfig = getAdminConfigForDate(dateKey, normalizedType);
+
+    if (dayConfig) {
+        // Convert Creator's "HH:MM" string into decimal for flawless math
+        const parseTime = (timeStr) => {
+            if (!timeStr) return 0;
+            const parts = timeStr.split(':');
+            return parseInt(parts[0], 10) + (parseInt(parts[1], 10) / 60);
+        };
+        
+        const startDec = parseTime(dayConfig.startTime);
+        const endDec = parseTime(dayConfig.endTime);
+        const onTimePts = Number(dayConfig.lcOnTime);
+        const latePts = Number(dayConfig.lcLate);
+        
+        // Is the customer submitting inside the Creator's window?
+        if (timeInDecimal >= startDec && timeInDecimal <= endDec) {
+            earnedPoints = onTimePts;
+        } else {
+            earnedPoints = latePts;
+        }
+    } else {
+        // Failsafe: If Creator hasn't setup this day yet, use standard logic
+        if (normalizedType === 'dip') {
+            earnedPoints = (timeInDecimal >= 5.0 && timeInDecimal <= 17.0) ? 33 : 3;
+        } else {
+            earnedPoints = (timeInDecimal >= 18.5 && timeInDecimal <= 19.0) ? 133 : 3;
+        }
+    }
+
+    // 4. API Call to TagMango (Assigning Points)
+    try {
+        submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting...';
+        submitBtn.disabled = true;
+
+        if (!currentUser || !currentUser._id) throw new Error("User ID not found. Please log in again.");
+
+        const payload = {
+            fanIds: [currentUser._id],
+            score: earnedPoints,
+            description: `${currentSubmissionState.type === 'dip' ? 'cMPLi Dip' : 'cMPLi Immerse'} - Day ${currentSubmissionState.day} Check-In`,
+            type: currentSubmissionState.type === 'dip' ? 'cMPLi Dip' : 'cMPLi Immerse'
+        };
+
+        const token = window.APP_CONFIG?.tagmangoKey || localStorage.getItem('token');
+        const baseUrl = window.APP_CONFIG?.baseUrl || 'https://api-prod-new.tagmango.com/api/v1';
+
+        const hostHeader = window.APP_CONFIG?.hostUrl || 'learn.cmplibe.com';
+        const response = await fetch(`${baseUrl}/external/gamification/points/assign`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'x-whitelabel-host': hostHeader
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error("API failed to assign points.");
+
+        // --- NEW: Dynamically Capture all input fields based on module type ---
+        let extraAnswers = {};
+        if (currentSubmissionState.type === 'dip') {
+            extraAnswers = {
+                Sector: document.getElementById('frmSector')?.value || "",
+                Strategy: document.getElementById('frmStrategy')?.value || "",
+                Fact: document.getElementById('frmFact')?.value || "",
+                "General Question": document.getElementById('frmGen')?.value || ""
+            };
+        } else if (currentSubmissionState.type === 'immerse') {
+            extraAnswers = {
+                "General Question": document.getElementById('frmGen')?.value || ""
+            };
+        }
+
+        const savedSubmission = {
+            type: currentSubmissionState.type,
+            day: currentSubmissionState.day,
+            date: currentSubmissionState.date,
+            earnedPoints,
+            summary: summaryField.value.trim(),
+            extraAnswers: extraAnswers, // Saved here!
+            media: {
+                name: fileField.files[0]?.name || 'unknown',
+                size: fileField.files[0]?.size || 0,
+                type: fileField.files[0]?.type || ''
+            },
+            createdAt: new Date().toISOString(),
+            source: 'api'
+        };
+        // ----------------------------------------------------------------------
+
+        saveLevelUpSubmission(currentUser._id, savedSubmission);
+        recordLevelUpReward(currentUser._id, currentSubmissionState.type, currentSubmissionState.day, earnedPoints);
+
+        closeSubmissionModal();
+        document.getElementById('successModalText').innerHTML = `You submitted successfully and earned <strong>${earnedPoints} LCs</strong>!`;
+        document.getElementById('successModal').classList.remove('hidden');
+        
+        // Refresh points in UI
+        if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        renderTimelines();
+        
+    } catch (err) {
+        console.error("Submission Error:", err);
+
+        const fallbackSubmission = {
+            type: currentSubmissionState.type,
+            day: currentSubmissionState.day,
+            date: currentSubmissionState.date,
+            earnedPoints,
+            summary: summaryField.value.trim(),
+            media: {
+                name: fileField.files[0]?.name || 'unknown',
+                size: fileField.files[0]?.size || 0,
+                type: fileField.files[0]?.type || ''
+            },
+            createdAt: new Date().toISOString(),
+            source: 'local-fallback'
+        };
+
+        saveLevelUpSubmission(currentUser._id, fallbackSubmission);
+        recordLevelUpReward(currentUser._id, currentSubmissionState.type, currentSubmissionState.day, earnedPoints);
+        closeSubmissionModal();
+        document.getElementById('successModalText').innerHTML = `Submission saved locally. You earned <strong>${earnedPoints} LCs</strong>!`;
+        document.getElementById('successModal').classList.remove('hidden');
+
+        if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        renderTimelines();
+    } finally {
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit & Claim LCs';
+        submitBtn.disabled = false;
+    }
+
+    function showError(msg) {
+        errorText.innerText = msg;
+        errorBox.classList.remove('hidden');
+    }
+}
+
+// --- TIMEZONE-SAFE DATE UTILITY ---
+// Prevents standard .toISOString() from shifting IST dates to previous UTC days
+function getLocalDateKey(dateObj) {
+    if (!dateObj) return null;
+    const d = new Date(dateObj);
+    if (Number.isNaN(d.getTime())) return null;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getLevelUpSubmission(userId, type, dayNum, dateKey) {
+    const submissions = getUserSubmissionsByUserId(userId);
+    const normalizedType = normalizeLevelUpType(type);
+
+    return submissions.find(entry => {
+        if (normalizeLevelUpType(entry.type) !== normalizedType) return false;
+        if (entry.day !== undefined && String(entry.day) === String(dayNum)) return true;
+        if (dateKey && isSameSubmissionReference(entry, dateKey)) return true;
+        if (entry.dateKey && String(entry.dateKey) === String(dayNum)) return true;
+        return false;
+    }) || null;
+}
+
+function getLevelUpSubmission(userId, type, dayNum, dateKey) {
+    const submissions = getUserSubmissionsByUserId(userId);
+    const normalizedType = normalizeLevelUpType(type);
+
+    return submissions.find(entry => {
+        if (normalizeLevelUpType(entry.type) !== normalizedType) return false;
+        if (entry.day !== undefined && String(entry.day) === String(dayNum)) return true;
+        if (dateKey && isSameSubmissionReference(entry, dateKey)) return true;
+        if (entry.dateKey && String(entry.dateKey) === String(dayNum)) return true;
+        return false;
+    }) || null;
+}
+
+function hasLevelUpSubmission(userId, type, dayNum, dateKey) {
+    const submissions = getUserSubmissionsByUserId(userId);
+    const normalizedType = normalizeLevelUpType(type);
+    
+    return submissions.some(entry => {
+        // Must match module type (dip/immerse)
+        if (normalizeLevelUpType(entry.type) !== normalizedType) return false;
+        
+        // 1. Strict Day Number Match (For newer rolling cohort entries)
+        if (entry.day !== undefined && String(entry.day) === String(dayNum)) return true;
+        
+        // 2. Calendar Date Match (For legacy entries saved before the update)
+        if (dateKey && isSameSubmissionReference(entry, dateKey)) return true;
+        
+        return false;
+    });
+}
+
+function saveLevelUpSubmission(userId, entry) {
+    if (!userId) return;
+    
+    // Find their storage key, or default to their ID
+    let key = resolveSubmissionKey(userId) || String(userId);
+    
+    // If they have no history, physically create the array ON the main database object
+    if (!levelUpSubmissions[key]) {
+        levelUpSubmissions[key] = [];
+    }
+    
+    entry.type = normalizeLevelUpType(entry.type);
+    
+    // Push directly to the database reference
+    levelUpSubmissions[key].push(entry);
+    
+    // FORCE SAVE to localStorage using both keys to ensure it sticks permanently
+    localStorage.setItem(LEVELUP_SUBMISSIONS_KEY, JSON.stringify(levelUpSubmissions));
+    localStorage.setItem(LEGACY_LEVELUP_SUBMISSIONS_KEY, JSON.stringify(levelUpSubmissions));
+}
+
+function recordLevelUpReward(userId, moduleType, dayNum, points, customTitle = null) {
+    if (!userId) return;
+    const normalizedType = normalizeLevelUpType(moduleType);
+    const descriptionType = normalizedType === 'dip' ? 'cMPLi Dip' : normalizedType === 'immerse' ? 'cMPLi Immerse' : moduleType;
+
+    // ISSUE 1 FIX: Use the perfectly formatted title if provided
+    const finalDescription = customTitle ? customTitle : `${descriptionType} Day ${dayNum}`;
+
+    if (!localLedgers[userId]) localLedgers[userId] = [];
+    const ledgerEntry = {
+        _id: 'levelup_' + Date.now(),
+        score: points,
+        description: finalDescription,
+        type: descriptionType,
+        createdAt: new Date().toISOString()
+    };
+    localLedgers[userId].push(ledgerEntry);
+    localStorage.setItem('tagmangoLedgerMock', JSON.stringify(localLedgers));
+
+    if (currentUser && currentUser._id === userId) {
+        if (!currentScoreObj) currentScoreObj = { totalScore: 0, displayScore: 0, points: [] };
+        currentScoreObj.totalScore = (currentScoreObj.totalScore || 0) + points;
+        currentScoreObj.displayScore = (currentScoreObj.displayScore || 0) + points;
+        currentScoreObj.points = currentScoreObj.points || [];
+        currentScoreObj.points.unshift({ type: descriptionType, score: points });
+
+        currentUser.lcs = (currentUser.lcs || 0) + points;
+        const headerLcDisplay = document.getElementById('userLcs') || document.querySelector('.lc-display');
+        if (headerLcDisplay) headerLcDisplay.innerText = currentUser.lcs || currentScoreObj.displayScore;
+    }
+
+    if (typeof mockUsers !== 'undefined') {
+        const userIndex = mockUsers.findIndex(u => u._id === userId);
+        if (userIndex > -1) {
+            mockUsers[userIndex].lcs = (mockUsers[userIndex].lcs || 0) + points;
+            localStorage.setItem('mockUsers', JSON.stringify(mockUsers));
+        }
+    }
+}
+
+function showRewardPopup(title, reward) {
+    const popupHtml = `
+        <div id="rewardPopup" class="fixed inset-0 z-[200] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('rewardPopup').remove()"></div>
+            <div class="relative bg-slate-800 rounded-2xl border border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)] p-8 m-4 text-center max-w-sm w-full animate-fade-in-up">
+                <div class="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500">
+                    <i class="fas fa-gem text-4xl text-indigo-400"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Check-in Complete!</h2>
+                <p class="text-slate-300 mb-6">You've successfully completed <br><span class="font-bold text-white mt-1 block">${title}</span></p>
+                
+                <div class="bg-slate-900 rounded-xl p-4 mb-6 border border-slate-700">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider block mb-1">Reward Claimed</span>
+                    <span class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">+${reward} LCs</span>
+                </div>
+                
+                <button onclick="document.getElementById('rewardPopup').remove()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl transition-all w-full shadow-lg">Awesome!</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', popupHtml);
+}
+
+// ---------------------------------------------------------
+// COMPLEX TIMELINE & RULES GENERATION
+// ---------------------------------------------------------
+function switchMilestoneTab(moduleName, btnElement = null) {
+    if (btnElement) {
+        document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
+            btn.className = 'milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all text-slate-400 hover:bg-slate-800 hover:text-white';
+        });
+        btnElement.className = 'milestone-nav-btn px-6 py-2 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500';
+    }
+
+    const ms = milestoneConfig.find(m => m.id === activeMilestoneId);
+    const container = document.getElementById('milestoneTimelinesContent');
+    const multiplier = ms.id === 3 ? 2 : 1; 
+    const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
+
+    // --- BULLETPROOF START DATE & SANITY CHECK ---
+    let startDate = new Date();
+    const allUserSubs = getUserSubmissionsByUserId(currentUser);
+    
+    // Find the absolute first submission for MS1 Day 1 to perfectly anchor the calendar
+    const day1Sub = allUserSubs.find(s => normalizeLevelUpType(s.type) === 'dip' && String(s.day) === '1' && String(s.milestoneId || 1) === '1');
+
+    if (day1Sub) {
+        const rawTime = day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt || day1Sub.date || day1Sub.dateKey;
+        if (rawTime) {
+            const parsedDate = new Date(rawTime);
+            // Ensure the date is valid and didn't glitch to 2001
+            if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() >= 2023) {
+                startDate = parsedDate;
+            }
+        }
+    }
+    startDate.setHours(0,0,0,0);
+
+    // --- DYNAMIC MILESTONE OFFSETS ---
+    // Calculate the absolute start date of THIS specific milestone
+    let milestoneStartDate = new Date(startDate);
+    const msOffsets = { 1: 0, 2: 21, 3: 111, 4: 201, 5: 291, 6: 381 };
+    milestoneStartDate.setDate(milestoneStartDate.getDate() + (msOffsets[activeMilestoneId] || 0));
+    milestoneStartDate.setHours(0,0,0,0);
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    let daysSinceMsStart = Math.floor((today - milestoneStartDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    let html = ''; 
+
+    // 1. ========================================================
+    // THE GATEKEEPER: UNIVERSAL MODULE LOCKING (MS2 through MS6)
+    // ========================================================
+    if (activeMilestoneId >= 2) {
+        if (moduleName === 'ios' && daysSinceMsStart < 31 && !testModeOverrides['ios']) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center p-12 text-center">
+                    <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
+                        <i class="fas fa-lock text-3xl text-slate-500"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-2">cMPLi iOS is Locked</h3>
+                    <p class="text-slate-400 max-w-sm mb-4">This module unlocks in <span class="text-indigo-400 font-bold">Month 2</span> of this milestone (Day 31).</p>
+                    ${testMode ? `<button onclick="forceUnlockModule('ios')" class="px-4 py-2 bg-amber-600/20 text-amber-400 border border-amber-500/50 rounded-lg text-xs font-bold transition-all hover:bg-amber-600/40"><i class="fas fa-flask mr-1"></i> Test Override: Unlock</button>` : ''}
+                </div>`;
+            return; 
+        } else if (moduleName === 'projects' && daysSinceMsStart < 61 && !testModeOverrides['projects']) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center p-12 text-center">
+                    <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-700 shadow-lg">
+                        <i class="fas fa-lock text-3xl text-slate-500"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-2">Projects are Locked</h3>
+                    <p class="text-slate-400 max-w-sm mb-4">This module unlocks in <span class="text-indigo-400 font-bold">Month 3</span> of this milestone (Day 61).</p>
+                    ${testMode ? `<button onclick="forceUnlockModule('projects')" class="px-4 py-2 bg-amber-600/20 text-amber-400 border border-amber-500/50 rounded-lg text-xs font-bold transition-all hover:bg-amber-600/40"><i class="fas fa-flask mr-1"></i> Test Override: Unlock</button>` : ''}
+                </div>`;
+            return; 
+        }
+    }
+
+    // 2. ========================================================
+    // PROJECTS MODULE RENDERING
+    // ========================================================
+    if (moduleName === 'projects') {
+        customerProjectFilter = 'All';
+        const dbProjects = getDynamicProjectsForActiveMilestone();
+        const allDynamic = getAllDynamicProjects();
+        const sourceProjects = dbProjects.length > 0 ? dbProjects : (allDynamic.length > 0 ? allDynamic : (typeof projects !== 'undefined' ? projects : []));
+        const uniqueSectors = [...new Set(sourceProjects.map(p => p.sector).filter(Boolean))];
+        const buttonsHtml = [
+            `<button onclick="setCustomerProjectFilter('All')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-all ${customerProjectFilter === 'All' ? 'bg-indigo-500 text-white' : 'glass text-slate-400 hover:bg-slate-800'}">All</button>`,
+            ...uniqueSectors.map(s => `<button onclick="setCustomerProjectFilter('${s}')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-all ${customerProjectFilter === s ? 'bg-indigo-500 text-white' : 'glass text-slate-400 hover:bg-slate-800'}">${s}</button>`)
+        ].join('');
+
+        html += `
+        <div class="mb-6 bg-slate-800/50 p-4 rounded-xl border border-slate-700 shadow-inner">
+            <div id="customerProjectFilters" class="flex flex-wrap gap-2">${buttonsHtml}</div>
+        </div>
+        <div id="customerProjectsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8"></div>
+        `;
+        container.innerHTML = html;
+        setTimeout(renderCustomerProjectsGrid, 50);
+        return; 
+    }
+
+    // --- DYNAMIC RULES BANNER ---
+    const banners = {
+        dip: { title: "cMPLi Dip Rules", desc: "Mon-Sat (6 days/week). Complete between 05:00 AM - 05:00 PM for full LCs.", icon: "fa-sun", color: "text-amber-400" },
+        immerse: { title: "cMPLi Immerse Rules", desc: "Mon-Wed-Fri (3 days/week). Complete between 06:30 PM - 07:00 PM.", icon: "fa-moon", color: "text-indigo-400" },
+        ios: { title: "cMPLi iOS Rules", desc: "1 Check-in per week. Submit any day Mon-Sat between 01:00 PM - 06:00 PM.", icon: "fa-mobile-alt", color: "text-cyan-400" },
+        projects: { title: "Real-World Applications", desc: "Choose a project based on your sector/specialization. Collect data, analyze, and submit your findings.", icon: "fa-briefcase", color: "text-emerald-400" }
+    };
+    const banner = banners[moduleName] || banners['dip'];
+    
+    html += `
+    <div class="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 flex items-start gap-4 shadow-inner">
+        <div class="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-700 shrink-0">
+            <i class="fas ${banner.icon} ${banner.color} text-lg"></i>
+        </div>
+        <div>
+            <h4 class="font-bold text-white mb-1">${banner.title}</h4>
+            <p class="text-xs text-slate-400">${banner.desc}</p>
+        </div>
+    </div>`;
+
+    // --- TIMELINE GENERATION ---
+    html += `<div class="space-y-4 border-l-2 border-slate-700 pl-4 ml-2">`;
+    
+    // STRICT FILTER: Match exactly by module AND current Milestone ID (Fallback to MS1 for old test data)
+    const typeSubs = getUserSubmissionsByUserId(currentUser).filter(s => {
+        const subMsId = s.milestoneId || 1; 
+        return normalizeLevelUpType(s.type) === moduleName && String(subMsId) === String(activeMilestoneId);
+    });
+    
+    let totalSessions = 0;
+    if (moduleName === 'dip') totalSessions = (activeMilestoneId === 1) ? 21 : 78;
+    if (moduleName === 'immerse') totalSessions = 39;
+    if (moduleName === 'ios') totalSessions = 12; 
+    
+    let calendarDate = new Date(milestoneStartDate);
+    let sessionCount = 1;
+    
+    while (sessionCount <= totalSessions) {
+        const dayOfWeek = calendarDate.getDay(); 
+        let shouldRender = false;
+        let nodeLabel = `${sessionCount}`;
+        let maxPts = 33;
+        let configuredWindow = "05:00 AM - 05:00 PM";
+
+        if (moduleName === 'dip' && dayOfWeek !== 0) { 
+            shouldRender = true;
+            maxPts = (activeMilestoneId === 1 ? 33 : 66) * multiplier;
+        } else if (moduleName === 'immerse' && (dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5)) { 
+            shouldRender = true;
+            maxPts = 133 * multiplier;
+            configuredWindow = "06:30 PM - 07:00 PM";
+        } else if (moduleName === 'ios' && dayOfWeek === 6) { 
+            const elapsedForIos = Math.floor((calendarDate - milestoneStartDate) / (1000 * 60 * 60 * 24));
+            if (elapsedForIos >= 30) {
+                shouldRender = true;
+                nodeLabel = `Week ${sessionCount}`;
+                maxPts = 333 * multiplier;
+                configuredWindow = "01:00 PM - 06:00 PM (Anyday Mon-Sat)";
+            }
+        }
+
+        if (shouldRender) {
+            calendarDate.setHours(0,0,0,0);
+            const isPast = calendarDate < today;
+            const isToday = calendarDate.getTime() === today.getTime();
+            
+            const dateStr = calendarDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            const existingSub = typeSubs.find(s => String(s.day) === String(sessionCount) || String(s.day) === nodeLabel);
+            
+            let finalPts = existingSub ? (existingSub.lcReward || existingSub.earnedPoints || maxPts) : maxPts;
+            let windowStr = existingSub ? `${(existingSub.timeWindow || configuredWindow).replace(' (Locked)', '')} (Locked)` : configuredWindow;
+            
+            let buttonHtml = '';
+            if (existingSub) {
+                buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View</button>`;
+            } else if (isToday) {
+                buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+            } else if (isPast) {
+                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+            } else {
+                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
+            }
+
+            const iconClass = existingSub ? 'fa-check-circle text-emerald-400' : (isToday ? 'fa-play-circle text-emerald-500' : (isPast ? 'fa-times-circle text-red-400' : 'fa-flask text-indigo-400'));
+            const borderClass = existingSub ? 'border-emerald-500/30' : (isToday ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : (isPast ? 'border-amber-500/30' : 'border-slate-700'));
+
+            html += `
+            <div class="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl border ${borderClass} relative mb-3 hover:bg-slate-800 transition-colors">
+                <div class="absolute -left-7 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center z-10">
+                    <div class="w-2 h-2 rounded-full ${existingSub ? 'bg-emerald-400' : (isToday ? 'bg-emerald-500' : 'bg-slate-600')}"></div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-600 shrink-0 shadow-inner">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm">${moduleName === 'ios' ? 'Week' : 'Day'} ${sessionCount} <span class="text-slate-500 text-xs font-normal ml-2">• ${dateStr}</span></h4>
+                        <p class="text-[10px] text-amber-400 font-bold mt-1">Max: ${finalPts} LCs | Window: ${windowStr}</p>
+                    </div>
+                </div>
+                <div>${buttonHtml}</div>
+            </div>`;
+            
+            sessionCount++; 
+        }
+        
+        calendarDate.setDate(calendarDate.getDate() + 1);
+        
+        if (Math.floor((calendarDate - startDate) / (1000 * 60 * 60 * 24)) > 1000) break; 
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
+}
+
+function setCustomerProjectFilter(filterValue) {
+    customerProjectFilter = filterValue || 'All';
+    const buttons = document.querySelectorAll('#customerProjectFilters button');
+    buttons.forEach(button => {
+        if (button.innerText === customerProjectFilter) {
+            button.className = 'px-4 py-1.5 rounded-full text-sm font-bold transition-all bg-indigo-500 text-white';
+        } else {
+            button.className = 'px-4 py-1.5 rounded-full text-sm font-bold transition-all glass text-slate-400 hover:bg-slate-800';
+        }
+    });
+    renderCustomerProjectsGrid();
+}
+
+function renderCustomerProjectsGrid() {
+    const grid = document.getElementById('customerProjectsGrid');
+    if (!grid) return;
+
+    // STRICT ISOLATION: Fetch specifically for the active milestone being viewed
+    const dbProjects = (JSON.parse(localStorage.getItem('customProjectsDB')) || {})[activeMilestoneId] || [];
+    
+    // Only fall back to the legacy "projects" array if it's Milestone 2 and the admin hasn't created anything yet.
+    // Otherwise, keep it strictly to what the Creator has built for this Milestone!
+    let fallbackProjects = [];
+    if (activeMilestoneId === 2 && dbProjects.length === 0 && typeof projects !== 'undefined') {
+        fallbackProjects = projects;
+    } else {
+        fallbackProjects = dbProjects;
+    }
+
+    const filtered = customerProjectFilter === 'All'
+        ? fallbackProjects
+        : fallbackProjects.filter(p => p.sector === customerProjectFilter);
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-full flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl bg-slate-800/30">
+                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                    <i class="fas fa-folder-open text-2xl text-slate-500"></i>
+                </div>
+                <h4 class="text-lg font-bold text-white mb-2">No Projects Available</h4>
+                <p class="text-sm text-slate-400">There are currently no projects assigned to Milestone ${activeMilestoneId} for this sector.</p>
+            </div>`;
+        return;
+    }
+    
+    let html = '';
+    filtered.forEach((p, index) => {
+        const isDone = currentUser ? hasLevelUpSubmission(currentUser._id, 'projects', p.id, p.id) : false;
+        
+        html += `
+        <div onclick="openSubmissionModal('${p.id}', 'projects', '${p.id}')" class="glass p-6 rounded-2xl border ${isDone ? 'border-emerald-500/50 bg-emerald-900/10' : 'border-slate-700 bg-slate-800/50'} hover:border-emerald-400 hover:shadow-lg hover:-translate-y-1 cursor-pointer transition-all duration-300 group flex flex-col justify-between">
+            <div>
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[10px] font-bold tracking-widest text-emerald-400 uppercase bg-emerald-400/10 px-2 py-1 rounded border border-emerald-500/20 shadow-sm">Project ${index + 1}</span>
+                    <div class="flex gap-2">${isDone ? '<i class="fas fa-check-circle text-emerald-400 text-xl shadow-emerald"></i>' : '<i class="far fa-clock text-slate-500 text-xl group-hover:text-emerald-400 transition-colors"></i>'}</div>
+                </div>
+                <h3 class="text-xl font-bold mb-3 text-white group-hover:text-emerald-300 transition-colors line-clamp-2">${p.title}</h3>
+                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-bold mb-6">
+                    <span class="bg-slate-900 px-2.5 py-1 rounded border border-slate-700"><i class="fas fa-briefcase mr-1 text-slate-500"></i> ${p.sector}</span>
+                    <span class="bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded border border-emerald-500/20"><i class="fas fa-bolt mr-1"></i> ${p.pts} LCs</span>
+                </div>
+            </div>
+            <div class="flex items-center justify-between border-t border-slate-700/50 pt-4 mt-auto">
+                <span class="text-xs text-slate-400"><i class="fas fa-calendar-alt mr-1"></i> ${p.duration}</span>
+                <span class="text-emerald-400 font-bold text-sm group-hover:translate-x-1 transition-transform">${isDone ? 'Review Submission' : 'Start Project'} <i class="fas fa-arrow-right ml-1"></i></span>
+            </div>
+        </div>`;
+    });
+    grid.innerHTML = html;
+}
+
+function generateNodeHTML(label, dateObj, type, maxPts, timeWindow) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const nodeDate = new Date(dateObj); nodeDate.setHours(0,0,0,0);
+    const dateStr = nodeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    
+    const isPast = nodeDate < today;
+    const isToday = nodeDate.getTime() === today.getTime();
+    const isFuture = nodeDate > today; 
+    
+    const dateKey = getLocalDateKey(nodeDate);
+    const isCompleted = currentUser ? hasLevelUpSubmission(currentUser._id, type, label, dateKey) : false;
+    
+    // Check if the current user has God Mode
+    const testMode = typeof isTestUser === 'function' && isTestUser();
+
+    let statusColor = 'text-slate-500', bgClass = 'bg-slate-800/50 border-slate-700 opacity-60', icon = '<i class="fas fa-lock"></i>', action = 'Opens Later';
+
+    if (isCompleted) {
+        statusColor = 'text-emerald-400'; bgClass = 'bg-emerald-900/10 border-emerald-500/50';
+        icon = '<i class="fas fa-check-circle"></i>'; 
+        action = `<button onclick="openSubmissionModal('${label}', '${type}', '${dateKey}')" class="px-4 py-1.5 bg-slate-800 border border-slate-600 hover:bg-slate-700 text-white text-xs font-bold rounded-full transition-all shadow-md"><i class="fas fa-eye mr-1"></i> View</button>`;
+    } else if (isToday) {
+        statusColor = 'text-indigo-400'; bgClass = 'bg-indigo-900/20 border-indigo-500 shadow-lg';
+        icon = '<i class="fas fa-unlock-alt"></i>'; 
+        action = `<button onclick="openSubmissionModal('${label}', '${type}', '${dateKey}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-full transition-all shadow-md">Start Check-in</button>`;
+    } else if (isPast) {
+        if (testMode) {
+            // God Mode: Allow testing past days
+            statusColor = 'text-amber-400'; bgClass = 'bg-amber-900/10 border-amber-500/50 shadow-lg';
+            icon = '<i class="fas fa-flask"></i>'; 
+            action = `<button onclick="openSubmissionModal('${label}', '${type}', '${dateKey}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-full transition-all shadow-md">Test Past</button>`;
+        } else {
+            statusColor = 'text-red-400'; bgClass = 'bg-red-900/10 border-red-500/30';
+            icon = '<i class="fas fa-times-circle"></i>'; 
+            action = `<span class="text-xs font-bold text-red-400"><i class="fas fa-lock mr-1"></i> Missed (Closed)</span>`;
+        }
+    } else if (isFuture) {
+        if (testMode) {
+            // God Mode: Allow testing future days
+            statusColor = 'text-amber-400'; bgClass = 'bg-amber-900/10 border-amber-500/50 shadow-lg';
+            icon = '<i class="fas fa-flask"></i>'; 
+            action = `<button onclick="openSubmissionModal('${label}', '${type}', '${dateKey}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-full transition-all shadow-md">Test Future</button>`;
+        } else {
+            statusColor = 'text-slate-500'; bgClass = 'bg-slate-800/50 border-slate-700 opacity-60';
+            icon = '<i class="fas fa-lock"></i>'; 
+            action = `<span class="text-xs font-bold text-slate-500"><i class="fas fa-clock mr-1"></i> Opens Later</span>`;
+        }
+    }
+
+    return `
+    <div class="relative pl-6 pb-6 group">
+        <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 ${statusColor === 'text-emerald-400' ? 'border-emerald-500' : (statusColor === 'text-indigo-400' || statusColor === 'text-amber-400' ? 'border-indigo-500' : 'border-slate-600')} flex items-center justify-center text-[8px] ${statusColor}">${icon}</div>
+        <div class="glass p-4 rounded-xl border ${bgClass} flex justify-between items-center transition-all">
+            <div>
+                <h4 class="font-bold text-white flex items-center gap-2">${type === 'dip' || type === 'immerse' ? 'Day' : (type === 'ios' ? '' : 'Day')} ${label} <span class="text-xs font-normal text-slate-400">• ${dateStr}</span></h4>
+                <p class="text-xs font-bold mt-1 ${statusColor}">Max: ${maxPts} LCs | Window: ${timeWindow}</p>
+            </div>
+            <div>${action}</div>
+        </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------
+// MODALS (T&C and Certificates)
+// ---------------------------------------------------------
+function openTermsModal() {
+    if (!activeMilestoneId) return;
+    const ms = milestoneConfig.find(m => m.id === activeMilestoneId);
+    
+    let rulesHtml = `
+        <div class="p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-xl mb-4">
+            <h4 class="font-bold text-indigo-400 mb-2">Core Requirement</h4>
+            <p>${ms.rules}</p>
+        </div>
+        <div class="p-4 bg-red-900/20 border border-red-500/30 rounded-xl">
+            <h4 class="font-bold text-red-400 mb-2"><i class="fas fa-exclamation-triangle mr-1"></i> Strict Reset Policy</h4>
+            <p>If you fail to maintain the required completion percentage or miss mandatory consecutive check-ins according to the rules, your progress for this milestone will be reset. You will be required to start from Day 1.</p>
+        </div>
+    `;
+    
+    document.getElementById('termsContent').innerHTML = rulesHtml;
+    document.getElementById('termsModal').classList.remove('hidden');
+}
+
+function applyForCertificate() {
+    if (!currentUser) return;
+    
+    // Fetch user's submission history from local storage
+    const submissions = levelUpSubmissions[currentUser._id] || [];
+    
+    if (activeMilestoneId === 1) {
+        // MS1: Requires >90% completion of the 21 days
+        const ms1Subs = submissions.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+        const percentage = Math.round((ms1Subs / 21) * 100);
+        
+        if (percentage >= 90) {
+            alert(`🎉 Congratulations! Your completion is ${percentage}%. Your Credential application has been sent to the Creator for approval.`);
+        } else {
+            alert(`⚠️ Ineligible. Your current completion is ${percentage}% (${ms1Subs}/21 days). You must reach >90% to apply for the Credential.`);
+        }
+        
+    } else if (activeMilestoneId === 2 || activeMilestoneId === 3) {
+        // MS2 & MS3: Requires >80% in Dip & Immerse, plus minimum iOS and Project counts
+        const dipCount = submissions.filter(s => s.type === 'dip').length;
+        const immerseCount = submissions.filter(s => s.type === 'immerse').length;
+        const iosCount = submissions.filter(s => s.type === 'ios').length;
+        const projCount = submissions.filter(s => s.type === 'projects').length;
+        
+        // Approximate total expected days for 3 months (78 for Dip, 39 for Immerse)
+        const dipPercentage = Math.round((dipCount / 78) * 100);
+        const immersePercentage = Math.round((immerseCount / 39) * 100);
+        
+        if (dipPercentage >= 80 && immersePercentage >= 80 && iosCount >= 5 && projCount >= 1) {
+            alert(`🎉 Congratulations! You have met all requirements. Application sent to Creator!`);
+        } else {
+            let errorMsg = `⚠️ Ineligible. You have not met the minimum criteria:\n`;
+            if (dipPercentage < 80) errorMsg += `- cMPLi Dip: ${dipPercentage}% (Requires >80%)\n`;
+            if (immersePercentage < 80) errorMsg += `- cMPLi Immerse: ${immersePercentage}% (Requires >80%)\n`;
+            if (iosCount < 5) errorMsg += `- cMPLi iOS: ${iosCount} completed (Requires 5)\n`;
+            if (projCount < 1) errorMsg += `- Projects: ${projCount} completed (Requires 1)\n`;
+            
+            alert(errorMsg);
+        }
+    }
+}
+
+function viewMySubmission(userId, dayLabel, type) {
+    const submissions = getUserSubmissionsByUserId(userId);
+    const normalizedType = normalizeLevelUpType(type);
+    
+    // Safely determine which milestone we are currently looking at (works for both Admin and Learner views)
+    const currentMsId = typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
+
+    // 1. Strict Check: Type, Reference, AND Milestone
+    let sub = submissions.find(s => {
+        const subMsId = s.milestoneId || 1;
+        return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, dayLabel) && String(subMsId) === String(currentMsId);
+    });
+
+    // 2. Fallback Check: ISO Date parsing
+    if (!sub) {
+        const fallbackLabel = parseToIsoDate(dayLabel) || dayLabel;
+        sub = submissions.find(s => {
+            const subMsId = s.milestoneId || 1;
+            return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, fallbackLabel) && String(subMsId) === String(currentMsId);
+        });
+    }
+    
+    // 3. Final Fallback: Direct Day Number mapping
+    if (!sub) {
+        sub = submissions.find(s => {
+            const subMsId = s.milestoneId || 1;
+            return normalizeLevelUpType(s.type) === normalizedType && String(s.day) === String(dayLabel) && String(subMsId) === String(currentMsId);
+        });
+    }
+    
+    if (!sub) return alert("No submission data found for this selection.");
+
+    const actualDay = sub.day || dayLabel;
+    
+    // --- DISPLAY CORRECT TITLE ---
+    let displayTitle = sub.title || `Day ${actualDay} Response`;
+    if (normalizedType === 'projects' && !sub.title) {
+        let allProjects = [];
+        const db = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+        for (const ms in db) { db[ms].forEach(p => allProjects.push(p)); }
+        if (typeof projects !== 'undefined') projects.forEach(p => allProjects.push(p));
+        const p = allProjects.find(x => String(x.id) === String(actualDay));
+        if (p) displayTitle = p.title;
+    }
+
+    const subTime = sub.submittedAt || sub.timestamp || sub.createdAt || sub.date || sub.dateKey;
+    let exactTimeStr = 'Unknown Time';
+    
+    if (subTime) {
+        const dObj = new Date(subTime);
+        if (!isNaN(dObj.getTime())) {
+            const dd = String(dObj.getDate()).padStart(2, '0');
+            const mm = String(dObj.getMonth() + 1).padStart(2, '0');
+            const yyyy = dObj.getFullYear();
+            let h = dObj.getHours();
+            const m = String(dObj.getMinutes()).padStart(2, '0');
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            exactTimeStr = `${dd}-${mm}-${yyyy} at ${String(h).padStart(2, '0')}:${m} ${ampm}`;
+        }
+    }
+
+    let lcReward = sub.lcReward !== undefined ? sub.lcReward : (sub.earnedPoints !== undefined ? sub.earnedPoints : null);
+    if (lcReward === null) {
+        const userLedger = localLedgers[userId] || [];
+        const ledgerMatch = userLedger.find(l => l.description && (l.description === displayTitle || l.description.includes(`Day ${actualDay}`)));
+        lcReward = ledgerMatch ? (Number(ledgerMatch.score) || 0) : 0;
+    }
+
+    let answersHtml = `<div class="space-y-4">`;
+    if (sub.responses && sub.responses.length > 0) {
+        sub.responses.forEach(response => {
+            answersHtml += `
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">${response.question}</label>
+                <div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 shadow-inner">`;
+            
+            if (['audio', 'video', 'doc'].includes(response.type) && response.fileData) {
+                 const isMockFile = response.fileData === "#mock_file_uploaded_successfully";
+                 answersHtml += `<p class="mb-3 font-medium text-indigo-300"><i class="fas fa-file mr-2"></i>${response.fileName || response.answer}</p>`;
+                 if (isMockFile) {
+                     answersHtml += `<span class="inline-flex items-center gap-2 text-amber-400 bg-amber-900/30 px-3 py-1.5 rounded-lg border border-amber-700/50 text-xs font-bold"><i class="fas fa-exclamation-triangle"></i> Mock File</span>`;
+                 } else {
+                     answersHtml += `<a href="${response.fileData}" download="${response.fileName || 'download'}" target="_blank" class="inline-flex items-center gap-2 text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg border border-indigo-500 shadow-md text-xs font-bold transition-all"><i class="fas fa-download"></i> Download File</a>`;
+                 }
+            } else {
+                answersHtml += `<div class="whitespace-pre-wrap leading-relaxed">${response.answer || 'No response provided.'}</div>`;
+            }
+            answersHtml += `</div></div>`;
+        });
+    } else {
+        answersHtml += `<div><label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Summary / Reflection</label><div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 whitespace-pre-wrap shadow-inner leading-relaxed">${sub.summary || "No summary provided."}</div></div>`;
+    }
+    answersHtml += `</div>`;
+
+    const oldModal = document.getElementById('viewSubmissionModalDynamic');
+    if (oldModal) oldModal.remove();
+
+    // 1. First, quickly define the sector name right BEFORE modalHtml so it doesn't cause an error
+    let sectorName = 'General';
+    if (normalizedType === 'projects') {
+        const allProjects = [];
+        const db = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+        for (const ms in db) { db[ms].forEach(p => allProjects.push(p)); }
+        if (typeof projects !== 'undefined') projects.forEach(p => allProjects.push(p));
+        
+        // Assumes 'dayLabel' or 'day' is the variable holding your project ID in this function
+        const matchedProj = allProjects.find(p => String(p.id) === String(typeof dayLabel !== 'undefined' ? dayLabel : '')); 
+        if (matchedProj && matchedProj.sector) sectorName = matchedProj.sector;
+    }
+
+    // 1.5 Determine the Badge Status
+    let lcBadgeHtml = '';
+    if (sub.status === 'evaluating' || sub.status === 'pending') {
+        lcBadgeHtml = `
+            <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/50 px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                <i class="fas fa-spinner fa-spin"></i> Evaluating...
+            </span>`;
+    } else {
+        lcBadgeHtml = `
+            <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 px-3 py-1 rounded-full font-bold shadow-sm">
+                +${lcReward} LCs
+            </span>`;
+    }
+
+    // 2. Now, here is your updated HTML block
+    const modalHtml = `
+        <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[100] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
+            <div class="relative w-full max-w-2xl bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-8 m-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div class="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-6 border-b border-slate-700 pb-4 gap-3">
+                    <div class="pr-6">
+                        <h3 class="text-xl font-bold text-white flex items-start gap-3">
+                            <i class="fas ${normalizedType === 'projects' ? 'fa-briefcase text-emerald-400' : 'fa-file-alt text-indigo-400'} mt-1"></i> 
+                            <span class="leading-tight">${displayTitle}</span>
+                        </h3>
+                        <div class="flex flex-wrap items-center gap-3 mt-3">
+                            ${lcBadgeHtml}
+                            <span class="text-xs text-slate-400"><i class="fas fa-clock mr-1"></i> Submitted: <span class="font-bold text-slate-300">${exactTimeStr}</span></span>
+                        </div>
+                    </div>
+                    
+                    <!-- NEW WRAPPER: Sector Badge + Close Button -->
+                    <div class="absolute top-6 right-6 flex items-center gap-3">
+                        ${normalizedType === 'projects' ? `<span class="text-[15px] font-bold tracking-widest text-emerald-400 uppercase bg-emerald-400/10 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-sm">${sectorName}</span>` : ''}
+                        
+                        <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-500/80 w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-md">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                </div>
+                ${answersHtml}
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// ================= ADMIN LEVEL-UP ENGINE =================
+
+let activeAdminMilestoneId = null;
+
+function renderAdminMilestoneGrid() {
+    const grid = document.getElementById('adminMilestoneGridContainer');
+    document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
+    grid.classList.remove('hidden');
+
+    let partnerManageBtn = '';
+    if (isAdminLogin && !isCampusPartner) {
+        partnerManageBtn = `
+        <div class="col-span-full mb-6 flex justify-end">
+            <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                <i class="fas fa-university mr-2"></i> Manage Campus Partners
+            </button>
+        </div>`;
+    }
+
+    const gridCards = milestoneConfig.map(ms => {
+        const isBlank = ms.modules.length === 0;
+        const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
+        return `
+        <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
+            <div onclick="${isBlank ? '' : `openAdminMilestone(${ms.id})`}">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black tracking-widest uppercase text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-700/50">Milestone ${ms.id}</span>
+                    ${!isBlank ? '<i class="fas fa-users text-slate-500 bg-slate-800 p-2 rounded-lg group-hover:text-indigo-400 transition-colors"></i>' : ''}
+                </div>
+                <h4 class="font-bold text-lg text-white mb-2">${ms.name}</h4>
+                <p class="text-xs text-slate-400 line-clamp-2">${ms.desc}</p>
+            </div>
+            
+            ${!isBlank ? `
+            <div class="mt-5 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                <span onclick="openAdminMilestone(${ms.id})" class="text-xs font-bold text-indigo-400 hover:text-white transition-colors cursor-pointer">View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
+                ${!isCampusPartner ? `<button onclick="alert('Admin Config: Edit rules, LC assignments, and time-windows for ${ms.name}')" class="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"><i class="fas fa-cog mr-1"></i> Edit Settings</button>` : ''}
+            </div>` : '<div class="mt-5 pt-4 border-t border-slate-800"><span class="text-xs text-slate-600 font-bold uppercase">Locked / Setup Pending</span></div>'}
+        </div>`;
+    }).join('');
+
+    grid.innerHTML = partnerManageBtn + gridCards;
+}
+
+function populateAdminCohortFilters() {
+    const filter = document.getElementById('adminCohortFilter');
+    if (!filter) return;
+    filter.innerHTML = '<option value="all">-- All Allowed Customers --</option>';
+    
+    let activeMangos = allAdminMangos.filter(m => levelUpAccessConfig.includes(m._id));
+    
+    // STRICT FILTER: If Campus Partner, ONLY show their assigned Mangoes
+    if (isCampusPartner) {
+        activeMangos = activeMangos.filter(m => partnerAllowedMangoes.includes(m._id));
+    }
+
+    activeMangos.forEach(mango => {
+        const opt = document.createElement('option');
+        opt.value = mango._id;
+        opt.textContent = mango.title;
+        filter.appendChild(opt);
+    });
+}
+
+// Global State for Admin Tabs
+let activeAdminModule = 'dip';
+
 function openAdminMilestone(id) {
     activeAdminMilestoneId = id;
+    activeAdminModule = 'dip';
     const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
-
-    const gridContainer = document.getElementById('adminMilestoneGridContainer');
-    if(gridContainer) gridContainer.classList.add('hidden');
     
-    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
-    if (togglesArea) togglesArea.style.display = 'none';
-
-    const detailContainer = document.getElementById('adminMilestoneDetailContainer');
-    if(detailContainer) detailContainer.classList.remove('hidden');
-
+    document.getElementById('adminMilestoneGridContainer')?.classList.add('hidden');
+    document.getElementById('adminMilestoneDetailContainer')?.classList.remove('hidden');
+    
     const titleEl = document.getElementById('adminActiveMilestoneTitle');
-    if(titleEl) titleEl.innerText = ms.name + " - Creator Setup";
-
-    // Stats bar showing student counts
-    const statsBar = document.getElementById('adminMsStatsBar');
-    if (statsBar) {
-        let inThisMs = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === id).length;
-        statsBar.innerHTML = `
-            <span class="badge-pill badge-indigo text-xs"><i class="fas fa-users mr-1"></i> ${inThisMs} Students in Milestone ${id}</span>
-            <span class="badge-pill bg-slate-800 text-slate-300 text-xs"><i class="fas fa-globe mr-1"></i> ${actualUsers.length} Total Cohort Students</span>
-        `;
-    }
+    if (titleEl) titleEl.innerText = ms.name + " - Creator Setup";
+    
+    // Hide global toggles
+    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.parentElement;
+    if (togglesArea) togglesArea.style.display = 'none';
+    const searchArea = document.getElementById('adminLevelUpSearch')?.closest('.glass') || document.getElementById('adminLevelUpSearch')?.closest('.glass-card') || document.getElementById('adminLevelUpSearch')?.parentElement;
+    if (searchArea) searchArea.style.display = 'none';
 
     // Module Sub-Navigation for Creator (ALL 6 MODULES with ON/OFF switch)
     const subNavEl = document.getElementById('adminMilestoneSubNav');
@@ -760,8 +3656,6 @@ function openAdminMilestone(id) {
         }).join('');
     }
 
-    activeAdminModule = ALL_PLATFORM_MODULES[0].code;
-
     // --- CAMPUS PARTNER RESTRICTIONS ---
     const btnCheckins = document.getElementById('btnTabCheckins');
     if (isCampusPartner) {
@@ -770,6 +3664,37 @@ function openAdminMilestone(id) {
     } else {
         if (btnCheckins) btnCheckins.style.display = 'block';
         switchAdminMilestoneTab('checkins');
+    }
+}
+
+function selectAdminConfigDate() {
+    const dateInput = document.getElementById('adminConfigDateInput');
+    const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
+    loadAdminCheckinEditor(selectedDate);
+}
+
+function switchAdminMilestoneTab(tabName) {
+    const btnCheckins = document.getElementById('btnTabCheckins');
+    const btnCompletion = document.getElementById('btnTabCompletion');
+    const viewCheckins = document.getElementById('adminCheckinsConfigView');
+    const viewCompletion = document.getElementById('adminCompletionView');
+    
+    if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (viewCheckins) viewCheckins.classList.add('hidden');
+    if (viewCompletion) viewCompletion.classList.add('hidden');
+    
+    if (tabName === 'checkins') {
+        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCheckins) viewCheckins.classList.remove('hidden');
+        renderAdminCheckinsList(); 
+        const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
+        activeAdminDateKey = todayKey;
+        loadAdminCheckinEditor(todayKey);
+    } else {
+        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCompletion) viewCompletion.classList.remove('hidden');
+        renderAdminCohortSubmissions(); 
     }
 }
 
@@ -802,33 +3727,31 @@ function selectAdminConfigDate() {
 // --- NEW Admin State Management ---
 let activeAdminDateKey = null;
 
-function selectAdminConfigDate() {
-    const dateInput = document.getElementById('adminConfigDateInput');
-    const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
-    loadAdminCheckinEditor(selectedDate);
-}
-
 function switchAdminMilestoneTab(tabName) {
     const btnCheckins = document.getElementById('btnTabCheckins');
     const btnCompletion = document.getElementById('btnTabCompletion');
     const viewCheckins = document.getElementById('adminCheckinsConfigView');
     const viewCompletion = document.getElementById('adminCompletionView');
     
-    if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-    if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-    if (viewCheckins) viewCheckins.classList.add('hidden');
-    if (viewCompletion) viewCompletion.classList.add('hidden');
+    btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
+    btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
+    viewCheckins.classList.add('hidden');
+    viewCompletion.classList.add('hidden');
     
     if (tabName === 'checkins') {
-        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (viewCheckins) viewCheckins.classList.remove('hidden');
+        btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
+        viewCheckins.classList.remove('hidden');
         renderAdminCheckinsList(); 
-        const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
-        activeAdminDateKey = todayKey;
-        loadAdminCheckinEditor(todayKey);
+        if (activeAdminDateKey) {
+            loadAdminCheckinEditor(activeAdminDateKey);
+        } else {
+            const todayKey = isoDateKey(new Date());
+            activeAdminDateKey = todayKey;
+            loadAdminCheckinEditor(todayKey);
+        }
     } else {
-        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (viewCompletion) viewCompletion.classList.remove('hidden');
+        btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
+        viewCompletion.classList.remove('hidden');
         renderAdminCohortSubmissions(); 
     }
 }
@@ -1999,95 +4922,3 @@ function startLiveSync() {
     }, 4000); // 4-second live bi-directional sync
 }
 startLiveSync();
-
-
-// --- LEARNER 4-MILESTONES GRID RENDERER ---
-function renderMilestoneGrid() {
-    const gridContainer = document.getElementById('milestoneGridContainer');
-    const detailContainer = document.getElementById('milestoneDetailContainer');
-    const btnBack = document.getElementById('btnBackToGrid');
-    
-    if (detailContainer) detailContainer.classList.add('hidden');
-    if (btnBack) btnBack.classList.add('hidden');
-    if (!gridContainer) return;
-    
-    gridContainer.classList.remove('hidden');
-
-    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
-    const isGodMode = typeof isTestUser === 'function' ? isTestUser() : false;
-
-    gridContainer.innerHTML = milestoneConfig.map(ms => {
-        const isUnlocked = isGodMode || isAdminLogin || ms.id <= highestUnlocked;
-        const isCurrent = ms.id === highestUnlocked;
-        const activeMods = getEnabledModulesForMilestone(ms.id);
-
-        return `
-        <div class="glass-card p-6 md:p-8 border-slate-800 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${isUnlocked ? 'hover:border-indigo-500/50 hover:shadow-2xl cursor-pointer' : 'opacity-60 bg-slate-950/60'}" onclick="${isUnlocked ? `openMilestone(${ms.id})` : `alert('Complete Milestone ${ms.id - 1} to unlock ${ms.name}')`}">
-            
-            ${isCurrent ? '<div class="absolute top-0 right-0 w-28 h-28 bg-indigo-500/10 rounded-bl-full pointer-events-none"></div>' : ''}
-
-            <div>
-                <div class="flex justify-between items-start mb-3">
-                    <span class="badge-pill ${isUnlocked ? 'badge-indigo' : 'bg-slate-800 text-slate-500'}">Milestone ${ms.id}</span>
-                    <span class="text-xs font-bold ${isCurrent ? 'text-indigo-400' : (isUnlocked ? 'text-emerald-400' : 'text-slate-500')}">
-                        ${isCurrent ? '<i class="fas fa-play-circle mr-1"></i> Current Level' : (isUnlocked ? '<i class="fas fa-check-circle mr-1"></i> Unlocked' : '<i class="fas fa-lock mr-1"></i> Locked')}
-                    </span>
-                </div>
-
-                <h3 class="text-xl font-bold text-white font-heading mt-1">${ms.name}</h3>
-                <p class="text-xs text-indigo-300 font-semibold mb-2">${ms.subtitle}</p>
-                <p class="text-xs text-slate-400 leading-relaxed mb-4">${ms.desc}</p>
-
-                <div class="flex flex-wrap gap-1.5 pt-2">
-                    ${activeMods.map(mCode => {
-                        const mObj = ALL_PLATFORM_MODULES.find(m => m.code === mCode) || { name: mCode, icon: 'fa-cube' };
-                        return `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300"><i class="fas ${mObj.icon} mr-1"></i>${mObj.name}</span>`;
-                    }).join('')}
-                </div>
-            </div>
-
-            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                <span class="text-xs text-slate-400 font-medium">${ms.durationDays} Days Duration</span>
-                <button class="btn-primary py-1.5 px-3 text-xs ${!isUnlocked ? 'opacity-50 pointer-events-none' : ''}">
-                    <span>${isUnlocked ? 'Enter Milestone' : 'Locked'}</span> <i class="fas fa-arrow-right text-[10px] ml-1"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function closeMilestoneView() {
-    activeMilestoneId = null;
-    renderMilestoneGrid();
-}
-
-// --- STUDENT PROMOTION ENGINE ---
-function openPromoteModal(userId, userName) {
-    const modal = document.getElementById('promoteStudentModal');
-    if (!modal) return;
-    document.getElementById('promoteUserId').value = userId;
-    document.getElementById('promoteUserName').innerText = userName || 'Student';
-    modal.classList.remove('hidden');
-}
-
-function closePromoteModal() {
-    const modal = document.getElementById('promoteStudentModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function confirmStudentPromotion() {
-    const userId = document.getElementById('promoteUserId').value;
-    const targetMsId = parseInt(document.getElementById('promoteTargetMilestone').value) || 2;
-    
-    if (!userMilestoneState[userId]) {
-        userMilestoneState[userId] = { highestUnlocked: 1, viewedTerms: [] };
-    }
-    userMilestoneState[userId].highestUnlocked = targetMsId;
-    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
-
-    closePromoteModal();
-    alert('🎓 Student promoted successfully to Milestone ' + targetMsId + '!');
-    if (typeof renderAdminCohortSubmissions === 'function') {
-        renderAdminCohortSubmissions();
-    }
-}
