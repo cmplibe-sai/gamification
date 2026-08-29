@@ -309,7 +309,7 @@ async function syncGlobalServerData() {
                         (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
                         String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
                         normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
-                        String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
+                        String(l.day !== undefined && l.day !== null ? l.day : l.date) === String(s.day !== undefined && s.day !== null ? s.day : s.date)
                     ));
 
                     if (idx > -1) {
@@ -317,15 +317,12 @@ async function syncGlobalServerData() {
                         localData[idx] = { ...localData[idx], ...s };
 
                         // Credit points ONLY when Make.com or Creator transitions status from 'evaluating' to 'completed'
-                        if (prevStatus === 'evaluating' && s.status === 'completed') {
-                            if (currentUser && (String(currentUser._id) === String(s.userId) || (currentUser.email && s.userEmail && currentUser.email.toLowerCase() === s.userEmail.toLowerCase()))) {
-                                recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
-                            }
+                        if (prevStatus === 'evaluating' && s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
+                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
                         }
                     } else {
-                        // CROSS-BROWSER FIX: If submission exists on server but not in this browser, ADD IT!
                         localData.push(s);
-                        if (s.status === 'completed' && currentUser && (String(currentUser._id) === String(s.userId) || (currentUser.email && s.userEmail && currentUser.email.toLowerCase() === s.userEmail.toLowerCase()))) {
+                        if (s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
                             recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
                         }
                     }
@@ -3571,14 +3568,13 @@ function applyForCertificate() {
 }
 
 
-
 function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     if (!sub) return alert("No submission data found for this selection.");
 
     const normalizedType = normalizeLevelUpType(type || sub.type || 'dip');
     const isPod = normalizedType === 'pod';
+    const isEvaluating = (sub.status === 'evaluating' || sub.status === 'pending');
     const isCompleted = sub.status === 'completed';
-    const isEvaluating = !isCompleted;
     const lcReward = (sub.lcReward !== undefined && sub.lcReward !== null) ? sub.lcReward : 33;
     const actualDay = sub.day || sub.sessionDay || dayLabel || 1;
 
@@ -3594,8 +3590,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     let bodyHtml = '';
 
-    // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (IMG-4 STYLE WITH GREEN/RED INDICATORS) ---
-    if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || (r.options && r.options.length > 0)))) {
+    // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (MATCHES IMG-4 EXACTLY) ---
+    if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || r.options))) {
         const responses = sub.responses || sub.answers || [];
         
         bodyHtml = `
@@ -3649,7 +3645,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             </div>
         `;
     } else {
-        // --- CASE B: DIP & IMMERSE REFLECTIONS WITH IN-BROWSER AUDIO/VIDEO PLAYER ---
+        // --- CASE B: DIP & IMMERSE REFLECTIONS WITH IN-BROWSER PLAYER (FIXES IMG-3) ---
         const responses = sub.responses || sub.answers || [];
         bodyHtml = `
             <div class="space-y-5">
@@ -3673,7 +3669,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                         </div>
                                         <div>
                                             <p class="text-xs font-bold text-white">${fileName}</p>
-                                            <p class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Attached Reflection</p>
+                                            <p class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Media Verified</p>
                                         </div>
                                     </div>
                                     <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${fileName}')" class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 text-indigo-300 hover:text-white shadow-sm">
@@ -3681,7 +3677,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                     </button>
                                 </div>
 
-                                <!-- In-Browser Player (Plays right inside modal!) -->
+                                <!-- In-Browser Player (Play right inside modal!) -->
                                 <div class="pt-1">
                                     ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm')) ? `
                                         <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
@@ -3750,7 +3746,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <button onclick="approveLearnerSubmission('${userId || sub.userId}', ${sub.milestoneId || 1}, '${normalizedType}', '${actualDay}', ${lcReward})" class="btn-primary py-2.5 px-5 text-xs bg-emerald-600 border-emerald-500 shadow-lg">
                             <i class="fas fa-check-circle mr-1.5"></i> Approve & Finalize +${lcReward} LCs
                         </button>
-                    ` : (isCompleted ? '<span class="text-xs text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Points Credited to TagMango Wallet</span>' : '')}
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -3759,7 +3755,1097 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
+function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
+    const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    const normalizedType = normalizeLevelUpType(type);
+    const msId = activeMilestoneId || activeAdminMilestoneId || 1;
 
+    let sub = allSubs.find(s => 
+        (s.userId === userId || s.userEmail === userId) && 
+        String(s.milestoneId || 1) === String(msId) && 
+        normalizeLevelUpType(s.type) === normalizedType && 
+        (String(s.day) === String(dayLabel) || s.date === dayLabel || String(s.sessionDay) === String(dayLabel))
+    );
+
+    if (!sub) {
+        sub = allSubs.find(s => 
+            (s.userId === userId || s.userEmail === userId) && 
+            normalizeLevelUpType(s.type) === normalizedType && 
+            (String(s.day) === String(dayLabel) || s.date === dayLabel)
+        );
+    }
+
+    renderSubmissionDetailModal(sub, userId, dayLabel, type);
+}
+
+function viewMySubmission(userId, dayLabel, type) {
+    viewCustomerSubmission(userId, dayLabel, type);
+}
+
+window.renderSubmissionDetailModal = renderSubmissionDetailModal;
+window.viewCustomerSubmission = viewCustomerSubmission;
+window.viewMySubmission = viewMySubmission;
+
+
+// 7. CREATOR 1-CLICK APPROVAL FUNCTION
+async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
+    let allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    const idx = allSubs.findIndex(s => s.userId === userId && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(type) && String(s.day) === String(day));
+    
+    if (idx > -1) {
+        allSubs[idx].status = 'completed';
+        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
+    }
+
+    const desc = `[Manual Approved] Milestone-${msId} Day-${day} ${type.toUpperCase()} Check-in`;
+    
+    // 1. Credit to local gamification ledger
+    recordLevelUpReward(userId, type, msId, lcReward, desc);
+
+    // 2. Credit to live TagMango In-Community Wallet (learn.cmplibe.com)
+    assignTagMangoPoints(userId, lcReward, desc);
+
+    // 3. Sync update to Render Web Service
+    try {
+        await fetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId,
+                milestoneId: msId,
+                type,
+                day,
+                status: 'completed',
+                lcReward
+            })
+        });
+    } catch (e) {
+        console.error('Server sync error for approval:', e);
+    }
+
+    document.getElementById('viewSubmissionModalDynamic')?.remove();
+    alert(`🎉 Submission for Day ${day} approved! +${lcReward} LCs credited to live TagMango Wallet.`);
+    
+    if (typeof renderAdminCohortSubmissions === 'function') {
+        renderAdminCohortSubmissions();
+    }
+}
+
+// ================= ADMIN LEVEL-UP ENGINE =================
+
+let activeAdminMilestoneId = null;
+
+function renderAdminMilestoneGrid() {
+    const grid = document.getElementById('adminMilestoneGridContainer');
+    document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
+    grid.classList.remove('hidden');
+
+    let partnerManageBtn = '';
+    if (isAdminLogin && !isCampusPartner) {
+        partnerManageBtn = `
+        <div class="col-span-full mb-6 flex justify-end">
+            <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                <i class="fas fa-university mr-2"></i> Manage Campus Partners
+            </button>
+        </div>`;
+    }
+
+    const gridCards = milestoneConfig.map(ms => {
+        const isBlank = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).length === 0;
+        const bgClass = isBlank ? 'bg-slate-900 border-slate-800 opacity-60' : 'bg-slate-800/80 border-indigo-500/40 hover:border-indigo-400 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all duration-300 group';
+        return `
+        <div class="glass p-6 rounded-2xl border flex flex-col justify-between min-h-[180px] ${bgClass}">
+            <div onclick="${isBlank ? '' : `openAdminMilestone(${ms.id})`}">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="text-[10px] font-black tracking-widest uppercase text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded border border-indigo-700/50">Milestone ${ms.id}</span>
+                    ${!isBlank ? '<i class="fas fa-users text-slate-500 bg-slate-800 p-2 rounded-lg group-hover:text-indigo-400 transition-colors"></i>' : ''}
+                </div>
+                <h4 class="font-bold text-lg text-white mb-2">${ms.name}</h4>
+                <p class="text-xs text-slate-400 line-clamp-2">${ms.desc}</p>
+            </div>
+            
+            ${!isBlank ? `
+            <div class="mt-5 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+                <span onclick="openAdminMilestone(${ms.id})" class="text-xs font-bold text-indigo-400 hover:text-white transition-colors cursor-pointer">View Cohort <i class="fas fa-arrow-right ml-1"></i></span>
+                ${!isCampusPartner ? `<button onclick="alert('Admin Config: Edit rules, LC assignments, and time-windows for ${ms.name}')" class="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"><i class="fas fa-cog mr-1"></i> Edit Settings</button>` : ''}
+            </div>` : '<div class="mt-5 pt-4 border-t border-slate-800"><span class="text-xs text-slate-600 font-bold uppercase">Locked / Setup Pending</span></div>'}
+        </div>`;
+    }).join('');
+
+    grid.innerHTML = partnerManageBtn + gridCards;
+}
+
+function populateAdminCohortFilters() {
+    const filter = document.getElementById('adminCohortFilter');
+    if (!filter) return;
+    filter.innerHTML = '<option value="all">-- All Allowed Customers --</option>';
+    
+    let activeMangos = allAdminMangos.filter(m => levelUpAccessConfig.includes(m._id));
+    
+    // STRICT FILTER: If Campus Partner, ONLY show their assigned Mangoes
+    if (isCampusPartner) {
+        activeMangos = activeMangos.filter(m => partnerAllowedMangoes.includes(m._id));
+    }
+
+    activeMangos.forEach(mango => {
+        const opt = document.createElement('option');
+        opt.value = mango._id;
+        opt.textContent = mango.title;
+        filter.appendChild(opt);
+    });
+}
+
+// Global State for Admin Tabs
+let activeAdminModule = 'dip';
+
+function openAdminMilestone(id) {
+    activeAdminMilestoneId = Number(id) || 1;
+    activeAdminModule = 'dip';
+    
+    // Background sync without blocking UI
+    syncGlobalServerData().catch(() => {});
+
+    const ms = milestoneConfig.find(m => m.id === activeAdminMilestoneId) || milestoneConfig[0];
+    
+    document.getElementById('adminMilestoneGridContainer')?.classList.add('hidden');
+    document.getElementById('adminMilestoneDetailContainer')?.classList.remove('hidden');
+    
+    const titleEl = document.getElementById('adminActiveMilestoneTitle');
+    if (titleEl) titleEl.innerText = ms.name + " - Creator Setup";
+    
+    // Hide global toggles
+    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.parentElement;
+    if (togglesArea) togglesArea.style.display = 'none';
+    const searchArea = document.getElementById('adminLevelUpSearch')?.closest('.glass') || document.getElementById('adminLevelUpSearch')?.closest('.glass-card') || document.getElementById('adminLevelUpSearch')?.parentElement;
+    if (searchArea) searchArea.style.display = 'none';
+
+    // Module Sub-Navigation for Creator (ALL 6 MODULES with ON/OFF switch)
+    const subNavEl = document.getElementById('adminMilestoneSubNav');
+    if(subNavEl) {
+        const enabledForStudents = getEnabledModulesForMilestone(activeAdminMilestoneId);
+        
+        subNavEl.innerHTML = ALL_PLATFORM_MODULES.map((mObj, i) => {
+            const isEnabledForStudents = enabledForStudents.includes(mObj.code);
+            const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+            return `
+            <div class="flex items-center gap-1.5 ${activeClass} px-3 py-2 rounded-t-xl font-bold text-xs transition-all">
+                <button onclick="switchAdminModuleTab('${mObj.code}', this.parentElement)" class="admin-module-btn flex items-center gap-2">
+                    <i class="fas ${mObj.icon}"></i> ${mObj.name}
+                </button>
+                <button onclick="event.stopPropagation(); toggleMilestoneModuleAccess(${activeAdminMilestoneId}, '${mObj.code}')" title="${isEnabledForStudents ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)'}" class="ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabledForStudents ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
+                    ${isEnabledForStudents ? 'ON' : 'OFF'}
+                </button>
+            </div>`;
+        }).join('');
+    }
+
+    const btnCheckins = document.getElementById('btnTabCheckins');
+    if (isCampusPartner) {
+        if (btnCheckins) btnCheckins.style.display = 'none';
+        switchAdminMilestoneTab('completion');
+    } else {
+        if (btnCheckins) btnCheckins.style.display = 'block';
+        switchAdminMilestoneTab('checkins');
+    }
+}
+
+function selectAdminConfigDate() {
+    const dateInput = document.getElementById('adminConfigDateInput');
+    const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
+    loadAdminCheckinEditor(selectedDate);
+}
+
+function switchAdminMilestoneTab(tabName) {
+    const btnCheckins = document.getElementById('btnTabCheckins');
+    const btnCompletion = document.getElementById('btnTabCompletion');
+    const viewCheckins = document.getElementById('adminCheckinsConfigView');
+    const viewCompletion = document.getElementById('adminCompletionView');
+    
+    if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (viewCheckins) viewCheckins.classList.add('hidden');
+    if (viewCompletion) viewCompletion.classList.add('hidden');
+    
+    if (tabName === 'checkins') {
+        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCheckins) viewCheckins.classList.remove('hidden');
+        renderAdminCheckinsList(); 
+        const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
+        activeAdminDateKey = todayKey;
+        loadAdminCheckinEditor(todayKey);
+    } else {
+        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCompletion) viewCompletion.classList.remove('hidden');
+        renderAdminCohortSubmissions(); 
+    }
+}
+
+// Function to handle switching tabs in the Admin View
+function switchAdminModuleTab(mod, btnElement) {
+    activeAdminModule = mod;
+    if (btnElement) {
+        document.querySelectorAll('.admin-module-btn').forEach(btn => {
+            btn.className = 'admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all text-slate-400 hover:bg-slate-800 hover:text-white';
+        });
+        btnElement.className = 'admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500';
+    }
+    
+    // Refresh the currently active view
+    const isCheckinsActive = !document.getElementById('adminCheckinsConfigView').classList.contains('hidden');
+    if (isCheckinsActive) {
+        renderAdminCheckinsList();
+    } else {
+        renderAdminCohortSubmissions();
+    }
+}
+
+function selectAdminConfigDate() {
+    const dateInput = document.getElementById('adminConfigDateInput');
+    if (dateInput && dateInput.value) {
+        loadAdminCheckinEditor(dateInput.value);
+    }
+}
+
+// --- NEW Admin State Management ---
+let activeAdminDateKey = null;
+
+function switchAdminMilestoneTab(tabName) {
+    const btnCheckins = document.getElementById('btnTabCheckins');
+    const btnCompletion = document.getElementById('btnTabCompletion');
+    const viewCheckins = document.getElementById('adminCheckinsConfigView');
+    const viewCompletion = document.getElementById('adminCompletionView');
+    
+    btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
+    btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
+    viewCheckins.classList.add('hidden');
+    viewCompletion.classList.add('hidden');
+    
+    if (tabName === 'checkins') {
+        btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
+        viewCheckins.classList.remove('hidden');
+        renderAdminCheckinsList(); 
+        if (activeAdminDateKey) {
+            loadAdminCheckinEditor(activeAdminDateKey);
+        } else {
+            const todayKey = isoDateKey(new Date());
+            activeAdminDateKey = todayKey;
+            loadAdminCheckinEditor(todayKey);
+        }
+    } else {
+        btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
+        viewCompletion.classList.remove('hidden');
+        renderAdminCohortSubmissions(); 
+    }
+}
+
+// --- ADMIN CHECKIN CONFIGURATOR (UPGRADED) ---
+function updateCohortStartDate() {
+    const input = document.getElementById('adminCohortStartDate');
+    if (input && input.value) {
+        milestoneStartDates[activeAdminMilestoneId] = input.value;
+        localStorage.setItem('milestoneStartDates', JSON.stringify(milestoneStartDates));
+        renderAdminCheckinsList();
+        loadAdminCheckinEditor(activeAdminDateKey);
+    }
+}
+
+// --- ADMIN CHECKIN CONFIGURATOR (CALENDAR BASED) ---
+// --- 3. UPGRADED: Render Configs by Active Module ---
+function renderAdminCheckinsList() {
+    const list = document.getElementById('adminCheckinDaysList');
+    
+    // IF PROJECTS: Reroute to the new Project Builder Architecture!
+    if (activeAdminModule === 'projects') {
+        renderAdminProjectsList();
+        
+        // Trigger the initial editor load for projects without causing an infinite loop
+        const projectsList = customProjectsDB[activeAdminMilestoneId] || [];
+        if (activeAdminProjectId) {
+            loadAdminProjectEditor(activeAdminProjectId);
+        } else if (projectsList.length > 0) {
+            loadAdminProjectEditor(projectsList[0].id);
+        } else {
+            document.getElementById('adminCheckinEditor').innerHTML = `
+                <div class="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl">
+                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                        <i class="fas fa-folder-plus text-2xl text-emerald-500"></i>
+                    </div>
+                    <h4 class="text-lg font-bold text-white mb-2">No Projects Yet</h4>
+                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application.</p>
+                </div>`;
+        }
+        return;
+    }
+
+    // Ensure database paths exist for date-based modules
+    if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
+    if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
+    
+    const savedDates = Object.keys(customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]).sort();
+    
+    if (!activeAdminDateKey) {
+        activeAdminDateKey = savedDates.length > 0 ? savedDates[0] : new Date().toISOString().split('T')[0];
+    }
+
+    let html = `
+        <div class="mb-5 p-4 bg-slate-900 rounded-2xl border border-slate-700">
+            <label class="block text-xs font-bold text-indigo-400 uppercase tracking-widest mb-2">${activeAdminModule} Date Setup</label>
+            <div class="flex gap-2">
+                <input id="adminConfigDateInput" type="date" value="${activeAdminDateKey}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500" />
+                <button onclick="selectAdminConfigDate()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold">Load</button>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-2">These configs apply strictly to <b>cMPLi ${activeAdminModule}</b>.</p>
+        </div>
+        <div class="space-y-1 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+    `;
+
+    if (savedDates.length === 0) {
+        html += `<div class="text-xs text-slate-500 p-4 text-center">No dates configured for ${activeAdminModule} yet.</div>`;
+    } else {
+        savedDates.forEach(dateKey => {
+            const isActive = dateKey === activeAdminDateKey;
+            const dateStr = new Date(dateKey).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            html += `<button onclick="loadAdminCheckinEditor('${dateKey}')" class="w-full text-left p-3 rounded-lg text-sm font-bold transition-all flex justify-between items-center ${isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
+                <span>${dateStr}</span>
+                <span class="text-[10px] font-bold text-slate-400">Edit</span>
+            </button>`;
+        });
+    }
+    html += `</div>`;
+    list.innerHTML = html;
+}
+
+function closeAdminMilestoneView() {
+    activeAdminMilestoneId = null;
+    document.getElementById('adminMilestoneGridContainer').classList.remove('hidden');
+    document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
+    
+    // FIX: Restore the global Level-Up toggles/search when going back to the grid
+    const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
+    if (togglesArea) togglesArea.style.display = '';
+    const searchArea = document.getElementById('adminLevelUpSearch')?.closest('.glass') || document.getElementById('adminLevelUpSearch')?.parentElement;
+    if (searchArea) searchArea.style.display = '';
+}
+
+// --- Global store for mock approvals ---
+let mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
+
+// Update the Cohort Renderer to respect the active module
+function renderAdminCohortSubmissions() {
+    const table = document.getElementById('adminCompletionTable');
+    if (!table) return;
+
+    const filterMango = document.getElementById('adminCohortFilter').value;
+    const filterStatus = document.getElementById('adminStatusFilter').value;
+    const searchText = document.getElementById('adminSearchUser').value.toLowerCase();
+
+    // 1. FILTER LOGIC: VIP PASS FOR TEST EMAILS & PARTNER BOUNDARIES
+    let cohort = adminRealtimeUsers.filter(u => {
+        const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId));
+        const isTestUserEmail = TEST_EMAILS.includes(u.email) || TEST_EMAILS.includes(u.phone);
+        
+        // NEW: If Campus Partner, ONLY allow users who possess the partner's specifically assigned mangoes
+        if (isCampusPartner) {
+            return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
+        }
+        
+        return hasAccess || isTestUserEmail; 
+    });
+
+    if (filterMango !== 'all') {
+        cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
+    }
+
+    if (searchText) {
+        cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)));
+    }
+    
+    cohort = cohort.filter(u => {
+        if (TEST_EMAILS.includes(u.email) || TEST_EMAILS.includes(u.phone)) return true;
+        const highest = (userMilestoneState[u._id] || { highestUnlocked: 1 }).highestUnlocked;
+        return highest >= activeAdminMilestoneId;
+    });
+
+    let totalPending = 0;
+    let validCohort = [];
+
+    // Filter by Status & prepare math
+    cohort.forEach(user => {
+        const subs = getUserSubmissionsByUserId(user);
+
+        let calculatedLcs = 0;
+        subs.forEach(s => {
+            if (String(s.milestoneId || 1) === String(activeAdminMilestoneId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule)) {
+                calculatedLcs += Number(s.lcReward) || 0;
+            }
+        });
+        const earnedLcs = calculatedLcs;
+
+        let completionPct = activeAdminMilestoneId === 1 ? Math.round(((subs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length) / 21) * 100) : 100;
+        let isApproved = mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId}`] === true;
+        const isPending = completionPct >= 90 && !isApproved; 
+        
+        if (isPending) totalPending++;
+        if (filterStatus === 'pending' && !isPending) return;
+        if (filterStatus === 'approved' && !isApproved) return;
+        validCohort.push({ ...user, completionPct, isPending, isApproved, earnedLcs });
+    });
+
+    validCohort.sort((a, b) => (b.earnedLcs || 0) - (a.earnedLcs || 0));
+
+    document.getElementById('adminMsStatsBar').innerHTML = `
+        <span class="text-xs font-bold bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/50">Active Customers: ${validCohort.length}</span>
+        <span class="text-xs font-bold bg-amber-900/40 text-amber-300 px-3 py-1 rounded-full border border-amber-700/50">Pending Approvals: ${totalPending}</span>
+    `;
+
+    // Calculate max display days based on Milestone AND active module
+    let maxDays = 21;
+    let isProjectGrid = (activeAdminModule === 'projects');
+    let projectHeaders = [];
+
+    if (isProjectGrid) {
+        projectHeaders = (customProjectsDB[activeAdminMilestoneId] || []);
+        maxDays = projectHeaders.length; 
+    } else if (activeAdminMilestoneId === 2 || activeAdminMilestoneId === 3) {
+        if (activeAdminModule === 'dip' || activeAdminModule === 'immerse') maxDays = 30;
+        if (activeAdminModule === 'ios') maxDays = 15; 
+    }
+    
+    let theadHtml = `
+        <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 font-black border-b border-slate-700 sticky top-0 z-10">
+            <tr>
+                <th class="px-4 py-4 sticky left-0 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[250px]">Customer Name</th>
+                <th class="px-4 py-4 text-center min-w-[100px]">Status</th>
+        <th class="px-4 py-4 text-center min-w-[100px]">LCs</th>`;
+    
+    if (isProjectGrid) {
+        // FIX 1: Generate clean, sequential headers (P1, P2, P3) without sector names
+        for (let i = 0; i < maxDays; i++) {
+            theadHtml += `<th class="px-2 py-4 text-center w-24 border-l border-slate-700/50">P${i + 1}</th>`;
+        }
+    } else {
+        for (let d = 1; d <= maxDays; d++) {
+            theadHtml += `<th class="px-2 py-4 text-center w-12 border-l border-slate-700/50">D${d}</th>`;
+        }
+    }
+    theadHtml += `</tr></thead>`;
+
+    if (validCohort.length === 0 || (isProjectGrid && projectHeaders.length === 0)) {
+        table.innerHTML = `${theadHtml}<tbody><tr><td colspan="${maxDays + 3}" class="text-center p-8 text-slate-500 font-medium">${isProjectGrid && projectHeaders.length === 0 ? 'Create projects in "Check-ins Setup" first.' : 'No customers found matching these criteria.'}</td></tr></tbody>`;
+        return;
+    }
+
+    let tbodyHtml = `<tbody class="divide-y divide-slate-800 bg-slate-900/40">`;
+    validCohort.forEach(user => {
+        const subs = getUserSubmissionsByUserId(user);
+        
+        let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
+            : (user.isPending ? `<button onclick="alert('Cert Approved!')" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
+            
+        let rowHtml = `
+            <tr class="hover:bg-slate-800/50 transition-colors group">
+                <td class="px-4 py-3 sticky left-0 bg-slate-900/90 group-hover:bg-slate-800/90 z-10 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">
+                    <div class="flex items-center gap-3">
+                        <img src="${user.profilePicUrl || 'https://via.placeholder.com/30'}" class="w-8 h-8 rounded-full border border-slate-600">
+                        <div>
+                            <p class="text-sm font-bold text-white truncate w-40">${user.name || 'Customer'}</p>
+                            <p class="text-[10px] text-slate-400 truncate w-40">${user.email || user.phone}</p>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-center">${statusBadge}</td>
+                <td class="px-4 py-3 text-center font-bold text-indigo-400">${user.earnedLcs || 0} LCs</td>
+        `;
+
+        if (isProjectGrid) {
+            // FIX 2: Filter to get ALL project submissions for this user, then fill them sequentially
+            const userProjectSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === 'projects');
+            
+            // Loop through the maximum available projects to create the cells
+            for (let i = 0; i < maxDays; i++) {
+                const matchingSub = userProjectSubs[i]; // If they submitted 2, it fills index 0 (P1) and 1 (P2)
+                
+                if (matchingSub) {
+                    const originalProjId = matchingSub.day; 
+                    const projectDef = projectHeaders.find(p => String(p.id) === String(originalProjId)) || {};
+                    const lcReward = matchingSub.lcReward || projectDef.pts || 0;
+                    
+                    const tooltip = `${new Date(matchingSub.submittedAt || matchingSub.timestamp).toLocaleDateString('en-GB')} • ${lcReward} LCs`;
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${originalProjId}', 'projects')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${lcReward} LCs</span></div></td>`;
+                } else {
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
+                }
+            }
+        } else {
+            for (let d = 1; d <= maxDays; d++) {
+                let actualDay = d;
+                if (activeAdminModule === 'ios') actualDay = d + 30; 
+                
+                const matchingSub = subs.find(entry => {
+                    if (normalizeLevelUpType(entry.type) !== activeAdminModule) return false;
+                    if (entry.day !== undefined && String(entry.day) === String(actualDay)) return true;
+                    return false;
+                });
+                
+                if (matchingSub) {
+                    const dateLabel = matchingSub.dateKey ? matchingSub.dateKey : matchingSub.day;
+                    const tooltip = matchingSub.date ? `${new Date(matchingSub.date).toLocaleDateString('en-GB')} • ${matchingSub.lcReward || 0} LCs` : `Day ${actualDay}`;
+                    const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${dateLabel}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${statusLabel}</span></div></td>`;
+                } else {
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
+                }
+            }
+        }
+        
+        rowHtml += `</tr>`;
+        tbodyHtml += rowHtml;
+    });
+
+    tbodyHtml += `</tbody>`;
+    table.innerHTML = theadHtml + tbodyHtml;
+}   
+
+let customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+
+
+// ==============================================================
+// cMPLi POD: CSV TEMPLATE DOWNLOAD & UPLOAD ENGINE
+// ==============================================================
+function downloadPodCsvTemplate() {
+    const headers = ["Question Number", "Question Prompt", "Option A", "Option B", "Option C", "Option D", "Correct Option (A/B/C/D)", "Points"];
+    const rows = [
+        ["1", "What is the #1 driver of consistent habit formation discussed in today's podcast?", "Intrinsic Motivation & Identity Shift", "External Pressure only", "Random Motivation Spikes", "Waiting for Perfect Timing", "A", "11"],
+        ["2", "What core strategy was recommended for handling unexpected daily schedule disruptions?", "If-Then Implementation Intentions", "Giving up until next week", "Ignoring the problem", "Immediate Escalation", "A", "11"],
+        ["3", "Which mindset distinguishes a Challenge Embracer from a passive learner?", "Viewing friction as growth feedback", "Avoiding all difficult tasks", "Seeking quick shortcuts", "Focusing solely on outcomes", "A", "11"],
+        ["4", "How long is the ideal daily morning focus window recommended in the session?", "60-90 minutes of uninterrupted work", "10 minutes while multitasking", "5 hours without breaks", "20 minutes with frequent notifications", "A", "11"],
+        ["5", "What is the role of continuous micro-reflections in mastery?", "Consolidates neural pathways and self-awareness", "Wastes valuable time", "Only useful for exams", "Creates unnecessary friction", "A", "11"]
+    ];
+
+    let csvContent = "data:text/csv;charset=utf-8," 
+        + headers.map(h => `"${h}"`).join(",") + "\n"
+        + rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "cmpli_pod_quiz_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function parseCsvQuestions(text) {
+    if (!text || typeof text !== 'string') return [];
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return [];
+
+    const questions = [];
+    const startIdx = (lines[0].toLowerCase().includes('question') || lines[0].toLowerCase().includes('option') || lines[0].toLowerCase().includes('prompt')) ? 1 : 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i];
+        const row = [];
+        let inQuotes = false;
+        let currentValue = '';
+
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"' && line[j + 1] === '"') {
+                currentValue += '"';
+                j++;
+            } else if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                row.push(currentValue.trim());
+                currentValue = '';
+            } else {
+                currentValue += char;
+            }
+        }
+        row.push(currentValue.trim());
+
+        if (row.length >= 5) {
+            let prompt = '';
+            let optA = '';
+            let optB = '';
+            let optC = '';
+            let optD = '';
+            let correctOption = 0;
+            let pts = 11;
+
+            // Pattern 1 (Img-2): [QNum, QuestionPrompt, Option A, Option B, Option C, Option D, Correct, Points?]
+            if (row.length >= 7) {
+                prompt = row[1] || row[0];
+                optA = row[2] || 'Option A';
+                optB = row[3] || 'Option B';
+                optC = row[4] || 'Option C';
+                optD = row[5] || 'Option D';
+                const rawCorrect = (row[6] || 'A').toUpperCase().trim();
+                if (rawCorrect === 'B' || rawCorrect === '2') correctOption = 1;
+                else if (rawCorrect === 'C' || rawCorrect === '3') correctOption = 2;
+                else if (rawCorrect === 'D' || rawCorrect === '4') correctOption = 3;
+                else correctOption = 0;
+                pts = parseInt(row[7], 10) || 11;
+            } else {
+                // Pattern 2: [QuestionPrompt, Option A, Option B, Option C, Option D, Correct?]
+                prompt = row[0];
+                optA = row[1] || 'Option A';
+                optB = row[2] || 'Option B';
+                optC = row[3] || 'Option C';
+                optD = row[4] || 'Option D';
+                const rawCorrect = (row[5] || 'A').toUpperCase().trim();
+                if (rawCorrect === 'B' || rawCorrect === '2') correctOption = 1;
+                else if (rawCorrect === 'C' || rawCorrect === '3') correctOption = 2;
+                else if (rawCorrect === 'D' || rawCorrect === '4') correctOption = 3;
+                else correctOption = 0;
+                pts = parseInt(row[6], 10) || 11;
+            }
+
+            if (prompt && prompt.length > 1) {
+                questions.push({
+                    id: 'q_' + i + '_' + Date.now(),
+                    title: prompt,
+                    type: 'mcq',
+                    options: [optA, optB, optC, optD],
+                    correctOption: correctOption,
+                    pts: pts
+                });
+            }
+        }
+    }
+    return questions;
+}
+
+function handlePodCsvUpload(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const text = e.target.result;
+        const parsed = parseCsvQuestions(text);
+        if (parsed.length === 0) {
+            alert("No valid questions found in CSV. Please ensure you use the template format.");
+            return;
+        }
+
+        // Add to active POD questions container
+        renderAdminPodQuestionsInEditor(parsed);
+        alert(`🎉 Successfully loaded ${parsed.length} questions from CSV! 3 will be randomly served to each student.`);
+    };
+    reader.readAsText(file);
+}
+
+function renderAdminPodQuestionsInEditor(questionsList) {
+    const container = document.getElementById('adminPodQuestionsContainer');
+    if (!container) return;
+
+    container.innerHTML = questionsList.map((q, idx) => {
+        const correctOpt = q.correctOption !== undefined ? q.correctOption : 0;
+        return `
+        <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 group space-y-3 animation-fade-in pod-q-item" data-pts="${q.pts || 11}">
+            <div class="flex justify-between items-start">
+                <span class="badge-pill badge-indigo text-[10px]">Question ${idx + 1}</span>
+                <button type="button" onclick="this.closest('.pod-q-item').remove(); updatePodPoolCountBadge();" class="text-red-400 hover:text-red-300 text-xs font-bold transition-colors">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div>
+                <label class="block text-[11px] font-bold text-slate-400 mb-1">Question Prompt</label>
+                <input type="text" value="${q.title || ''}" placeholder="Enter question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                ${[0, 1, 2, 3].map(i => {
+                    const letter = String.fromCharCode(65 + i);
+                    const optText = (q.options && q.options[i]) || `Option ${letter}`;
+                    const isChecked = correctOpt === i;
+                    return `
+                    <div class="flex items-center gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                        <input type="radio" name="correct_pod_q_${idx}" value="${i}" ${isChecked ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
+                        <input type="text" value="${optText}" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }).join('');
+
+    updatePodPoolCountBadge();
+}
+
+function updatePodPoolCountBadge() {
+    const items = document.querySelectorAll('.pod-q-item');
+    const badge = document.getElementById('podPoolCountBadge');
+    if (badge) {
+        badge.innerText = `${items.length} Questions in Pool`;
+    }
+}
+
+function addSinglePodQuestionToEditor() {
+    const container = document.getElementById('adminPodQuestionsContainer');
+    if (!container) return;
+
+    const idx = document.querySelectorAll('.pod-q-item').length;
+    const newHtml = `
+    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 group space-y-3 animation-fade-in pod-q-item" data-pts="11">
+        <div class="flex justify-between items-start">
+            <span class="badge-pill badge-indigo text-[10px]">Question ${idx + 1}</span>
+            <button type="button" onclick="this.closest('.pod-q-item').remove(); updatePodPoolCountBadge();" class="text-red-400 hover:text-red-300 text-xs font-bold transition-colors">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+        <div>
+            <label class="block text-[11px] font-bold text-slate-400 mb-1">Question Prompt</label>
+            <input type="text" placeholder="Enter podcast question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+            ${[0, 1, 2, 3].map(i => {
+                const letter = String.fromCharCode(65 + i);
+                return `
+                <div class="flex items-center gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                    <input type="radio" name="correct_pod_q_${idx}" value="${i}" ${i === 0 ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
+                    <input type="text" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
+
+    container.insertAdjacentHTML('beforeend', newHtml);
+    updatePodPoolCountBadge();
+}
+
+function loadAdminCheckinEditor(dateKey) {
+    activeAdminDateKey = dateKey;
+    renderAdminCheckinsList(); // Refresh list to show active state
+    
+    const ms = milestoneConfig.find(m => m.id === activeAdminMilestoneId) || { name: "Milestone" };
+    const todayKey = getLocalDateKey(new Date());
+    const isPastDate = dateKey < todayKey;
+    const isEditable = true; // Creators can always edit and configure any date freely
+    const disableAttr = '';
+    
+    const moduleConfig = (customMilestoneConfigs[activeAdminMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule])
+        ? customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey]
+        : null;
+    
+    const savedConfig = moduleConfig || {
+        lcOnTime: activeAdminMilestoneId === 1 ? 33 : 133,
+        lcLate: 3,
+        startTime: '05:00',
+        endTime: '17:00',
+        audioUrl: '',
+        audioTitle: 'cMPLi POD Morning Insights',
+        questions: (activeAdminModule === 'pod') ? [
+            { title: "What is the #1 driver of long-term habit consistency?", type: "mcq", options: ["Intrinsic Identity Shift & Daily Micro-actions", "External Pressure only", "Random Motivation Spikes", "Waiting for perfect conditions"], correctOption: 0, pts: 11 },
+            { title: "What primary method was recommended for handling unexpected schedule disruptions?", type: "mcq", options: ["If-Then Implementation Intentions", "Abandoning the week goal", "Skipping without reflection", "Immediate panic"], correctOption: 0, pts: 11 },
+            { title: "Which mindset separates a Challenge Embracer from a passive student?", type: "mcq", options: ["Viewing friction & feedback as fuel for growth", "Avoiding all challenging tasks", "Seeking quick shortcuts", "Focusing solely on certificates"], correctOption: 0, pts: 11 }
+        ] : [
+            { title: 'The Sector is about', type: 'text' },
+            { title: 'Upload Proof of Work', type: 'audio' }
+        ]
+    };
+
+    const displayDateObj = new Date(dateKey);
+    const displayDate = !isNaN(displayDateObj.getTime()) ? displayDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : dateKey;
+    const editor = document.getElementById('adminCheckinEditor');
+    if (!editor) return;
+
+    // --- CASE A: cMPLi POD MODULE (AUDIO UPLOAD + CSV QUIZ POOL BUILDER) ---
+    if (activeAdminModule === 'pod') {
+        const poolQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions)) ? savedConfig.questions : [];
+        editor.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="badge-pill badge-indigo text-[10px]"><i class="fas fa-podcast"></i> cMPLi POD Setup</span>
+                        <span id="podPoolCountBadge" class="badge-pill bg-slate-800 text-slate-300 text-[10px]">${poolQuestions.length} Questions in Pool</span>
+                    </div>
+                    <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                    <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
+                    <p class="text-xs mt-1.5 text-slate-400">Upload podcast audio & question pool. 3 randomized questions will be served to each student.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="btn-secondary py-2 px-3 text-xs"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
+                    <button id="btnSaveConfig" onclick="saveAdminPodCheckinConfig('${dateKey}')" class="btn-primary py-2 px-4 text-xs">
+                        <i class="fas fa-save mr-1.5"></i> Save POD Day Setup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Audio Upload & URL Section -->
+            <div class="glass-card p-5 border-slate-800 mb-6 space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-volume-up text-indigo-400"></i> Daily Podcast Audio Stream
+                    </h5>
+                    <span class="text-[10px] text-slate-400 font-semibold">Listened in-browser with earphones</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Audio Episode Title</label>
+                        <input type="text" id="podAudioTitle" value="${savedConfig.audioTitle || 'cMPLi POD Daily Audio'}" placeholder="e.g. Episode 3: Identity-Based Habits" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr} />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Podcast Audio URL or File</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="podAudioUrl" value="${savedConfig.audioUrl || ''}" placeholder="https://... or select file ->" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr} />
+                            <label class="btn-secondary py-2 px-3 text-xs cursor-pointer flex items-center shrink-0">
+                                <i class="fas fa-upload mr-1"></i> Upload MP3
+                                <input type="file" accept="audio/*" class="hidden" onchange="uploadPodAudioFile(this)" ${disableAttr} />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div id="podAudioStatus" class="pt-1">
+                    ${savedConfig.audioUrl ? '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Audio Stream Configured & Ready for Playback</span>' : '<span class="text-xs text-slate-500"><i class="fas fa-info-circle mr-1"></i> No custom audio uploaded yet (default stream will play).</span>'}
+                </div>
+                <div id="podAudioPreviewPlayer">
+                    ${savedConfig.audioUrl ? `
+                        <div class="mt-2 p-3 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                                <i class="fas fa-play text-xs"></i>
+                            </div>
+                            <div class="flex-1">
+                                <audio controls class="w-full h-8 rounded-lg" src="${savedConfig.audioUrl}"></audio>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Rewards & Time Window Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
+                    <input type="number" id="configLcOnTime" value="${savedConfig.lcOnTime || 33}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (Late)</label>
+                    <input type="number" id="configLcLate" value="${savedConfig.lcLate || 3}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Start Time</label>
+                    <input type="time" id="configStartTime" value="${savedConfig.startTime || '05:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">End Time</label>
+                    <input type="time" id="configEndTime" value="${savedConfig.endTime || '17:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
+                </div>
+            </div>
+
+            <!-- CSV Bulk Upload & Questions Pool Builder -->
+            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-700 pb-3">
+                <div>
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-list-ol text-emerald-400"></i> POD Quiz Questions Pool
+                    </h5>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Upload a CSV containing 10-50 questions or add them manually.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="downloadPodCsvTemplate()" class="btn-secondary py-1.5 px-3 text-xs text-indigo-300 hover:text-white">
+                        <i class="fas fa-file-csv mr-1.5 text-emerald-400"></i> Download CSV Template
+                    </button>
+                    <label class="btn-primary py-1.5 px-3 text-xs cursor-pointer flex items-center">
+                        <i class="fas fa-file-upload mr-1.5"></i> Upload CSV
+                        <input type="file" accept=".csv" class="hidden" onchange="handlePodCsvUpload(this)" ${disableAttr} />
+                    </label>
+                    <button type="button" onclick="addSinglePodQuestionToEditor()" class="btn-secondary py-1.5 px-3 text-xs">
+                        <i class="fas fa-plus mr-1"></i> Add Question
+                    </button>
+                </div>
+            </div>
+
+            <div id="adminPodQuestionsContainer" class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-1"></div>
+        `;
+
+        setTimeout(() => {
+            renderAdminPodQuestionsInEditor(poolQuestions);
+        }, 50);
+        return;
+    }
+
+    // --- CASE B: DIP & IMMERSE (STANDARD CHECK-IN EDITOR) ---
+    editor.innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+            <div>
+                <h4 class="text-xl font-bold text-white">Configuring: ${displayDate}</h4>
+                <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase">${ms.name}</p>
+                <p class="text-xs mt-2 ${isPastDate ? 'text-slate-400' : 'text-emerald-300'}">${isPastDate ? 'Past date — read-only view.' : 'Today/future date — editable.'}</p>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs rounded-lg border border-slate-600 shadow-lg transition-all"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
+                <button id="btnSaveConfig" onclick="saveAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-lg transition-all"><i class="fas fa-save mr-1"></i> ${isEditable ? 'Save Changes' : 'Locked'}</button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
+                <input type="number" id="configLcOnTime" value="${savedConfig.lcOnTime}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500" ${disableAttr}>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">LC Reward (Late)</label>
+                <input type="number" id="configLcLate" value="${savedConfig.lcLate}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500" ${disableAttr}>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">Window Start Time</label>
+                <input type="time" id="configStartTime" value="${savedConfig.startTime}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500" ${disableAttr}>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">Window End Time</label>
+                <input type="time" id="configEndTime" value="${savedConfig.endTime}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500" ${disableAttr}>
+            </div>
+        </div>
+
+        <div class="mb-4 flex justify-between items-end border-b border-slate-700 pb-2">
+            <h5 class="text-sm font-bold text-indigo-400">Input Fields & Questions</h5>
+            ${isEditable ? `<button onclick="addAdminQuestionField()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-700/50 transition-colors"><i class="fas fa-plus mr-1"></i> Add Question</button>` : ''}
+        </div>
+
+        <div id="adminQuestionsContainer" class="space-y-3">
+            ${savedConfig.questions.map(q => `
+                <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
+                    <i class="fas fa-grip-vertical text-slate-500 ${isEditable ? 'cursor-move' : ''}"></i>
+                    <input type="text" value="${q.title}" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-indigo-500 rounded px-2 py-1" ${disableAttr}>
+                    <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500" ${disableAttr}>
+                        <option value="text" ${q.type === 'text' ? 'selected' : ''}>Text Box</option>
+                        <option value="audio" ${q.type === 'audio' ? 'selected' : ''}>Audio File (.mp3)</option>
+                        <option value="video" ${q.type === 'video' ? 'selected' : ''}>Video File (.mp4)</option>
+                        <option value="doc" ${q.type === 'doc' ? 'selected' : ''}>Document (.pdf, .doc)</option>
+                    </select>
+                    ${isEditable ? `<button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function addAdminQuestionField() {
+    const container = document.getElementById('adminQuestionsContainer');
+    if (!container) return;
+    
+    const fieldHtml = `
+        <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
+            <i class="fas fa-grip-vertical text-slate-500 cursor-move"></i>
+            <input type="text" placeholder="Enter question title..." class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-indigo-500 rounded px-2 py-1">
+            <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500">
+                <option value="text">Text Box</option>
+                <option value="audio">Audio File (.mp3)</option>
+                <option value="video">Video File (.mp4)</option>
+                <option value="doc">Document (.pdf, .doc)</option>
+            </select>
+            <button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', fieldHtml);
+}
+
+function saveAdminCheckinConfig(dateKey) {
+    if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
+    if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
+    
+    const dayConfig = {
+        date: dateKey,
+        lcOnTime: parseInt(document.getElementById('configLcOnTime').value, 10) || 33,
+        lcLate: parseInt(document.getElementById('configLcLate').value, 10) || 3,
+        startTime: document.getElementById('configStartTime').value,
+        endTime: document.getElementById('configEndTime').value,
+        questions: []
+    };
+
+    const questionRows = document.querySelectorAll('#adminQuestionsContainer .group');
+    questionRows.forEach(row => {
+        const titleInput = row.querySelector('input[type="text"]');
+        const typeSelect = row.querySelector('select');
+        if (titleInput && typeSelect && titleInput.value.trim() !== "") {
+            dayConfig.questions.push({ title: titleInput.value.trim(), type: typeSelect.value });
+        }
+    });
+
+    customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey] = dayConfig;
+    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    
+    // Sync to Server backend for cross-browser persistence
+    fetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: activeAdminMilestoneId,
+            moduleName: activeAdminModule,
+            dateKey: dateKey,
+            config: dayConfig,
+            allConfigs: customMilestoneConfigs
+        })
+    }).then(r => r.json()).then(data => {
+        console.log('✅ Milestone configs synced to server:', data);
+    }).catch(e => console.error('Server sync error:', e));
+
+    renderAdminCheckinsList();
+    
+    const btn = document.getElementById('btnSaveConfig');
+    if (btn) {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-check mr-1"></i> Saved!`;
+        btn.classList.replace('bg-emerald-600', 'bg-emerald-400');
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.classList.replace('bg-emerald-400', 'bg-emerald-600');
+        }, 1500);
+    }
+}
+
+function duplicateAdminCheckinConfig(sourceDateKey) {
+    const sourceConfig = (customMilestoneConfigs[activeAdminMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule])
+        ? customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][sourceDateKey]
+        : (customMilestoneConfigs[activeAdminMilestoneId] || {})[sourceDateKey];
+        
+    if (!sourceConfig) {
+        alert('Please save the current configuration first before duplicating.');
+        return;
+    }
+    
+    let nextDate = new Date(sourceDateKey);
+    nextDate.setDate(nextDate.getDate() + 1);
+    let defaultTarget = getLocalDateKey(nextDate);
+
+    const targetStr = prompt(`Duplicate config to which Date?\n(Format: YYYY-MM-DD)`, defaultTarget);
+    if (!targetStr) return;
+    
+    if (customMilestoneConfigs[activeAdminMilestoneId] && 
+        customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] && 
+        customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][targetStr]) {
+        const confirmOverwrite = confirm(`Warning: A configuration already exists for ${targetStr}. Do you want to overwrite it?`);
+        if (!confirmOverwrite) return;
+    }
+    
+    if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
+    if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
+    
+    const cloned = JSON.parse(JSON.stringify(sourceConfig));
+    cloned.date = targetStr;
+    customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][targetStr] = cloned;
+    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+
+    fetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: activeAdminMilestoneId,
+            moduleName: activeAdminModule,
+            dateKey: targetStr,
+            config: cloned
+        })
+    }).catch(e => console.error('Server sync error:', e));
+
+    renderAdminCheckinsList();
+    loadAdminCheckinEditor(targetStr);
+}
+
+// Exactly mirror the Customer view to guarantee visual consistency
+function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
+    viewMySubmission(userId, dayLabel, type);
+}
 
 function resolveSubmissionKey(user) {
     if (!user) return null;
@@ -4877,3 +5963,18 @@ window.downloadPodCsvTemplate = downloadPodCsvTemplate;
 window.addSinglePodQuestionToEditor = addSinglePodQuestionToEditor;
 window.openPodSessionModal = openPodSessionModal;
 window.submitPodSessionQuiz = submitPodSessionQuiz;
+
+
+window.openAdminMilestone = openAdminMilestone;
+window.switchAdminMilestoneTab = switchAdminMilestoneTab;
+window.switchAdminModuleTab = switchAdminModuleTab;
+window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
+window.selectAdminConfigDate = selectAdminConfigDate;
+window.loadAdminCheckinEditor = loadAdminCheckinEditor;
+window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
+window.saveAdminCheckinConfig = saveAdminCheckinConfig;
+window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;
+window.viewCustomerSubmission = viewCustomerSubmission;
+window.viewMySubmission = viewMySubmission;
+window.renderSubmissionDetailModal = renderSubmissionDetailModal;
+window.closeAdminMilestoneView = closeAdminMilestoneView;
