@@ -1,4 +1,12 @@
 
+async function initApp() {
+    if (!currentUser) return;
+    if (typeof updateDashboardUI === 'function') updateDashboardUI();
+    if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
+}
+window.initApp = initApp;
+
+
 function toggleMediaMenu(btn) {
     const parent = btn.closest('.relative');
     const menu = parent ? parent.querySelector('.media-dropdown-menu') : null;
@@ -360,7 +368,7 @@ async function verifyOTP() {
         }
 
         try {
-            // 1. Instantly reveal the main app interface
+            // 1. Reveal main app interface immediately
             const loginScreen = document.getElementById('loginScreen');
             const mainApp = document.getElementById('mainApp');
             const learnerNav = document.getElementById('learnerNav');
@@ -369,15 +377,15 @@ async function verifyOTP() {
             if (loginScreen) loginScreen.style.display = 'none';
             if (mainApp) mainApp.classList.remove('hidden');
 
-            // 2. Route Admin vs Learner
+            // 2. Route Creator vs Learner
             if (isAdminLogin || isCampusPartner) {
                 if (learnerNav) learnerNav.classList.add('hidden');
                 if (adminNav) adminNav.classList.remove('hidden');
                 
-                switchTab('adminTab');
-                // Run background data fetches non-blockingly
+                // Open Creator Level-Up Command Center by default for instant productivity
+                switchTab('adminLevelUpTab');
                 loadGlobalSettings().catch(() => {});
-                initAdminApp().catch(e => console.warn('Admin init fallback:', e));
+                initAdminApp().catch(e => console.warn('Admin init:', e));
             } else {
                 currentUser = realtimeCustomer || (Array.isArray(actualUsers) ? actualUsers[0] : {
                     _id: 'usr_' + Date.now(),
@@ -392,12 +400,12 @@ async function verifyOTP() {
                 if (!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
                 currentScoreObj = { totalScore: 0, points: [], displayScore: 0 };
 
-                switchTab('dashboardTab');
-                // Run background subscriber & points sync non-blockingly
+                // Open Learner Level-Up Hub by default
+                switchTab('levelUpTab');
                 loadGlobalSettings().catch(() => {});
-                initApp().catch(e => console.warn('App init fallback:', e));
+                initApp().catch(e => console.warn('App init:', e));
 
-                // Non-blocking background fetch for live points
+                // Fetch live points in background
                 fetchLivePoints(currentUser._id).then(liveScoreData => {
                     if (liveScoreData) {
                         currentScoreObj = liveScoreData;
@@ -409,7 +417,6 @@ async function verifyOTP() {
             }
         } catch (e) {
             console.error("Login transition error:", e);
-            // Fallback: force open
             document.getElementById('loginScreen')?.style.setProperty('display', 'none', 'important');
             document.getElementById('mainApp')?.classList.remove('hidden');
         } finally {
@@ -446,48 +453,48 @@ function logout() {
 
 async function switchTab(tab) {
     syncGlobalServerData().catch(e => console.warn(e));
-    document.getElementById('dashboardTab').classList.add('hidden');
-    document.getElementById('adminTab').classList.add('hidden');
-    document.getElementById('adminLevelUpTab').classList.add('hidden');
-    document.getElementById('leaderboardTab').classList.add('hidden');
     
-    const levelUpElement = document.getElementById('levelUpTab');
-    if(levelUpElement) levelUpElement.classList.add('hidden');
+    // Hide all tab sections
+    ['dashboardTab', 'adminTab', 'adminLevelUpTab', 'leaderboardTab', 'levelUpTab'].forEach(tId => {
+        const el = document.getElementById(tId);
+        if (el) el.classList.add('hidden');
+    });
     
-    document.getElementById(tab).classList.remove('hidden');
+    // Unhide the requested tab section
+    const targetEl = document.getElementById(tab);
+    if (targetEl) targetEl.classList.remove('hidden');
+
+    // Update active nav button state
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => btn.classList.remove('active'));
+    const activeNavBtn = document.getElementById('nav-' + tab) || document.getElementById('nav-admin' + tab.charAt(0).toUpperCase() + tab.slice(1));
+    if (activeNavBtn) activeNavBtn.classList.add('active');
     
-    if(tab === 'dashboardTab' && currentUser) updateDashboardUI();
-    if(tab === 'leaderboardTab') renderLeaderboard('all'); 
-    
-    // --- AUTO-FETCH LATEST GLOBAL SETTINGS FROM SCENARIO-B ---
-    if(tab === 'adminLevelUpTab' || tab === 'levelUpTab') {
-        await loadGlobalSettings();
+    if (tab === 'dashboardTab' && currentUser) {
+        updateDashboardUI();
     }
-
-    if(tab === 'adminLevelUpTab') {
-        document.getElementById('adminMilestoneGridContainer').classList.remove('hidden');
-        document.getElementById('adminMilestoneDetailContainer').classList.add('hidden');
-        
-        const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
-        if (togglesArea) togglesArea.style.display = '';
-        const searchArea = document.getElementById('adminLevelUpSearch')?.closest('.glass') || document.getElementById('adminLevelUpSearch')?.parentElement;
-        if (searchArea) searchArea.style.display = '';
-
+    if (tab === 'leaderboardTab') {
+        renderLeaderboard('all'); 
+    }
+    if (tab === 'adminTab') {
+        initAdminApp();
+    }
+    if (tab === 'adminLevelUpTab') {
+        document.getElementById('adminMilestoneGridContainer')?.classList.remove('hidden');
+        document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
         renderAdminMilestoneGrid();
         populateAdminCohortFilters();
-        renderAdminMangoToggles(); // Re-render toggles with latest DB state
+        renderAdminMangoToggles();
     }
-    
-    if(tab === 'levelUpTab') {
+    if (tab === 'levelUpTab') {
         const hasAccess = isAdminLogin || (currentUser && currentUser.subscribedMangoes && currentUser.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId)));
-        
-        if (!hasAccess) {
-            document.getElementById('levelUpNoAccess').classList.remove('hidden');
-            document.getElementById('milestoneGridContainer').classList.add('hidden');
-            document.getElementById('milestoneDetailContainer').classList.add('hidden');
+        if (!hasAccess && !(typeof isTestUser === 'function' && isTestUser())) {
+            document.getElementById('levelUpNoAccess')?.classList.remove('hidden');
+            document.getElementById('milestoneGridContainer')?.classList.add('hidden');
+            document.getElementById('milestoneDetailContainer')?.classList.add('hidden');
         } else {
-            document.getElementById('levelUpNoAccess').classList.add('hidden');
-            document.getElementById('milestoneGridContainer').classList.remove('hidden');
+            document.getElementById('levelUpNoAccess')?.classList.add('hidden');
+            document.getElementById('milestoneGridContainer')?.classList.remove('hidden');
+            document.getElementById('milestoneDetailContainer')?.classList.add('hidden');
             renderMilestoneGrid();
         }
     }
