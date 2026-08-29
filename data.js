@@ -1,6 +1,6 @@
+// data.js - cMPLi Be Gamification Core Configurations & Projects
 
-// ================= CORE PLATFORM MODULES & 4 MILESTONES =================
-const ALL_PLATFORM_MODULES = [
+var ALL_PLATFORM_MODULES = [
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
     { code: 'pod', name: 'cMPLi Pod', icon: 'fa-podcast text-indigo-400' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
@@ -9,7 +9,7 @@ const ALL_PLATFORM_MODULES = [
     { code: 'corporate', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
 ];
 
-const milestoneConfig = [
+var milestoneConfig = [
     {
         id: 1,
         name: 'Milestone 1: Simply Challenge Embracer',
@@ -40,14 +40,7 @@ const milestoneConfig = [
     }
 ];
 
-if (typeof window !== 'undefined') {
-    window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
-    window.milestoneConfig = milestoneConfig;
-}
-
-// data.js - cMPLi Be Gamification Core Configurations & Projects
-
-const defaultPodQuestionsPool = [
+var defaultPodQuestionsPool = [
     {
         id: 'pod_q1',
         title: 'According to today’s POD audio, what is the core driver of long-term habit consistency?',
@@ -105,15 +98,7 @@ const defaultPodQuestionsPool = [
     }
 ];
 
-// Export / Attach to window
-if (typeof window !== 'undefined') {
-    window.defaultPodQuestionsPool = defaultPodQuestionsPool;
-}
-
-// -------------------------------------------------------------
-// Real-World Execution (cMPLi-ai) Sector Challenge Projects
-// -------------------------------------------------------------
-const projects = [
+var projects = [
     { 
         id: 'SPORT-FIN', sector: 'Sportstech', spec: 'Finance', code: '[SPORT]', 
         title: 'Event Unit-Economics Model: 2,000-participant fitness race', 
@@ -159,5 +144,8 @@ const projects = [
 ];
 
 if (typeof window !== 'undefined') {
+    window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
+    window.milestoneConfig = milestoneConfig;
+    window.defaultPodQuestionsPool = defaultPodQuestionsPool;
     window.projects = projects;
 }
