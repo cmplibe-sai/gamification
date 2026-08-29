@@ -2243,17 +2243,27 @@ function getAdminConfigForDate(dateKey, moduleName = 'dip') {
     const customConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || customMilestoneConfigs || {};
     const msId = activeMilestoneId || 1;
     
-    if (customConfigs[msId] && customConfigs[msId][moduleName] && customConfigs[msId][moduleName][dateKey]) {
-        return customConfigs[msId][moduleName][dateKey]; 
-    }
+    if (!dateKey) dateKey = getLocalDateKey(new Date());
 
-    for (const id in customConfigs) {
-        if (customConfigs[id] && customConfigs[id][moduleName] && customConfigs[id][moduleName][dateKey]) {
-            return customConfigs[id][moduleName][dateKey];
+    const possibleKeys = [
+        dateKey,
+        (typeof parseToIsoDate === 'function' ? parseToIsoDate(dateKey) : null),
+        getLocalDateKey(new Date(dateKey)),
+        getLocalDateKey(new Date())
+    ].filter(Boolean);
+
+    for (const key of possibleKeys) {
+        if (customConfigs[msId] && customConfigs[msId][moduleName] && customConfigs[msId][moduleName][key]) {
+            return customConfigs[msId][moduleName][key];
+        }
+        for (const id in customConfigs) {
+            if (customConfigs[id] && customConfigs[id][moduleName] && customConfigs[id][moduleName][key]) {
+                return customConfigs[id][moduleName][key];
+            }
         }
     }
     
-    // Fallback for legacy configurations
+    // Fallback for legacy format
     if (customConfigs[msId] && customConfigs[msId][dateKey]) {
         return customConfigs[msId][dateKey];
     }
@@ -2317,7 +2327,7 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
                 questionsToRender = [{ question: 'Upload Deliverable', type: 'doc', answer: '' }];
             }
         } else {
-            const dayConfig = getAdminConfigForDate(dateKey);
+            const dayConfig = getAdminConfigForDate(dateKey, normalizedType);
             if (dayConfig && dayConfig.questions && dayConfig.questions.length > 0) {
                 questionsToRender = dayConfig.questions.map(q => ({ question: q.title, type: q.type, answer: '' }));
             } else {
@@ -2671,26 +2681,33 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
 }
 
 // Add the Pending UI Pop-up
-function showPendingEvaluationPopup() {
+function showPendingEvaluationPopup(pendingLcs = 33) {
+    const oldPopup = document.getElementById('rewardPopup');
+    if (oldPopup) oldPopup.remove();
+
     const popupHtml = `
         <div id="rewardPopup" class="fixed inset-0 z-[200] flex items-center justify-center">
             <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('rewardPopup').remove()"></div>
-            <div class="relative bg-slate-800 rounded-2xl border border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.3)] p-8 m-4 text-center max-w-sm w-full animate-fade-in-up">
-                <div class="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500">
-                    <i class="fas fa-robot text-4xl text-indigo-400 fa-bounce"></i>
+            <div class="relative bg-slate-800 rounded-2xl border border-amber-500/50 shadow-[0_0_30px_rgba(245,158,11,0.3)] p-8 m-4 text-center max-w-md w-full animate-fade-in-up">
+                <div class="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500 shadow-inner">
+                    <i class="fas fa-user-shield text-3xl text-amber-400"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-white mb-2">Video Submitted!</h2>
-                <p class="text-slate-300 mb-6">Your reflection is being transcribed and evaluated by our AI.</p>
+                <h2 class="text-2xl font-extrabold text-white mb-2 font-heading">Submission Under Review</h2>
+                <p class="text-slate-300 text-xs mb-6">Your check-in reflection has been recorded and submitted to the evaluation system.</p>
                 
-                <div class="bg-slate-900 rounded-xl p-4 mb-6 border border-slate-700">
-                    <span class="text-xs text-amber-400 uppercase tracking-wider block mb-1 font-bold"><i class="fas fa-circle-notch fa-spin mr-1"></i> Evaluation in Progress</span>
-                    <span class="text-sm text-slate-400">LCs will be credited to your wallet once approved.</span>
+                <div class="bg-slate-900 rounded-xl p-4 mb-6 border border-slate-700 text-left space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-amber-400 font-bold uppercase tracking-wider"><i class="fas fa-hourglass-half fa-spin mr-1.5"></i> Quality Verification</span>
+                        <span class="badge-pill badge-amber text-[10px]">+${pendingLcs} LCs Pending</span>
+                    </div>
+                    <p class="text-xs text-slate-400 leading-relaxed">Our evaluation coaches and AI verify each submission against quality rubrics. Your wallet will finalize with LCs upon verification.</p>
                 </div>
                 
-                <button onclick="document.getElementById('rewardPopup').remove()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-xl transition-all w-full shadow-lg">Got it</button>
+                <button onclick="document.getElementById('rewardPopup').remove()" class="btn-primary w-full py-3 text-xs">
+                    <i class="fas fa-check mr-1.5"></i> Acknowledge & Return
+                </button>
             </div>
-        </div>
-    `;
+        </div>`;
     document.body.insertAdjacentHTML('beforeend', popupHtml);
 }
 
@@ -3432,26 +3449,21 @@ function applyForCertificate() {
 function viewMySubmission(userId, dayLabel, type) {
     const submissions = getUserSubmissionsByUserId(userId);
     const normalizedType = normalizeLevelUpType(type);
-    
-    // Safely determine which milestone we are currently looking at (works for both Admin and Learner views)
     const currentMsId = typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
 
-    // 1. Strict Check: Type, Reference, AND Milestone
     let sub = submissions.find(s => {
         const subMsId = s.milestoneId || 1;
         return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, dayLabel) && String(subMsId) === String(currentMsId);
     });
 
-    // 2. Fallback Check: ISO Date parsing
     if (!sub) {
-        const fallbackLabel = parseToIsoDate(dayLabel) || dayLabel;
+        const fallbackLabel = typeof parseToIsoDate === 'function' ? parseToIsoDate(dayLabel) : dayLabel;
         sub = submissions.find(s => {
             const subMsId = s.milestoneId || 1;
             return normalizeLevelUpType(s.type) === normalizedType && isSameSubmissionReference(s, fallbackLabel) && String(subMsId) === String(currentMsId);
         });
     }
     
-    // 3. Final Fallback: Direct Day Number mapping
     if (!sub) {
         sub = submissions.find(s => {
             const subMsId = s.milestoneId || 1;
@@ -3462,40 +3474,17 @@ function viewMySubmission(userId, dayLabel, type) {
     if (!sub) return alert("No submission data found for this selection.");
 
     const actualDay = sub.day || dayLabel;
+    const isEvaluating = (sub.status === 'evaluating' || sub.status === 'pending');
+    const lcReward = sub.lcReward !== undefined ? sub.lcReward : 33;
     
-    // --- DISPLAY CORRECT TITLE ---
     let displayTitle = sub.title || `Day ${actualDay} Response`;
-    if (normalizedType === 'projects' && !sub.title) {
-        let allProjects = [];
-        const db = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
-        for (const ms in db) { db[ms].forEach(p => allProjects.push(p)); }
-        if (typeof projects !== 'undefined') projects.forEach(p => allProjects.push(p));
-        const p = allProjects.find(x => String(x.id) === String(actualDay));
-        if (p) displayTitle = p.title;
-    }
-
-    const subTime = sub.submittedAt || sub.timestamp || sub.createdAt || sub.date || sub.dateKey;
-    let exactTimeStr = 'Unknown Time';
-    
+    const subTime = sub.submittedAt || sub.timestamp || sub.date;
+    let exactTimeStr = 'Recorded';
     if (subTime) {
         const dObj = new Date(subTime);
         if (!isNaN(dObj.getTime())) {
-            const dd = String(dObj.getDate()).padStart(2, '0');
-            const mm = String(dObj.getMonth() + 1).padStart(2, '0');
-            const yyyy = dObj.getFullYear();
-            let h = dObj.getHours();
-            const m = String(dObj.getMinutes()).padStart(2, '0');
-            const ampm = h >= 12 ? 'PM' : 'AM';
-            h = h % 12 || 12;
-            exactTimeStr = `${dd}-${mm}-${yyyy} at ${String(h).padStart(2, '0')}:${m} ${ampm}`;
+            exactTimeStr = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
-    }
-
-    let lcReward = sub.lcReward !== undefined ? sub.lcReward : (sub.earnedPoints !== undefined ? sub.earnedPoints : null);
-    if (lcReward === null) {
-        const userLedger = localLedgers[userId] || [];
-        const ledgerMatch = userLedger.find(l => l.description && (l.description === displayTitle || l.description.includes(`Day ${actualDay}`)));
-        lcReward = ledgerMatch ? (Number(ledgerMatch.score) || 0) : 0;
     }
 
     let answersHtml = `<div class="space-y-4">`;
@@ -3508,7 +3497,7 @@ function viewMySubmission(userId, dayLabel, type) {
             
             if (['audio', 'video', 'doc'].includes(response.type) && response.fileData) {
                  const isMockFile = response.fileData === "#mock_file_uploaded_successfully";
-                 answersHtml += `<p class="mb-3 font-medium text-indigo-300"><i class="fas fa-file mr-2"></i>${response.fileName || response.answer}</p>`;
+                 answersHtml += `<p class="mb-3 font-medium text-indigo-300"><i class="fas fa-file mr-2"></i>${response.fileName || response.answer || 'Uploaded Media'}</p>`;
                  if (isMockFile) {
                      answersHtml += `<span class="inline-flex items-center gap-2 text-amber-400 bg-amber-900/30 px-3 py-1.5 rounded-lg border border-amber-700/50 text-xs font-bold"><i class="fas fa-exclamation-triangle"></i> Mock File</span>`;
                  } else {
@@ -3520,63 +3509,104 @@ function viewMySubmission(userId, dayLabel, type) {
             answersHtml += `</div></div>`;
         });
     } else {
-        answersHtml += `<div><label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Summary / Reflection</label><div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 whitespace-pre-wrap shadow-inner leading-relaxed">${sub.summary || "No summary provided."}</div></div>`;
+        answersHtml += `<div><label class="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Reflection Summary</label><div class="p-4 bg-slate-900 rounded-lg text-slate-200 text-sm border border-slate-700 whitespace-pre-wrap shadow-inner leading-relaxed">${sub.summary || "No summary provided."}</div></div>`;
     }
     answersHtml += `</div>`;
 
     const oldModal = document.getElementById('viewSubmissionModalDynamic');
     if (oldModal) oldModal.remove();
 
-    // 1. First, quickly define the sector name right BEFORE modalHtml so it doesn't cause an error
-    let sectorName = 'General';
-    if (normalizedType === 'projects') {
-        const allProjects = [];
-        const db = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
-        for (const ms in db) { db[ms].forEach(p => allProjects.push(p)); }
-        if (typeof projects !== 'undefined') projects.forEach(p => allProjects.push(p));
-        
-        // Assumes 'dayLabel' or 'day' is the variable holding your project ID in this function
-        const matchedProj = allProjects.find(p => String(p.id) === String(typeof dayLabel !== 'undefined' ? dayLabel : '')); 
-        if (matchedProj && matchedProj.sector) sectorName = matchedProj.sector;
+    // Creator 1-Click Approval Action Button
+    let creatorActionBtn = '';
+    if (isAdminLogin && isEvaluating) {
+        creatorActionBtn = `
+            <button onclick="approveLearnerSubmission('${userId}', ${sub.milestoneId || 1}, '${normalizedType}', '${actualDay}', ${lcReward})" class="btn-primary py-2.5 px-4 text-xs">
+                <i class="fas fa-check-circle mr-1.5 text-emerald-300"></i> Approve & Finalize +${lcReward} LCs
+            </button>
+        `;
     }
 
-    // 1.5 Determine the Badge Status
-    let lcBadgeHtml = `
-        <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
-            <i class="fas fa-check-circle"></i> +${lcReward !== null ? lcReward : 33} LCs Awarded
-        </span>`;
-
     const modalHtml = `
-        <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[100] flex items-center justify-center">
-            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
-            <div class="relative w-full max-w-2xl bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-8 m-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
-                <div class="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-6 border-b border-slate-700 pb-4 gap-3">
-                    <div class="pr-6">
-                        <h3 class="text-xl font-bold text-white flex items-start gap-3">
-                            <i class="fas ${normalizedType === 'projects' ? 'fa-briefcase text-emerald-400' : 'fa-file-alt text-indigo-400'} mt-1"></i> 
-                            <span class="leading-tight">${displayTitle}</span>
-                        </h3>
-                        <div class="flex flex-wrap items-center gap-3 mt-3">
-                            ${lcBadgeHtml}
-                            <span class="text-xs text-slate-400"><i class="fas fa-clock mr-1"></i> Submitted: <span class="font-bold text-slate-300">${exactTimeStr}</span></span>
+        <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center">
+            <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
+            <div class="relative bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
+                
+                <div class="flex items-start justify-between border-b border-slate-700 pb-4 mb-6">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="text-xl font-bold text-white font-heading">${displayTitle}</h3>
+                            ${isEvaluating ? `
+                                <span class="badge-pill badge-amber text-[10px]"><i class="fas fa-hourglass-half fa-spin"></i> Evaluating...</span>
+                            ` : `
+                                <span class="badge-pill badge-emerald text-[10px]"><i class="fas fa-check-circle"></i> +${lcReward} LCs Awarded</span>
+                            `}
+                        </div>
+                        <p class="text-xs text-slate-400">Submitted on ${exactTimeStr}</p>
+                    </div>
+                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                ${isEvaluating ? `
+                    <div class="mb-6 p-4 bg-amber-950/40 border border-amber-600/40 rounded-xl text-amber-200 text-xs flex items-center gap-3">
+                        <i class="fas fa-user-shield text-2xl text-amber-400 shrink-0"></i>
+                        <div>
+                            <p class="font-bold text-amber-300">Quality & Integrity Verification in Progress</p>
+                            <p class="text-slate-400 text-[11px] mt-0.5">This submission is undergoing strict quality verification. Expected Reward: <strong class="text-amber-400">+${lcReward} LCs</strong>.</p>
                         </div>
                     </div>
-                    
-                    <!-- NEW WRAPPER: Sector Badge + Close Button -->
-                    <div class="absolute top-6 right-6 flex items-center gap-3">
-                        ${normalizedType === 'projects' ? `<span class="text-[15px] font-bold tracking-widest text-emerald-400 uppercase bg-emerald-400/10 px-3 py-1 rounded-lg border border-emerald-500/20 shadow-sm">${sectorName}</span>` : ''}
-                        
-                        <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-500/80 w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-md">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    
-                </div>
+                ` : ''}
+
                 ${answersHtml}
+
+                <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    ${creatorActionBtn}
+                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="btn-secondary py-2 px-4 text-xs ml-auto">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// 7. CREATOR 1-CLICK APPROVAL FUNCTION
+async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
+    let allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    const idx = allSubs.findIndex(s => s.userId === userId && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(type) && String(s.day) === String(day));
+    
+    if (idx > -1) {
+        allSubs[idx].status = 'completed';
+        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
+    }
+
+    recordLevelUpReward(userId, type, msId, lcReward, `cMPLi ${type.toUpperCase()} Day ${day} Approved`);
+
+    try {
+        await fetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId,
+                milestoneId: msId,
+                type,
+                day,
+                status: 'completed',
+                lcReward
+            })
+        });
+    } catch (e) {
+        console.error('Server sync error for approval:', e);
+    }
+
+    document.getElementById('viewSubmissionModalDynamic')?.remove();
+    alert(`🎉 Submission for Day ${day} approved! +${lcReward} LCs credited.`);
+    
+    if (typeof renderAdminCohortSubmissions === 'function') {
+        renderAdminCohortSubmissions();
+    }
 }
 
 // ================= ADMIN LEVEL-UP ENGINE =================
@@ -4195,8 +4225,11 @@ function saveAdminCheckinConfig(dateKey) {
             milestoneId: activeAdminMilestoneId,
             moduleName: activeAdminModule,
             dateKey: dateKey,
-            config: dayConfig
+            config: dayConfig,
+            allConfigs: customMilestoneConfigs
         })
+    }).then(r => r.json()).then(data => {
+        console.log('✅ Milestone configs synced to server:', data);
     }).catch(e => console.error('Server sync error:', e));
 
     renderAdminCheckinsList();
