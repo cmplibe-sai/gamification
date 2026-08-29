@@ -54,295 +54,19 @@ async function downloadMediaDirectly(url, filename) {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    } catch (e) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename || 'download_reflection';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    }
-}
-window.downloadMediaDirectly = downloadMediaDirectly;
-
-
-// ==============================================================
-// TAGMANGO LIVE IN-COMMUNITY WALLET API SYNC
-// ==============================================================
-async function assignTagMangoPoints(userId, points, description, type = 'community') {
-    try {
-        const apiKey = window.APP_CONFIG?.tagmangoKey || '117769efad62c64b63e8a71f7fcb16d10c144e6ef402ff6e927c32724490f5c6b653133ffbc8daebcb72798e6ad48a60424564c7816db73650cbe1131c9443c9';
-        const hostUrl = window.APP_CONFIG?.hostUrl || 'learn.cmplibe.com';
-        
-        const res = await fetch('https://api-prod-new.tagmango.com/api/v1/external/gamification/points/assign', {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'x-whitelabel-host': hostUrl
-            },
-            body: JSON.stringify({
-                fanIds: [userId],
-                score: Number(points) || 33,
-                description: description || `[AI Approved] Milestone-1 Day-1 Check-in`,
-                type: type,
-                date: new Date().toISOString()
-            })
-        });
-        const data = await res.json();
-        console.log('✅ TagMango Live Wallet Response:', data);
-        return data;
-    } catch (e) {
-        console.error('TagMango Wallet API Error:', e);
-    }
-}
-window.assignTagMangoPoints = assignTagMangoPoints;
-
-
-// ==============================================================
-// DEFAULT cMPLi POD QUESTIONS POOL
-// ==============================================================
-function getPodQuestionsPool() {
-    return [
-        { id: 'pod_q_1', title: "What is the core driver of long-term habit consistency discussed in today's podcast?", type: "mcq", options: ["Intrinsic Identity Shift & Daily Micro-actions", "External Pressure only", "Random Motivation Spikes", "Waiting for perfect conditions"], correctOption: 0, pts: 11 },
-        { id: 'pod_q_2', title: "What primary method was recommended for handling unexpected daily schedule disruptions?", type: "mcq", options: ["If-Then Implementation Intentions", "Abandoning the weekly goal", "Skipping without reflection", "Immediate panic"], correctOption: 0, pts: 11 },
-        { id: 'pod_q_3', title: "Which mindset separates a Challenge Embracer from a passive learner?", type: "mcq", options: ["Viewing friction & feedback as fuel for growth", "Avoiding all challenging tasks", "Seeking quick shortcuts", "Focusing solely on certificates"], correctOption: 0, pts: 11 },
-        { id: 'pod_q_4', title: "How does deliberate daily reflection impact skill acquisition?", type: "mcq", options: ["Consolidates neural pathways and converts experience into intuition", "Has no noticeable effect", "Slows down practical learning", "Only matters for academic tests"], correctOption: 0, pts: 11 },
-        { id: 'pod_q_5', title: "What is the recommended approach to high-friction tasks?", type: "mcq", options: ["Tackle them in the first 90 minutes of the morning", "Procrastinate until late night", "Delegate everything immediately", "Avoid them entirely"], correctOption: 0, pts: 11 }
-    ];
-}
-
-// app.js
-
-// --- "GOD MODE" TEST ACCOUNTS ---
-// These accounts can submit check-ins in the past or future to test the system.
-const TEST_EMAILS = [
-    'saiyedamala02@gmail.com', 
-    'engineersai02@gmail.com'
-];
-
-function isTestUser() {
-    return currentUser && (TEST_EMAILS.includes(currentUser.email) || isAdminLogin);
-}
-
-// 1. Extract arrays safely from the loaded data files
-const actualScores = (typeof scoresData !== 'undefined' && scoresData.result) ? scoresData.result : [];
-const actualUsers = (typeof usersData !== 'undefined' && usersData.result) ? usersData.result : [];
-const actualCourses = (typeof coursesData !== 'undefined' && coursesData.result && coursesData.result.subscriptions) ? coursesData.result.subscriptions : [];
-const activeReferenceData = typeof referenceData !== 'undefined' ? referenceData : {};
-
-// --- Level-Up Settings & State ---
-let levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || [];
-let userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
-let activeMilestoneId = null;
-
-let testModeOverrides = {};
-function forceUnlockModule(mod) {
-    testModeOverrides[mod] = true;
-    switchMilestoneTab(mod);
-}
-
-// The 4 Core Gamified Milestones
-const milestoneConfig = [
-    { 
-        id: 1, 
-        code: 'EMBRACER', 
-        name: "cMPLi Challenge Embracer", 
-        subtitle: "Foundation Phase (~21 Days)", 
-        durationDays: 21, 
-        modules: ['dip', 'pod'],
-        defaultModules: ['dip', 'pod'], 
-        desc: "Strictly 21 Days continuous baseline. Form morning reflection habits with cMPLi Dip and explore audio insights with cMPLi POD.", 
-        rules: "Completion % must be >90%. Complete daily cMPLi Dip (05:00 AM - 05:00 PM, 33 LCs) and cMPLi POD audio quizzes (33 LCs) to qualify for promotion." 
-    },
-    { 
-        id: 2, 
-        code: 'CURIOUS', 
-        name: "cMPLi Curious", 
-        subtitle: "Exploration Phase (~4 Months)", 
-        durationDays: 120, 
-        modules: ['dip', 'pod', 'immerse'],
-        defaultModules: ['dip', 'pod', 'immerse'], 
-        desc: "~4 Months adaptive journey. Broaden perspectives, continue daily Dip & POD, and unlock cMPLi Immerse deep-dives.", 
-        rules: "Continuous Dip (6 days/week) & POD Quizzes. cMPLi Immerse deep-dives unlock upon satisfying activity criteria. Minimum benchmark LCs required to advance." 
-    },
-    { 
-        id: 3, 
-        code: 'COMMITTED', 
-        name: "cMPLi Committed", 
-        subtitle: "Execution Phase (~4 Months)", 
-        durationDays: 120, 
-        modules: ['dip', 'pod', 'immerse', 'projects'],
-        defaultModules: ['dip', 'pod', 'immerse', 'projects'], 
-        desc: "~4 Months adaptive execution. Execute cMPLi-ai real-world challenges, continue Dip, POD, and Immerse deep dives.", 
-        rules: "Consistent Dip & POD + Real-world execution projects. Achieve required benchmark LCs for capstone eligibility." 
-    },
-    { 
-        id: 4, 
-        code: 'FUTURE_READI', 
-        name: "cMPLi futureREadi earliTalent", 
-        subtitle: "Capstone & Corporate Phase (~4-5 Months)", 
-        durationDays: 150, 
-        modules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'],
-        defaultModules: ['dip', 'pod', 'projects', 'problem_solution', 'residency'], 
-        desc: "Final frontier of leadership. Engage in Corporate Residency, Problem-Solution Insight Engine, and daily Dip & POD mastery.", 
-        rules: "Complete Corporate Residency immersion and Problem-Solution capstone deliverables to attain the ultimate cMPLi futureREadi credential." 
-    }
-];
-
-const ALL_PLATFORM_MODULES = [
-    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
-    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Daily Audio Insights + Comprehension Quiz' },
-    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-moon text-cyan-400', desc: 'Evening Deep-Dive Reflections (06:30 PM - 07:00 PM)' },
-    { code: 'projects', name: 'cMPLi Real-world (cMPLi-ai)', icon: 'fa-robot text-purple-400', desc: 'Industry Challenges & Execution Projects' },
-    { code: 'problem_solution', name: 'cMPLi Problem-Solution', icon: 'fa-brain text-emerald-400', desc: 'Insight Engine & Analytical Problem Solving' },
-    { code: 'residency', name: 'cMPLi Corporate Residency', icon: 'fa-building text-blue-400', desc: 'Corporate Placement & Industry Immersion' }
-];
-
-function getEnabledModulesForMilestone(msId) {
-    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
-    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
-        // Filter out any undefined or empty strings
-        return saved[msId].filter(m => m && m !== 'undefined');
-    }
-    const ms = milestoneConfig.find(m => m.id === msId);
-    return (ms && ms.defaultModules) ? [...ms.defaultModules] : ['dip', 'pod'];
-}
-
-// Helper to get enabled modules for a milestone (configured by Creator)
-function getEnabledModulesForMilestone(msId) {
-    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
-    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
-        return saved[msId];
-    }
-    const ms = milestoneConfig.find(m => m.id === msId);
-    return ms ? [...ms.defaultModules] : ['dip', 'pod'];
-}
-
-function toggleMilestoneModuleAccess(msId, moduleCode) {
-    let saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
-    let current = getEnabledModulesForMilestone(msId);
-    if (current.includes(moduleCode)) {
-        if (current.length === 1) {
-            alert('At least one module must remain active in this milestone.');
-            return;
+    // Auto-refresh active views if new submissions arrive
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
         }
-        current = current.filter(m => m !== moduleCode);
-    } else {
-        current.push(moduleCode);
-    }
-    saved[msId] = current;
-    localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
-    
-    // Re-render views
-    if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
-    if (typeof openAdminMilestone === 'function' && activeAdminMilestoneId === msId) openAdminMilestone(msId);
-}
-
-// --- Global State Management ---
-let currentUser = null;
-let currentScoreObj = null; 
-let currentView = 'sector';
-let currentFilter = 'All';
-let customerProjectFilter = 'All';
-let selectedProject = null;
-let isAdminLogin = false;
-let isCampusPartner = false; // NEW: Partner Role
-let partnerAllowedMangoes = []; // NEW: Partner's assigned cohorts
-let tempLoginId = '';
-
-// NEW: Campus Partner Database
-// Format: { "partner_email": ["mango_id_1", "mango_id_2"] }
-
-// --- GLOBAL SERVER SYNCHRONIZATION ENGINE ---
-async function syncGlobalServerData() {
-    try {
-        const [subsRes, configsRes, projectsRes, accessRes] = await Promise.allSettled([
-            fetch('/api/submissions').then(r => r.json()),
-            fetch('/api/milestone-configs').then(r => r.json()),
-            fetch('/api/projects').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json())
-        ]);
-
-        // 1. Milestone Configs Sync (Bidirectional Safe Merge)
-        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
-            const serverConfigs = configsRes.value.data;
-            let localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
-
-            if (Object.keys(serverConfigs).length === 0 && Object.keys(localConfigs).length > 0) {
-                // Seed server with local configurations if server is empty
-                fetch('/api/milestone-configs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ allConfigs: localConfigs })
-                }).catch(() => {});
-            } else {
-                for (const ms in serverConfigs) {
-                    if (!localConfigs[ms]) localConfigs[ms] = {};
-                    for (const mod in serverConfigs[ms]) {
-                        if (!localConfigs[ms][mod]) localConfigs[ms][mod] = {};
-                        Object.assign(localConfigs[ms][mod], serverConfigs[ms][mod]);
-                    }
-                }
-                customMilestoneConfigs = localConfigs;
-                localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
-            }
+        if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
+            renderLearnerTimeline();
         }
-
-        // 2. Submissions Sync (Bidirectional Safe Merge & Credit ONLY upon 'completed')
-        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
-            const serverData = subsRes.value.data;
-            let localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-
-            if (serverData.length === 0 && localData.length > 0) {
-                // Seed server with local submissions if server restarted
-                localData.forEach(sub => {
-                    fetch('/api/submissions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(sub)
-                    }).catch(() => {});
-                });
-            } else {
-                serverData.forEach(s => {
-                    const idx = localData.findIndex(l => (
-                        (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
-                        String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
-                        normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
-                        String(l.day !== undefined && l.day !== null ? l.day : l.date) === String(s.day !== undefined && s.day !== null ? s.day : s.date)
-                    ));
-
-                    if (idx > -1) {
-                        const prevStatus = localData[idx].status;
-                        localData[idx] = { ...localData[idx], ...s };
-
-                        // Credit points ONLY when Make.com or Creator transitions status from 'evaluating' to 'completed'
-                        if (prevStatus === 'evaluating' && s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
-                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
-                        }
-                    } else {
-                        localData.push(s);
-                        if (s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
-                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
-                        }
-                    }
-                });
-                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
-            }
-        }
-
-        // 3. Level-Up Access Sync
-        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
-            levelUpAccessConfig = accessRes.value.data;
-            localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-        }
-
     } catch (e) {
         console.warn('Server sync offline mode:', e);
     }
 }
 syncGlobalServerData();
-setInterval(syncGlobalServerData, 4000); // Live poll every 5 seconds for cross-browser sync
+setInterval(syncGlobalServerData, 3000); // Live poll every 3 seconds for real-time cross-browser harmony // Live poll every 5 seconds for cross-browser sync
 
 let campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
     'campus@partners.com': ['6a168e4213e4e9a10984b164'    ] // We will use this to test!
@@ -3761,22 +3485,44 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 }
 
 function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
-    const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     const normalizedType = normalizeLevelUpType(type);
-    const msId = activeMilestoneId || activeAdminMilestoneId || 1;
+    const msId = (typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId) ? activeAdminMilestoneId : ((typeof activeMilestoneId !== 'undefined' && activeMilestoneId) ? activeMilestoneId : 1);
+    
+    // Retrieve all submissions associated with this user via ID, Email, or Phone
+    const userSubs = getUserSubmissionsByUserId(userId);
 
-    let sub = allSubs.find(s => 
-        (s.userId === userId || s.userEmail === userId) && 
-        String(s.milestoneId || 1) === String(msId) && 
-        normalizeLevelUpType(s.type) === normalizedType && 
-        (String(s.day) === String(dayLabel) || s.date === dayLabel || String(s.sessionDay) === String(dayLabel))
-    );
+    // 1. Direct match by day / sessionDay / dateKey / date
+    let sub = userSubs.find(s => {
+        const subMs = s.milestoneId || 1;
+        const subType = normalizeLevelUpType(s.type);
+        if (subType !== normalizedType) return false;
+        if (String(subMs) !== String(msId)) return false;
+        
+        if (dayLabel !== undefined && dayLabel !== null) {
+            if (String(s.day) === String(dayLabel)) return true;
+            if (String(s.sessionDay) === String(dayLabel)) return true;
+            if (s.date && String(s.date) === String(dayLabel)) return true;
+            if (s.dateKey && String(s.dateKey) === String(dayLabel)) return true;
+        }
+        return false;
+    });
+
+    // 2. Failsafe across milestone or date key
+    if (!sub) {
+        sub = userSubs.find(s => normalizeLevelUpType(s.type) === normalizedType && (String(s.day) === String(dayLabel) || s.date === dayLabel || s.dateKey === dayLabel));
+    }
+
+    // 3. Absolute failsafe: if user has any submission for this module, open the latest
+    if (!sub && userSubs.length > 0) {
+        sub = userSubs.find(s => normalizeLevelUpType(s.type) === normalizedType) || userSubs[userSubs.length - 1];
+    }
 
     if (!sub) {
+        // Search the global DB array directly as final fallback
+        const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
         sub = allSubs.find(s => 
-            (s.userId === userId || s.userEmail === userId) && 
-            normalizeLevelUpType(s.type) === normalizedType && 
-            (String(s.day) === String(dayLabel) || s.date === dayLabel)
+            (String(s.userId) === String(userId) || (s.userEmail && userId && s.userEmail.toLowerCase() === String(userId).toLowerCase())) &&
+            normalizeLevelUpType(s.type) === normalizedType
         );
     }
 
