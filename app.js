@@ -1,4 +1,37 @@
 
+function toggleMediaMenu(btn) {
+    const parent = btn.closest('.relative');
+    const menu = parent ? parent.querySelector('.media-dropdown-menu') : null;
+    if (menu) {
+        // Close all other menus first
+        document.querySelectorAll('.media-dropdown-menu').forEach(m => {
+            if (m !== menu) m.classList.add('hidden');
+        });
+        menu.classList.toggle('hidden');
+    }
+}
+
+function playEmbeddedMedia(btn, url) {
+    const card = btn.closest('.relative').closest('.p-4') || btn.closest('.glass-card') || btn.closest('.space-y-3');
+    const player = card ? card.querySelector('audio, video') : null;
+    if (player) {
+        player.play();
+    }
+    const menu = btn.closest('.media-dropdown-menu');
+    if (menu) menu.classList.add('hidden');
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.media-dropdown-menu') && !e.target.closest('button[onclick*="toggleMediaMenu"]')) {
+        document.querySelectorAll('.media-dropdown-menu').forEach(m => m.classList.add('hidden'));
+    }
+});
+
+window.toggleMediaMenu = toggleMediaMenu;
+window.playEmbeddedMedia = playEmbeddedMedia;
+
+
 async function downloadMediaDirectly(url, filename) {
     if (!url) return;
     try {
@@ -2547,27 +2580,47 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
                 const downloadName = q.fileName || q.answer || `submission_${q.type}_day_${dayNum}`;
                 
                 contentHtml += `
-                <div class="p-4 bg-slate-900/90 rounded-2xl border border-indigo-500/40 space-y-3 mb-2">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                            <i class="fas fa-check-circle"></i> ${q.type === 'audio' ? 'Recorded Audio Reflection' : (q.type === 'video' ? 'Recorded Video Reflection' : 'Uploaded Deliverable')}
-                        </span>
-                        ${fileUrl ? `
-                            <a href="${fileUrl}" download="${downloadName}" target="_blank" class="btn-secondary py-1.5 px-3 text-xs inline-flex items-center gap-1.5 text-indigo-300 hover:text-white shrink-0">
-                                <i class="fas fa-download"></i> Download File
-                            </a>
-                        ` : ''}
+                <div class="p-4 bg-slate-900/90 rounded-2xl border border-indigo-500/40 space-y-3 mb-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-indigo-400 text-lg shadow-inner">
+                                <i class="fas ${q.type === 'audio' ? 'fa-music' : (q.type === 'video' ? 'fa-video' : 'fa-file-alt')}"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold text-white">${q.fileName || (q.type === 'audio' ? 'Audio File' : (q.type === 'video' ? 'Video File' : 'Deliverable Document'))}</p>
+                                <p class="text-[10px] text-slate-400">${q.type === 'audio' ? 'Recorded Audio Reflection' : (q.type === 'video' ? 'Recorded Video Reflection' : 'Uploaded File')}</p>
+                            </div>
+                        </div>
+
+                        <!-- Img-2 Style Dropdown Menu Trigger -->
+                        <div class="relative">
+                            <button type="button" onclick="toggleMediaMenu(this)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div class="media-dropdown-menu hidden absolute right-0 top-10 w-36 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl z-30 py-1.5 backdrop-blur-md">
+                                ${fileUrl ? `
+                                    <button type="button" onclick="playEmbeddedMedia(this, '${fileUrl}')" class="w-full text-left px-4 py-2 text-xs text-white hover:bg-indigo-600/30 flex items-center gap-2 transition-colors">
+                                        <i class="fas fa-play text-indigo-400"></i> Play
+                                    </button>
+                                    <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${downloadName}')" class="w-full text-left px-4 py-2 text-xs text-white hover:bg-indigo-600/30 flex items-center gap-2 transition-colors">
+                                        <i class="fas fa-download text-emerald-400"></i> Download
+                                    </button>
+                                ` : '<span class="block px-4 py-1.5 text-[11px] text-slate-500">No file URL</span>'}
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Direct In-Page Player -->
                     ${fileUrl ? `
                         <div class="pt-1">
                             ${q.type === 'audio' || fileUrl.includes('audio') || fileUrl.includes('mp3') || fileUrl.includes('m4a') || fileUrl.includes('wav') ? `
-                                <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner" src="${fileUrl}"></audio>
+                                <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-800 shadow-inner" src="${fileUrl}"></audio>
                             ` : (q.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm') ? `
-                                <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
+                                <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-800 shadow-inner" src="${fileUrl}"></video>
                             ` : `
-                                <a href="${fileUrl}" target="_blank" class="inline-flex items-center gap-2 text-indigo-400 hover:underline text-xs">
-                                    <i class="fas fa-external-link-alt"></i> Open Document in New Tab
-                                </a>
+                                <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${downloadName}')" class="btn-secondary py-2 px-4 text-xs flex items-center gap-2 text-indigo-300">
+                                    <i class="fas fa-file-download"></i> Download Document Directly
+                                </button>
                             `)}
                         </div>
                     ` : '<p class="text-xs text-slate-400">File recording attached and verified.</p>'}
@@ -5548,34 +5601,48 @@ function openPodSessionModal(dayNum, dateKey) {
             const progressPercent = document.getElementById('podAudioProgressPercent');
 
             if (player) {
-                player.addEventListener('timeupdate', () => {
-                    if (player.duration) {
-                        const pct = Math.round((player.currentTime / player.duration) * 100);
-                        if (progressPercent) progressPercent.innerText = `${pct}% Listened`;
-                        if (statusText) statusText.innerHTML = `<i class="fas fa-volume-up text-emerald-400 mr-1"></i> Listening to Episode...`;
-                        
-                        // Unlock if finished or reached 95%
-                        if (pct >= 95 || player.ended) {
-                            if (lockedNotice) lockedNotice.classList.add('hidden');
-                            if (questionsArea) questionsArea.classList.remove('hidden');
-                            if (submitBtn) {
-                                submitBtn.disabled = false;
-                                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                            }
-                            if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
-                        }
-                    }
-                });
+                let maxAudibleTime = 0;
+            
+            // Anti-Scrubbing: Prevent dragging or skipping forward
+            player.addEventListener('timeupdate', () => {
+                if (player.currentTime > maxAudibleTime + 1.5) {
+                    player.currentTime = maxAudibleTime; // Snap back immediately!
+                } else {
+                    maxAudibleTime = Math.max(maxAudibleTime, player.currentTime);
+                }
 
-                player.addEventListener('ended', () => {
-                    if (lockedNotice) lockedNotice.classList.add('hidden');
-                    if (questionsArea) questionsArea.classList.remove('hidden');
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                if (player.duration) {
+                    const pct = Math.min(100, Math.round((maxAudibleTime / player.duration) * 100));
+                    if (progressPercent) progressPercent.innerText = `${pct}% Listened`;
+                    if (statusText) statusText.innerHTML = `<i class="fas fa-volume-up text-emerald-400 mr-1"></i> Listening (Seeking Disabled)...`;
+
+                    if (pct >= 95 || player.ended) {
+                        if (lockedNotice) lockedNotice.classList.add('hidden');
+                        if (questionsArea) questionsArea.classList.remove('hidden');
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        }
+                        if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
                     }
-                    if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
-                });
+                }
+            });
+
+            player.addEventListener('seeking', () => {
+                if (player.currentTime > maxAudibleTime + 1.5) {
+                    player.currentTime = maxAudibleTime; // Snap back!
+                }
+            });
+
+            player.addEventListener('ended', () => {
+                if (lockedNotice) lockedNotice.classList.add('hidden');
+                if (questionsArea) questionsArea.classList.remove('hidden');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+            });
             }
         }, 100);
     }

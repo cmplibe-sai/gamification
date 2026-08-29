@@ -57,6 +57,55 @@
             }
           ]
         }
+      },
+      "pod": {
+        "2026-08-29": {
+          "date": "2026-08-29",
+          "audioTitle": "cMPLi POD Morning Insights",
+          "audioUrl": "",
+          "lcOnTime": 33,
+          "lcLate": 3,
+          "startTime": "05:00",
+          "endTime": "17:00",
+          "questions": [
+            {
+              "title": "What is Capital Expenditure (CapEx)?",
+              "type": "mcq",
+              "options": [
+                " Billion",
+                " Million",
+                " Billion",
+                " Million"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "title": "Which infrastructure sector is driving rapid growth?",
+              "type": "mcq",
+              "options": [
+                "Automobile",
+                "Data Centers",
+                "Food Processing",
+                "Consumer Goods"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "title": "What does HVAC stand for in project facilities?",
+              "type": "mcq",
+              "options": [
+                "Heavy Vehicles & Cargo",
+                "Heating, Ventilation & Air Conditioning",
+                "High Voltage AC",
+                "Housing & Commercial"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            }
+          ]
+        }
       }
     }
   },
