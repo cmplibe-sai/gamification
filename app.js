@@ -2314,8 +2314,14 @@ function getMilestoneStartDate(msId) {
 
 // --- 1. UPGRADED: Get Config with Module Isolation ---
 function getAdminConfigForDate(dateKey, moduleName = 'dip') {
-    const customConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || customMilestoneConfigs || {};
-    const msId = activeMilestoneId || 1;
+    let localStore = {};
+    try {
+        localStore = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+    } catch(e) {}
+    
+    // Merge in-memory customMilestoneConfigs with localStore for 100% complete data
+    const customConfigs = { ...localStore, ...customMilestoneConfigs };
+    const msId = activeMilestoneId || activeAdminMilestoneId || 1;
     
     if (!dateKey) dateKey = getLocalDateKey(new Date());
 
@@ -2345,17 +2351,18 @@ function getAdminConfigForDate(dateKey, moduleName = 'dip') {
         }
     }
 
-    // 3. Fallback: If pod module has only one configured date, return that config so student is never stuck
+    // 3. Fallback for POD: If date has no specific config, look up any configured POD setup across milestones
     if (moduleName === 'pod') {
-        const podConfigs = (customConfigs[msId] && customConfigs[msId]['pod']) ? customConfigs[msId]['pod'] : {};
-        const configKeys = Object.keys(podConfigs);
-        if (configKeys.length > 0) {
-            // Find most recent configured POD setup
-            return podConfigs[configKeys[configKeys.length - 1]];
+        for (const id of [msId, 1, 2, 3, 4]) {
+            if (customConfigs[id] && customConfigs[id]['pod']) {
+                const podKeys = Object.keys(customConfigs[id]['pod']);
+                if (podKeys.length > 0) {
+                    return customConfigs[id]['pod'][podKeys[podKeys.length - 1]];
+                }
+            }
         }
     }
     
-    // 4. Legacy format fallback
     if (customConfigs[msId] && customConfigs[msId][dateKey]) {
         return customConfigs[msId][dateKey];
     }
@@ -2502,13 +2509,34 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
 
         if (isCompleted) {
             if (['audio', 'video', 'doc'].includes(q.type)) {
-                const fileUrl = q.fileData || q.data || (existingSub.media && existingSub.media.data) || (existingSub.extraData && existingSub.extraData.file && existingSub.extraData.file.data) || '';
-                const downloadName = q.fileName || q.answer || 'download';
-                contentHtml += `<div class="p-3 bg-slate-900 rounded-lg text-emerald-400 text-sm border border-slate-700">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <span><i class="fas fa-check-circle mr-2"></i> ${q.answer || 'File Attached'}</span>
-                        ${fileUrl ? `<a href="${fileUrl}" download="${downloadName}" target="_blank" class="inline-flex items-center gap-2 text-indigo-300 hover:text-indigo-200 text-xs font-bold"><i class="fas fa-download"></i> Download</a>` : ''}
+                const fileUrl = q.fileData || q.data || (existingSub.media && existingSub.media.data) || (existingSub.extraData && existingSub.extraData.file && existingSub.extraData.file.data) || (existingSub.mediaUrl) || '';
+                const downloadName = q.fileName || q.answer || `submission_${q.type}_day_${dayNum}`;
+                
+                contentHtml += `
+                <div class="p-4 bg-slate-900/90 rounded-2xl border border-indigo-500/40 space-y-3 mb-2">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                            <i class="fas fa-check-circle"></i> ${q.type === 'audio' ? 'Recorded Audio Reflection' : (q.type === 'video' ? 'Recorded Video Reflection' : 'Uploaded Deliverable')}
+                        </span>
+                        ${fileUrl ? `
+                            <a href="${fileUrl}" download="${downloadName}" target="_blank" class="btn-secondary py-1.5 px-3 text-xs inline-flex items-center gap-1.5 text-indigo-300 hover:text-white shrink-0">
+                                <i class="fas fa-download"></i> Download File
+                            </a>
+                        ` : ''}
                     </div>
+                    ${fileUrl ? `
+                        <div class="pt-1">
+                            ${q.type === 'audio' || fileUrl.includes('audio') || fileUrl.includes('mp3') || fileUrl.includes('m4a') || fileUrl.includes('wav') ? `
+                                <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner" src="${fileUrl}"></audio>
+                            ` : (q.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm') ? `
+                                <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
+                            ` : `
+                                <a href="${fileUrl}" target="_blank" class="inline-flex items-center gap-2 text-indigo-400 hover:underline text-xs">
+                                    <i class="fas fa-external-link-alt"></i> Open Document in New Tab
+                                </a>
+                            `)}
+                        </div>
+                    ` : '<p class="text-xs text-slate-400">File recording attached and verified.</p>'}
                 </div>`;
             } else {
                 contentHtml += `<div class="p-3 bg-slate-900 rounded-lg text-slate-300 text-sm border border-slate-700 whitespace-pre-wrap">${q.answer}</div>`;
@@ -2555,11 +2583,22 @@ function openSubmissionModal(dayNum, type = 'dip', referenceDate = null) {
 
         if (fileHref) {
             downloadHtml = `
-                <div class="bg-slate-900/70 rounded-xl border border-slate-700 p-4 mt-4">
-                    <p class="text-xs text-indigo-300 uppercase tracking-widest mb-2">Attached Proof</p>
-                    <a href="${fileHref}" download="${fileName}" target="_blank" class="inline-flex items-center gap-2 text-indigo-300 hover:text-indigo-200 transition-colors">
-                        <i class="fas fa-download"></i> Download ${fileName}
-                    </a>
+                <div class="bg-slate-900/90 rounded-2xl border border-indigo-500/40 p-4 mt-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-indigo-300 uppercase tracking-widest flex items-center gap-1.5">
+                            <i class="fas fa-play-circle text-indigo-400"></i> Attached Submission Proof
+                        </span>
+                        <a href="${fileHref}" download="${fileName}" target="_blank" class="btn-secondary py-1.5 px-3 text-xs inline-flex items-center gap-1.5 text-indigo-300 hover:text-white">
+                            <i class="fas fa-download"></i> Download ${fileName}
+                        </a>
+                    </div>
+                    <div>
+                        ${fileHref.includes('audio') || fileHref.includes('mp3') || fileHref.includes('m4a') || fileHref.includes('wav') ? `
+                            <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner" src="${fileHref}"></audio>
+                        ` : (fileHref.includes('video') || fileHref.includes('mp4') || fileHref.includes('webm') ? `
+                            <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileHref}"></video>
+                        ` : '')}
+                    </div>
                 </div>`;
         }
     }
@@ -5404,11 +5443,13 @@ function openPodSessionModal(dayNum, dateKey) {
                     <div class="pt-2">
                         ${audioUrl ? `
                             <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${audioUrl}"></audio>
+                        ` : (dayConfig.audioUrl ? `
+                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${dayConfig.audioUrl}"></audio>
                         ` : `
-                            <div class="p-3.5 bg-slate-900/80 rounded-xl border border-amber-500/30 text-center">
-                                <p class="text-xs text-amber-300 font-semibold"><i class="fas fa-info-circle mr-1.5"></i>Audio episode is streaming. Complete the comprehension quiz below.</p>
+                            <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                                <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded. Listen with earphones and complete the quiz below.</p>
                             </div>
-                        `}
+                        `)}
                     </div>
                 </div>
 
