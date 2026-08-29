@@ -75,7 +75,7 @@ const milestoneConfig = [
 // Module registry across platform
 const ALL_PLATFORM_MODULES = [
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
-    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Comprehension Quiz' },
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Randomized Comprehension Quiz' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-moon text-cyan-400', desc: 'Evening Deep-Dive Reflections (06:30 PM - 07:00 PM)' },
     { code: 'projects', name: 'cMPLi Real-world (cMPLi-ai)', icon: 'fa-robot text-purple-400', desc: 'Industry Challenges & Execution Projects' },
     { code: 'problem_solution', name: 'cMPLi Problem-Solution', icon: 'fa-brain text-emerald-400', desc: 'Insight Engine & Analytical Problem Solving' },
@@ -644,6 +644,76 @@ function renderAdminMilestoneGrid() {
     grid.innerHTML = gridCards;
 }
 
+function handleLockedClick(id, isUnlocked) {
+    if (!isUnlocked) alert(`You need to complete Milestone ${id - 1} to join this milestone.`);
+}
+
+// Function to let the learner enter the milestone view (UPDATED WITH START DATE)
+function openMilestone(id) {
+    activeMilestoneId = id;
+    const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
+    
+    if (!userMilestoneState[currentUser._id]) {
+        userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
+    }
+    
+    // --- START DATE ANCHOR ---
+    const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => normalizeLevelUpType(s.type) === 'dip');
+    const day1Sub = userSubs.find(s => String(s.day) === '1');
+    
+    if (day1Sub) {
+        const rawTime = day1Sub.dateKey || day1Sub.date || day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt;
+        if (rawTime) {
+            userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date(rawTime));
+        }
+    } else {
+        userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date());
+    }
+    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+
+    if (!userMilestoneState[currentUser._id].viewedTerms) {
+        userMilestoneState[currentUser._id].viewedTerms = [];
+    }
+    
+    if (id === 1 && !userMilestoneState[currentUser._id].viewedTerms.includes(id)) {
+        if (typeof openTermsModal === 'function') openTermsModal();
+        userMilestoneState[currentUser._id].viewedTerms.push(id);
+        localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+    }
+    
+    document.getElementById('milestoneGridContainer').classList.add('hidden');
+    const btnBack = document.getElementById('btnBackToGrid');
+    if(btnBack) btnBack.classList.remove('hidden');
+    
+    const detailContainer = document.getElementById('milestoneDetailContainer');
+    if(detailContainer) detailContainer.classList.remove('hidden');
+
+    const titleEl = document.getElementById('activeMilestoneTitle');
+    if(titleEl) titleEl.innerText = ms.name;
+    
+    const descEl = document.getElementById('activeMilestoneDesc');
+    if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
+    
+    // ONLY GET MODULES ENABLED BY CREATOR FOR THIS MILESTONE
+    const activeMods = getEnabledModulesForMilestone(id);
+
+    const subNavEl = document.getElementById('milestoneSubNav');
+    if(subNavEl) {
+        subNavEl.innerHTML = activeMods.map((modCode, i) => {
+            const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode, icon: 'fa-cube' };
+            const activeClass = i === 0 ? 'border-indigo-500 text-indigo-400 bg-indigo-950/40' : 'text-slate-400';
+            return `<button id="btnNav_${modCode}" onclick="switchMilestoneTab('${modCode}')" class="milestone-nav-btn px-4 py-2 rounded-xl font-bold text-xs border border-transparent transition-all ${activeClass} flex items-center gap-2">
+                <i class="fas ${modObj.icon}"></i> ${modObj.name}
+            </button>`;
+        }).join('');
+    }
+
+    // Default to the first enabled module
+    if (activeMods.length > 0) {
+        switchMilestoneTab(activeMods[0]);
+    }
+}
+
 function openAdminMilestone(id) {
     activeAdminMilestoneId = id;
     const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
@@ -699,7 +769,7 @@ function openAdminMilestone(id) {
         switchAdminMilestoneTab('completion');
     } else {
         if (btnCheckins) btnCheckins.style.display = 'block';
-        renderAdminCheckinsList();
+        switchAdminMilestoneTab('checkins');
     }
 }
 
@@ -732,31 +802,33 @@ function selectAdminConfigDate() {
 // --- NEW Admin State Management ---
 let activeAdminDateKey = null;
 
+function selectAdminConfigDate() {
+    const dateInput = document.getElementById('adminConfigDateInput');
+    const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
+    loadAdminCheckinEditor(selectedDate);
+}
+
 function switchAdminMilestoneTab(tabName) {
     const btnCheckins = document.getElementById('btnTabCheckins');
     const btnCompletion = document.getElementById('btnTabCompletion');
     const viewCheckins = document.getElementById('adminCheckinsConfigView');
     const viewCompletion = document.getElementById('adminCompletionView');
     
-    btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
-    btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
-    viewCheckins.classList.add('hidden');
-    viewCompletion.classList.add('hidden');
+    if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    if (viewCheckins) viewCheckins.classList.add('hidden');
+    if (viewCompletion) viewCompletion.classList.add('hidden');
     
     if (tabName === 'checkins') {
-        btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
-        viewCheckins.classList.remove('hidden');
+        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCheckins) viewCheckins.classList.remove('hidden');
         renderAdminCheckinsList(); 
-        if (activeAdminDateKey) {
-            loadAdminCheckinEditor(activeAdminDateKey);
-        } else {
-            const todayKey = isoDateKey(new Date());
-            activeAdminDateKey = todayKey;
-            loadAdminCheckinEditor(todayKey);
-        }
+        const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
+        activeAdminDateKey = todayKey;
+        loadAdminCheckinEditor(todayKey);
     } else {
-        btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
-        viewCompletion.classList.remove('hidden');
+        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+        if (viewCompletion) viewCompletion.classList.remove('hidden');
         renderAdminCohortSubmissions(); 
     }
 }
@@ -1927,3 +1999,95 @@ function startLiveSync() {
     }, 4000); // 4-second live bi-directional sync
 }
 startLiveSync();
+
+
+// --- LEARNER 4-MILESTONES GRID RENDERER ---
+function renderMilestoneGrid() {
+    const gridContainer = document.getElementById('milestoneGridContainer');
+    const detailContainer = document.getElementById('milestoneDetailContainer');
+    const btnBack = document.getElementById('btnBackToGrid');
+    
+    if (detailContainer) detailContainer.classList.add('hidden');
+    if (btnBack) btnBack.classList.add('hidden');
+    if (!gridContainer) return;
+    
+    gridContainer.classList.remove('hidden');
+
+    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
+    const isGodMode = typeof isTestUser === 'function' ? isTestUser() : false;
+
+    gridContainer.innerHTML = milestoneConfig.map(ms => {
+        const isUnlocked = isGodMode || isAdminLogin || ms.id <= highestUnlocked;
+        const isCurrent = ms.id === highestUnlocked;
+        const activeMods = getEnabledModulesForMilestone(ms.id);
+
+        return `
+        <div class="glass-card p-6 md:p-8 border-slate-800 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${isUnlocked ? 'hover:border-indigo-500/50 hover:shadow-2xl cursor-pointer' : 'opacity-60 bg-slate-950/60'}" onclick="${isUnlocked ? `openMilestone(${ms.id})` : `alert('Complete Milestone ${ms.id - 1} to unlock ${ms.name}')`}">
+            
+            ${isCurrent ? '<div class="absolute top-0 right-0 w-28 h-28 bg-indigo-500/10 rounded-bl-full pointer-events-none"></div>' : ''}
+
+            <div>
+                <div class="flex justify-between items-start mb-3">
+                    <span class="badge-pill ${isUnlocked ? 'badge-indigo' : 'bg-slate-800 text-slate-500'}">Milestone ${ms.id}</span>
+                    <span class="text-xs font-bold ${isCurrent ? 'text-indigo-400' : (isUnlocked ? 'text-emerald-400' : 'text-slate-500')}">
+                        ${isCurrent ? '<i class="fas fa-play-circle mr-1"></i> Current Level' : (isUnlocked ? '<i class="fas fa-check-circle mr-1"></i> Unlocked' : '<i class="fas fa-lock mr-1"></i> Locked')}
+                    </span>
+                </div>
+
+                <h3 class="text-xl font-bold text-white font-heading mt-1">${ms.name}</h3>
+                <p class="text-xs text-indigo-300 font-semibold mb-2">${ms.subtitle}</p>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4">${ms.desc}</p>
+
+                <div class="flex flex-wrap gap-1.5 pt-2">
+                    ${activeMods.map(mCode => {
+                        const mObj = ALL_PLATFORM_MODULES.find(m => m.code === mCode) || { name: mCode, icon: 'fa-cube' };
+                        return `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300"><i class="fas ${mObj.icon} mr-1"></i>${mObj.name}</span>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                <span class="text-xs text-slate-400 font-medium">${ms.durationDays} Days Duration</span>
+                <button class="btn-primary py-1.5 px-3 text-xs ${!isUnlocked ? 'opacity-50 pointer-events-none' : ''}">
+                    <span>${isUnlocked ? 'Enter Milestone' : 'Locked'}</span> <i class="fas fa-arrow-right text-[10px] ml-1"></i>
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function closeMilestoneView() {
+    activeMilestoneId = null;
+    renderMilestoneGrid();
+}
+
+// --- STUDENT PROMOTION ENGINE ---
+function openPromoteModal(userId, userName) {
+    const modal = document.getElementById('promoteStudentModal');
+    if (!modal) return;
+    document.getElementById('promoteUserId').value = userId;
+    document.getElementById('promoteUserName').innerText = userName || 'Student';
+    modal.classList.remove('hidden');
+}
+
+function closePromoteModal() {
+    const modal = document.getElementById('promoteStudentModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function confirmStudentPromotion() {
+    const userId = document.getElementById('promoteUserId').value;
+    const targetMsId = parseInt(document.getElementById('promoteTargetMilestone').value) || 2;
+    
+    if (!userMilestoneState[userId]) {
+        userMilestoneState[userId] = { highestUnlocked: 1, viewedTerms: [] };
+    }
+    userMilestoneState[userId].highestUnlocked = targetMsId;
+    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+
+    closePromoteModal();
+    alert('🎓 Student promoted successfully to Milestone ' + targetMsId + '!');
+    if (typeof renderAdminCohortSubmissions === 'function') {
+        renderAdminCohortSubmissions();
+    }
+}
