@@ -1,3 +1,17 @@
+
+// ==============================================================
+// DEFAULT cMPLi POD QUESTIONS POOL
+// ==============================================================
+function getPodQuestionsPool() {
+    return [
+        { id: 'pod_q_1', title: "What is the core driver of long-term habit consistency discussed in today's podcast?", type: "mcq", options: ["Intrinsic Identity Shift & Daily Micro-actions", "External Pressure only", "Random Motivation Spikes", "Waiting for perfect conditions"], correctOption: 0, pts: 11 },
+        { id: 'pod_q_2', title: "What primary method was recommended for handling unexpected daily schedule disruptions?", type: "mcq", options: ["If-Then Implementation Intentions", "Abandoning the weekly goal", "Skipping without reflection", "Immediate panic"], correctOption: 0, pts: 11 },
+        { id: 'pod_q_3', title: "Which mindset separates a Challenge Embracer from a passive learner?", type: "mcq", options: ["Viewing friction & feedback as fuel for growth", "Avoiding all challenging tasks", "Seeking quick shortcuts", "Focusing solely on certificates"], correctOption: 0, pts: 11 },
+        { id: 'pod_q_4', title: "How does deliberate daily reflection impact skill acquisition?", type: "mcq", options: ["Consolidates neural pathways and converts experience into intuition", "Has no noticeable effect", "Slows down practical learning", "Only matters for academic tests"], correctOption: 0, pts: 11 },
+        { id: 'pod_q_5', title: "What is the recommended approach to high-friction tasks?", type: "mcq", options: ["Tackle them in the first 90 minutes of the morning", "Procrastinate until late night", "Delegate everything immediately", "Avoid them entirely"], correctOption: 0, pts: 11 }
+    ];
+}
+
 // app.js
 
 // --- "GOD MODE" TEST ACCOUNTS ---
@@ -206,12 +220,14 @@ const LEVELUP_SUBMISSIONS_KEY = 'tagmangoLevelUpLedgerMock';
 const LEGACY_LEVELUP_SUBMISSIONS_KEY = 'mockLevelUpSubmissions';
 
 function normalizeLevelUpType(type) {
-    if (!type) return type;
+    if (!type) return 'dip';
     const raw = type.toString().toLowerCase().trim();
-    if (raw.includes('dip')) return 'dip';
-    if (raw.includes('immerse')) return 'immerse';
-    if (raw.includes('ios')) return 'ios';
-    if (raw.includes('project') || raw.includes('micro')) return 'projects';
+    if (raw === 'pod' || raw.includes('pod')) return 'pod';
+    if (raw === 'dip' || raw.includes('dip')) return 'dip';
+    if (raw === 'immerse' || raw.includes('immerse')) return 'immerse';
+    if (raw.includes('problem') || raw.includes('solution')) return 'problem_solution';
+    if (raw.includes('residency') || raw.includes('corp')) return 'residency';
+    if (raw.includes('project') || raw.includes('micro') || raw.includes('ai')) return 'projects';
     return raw.replace(/\s+/g, '');
 }
 
@@ -3900,7 +3916,7 @@ function renderAdminCohortSubmissions() {
 
         let calculatedLcs = 0;
         subs.forEach(s => {
-            if (String(s.milestoneId || 1) === String(activeAdminMilestoneId)) {
+            if (String(s.milestoneId || 1) === String(activeAdminMilestoneId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule)) {
                 calculatedLcs += Number(s.lcReward) || 0;
             }
         });
