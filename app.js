@@ -141,11 +141,11 @@ async function syncGlobalServerData() {
             fetch('/api/milestone-start-dates').then(r => r.json())
         ]);
 
-        if (subsRes.status === 'fulfilled' && subsRes.value.success && Array.isArray(subsRes.value.data)) {
+        // 1. Sync Submissions
+        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
             const serverData = subsRes.value.data;
             
-            // 1. Merge server submissions into local DB by (User + Milestone + Type + DayNumber)
             serverData.forEach(sSub => {
                 const sDay = String(sSub.day !== undefined && sSub.day !== null ? sSub.day : (sSub.date || ''));
                 const sType = normalizeLevelUpType(sSub.type || 'dip');
@@ -167,31 +167,37 @@ async function syncGlobalServerData() {
                 }
             });
             localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+        }
 
-            // 2. Upload any local submissions that are not yet on the server
-            localDB.forEach(lSub => {
-                const lDay = String(lSub.day !== undefined && lSub.day !== null ? lSub.day : (lSub.date || ''));
-                const lType = normalizeLevelUpType(lSub.type || 'dip');
-                const lMsId = String(lSub.milestoneId || 1);
-
-                const onServer = serverData.some(sSub => {
-                    const sameUser = (String(sSub.userId) === String(lSub.userId)) || 
-                        (sSub.userEmail && lSub.userEmail && sSub.userEmail.toLowerCase() === lSub.userEmail.toLowerCase());
-                    const sameMs = String(sSub.milestoneId || 1) === lMsId;
-                    const sameType = normalizeLevelUpType(sSub.type || 'dip') === lType;
-                    const sameDay = String(sSub.day !== undefined && sSub.day !== null ? sSub.day : (sSub.date || '')) === lDay;
-                    return sameUser && sameMs && sameType && sameDay;
+        // 2. Sync Custom Milestone Configs (Cross-Browser Question Setup)
+        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
+            const serverConfigs = configsRes.value.data;
+            let localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+            
+            Object.keys(serverConfigs).forEach(msId => {
+                if (!localConfigs[msId]) localConfigs[msId] = {};
+                Object.keys(serverConfigs[msId]).forEach(mod => {
+                    if (!localConfigs[msId][mod]) localConfigs[msId][mod] = {};
+                    Object.assign(localConfigs[msId][mod], serverConfigs[msId][mod]);
                 });
-
-                if (!onServer && lSub.userId) {
-                    fetch('/api/submissions', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(lSub)
-                    }).catch(e => console.error(e));
-                }
             });
-        }} catch (e) {
+            
+            customMilestoneConfigs = localConfigs;
+            localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+        }
+
+        // 3. Sync Level-Up Access
+        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
+            levelUpAccessConfig = accessRes.value.data;
+            localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+        }
+
+        // 4. Sync Dynamic Projects
+        if (projectsRes.status === 'fulfilled' && projectsRes.value && projectsRes.value.success && projectsRes.value.data) {
+            localStorage.setItem('customProjectsDB', JSON.stringify(projectsRes.value.data));
+        }
+
+    } catch (e) {
         console.warn('Server sync offline mode:', e);
     }
 }
@@ -2234,15 +2240,22 @@ function getMilestoneStartDate(msId) {
 
 // --- 1. UPGRADED: Get Config with Module Isolation ---
 function getAdminConfigForDate(dateKey, moduleName = 'dip') {
-    const customConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+    const customConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || customMilestoneConfigs || {};
+    const msId = activeMilestoneId || 1;
     
-    // Check for the new isolated structure first
-    if (activeMilestoneId && customConfigs[activeMilestoneId] && customConfigs[activeMilestoneId][moduleName]) {
-        return customConfigs[activeMilestoneId][moduleName][dateKey]; 
+    if (customConfigs[msId] && customConfigs[msId][moduleName] && customConfigs[msId][moduleName][dateKey]) {
+        return customConfigs[msId][moduleName][dateKey]; 
     }
+
+    for (const id in customConfigs) {
+        if (customConfigs[id] && customConfigs[id][moduleName] && customConfigs[id][moduleName][dateKey]) {
+            return customConfigs[id][moduleName][dateKey];
+        }
+    }
+    
     // Fallback for legacy configurations
-    if (activeMilestoneId && customConfigs[activeMilestoneId] && customConfigs[activeMilestoneId][dateKey]) {
-        return customConfigs[activeMilestoneId][dateKey];
+    if (customConfigs[msId] && customConfigs[msId][dateKey]) {
+        return customConfigs[msId][dateKey];
     }
     return null;
 }
@@ -2631,12 +2644,22 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
         responses: answers,
         submittedAt: webhookPayload.timestamp,
         lcReward: calculatedPoints, // Powers the Local Database memory
-        status: 'evaluating' // Set initial state to evaluating
+        status: 'completed'
     };
 
     let allUserSubsDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     allUserSubsDB.push(newSubmission);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
+    
+    // Credit reward immediately to learner ledger & score
+    recordLevelUpReward(currentUser._id, type, activeMilestoneId || 1, calculatedPoints, 'cMPLi ' + type.toUpperCase() + ' Day ' + dayNum + ' Complete');
+    
+    // Sync to backend Web Service
+    fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSubmission)
+    }).catch(e => console.error('Server sync submission error:', e));
     
     const modal = document.getElementById('dynamicSubmissionModal');
     if (modal) modal.remove();
@@ -3170,11 +3193,11 @@ function switchMilestoneTab(moduleName, btnElement = null) {
             if (existingSub) {
                 buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View</button>`;
             } else if (isToday) {
-                buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
             } else if (isPast) {
-                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
             } else {
-                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
+                buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${getLocalDateKey(calendarDate)}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
             }
 
             const iconClass = existingSub ? 'fa-check-circle text-emerald-400' : (isToday ? 'fa-play-circle text-emerald-500' : (isPast ? 'fa-times-circle text-red-400' : 'fa-flask text-indigo-400'));
@@ -3518,20 +3541,11 @@ function viewMySubmission(userId, dayLabel, type) {
     }
 
     // 1.5 Determine the Badge Status
-    let lcBadgeHtml = '';
-    if (sub.status === 'evaluating' || sub.status === 'pending') {
-        lcBadgeHtml = `
-            <span class="text-xs bg-amber-900/40 text-amber-400 border border-amber-700/50 px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
-                <i class="fas fa-spinner fa-spin"></i> Evaluating...
-            </span>`;
-    } else {
-        lcBadgeHtml = `
-            <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 px-3 py-1 rounded-full font-bold shadow-sm">
-                +${lcReward} LCs
-            </span>`;
-    }
+    let lcBadgeHtml = `
+        <span class="text-xs bg-emerald-900/40 text-emerald-400 border border-emerald-700/50 px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+            <i class="fas fa-check-circle"></i> +${lcReward !== null ? lcReward : 33} LCs Awarded
+        </span>`;
 
-    // 2. Now, here is your updated HTML block
     const modalHtml = `
         <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[100] flex items-center justify-center">
             <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
