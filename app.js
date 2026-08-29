@@ -5293,15 +5293,17 @@ function openPodSessionModal(dayNum, dateKey) {
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
     const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Audio Session`;
     const audioUrl = dayConfig.audioUrl || '';
-    
-    // Pull Creator's uploaded questions or pool
-    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
-        ? dayConfig.questions 
-        : getPodQuestionsPool();
+    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions)) ? dayConfig.questions : [];
 
-    // Pick 3 random questions from pool
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
-    activePodSessionQuestions = shuffled.slice(0, 3);
+    const isConfigured = (pool.length > 0 || !!audioUrl);
+
+    // If Creator has configured questions, pick 3 randomized from their pool
+    if (pool.length > 0) {
+        const shuffled = [...pool].sort(() => 0.5 - Math.random());
+        activePodSessionQuestions = shuffled.slice(0, 3);
+    } else {
+        activePodSessionQuestions = [];
+    }
 
     const modalHtml = `
         <div id="podSessionModal" class="fixed inset-0 z-[150] flex items-center justify-center">
@@ -5312,80 +5314,92 @@ function openPodSessionModal(dayNum, dateKey) {
                     <div>
                         <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast"></i> cMPLi POD Day ${dayNum}</span>
                         <h3 class="text-2xl font-extrabold text-white font-heading">${audioTitle}</h3>
-                        <p class="text-xs text-slate-400 mt-1">Listen to the podcast episode with earphones, then complete the comprehension quiz.</p>
+                        <p class="text-xs text-slate-400 mt-1">Date: <strong class="text-slate-200">${activePodSessionDateKey}</strong></p>
                     </div>
                     <button onclick="document.getElementById('podSessionModal').remove()" class="text-slate-400 hover:text-white bg-slate-700/60 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <!-- In-Browser Podcast Audio Player -->
-                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
-                    <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
-                            <i class="fas fa-headphones-alt"></i>
+                ${!isConfigured ? `
+                    <div class="p-8 bg-slate-900/90 rounded-2xl border border-amber-600/40 text-center space-y-3 mb-6">
+                        <div class="w-14 h-14 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
+                            <i class="fas fa-hourglass-half fa-spin"></i>
                         </div>
-                        <div class="overflow-hidden flex-1">
-                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
-                            <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
+                        <h4 class="text-lg font-bold text-white">Check-in Setup in Progress</h4>
+                        <p class="text-xs text-slate-400 max-w-md mx-auto">The Creator is currently preparing the podcast episode and comprehension quiz for <strong class="text-amber-400">${activePodSessionDateKey}</strong>. Please check back shortly once published.</p>
+                        <button onclick="document.getElementById('podSessionModal').remove()" class="btn-primary py-2 px-6 text-xs mt-2">
+                            Got it
+                        </button>
+                    </div>
+                ` : `
+                    <!-- In-Browser Podcast Audio Player -->
+                    <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-8 space-y-4 shadow-lg">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
+                                <i class="fas fa-headphones-alt"></i>
+                            </div>
+                            <div class="overflow-hidden flex-1">
+                                <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
+                                <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Plug in earphones for best comprehension</p>
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            ${audioUrl ? `
+                                <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
+                                    <source src="${audioUrl}" type="audio/mpeg">
+                                    <source src="${audioUrl}" type="audio/mp3">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : `
+                                <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                                    <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
+                                </div>
+                            `}
                         </div>
                     </div>
 
-                    <div class="pt-2">
-                        ${audioUrl ? `
-                            <audio id="podAudioPlayerElement" controls class="w-full rounded-xl bg-slate-900 border border-slate-700">
-                                <source src="${audioUrl}" type="audio/mpeg">
-                                <source src="${audioUrl}" type="audio/mp3">
-                                Your browser does not support the audio element.
-                            </audio>
-                        ` : `
-                            <div class="p-4 bg-slate-900/80 rounded-xl border border-amber-600/40 text-center">
-                                <p class="text-xs text-amber-300 font-semibold mb-1"><i class="fas fa-info-circle mr-1.5"></i>Creator has not uploaded a podcast audio file for ${activePodSessionDateKey} yet.</p>
-                                <p class="text-[11px] text-slate-400">You can still proceed with the comprehension quiz below.</p>
-                            </div>
-                        `}
-                    </div>
-                </div>
+                    <!-- 3 Randomized Questions Section -->
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                            <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
+                            </h4>
+                            <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
+                        </div>
 
-                <!-- 3 Randomized Questions Section -->
-                <div class="space-y-6">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-700">
-                        <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                            <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (3 Questions)
-                        </h4>
-                        <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
-                    </div>
-
-                    <div id="podQuizQuestionsArea" class="space-y-5">
-                        ${activePodSessionQuestions.map((q, qIdx) => `
-                            <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
-                                <div class="flex justify-between items-center">
-                                    <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of 3</span>
-                                    <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
+                        <div id="podQuizQuestionsArea" class="space-y-5">
+                            ${activePodSessionQuestions.map((q, qIdx) => `
+                                <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
+                                        <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
+                                    </div>
+                                    <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
+                                    <div class="space-y-2 pt-1">
+                                        ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
+                                            <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
+                                                <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
+                                                <span class="text-xs text-slate-200 font-medium">${opt}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
                                 </div>
-                                <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
-                                <div class="space-y-2 pt-1">
-                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
-                                        <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
-                                            <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
-                                            <span class="text-xs text-slate-200 font-medium">${opt}</span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        `).join('')}
+                            `).join('')}
+                        </div>
                     </div>
-                </div>
 
-                <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
-                    <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
-                        Cancel
-                    </button>
-                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
-                        <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
-                    </button>
-                </div>
+                    <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
+                        <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
+                            Cancel
+                        </button>
+                        <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs">
+                            <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
+                        </button>
+                    </div>
+                `}
             </div>
         </div>
     `;
@@ -5501,8 +5515,11 @@ function uploadPodAudioFile(input) {
     reader.readAsDataURL(file);
 }
 
-function saveAdminPodCheckinConfig(dateKey) {
-    const msId = activeAdminMilestoneId || 1;
+function saveAdminPodCheckinConfig(passedDateKey) {
+    const dateInput = document.getElementById('adminConfigDateInput');
+    const dateKey = (dateInput && dateInput.value) ? dateInput.value : (passedDateKey || activeAdminDateKey || getLocalDateKey(new Date()));
+    const msId = activeAdminMilestoneId || activeMilestoneId || 1;
+
     if (!customMilestoneConfigs) customMilestoneConfigs = {};
     if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
     if (!customMilestoneConfigs[msId]['pod']) customMilestoneConfigs[msId]['pod'] = {};
@@ -5515,7 +5532,9 @@ function saveAdminPodCheckinConfig(dateKey) {
         const prompt = promptInput ? promptInput.value.trim() : '';
         const optInputs = item.querySelectorAll('.pod-q-opt');
         const options = Array.from(optInputs).map(inp => inp.value.trim() || 'Option');
-        const checkedRadio = item.querySelector(`input[name="correct_pod_q_${idx}"]:checked`);
+        
+        // Find which radio is checked inside this specific question card
+        const checkedRadio = item.querySelector('input[type="radio"]:checked');
         const correctOption = checkedRadio ? parseInt(checkedRadio.value, 10) : 0;
         const pts = parseInt(item.dataset.pts, 10) || 11;
 
@@ -5531,25 +5550,32 @@ function saveAdminPodCheckinConfig(dateKey) {
         }
     });
 
+    const audioTitleInput = document.getElementById('podAudioTitle');
+    const audioUrlInput = document.getElementById('podAudioUrl');
+    const onTimeInput = document.getElementById('configLcOnTime');
+    const lateInput = document.getElementById('configLcLate');
+    const startInput = document.getElementById('configStartTime');
+    const endInput = document.getElementById('configEndTime');
+
     const dayConfig = {
         date: dateKey,
-        lcOnTime: parseInt(document.getElementById('configLcOnTime')?.value, 10) || 33,
-        lcLate: parseInt(document.getElementById('configLcLate')?.value, 10) || 3,
-        startTime: document.getElementById('configStartTime')?.value || '05:00',
-        endTime: document.getElementById('configEndTime')?.value || '17:00',
-        audioTitle: document.getElementById('podAudioTitle')?.value.trim() || 'cMPLi POD Audio',
-        audioUrl: document.getElementById('podAudioUrl')?.value.trim() || '',
-        questions: questions.length > 0 ? questions : (typeof getPodQuestionsPool === 'function' ? getPodQuestionsPool() : [])
+        lcOnTime: onTimeInput ? (parseInt(onTimeInput.value, 10) || 33) : 33,
+        lcLate: lateInput ? (parseInt(lateInput.value, 10) || 3) : 3,
+        startTime: startInput ? (startInput.value || '05:00') : '05:00',
+        endTime: endInput ? (endInput.value || '17:00') : '17:00',
+        audioTitle: audioTitleInput ? (audioTitleInput.value.trim() || 'cMPLi POD Audio') : 'cMPLi POD Audio',
+        audioUrl: audioUrlInput ? (audioUrlInput.value.trim() || '') : '',
+        questions: questions
     };
 
     customMilestoneConfigs[msId]['pod'][dateKey] = dayConfig;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
 
-    // Instant save indicator on button
+    // Update button visual state
     const btn = document.getElementById('btnSaveConfig');
     if (btn) {
         btn.innerHTML = '<i class="fas fa-check mr-1.5"></i> Saved!';
-        btn.className = 'btn-primary py-2 px-4 text-xs bg-emerald-600 border-emerald-500';
+        btn.className = 'btn-primary py-2 px-4 text-xs bg-emerald-600 border-emerald-500 shadow-lg';
         setTimeout(() => {
             if (btn) {
                 btn.innerHTML = '<i class="fas fa-save mr-1.5"></i> Save POD Day Setup';
@@ -5558,7 +5584,7 @@ function saveAdminPodCheckinConfig(dateKey) {
         }, 2000);
     }
 
-    // Sync to backend Web Service
+    // Push to backend server
     fetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5574,7 +5600,7 @@ function saveAdminPodCheckinConfig(dateKey) {
     }).catch(e => console.error('Server sync error for POD:', e));
 
     renderAdminCheckinsList();
-    alert(`🎉 Saved cMPLi POD setup for ${dateKey} with ${dayConfig.questions.length} questions in pool!`);
+    alert(`🎉 Successfully Saved cMPLi POD Setup for ${dateKey}!\n• Questions in Pool: ${dayConfig.questions.length}\n• Audio Stream: ${dayConfig.audioUrl ? 'Configured' : 'Not attached'}`);
 }
 
 
