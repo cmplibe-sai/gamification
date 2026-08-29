@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>cMPLi Be | Gamified Student Learning & Coaching Platform</title>
+    <title>cMPLi Be | Gamified Learning & Milestone Platform</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">
     <link rel="shortcut icon" type="image/png" href="assets/favicon.png">
     
@@ -28,8 +28,8 @@
             <div class="flex justify-center mb-5">
                 <img src="assets/logo.png" alt="cMPLi Be" class="h-10 w-auto object-contain drop-shadow-lg">
             </div>
-            <h2 class="text-2xl font-extrabold text-white mb-1 tracking-tight font-heading">Student & Coach Portal</h2>
-            <p class="text-slate-400 text-xs mb-6">Enter your registered email or phone to access your journey.</p>
+            <h2 class="text-2xl font-extrabold text-white mb-1 tracking-tight font-heading">cMPLi Be Gamification</h2>
+            <p class="text-slate-400 text-xs mb-6">Enter your registered email or phone to access the Level-Up arena.</p>
             
             <div id="step1">
                 <div class="relative mb-4">
@@ -47,12 +47,12 @@
                 </div>
                 <input type="text" id="otpCode" onkeypress="if(event.key === 'Enter') verifyOTP()" placeholder="Enter OTP (Hint: 1234)" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 tracking-widest text-center text-lg font-bold">
                 <button onclick="verifyOTP()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30 shadow-emerald-600/30">
-                    <i class="fas fa-check-circle mr-1"></i> Verify & Enter Platform
+                    <i class="fas fa-check-circle mr-1"></i> Verify & Enter Arena
                 </button>
             </div>
 
             <div class="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-500">
-                <i class="fas fa-lock"></i> Secured by cMPLi Be Gamification
+                <i class="fas fa-lock"></i> Integrated with learn.cmplibe.com
             </div>
         </div>
     </div>
@@ -67,15 +67,13 @@
                 <!-- Brand Logo -->
                 <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
                     <img src="assets/logo.png" alt="cMPLi Be" class="h-8 md:h-9 w-auto object-contain">
-                    <span class="hidden sm:inline-block text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">Hub</span>
+                    <span class="hidden sm:inline-block text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">Arena</span>
                 </div>
                 
                 <!-- Learner Navigation Tabs -->
-                <div id="learnerNav" class="hidden flex items-center gap-1 md:gap-2">
-                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden md:inline">Dashboard</span></button>
-                    <button onclick="switchTab('coursesTab')" id="nav-coursesTab" class="nav-tab-btn"><i class="fas fa-graduation-cap"></i> <span class="hidden md:inline">Courses</span></button>
-                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span class="hidden md:inline">Level-Up</span></button>
-                    <button onclick="switchTab('coachingTab')" id="nav-coachingTab" class="nav-tab-btn"><i class="fas fa-user-friends"></i> <span class="hidden md:inline">1-on-1 Coaching</span></button>
+                <div id="learnerNav" class="hidden flex items-center gap-1 md:gap-3">
+                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden md:inline">Home</span></button>
+                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span>Level-Up (4 Milestones)</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
                     
                     <!-- LC Currency Pill -->
@@ -94,11 +92,11 @@
                 <!-- Admin Navigation Tabs -->
                 <div id="adminNav" class="hidden flex items-center gap-2 md:gap-3">
                     <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active"><i class="fas fa-chart-line"></i> <span class="hidden md:inline">Overview</span></button>
-                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span class="hidden md:inline">Level-Up Matrix</span></button>
+                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span>Level-Up Command</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
                     
                     <div class="bg-emerald-950/40 px-3.5 py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-extrabold tracking-wider uppercase ml-2">
-                        <i class="fas fa-shield-alt"></i> <span class="hidden sm:inline">Creator Command</span>
+                        <i class="fas fa-shield-alt"></i> <span class="hidden sm:inline">Creator Hub</span>
                     </div>
 
                     <!-- Logout -->
@@ -113,73 +111,44 @@
         <main class="pt-28 pb-20 px-4 md:px-8 max-w-7xl mx-auto w-full flex-1">
             
             <!-- ==============================================================
-                 1. STUDENT / LEARNER DASHBOARD TAB
+                 1. STUDENT / LEARNER HOME DASHBOARD
                  ============================================================== -->
             <section id="dashboardTab" class="hidden space-y-8 animate-fade-in">
                 
-                <!-- Hero Welcome & Quick Stats -->
+                <!-- Hero Welcome Banner -->
                 <div class="glass-card p-6 md:p-8 relative overflow-hidden border-indigo-500/30 bg-gradient-to-r from-slate-900/90 via-indigo-950/20 to-slate-900/90">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
                         <div>
                             <div class="flex items-center gap-2 mb-2">
-                                <span class="badge-pill badge-indigo"><i class="fas fa-sparkles"></i> Welcome Back</span>
+                                <span class="badge-pill badge-indigo"><i class="fas fa-sparkles"></i> Learner Arena</span>
                                 <span id="dashStreakBadge" class="badge-pill badge-amber flame-pulse"><i class="fas fa-fire"></i> 3-Day Streak</span>
                             </div>
-                            <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading" id="dashWelcomeName">Student Portal</h2>
-                            <p class="text-slate-400 text-sm mt-1">Track your coaching progress, complete daily quests, and level up your skills.</p>
+                            <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading" id="dashWelcomeName">Welcome, Learner</h2>
+                            <p class="text-slate-400 text-sm mt-1">Complete daily cMPLi Dip reflections and cMPLi POD audio quizzes to advance your milestone ranking.</p>
                         </div>
                         
                         <div class="flex flex-wrap gap-3">
                             <button onclick="switchTab('levelUpTab')" class="btn-primary text-xs md:text-sm">
-                                <i class="fas fa-bolt"></i> Continue Level-Up
-                            </button>
-                            <button onclick="switchTab('coachingTab')" class="btn-secondary text-xs md:text-sm">
-                                <i class="fas fa-calendar-check text-indigo-400"></i> Coaching Hub
+                                <i class="fas fa-bolt"></i> Enter Level-Up Journey
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- 3-Column Performance Stats -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Box 1: Learner Profile Details -->
+                <!-- 2-Column Performance Overview -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="glass-card p-6 border-slate-800">
                         <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
-                            <span><i class="fas fa-id-badge mr-2"></i> Student Details</span>
+                            <span><i class="fas fa-id-badge mr-2"></i> Learner Profile</span>
                         </h3>
                         <div id="userDetailsContent" class="space-y-3 text-sm"></div>
                     </div>
 
-                    <!-- Box 2: Total LCs & Wallet -->
                     <div class="glass-card p-6 border-slate-800">
                         <h3 class="text-base font-bold text-amber-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
-                            <span><i class="fas fa-wallet mr-2"></i> Learning Currencies</span>
+                            <span><i class="fas fa-coins mr-2"></i> Learning Currencies Ledger</span>
                         </h3>
                         <div id="pointsContent"></div>
-                    </div>
-
-                    <!-- Box 3: Quick Action Goals -->
-                    <div class="glass-card p-6 border-slate-800">
-                        <h3 class="text-base font-bold text-emerald-400 mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
-                            <span><i class="fas fa-bullseye mr-2"></i> Active Targets</span>
-                            <span class="text-[10px] text-slate-400 uppercase font-bold">This Week</span>
-                        </h3>
-                        <div class="space-y-3 text-xs">
-                            <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
-                                <div>
-                                    <p class="font-bold text-white">Daily Check-in Quest</p>
-                                    <p class="text-[11px] text-slate-400">Complete before 05:00 PM</p>
-                                </div>
-                                <span class="badge-pill badge-indigo">+33 LCs</span>
-                            </div>
-                            <div class="p-3 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
-                                <div>
-                                    <p class="font-bold text-white">1-on-1 Coaching Session</p>
-                                    <p class="text-[11px] text-slate-400">Review weekly reflection</p>
-                                </div>
-                                <span class="badge-pill badge-emerald">+50 LCs</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -187,7 +156,7 @@
                 <div class="glass-card p-6 md:p-8 border-slate-800">
                     <div class="flex justify-between items-center mb-6 pb-3 border-b border-slate-800">
                         <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
-                            <i class="fas fa-tasks text-indigo-400"></i> Your Submissions & Reflections
+                            <i class="fas fa-tasks text-indigo-400"></i> Your Submissions & Proofs
                         </h3>
                     </div>
                     <div id="myProjects" class="space-y-3"></div>
@@ -204,77 +173,17 @@
 
 
             <!-- ==============================================================
-                 2. COURSES & LESSON PLAYER TAB
-                 ============================================================== -->
-            <section id="coursesTab" class="hidden space-y-8 animate-fade-in">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-slate-800">
-                    <div>
-                        <span class="badge-pill badge-indigo mb-2"><i class="fas fa-graduation-cap"></i> Curriculum Hub</span>
-                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Courses & Lessons</h2>
-                        <p class="text-slate-400 text-sm mt-1">Engage with guided modules, watch lessons, and earn LCs on completion.</p>
-                    </div>
-                    <div class="w-full md:w-72">
-                        <input type="text" id="courseSearchInput" onkeyup="filterCourseCatalog()" placeholder="Search modules & topics..." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
-                    </div>
-                </div>
-
-                <!-- Course Cards Grid -->
-                <div id="coursesCatalogContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Populated dynamically by JS -->
-                </div>
-
-                <!-- Lesson Player Modal / Inline Container -->
-                <div id="lessonPlayerModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-                    <div class="glass w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
-                        <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                            <div>
-                                <span id="playerLessonBadge" class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/50">Lesson Player</span>
-                                <h3 id="playerLessonTitle" class="text-lg font-bold text-white mt-1"></h3>
-                            </div>
-                            <button onclick="closeLessonPlayer()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
-                                <i class="fas fa-times text-sm"></i>
-                            </button>
-                        </div>
-                        <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
-                            <!-- Video Embed or Responsive Container -->
-                            <div class="video-responsive rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-                                <iframe id="playerIframe" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
-                            </div>
-                            
-                            <!-- Lesson Summary & Takeaways -->
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div class="md:col-span-2 space-y-4">
-                                    <h4 class="text-sm font-bold text-indigo-300 uppercase tracking-wider">Lesson Overview & Key Takeaways</h4>
-                                    <p id="playerLessonDesc" class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap"></p>
-                                </div>
-                                <div class="glass-card p-5 border-slate-700 space-y-4">
-                                    <div class="text-center pb-3 border-b border-slate-800">
-                                        <p class="text-xs text-slate-400 font-medium">Completion Reward</p>
-                                        <p class="text-2xl font-extrabold text-amber-400 mt-1">+20 LCs</p>
-                                    </div>
-                                    <button id="btnCompleteLesson" onclick="markCurrentLessonComplete()" class="btn-primary w-full py-3 text-xs">
-                                        <i class="fas fa-check-circle"></i> Mark Lesson Complete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-
-            <!-- ==============================================================
-                 3. LEVEL-UP ARENA TAB (6 Milestones + Dip, Immerse, iOS, Projects)
+                 2. LEVEL-UP ARENA TAB (The 4 Milestones Journey)
                  ============================================================== -->
             <section id="levelUpTab" class="hidden space-y-8 animate-fade-in">
                 <div class="flex justify-between items-end pb-4 border-b border-slate-800">
                     <div>
-                        <span class="badge-pill badge-cyan mb-2"><i class="fas fa-fire"></i> Gamified Journey</span>
-                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">cMPLi Level-Up</h2>
-                        <p class="text-slate-400 text-sm mt-1">Master consecutive daily check-ins. Maintain strict compliance to avoid a milestone reset.</p>
+                        <span class="badge-pill badge-cyan mb-2"><i class="fas fa-trophy"></i> 4-Milestone Pathway</span>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">cMPLi Level-Up Journey</h2>
+                        <p class="text-slate-400 text-sm mt-1">Complete daily cMPLi Dip and cMPLi POD check-ins. Earn promotions through consistent performance.</p>
                     </div>
                     <button id="btnBackToGrid" onclick="closeMilestoneView()" class="hidden btn-secondary text-xs">
-                        <i class="fas fa-arrow-left"></i> Back to Milestones
+                        <i class="fas fa-arrow-left"></i> Back to 4 Milestones
                     </button>
                 </div>
 
@@ -287,8 +196,8 @@
                     <p class="text-slate-400 text-sm max-w-md mx-auto">Your current subscriptions do not include access to the Level-Up journey. Please enroll in an eligible cMPLi Solution to begin.</p>
                 </div>
 
-                <!-- 2x3 MILESTONE GRID -->
-                <div id="milestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                <!-- 4-MILESTONES GRID (2x2 Layout) -->
+                <div id="milestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
 
                 <!-- MILESTONE DETAIL CONTAINER -->
                 <div id="milestoneDetailContainer" class="hidden space-y-6">
@@ -303,92 +212,24 @@
                         </div>
                     </div>
 
-                    <!-- Dynamic Module Sub-Nav (Dip, Immerse, iOS, Projects) -->
+                    <!-- Dynamic Module Sub-Nav (Dip, POD, Immerse, Real-World Execution, Problem-Solution, Corporate Residency) -->
                     <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="milestoneSubNav"></div>
 
-                    <!-- Dynamic Timelines Container -->
+                    <!-- Dynamic Timelines & Module Content Container -->
                     <div id="milestoneTimelinesContent" class="glass-card p-6 md:p-8 border-slate-800 min-h-[400px]"></div>
                 </div>
             </section>
 
 
             <!-- ==============================================================
-                 4. 1-ON-1 COACHING & MENTORSHIP TAB
-                 ============================================================== -->
-            <section id="coachingTab" class="hidden space-y-8 animate-fade-in">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-4 border-b border-slate-800">
-                    <div>
-                        <span class="badge-pill badge-emerald mb-2"><i class="fas fa-user-friends"></i> 1-on-1 Mentorship</span>
-                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Coaching & Action Plans</h2>
-                        <p class="text-slate-400 text-sm mt-1">Book personalized 1-on-1 strategy sessions and track your personal growth action items.</p>
-                    </div>
-                    <button onclick="openCoachingBookingModal()" class="btn-primary text-xs md:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30">
-                        <i class="fas fa-calendar-plus"></i> Book 1-on-1 Session
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <!-- Left 2 Cols: Scheduled Sessions & Coach Feedback -->
-                    <div class="lg:col-span-2 space-y-6">
-                        <div class="glass-card p-6 md:p-8 border-slate-800">
-                            <h3 class="text-lg font-bold text-white font-heading mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
-                                <span><i class="fas fa-video text-indigo-400 mr-2"></i> Scheduled 1-on-1 Sessions</span>
-                                <span class="badge-pill badge-indigo">Live Calls</span>
-                            </h3>
-                            <div id="coachingSessionsList" class="space-y-4">
-                                <!-- Populated dynamically by JS -->
-                            </div>
-                        </div>
-
-                        <div class="glass-card p-6 md:p-8 border-slate-800">
-                            <h3 class="text-lg font-bold text-white font-heading mb-4 pb-2 border-b border-slate-800 flex items-center justify-between">
-                                <span><i class="fas fa-comment-dots text-emerald-400 mr-2"></i> Coach Feedback & Direct Guidance</span>
-                            </h3>
-                            <div id="coachFeedbackNotesArea" class="space-y-4 text-sm text-slate-300">
-                                <!-- Populated dynamically by JS -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right Col: Growth Action Items Checklist -->
-                    <div class="space-y-6">
-                        <div class="glass-card p-6 border-slate-800">
-                            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
-                                <h3 class="text-base font-bold text-white font-heading flex items-center gap-2">
-                                    <i class="fas fa-check-double text-cyan-400"></i> Action Checklist
-                                </h3>
-                                <span class="text-[10px] text-amber-400 font-bold bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40">+25 LCs / Task</span>
-                            </div>
-                            <p class="text-xs text-slate-400 mb-4">Complete weekly habits assigned by your mentor to advance your score.</p>
-                            <div id="coachingActionItemsList" class="space-y-2.5">
-                                <!-- Populated dynamically by JS -->
-                            </div>
-                        </div>
-
-                        <!-- Mentorship Guidelines Card -->
-                        <div class="glass-card p-6 border-indigo-500/20 bg-indigo-950/10">
-                            <h4 class="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2"><i class="fas fa-info-circle mr-1"></i> Mentorship Protocol</h4>
-                            <ul class="text-xs text-slate-400 space-y-2 list-disc list-inside">
-                                <li>Sessions are 45 minutes focused on strategy & implementation.</li>
-                                <li>Please prepare your reflections 24 hours prior to the call.</li>
-                                <li>Action tasks must be completed within 7 days.</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-
-            <!-- ==============================================================
-                 5. LEADERBOARD & ARENA TAB
+                 3. LEADERBOARD & ARENA TAB
                  ============================================================== -->
             <section id="leaderboardTab" class="hidden space-y-8 animate-fade-in">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-4 border-b border-slate-800">
                     <div>
-                        <span class="badge-pill badge-amber mb-2"><i class="fas fa-trophy"></i> Rankings</span>
+                        <span class="badge-pill badge-amber mb-2"><i class="fas fa-trophy"></i> Cohort Rankings</span>
                         <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Leaderboard Arena</h2>
-                        <p class="text-slate-400 text-sm mt-1">See how you rank against fellow students across all cohorts.</p>
+                        <p class="text-slate-400 text-sm mt-1">See how you rank against fellow students across all 4 milestones.</p>
                     </div>
                     <div class="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800">
                         <button onclick="setLbTab(this, 'all')" class="lb-tab active px-4 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all" data-time="all">All Time</button>
@@ -403,14 +244,14 @@
 
 
             <!-- ==============================================================
-                 6. CREATOR / COACH COMMAND CENTER
+                 4. CREATOR HUB (Overview + Level-Up Command Center)
                  ============================================================== -->
-            <!-- Creator Home Overview -->
+            <!-- Creator Overview -->
             <section id="adminTab" class="hidden space-y-8 animate-fade-in">
                 <div class="pb-4 border-b border-slate-800">
                     <span class="badge-pill badge-emerald mb-2"><i class="fas fa-chart-pie"></i> Coach Analytics</span>
                     <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Creator Command Hub</h2>
-                    <p class="text-slate-400 text-sm mt-1">Monitor real-time cohort engagement, student compliance health, and performance.</p>
+                    <p class="text-slate-400 text-sm mt-1">Monitor cohort compliance, evaluate check-in proofs, and track customer health.</p>
                 </div>
                 
                 <!-- Filter Controls -->
@@ -431,7 +272,7 @@
                     </div>
                 </div>
 
-                <!-- Customer Health Filter Box -->
+                <!-- Customer Health Status Box -->
                 <div class="glass-card p-5 border-slate-800 space-y-4">
                     <div class="flex items-center justify-between">
                         <h3 class="text-xs font-bold text-white uppercase tracking-wider"><i class="fas fa-heartbeat text-indigo-400 mr-2"></i> Student Compliance Health</h3>
@@ -473,12 +314,12 @@
                 </div>
             </section>
 
-            <!-- Creator Level-Up Matrix & Configurator -->
+            <!-- Creator Level-Up Command Center -->
             <section id="adminLevelUpTab" class="hidden space-y-8 animate-fade-in">
                 <div class="pb-4 border-b border-slate-800">
-                    <span class="badge-pill badge-indigo mb-2"><i class="fas fa-sliders-h"></i> Level-Up Controls</span>
+                    <span class="badge-pill badge-indigo mb-2"><i class="fas fa-sliders-h"></i> Level-Up Matrix</span>
                     <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Level-Up Command Center</h2>
-                    <p class="text-slate-400 text-sm mt-1">Manage solution access, evaluate submissions in real-time, and configure check-in questions.</p>
+                    <p class="text-slate-400 text-sm mt-1">Manage solution access, evaluate submissions in real-time across the 4 milestones, and configure questions for all 6 modules.</p>
                 </div>
 
                 <!-- Solution Access Toggles Box -->
@@ -505,8 +346,8 @@
                     <div id="adminMangoToggles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto custom-scrollbar pr-2"></div>
                 </div>
 
-                <!-- Admin 2x3 Milestone Grid -->
-                <div id="adminMilestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                <!-- Admin 4 Milestones Grid -->
+                <div id="adminMilestoneGridContainer" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
 
                 <!-- Admin Milestone Detail & Tabular Matrix View -->
                 <div id="adminMilestoneDetailContainer" class="hidden glass-card p-6 md:p-8 border-slate-800 space-y-6">
@@ -518,16 +359,16 @@
                         <button onclick="closeAdminMilestoneView()" class="btn-secondary text-xs"><i class="fas fa-arrow-left"></i> Back</button>
                     </div>
 
-                    <!-- Module Sub Nav -->
+                    <!-- Module Sub Nav (All 6 Modules) -->
                     <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="adminMilestoneSubNav"></div>
 
                     <!-- 50:50 View Switcher -->
                     <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-md">
-                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins Setup</button>
-                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Completion Grid</button>
+                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins & Quiz Setup</button>
+                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Completion Grid Matrix</button>
                     </div>
 
-                    <!-- VIEW 1: Checkins Configurator -->
+                    <!-- VIEW 1: Checkins / POD Quiz Configurator -->
                     <div id="adminCheckinsConfigView">
                         <div class="flex flex-col md:flex-row gap-6">
                             <div class="w-full md:w-1/3 glass-card p-2 border-slate-800 max-h-[500px] overflow-y-auto custom-scrollbar" id="adminCheckinDaysList"></div>
@@ -574,83 +415,52 @@
     </div>
 
     <!-- ==============================================================
-         7. INTERACTIVE MODALS
+         5. INTERACTIVE MODALS
          ============================================================== -->
 
-    <!-- Coaching Booking Modal -->
-    <div id="coachingBookingModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-        <div class="glass w-full max-w-lg rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
+    <!-- cMPLi POD RANDOMIZED QUIZ MODAL -->
+    <div id="podQuizModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col border border-indigo-500/40 shadow-2xl modal-enter">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
-                    <i class="fas fa-calendar-check text-emerald-400"></i> Book 1-on-1 Coaching
-                </h3>
-                <button onclick="closeCoachingBookingModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                        <i class="fas fa-podcast text-lg"></i>
+                    </div>
+                    <div>
+                        <span id="podQuizDayBadge" class="badge-pill badge-indigo">cMPLi POD Day 1</span>
+                        <h3 class="text-lg font-bold text-white font-heading mt-0.5">Podcast Comprehension Quiz</h3>
+                    </div>
+                </div>
+                <button onclick="closePodQuizModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
-            <div class="p-6 space-y-4 text-xs">
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Session Topic</label>
-                    <input type="text" id="coachBookingTopic" placeholder="e.g., Weekly Project Review & Strategy" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
+            
+            <div class="p-6 md:p-8 overflow-y-auto custom-scrollbar max-h-[75vh] space-y-6">
+                <!-- Audio Notice Banner -->
+                <div class="p-4 bg-indigo-950/40 rounded-2xl border border-indigo-500/30 flex items-start gap-3">
+                    <i class="fas fa-headphones text-indigo-400 text-lg mt-0.5"></i>
                     <div>
-                        <label class="block text-slate-400 font-bold mb-1.5">Preferred Date</label>
-                        <input type="date" id="coachBookingDate" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 font-bold mb-1.5">Time Slot</label>
-                        <select id="coachBookingSlot" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
-                            <option value="10:00 AM - 10:45 AM">10:00 AM - 10:45 AM</option>
-                            <option value="02:00 PM - 02:45 PM">02:00 PM - 02:45 PM</option>
-                            <option value="05:30 PM - 06:15 PM">05:30 PM - 06:15 PM</option>
-                            <option value="08:00 PM - 08:45 PM">08:00 PM - 08:45 PM</option>
-                        </select>
+                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Audio Episode on learn.cmplibe.com</h4>
+                        <p class="text-xs text-slate-300 mt-1">Answer the 3 randomly drawn questions below based on today’s POD audio to earn <strong>+33 LCs</strong>.</p>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">What is your primary goal for this session?</label>
-                    <textarea id="coachBookingGoal" rows="3" placeholder="Describe the challenges or milestones you want to address..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"></textarea>
+
+                <!-- 3 Randomized Questions Container -->
+                <div id="podQuizQuestionsList" class="space-y-6"></div>
+
+                <div id="podQuizError" class="hidden p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-xs font-bold flex items-center gap-2">
+                    <i class="fas fa-exclamation-circle"></i> <span id="podQuizErrorText">Please answer all 3 questions.</span>
                 </div>
-                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-medium">
-                    <i class="fas fa-coins mr-1"></i> Completing this session earns you <strong>+50 LCs</strong>.
-                </div>
-                <button onclick="confirmCoachingBooking()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500">
-                    <i class="fas fa-check-circle"></i> Confirm Booking
+
+                <button id="btnSubmitPodQuiz" onclick="submitPodQuiz()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-indigo-600 to-cyan-600 border-indigo-500 shadow-indigo-600/30">
+                    <i class="fas fa-paper-plane"></i> Submit Quiz & Claim +33 LCs
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Coach Feedback / Note Modal -->
-    <div id="coachFeedbackModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-        <div class="glass w-full max-w-md rounded-3xl overflow-hidden flex flex-col border border-slate-700 shadow-2xl modal-enter">
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                <h3 class="text-lg font-bold text-white font-heading">Submit Coach Feedback</h3>
-                <button onclick="closeCoachFeedbackModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
-                    <i class="fas fa-times text-sm"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-4 text-xs">
-                <input type="hidden" id="coachFeedbackSessionId">
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Coach Evaluation Notes</label>
-                    <textarea id="coachFeedbackNotes" rows="4" placeholder="Provide actionable feedback and praise for the student..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500"></textarea>
-                </div>
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Mark Status</label>
-                    <select id="coachFeedbackStatus" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-indigo-500">
-                        <option value="completed">Completed & Approved (+50 LCs)</option>
-                        <option value="scheduled">Keep Scheduled</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-                <button onclick="submitCoachFeedback()" class="btn-primary w-full py-3 text-sm">
-                    <i class="fas fa-paper-plane"></i> Save Feedback & Award LCs
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- Dynamic Checkin Modal Container is generated dynamically by app.js -->
 
     <!-- Rules & Regulations Modal -->
     <div id="termsModal" class="fixed inset-0 bg-black/85 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-md">
@@ -662,6 +472,41 @@
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs text-slate-300 leading-relaxed" id="termsContent"></div>
             <div class="p-6 border-t border-slate-800 bg-slate-900/60 rounded-b-3xl">
                 <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="btn-primary w-full py-3 text-sm">I Understand & Agree</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Promotion Modal (Admin Only) -->
+    <div id="promoteStudentModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-md rounded-3xl overflow-hidden flex flex-col border border-emerald-500/40 shadow-2xl modal-enter">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <h3 class="text-lg font-bold text-white font-heading flex items-center gap-2">
+                    <i class="fas fa-user-graduate text-emerald-400"></i> Promote Student
+                </h3>
+                <button onclick="closePromoteModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 text-xs">
+                <input type="hidden" id="promoteUserId">
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1">Student</label>
+                    <p id="promoteUserName" class="text-sm font-bold text-white"></p>
+                </div>
+                <div>
+                    <label class="block text-slate-400 font-bold mb-1.5">Promote to Milestone</label>
+                    <select id="promoteTargetMilestone" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="2">Milestone 2: cMPLi Curious</option>
+                        <option value="3">Milestone 3: cMPLi Committed</option>
+                        <option value="4">Milestone 4: cMPLi futureREadi earliTalent</option>
+                    </select>
+                </div>
+                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-medium">
+                    <i class="fas fa-unlock mr-1"></i> Promoting unlocks new modules and advanced challenges for this student.
+                </div>
+                <button onclick="confirmStudentPromotion()" class="btn-primary w-full py-3 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500">
+                    <i class="fas fa-check-circle"></i> Confirm Promotion
+                </button>
             </div>
         </div>
     </div>
