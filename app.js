@@ -75,7 +75,7 @@ const milestoneConfig = [
 // Module registry across platform
 const ALL_PLATFORM_MODULES = [
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400', desc: 'Daily Morning Reflections (05:00 AM - 05:00 PM)' },
-    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Randomized Comprehension Quiz' },
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400', desc: 'Audio Podcast + Comprehension Quiz' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-moon text-cyan-400', desc: 'Evening Deep-Dive Reflections (06:30 PM - 07:00 PM)' },
     { code: 'projects', name: 'cMPLi Real-world (cMPLi-ai)', icon: 'fa-robot text-purple-400', desc: 'Industry Challenges & Execution Projects' },
     { code: 'problem_solution', name: 'cMPLi Problem-Solution', icon: 'fa-brain text-emerald-400', desc: 'Insight Engine & Analytical Problem Solving' },
@@ -107,7 +107,7 @@ function toggleMilestoneModuleAccess(msId, moduleCode) {
     saved[msId] = current;
     localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
     
-    // Re-render admin views
+    // Re-render views
     if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
     if (typeof openAdminMilestone === 'function' && activeAdminMilestoneId === msId) openAdminMilestone(msId);
 }
@@ -603,21 +603,6 @@ function renderAdminMilestoneGrid() {
     document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
     grid.classList.remove('hidden');
 
-    // Campus Partner Management Button for Creators ONLY
-    let partnerManageBtn = '';
-    if (!isCampusPartner) {
-        partnerManageBtn = `
-        <div class="col-span-1 md:col-span-2 mb-2 flex justify-between items-center">
-            <div>
-                <h3 class="text-lg font-bold text-white font-heading">Level-Up Milestones & Cohort Pathways</h3>
-                <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and project rubrics.</p>
-            </div>
-            <button onclick="openPartnerManagementModal()" class="btn-secondary py-2 px-4 text-xs">
-                <i class="fas fa-handshake text-emerald-400 mr-1.5"></i> Manage Campus Partners
-            </button>
-        </div>`;
-    }
-
     const gridCards = milestoneConfig.map(ms => {
         const enabledMods = getEnabledModulesForMilestone(ms.id);
         const studentCount = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === ms.id).length;
@@ -656,77 +641,7 @@ function renderAdminMilestoneGrid() {
         </div>`;
     }).join('');
 
-    grid.innerHTML = partnerManageBtn + gridCards;
-}
-
-function handleLockedClick(id, isUnlocked) {
-    if (!isUnlocked) alert(`You need to complete Milestone ${id - 1} to join this milestone.`);
-}
-
-// Function to let the learner enter the milestone view (UPDATED WITH START DATE)
-function openMilestone(id) {
-    activeMilestoneId = id;
-    const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
-    
-    if (!userMilestoneState[currentUser._id]) {
-        userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
-    }
-    
-    // --- START DATE ANCHOR ---
-    const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => normalizeLevelUpType(s.type) === 'dip');
-    const day1Sub = userSubs.find(s => String(s.day) === '1');
-    
-    if (day1Sub) {
-        const rawTime = day1Sub.dateKey || day1Sub.date || day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt;
-        if (rawTime) {
-            userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date(rawTime));
-        }
-    } else {
-        userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date());
-    }
-    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
-
-    if (!userMilestoneState[currentUser._id].viewedTerms) {
-        userMilestoneState[currentUser._id].viewedTerms = [];
-    }
-    
-    if (id === 1 && !userMilestoneState[currentUser._id].viewedTerms.includes(id)) {
-        if (typeof openTermsModal === 'function') openTermsModal();
-        userMilestoneState[currentUser._id].viewedTerms.push(id);
-        localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
-    }
-    
-    document.getElementById('milestoneGridContainer').classList.add('hidden');
-    const btnBack = document.getElementById('btnBackToGrid');
-    if(btnBack) btnBack.classList.remove('hidden');
-    
-    const detailContainer = document.getElementById('milestoneDetailContainer');
-    if(detailContainer) detailContainer.classList.remove('hidden');
-
-    const titleEl = document.getElementById('activeMilestoneTitle');
-    if(titleEl) titleEl.innerText = ms.name;
-    
-    const descEl = document.getElementById('activeMilestoneDesc');
-    if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
-    
-    // ONLY GET MODULES ENABLED BY CREATOR FOR THIS MILESTONE
-    const activeMods = getEnabledModulesForMilestone(id);
-
-    const subNavEl = document.getElementById('milestoneSubNav');
-    if(subNavEl) {
-        subNavEl.innerHTML = activeMods.map((modCode, i) => {
-            const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode, icon: 'fa-cube' };
-            const activeClass = i === 0 ? 'border-indigo-500 text-indigo-400 bg-indigo-950/40' : 'text-slate-400';
-            return `<button id="btnNav_${modCode}" onclick="switchMilestoneTab('${modCode}')" class="milestone-nav-btn px-4 py-2 rounded-xl font-bold text-xs border border-transparent transition-all ${activeClass} flex items-center gap-2">
-                <i class="fas ${modObj.icon}"></i> ${modObj.name}
-            </button>`;
-        }).join('');
-    }
-
-    // Default to the first enabled module
-    if (activeMods.length > 0) {
-        switchMilestoneTab(activeMods[0]);
-    }
+    grid.innerHTML = gridCards;
 }
 
 function openAdminMilestone(id) {
@@ -751,7 +666,7 @@ function openAdminMilestone(id) {
         let inThisMs = actualUsers.filter(u => (userMilestoneState[u._id]?.highestUnlocked || 1) === id).length;
         statsBar.innerHTML = `
             <span class="badge-pill badge-indigo text-xs"><i class="fas fa-users mr-1"></i> ${inThisMs} Students in Milestone ${id}</span>
-            <span class="badge-pill bg-slate-800 text-slate-300 text-xs"><i class="fas fa-globe mr-1"></i> ${actualUsers.length} Total Students</span>
+            <span class="badge-pill bg-slate-800 text-slate-300 text-xs"><i class="fas fa-globe mr-1"></i> ${actualUsers.length} Total Cohort Students</span>
         `;
     }
 
@@ -861,75 +776,31 @@ function updateCohortStartDate() {
 // --- 3. UPGRADED: Render Configs by Active Module ---
 function renderAdminCheckinsList() {
     const list = document.getElementById('adminCheckinDaysList');
-    const editor = document.getElementById('adminCheckinEditor');
-    if (!list || !editor) return;
-
-    // 1. IF POD: Route to POD Question Pool & Quiz Setup
-    if (activeAdminModule === 'pod') {
-        renderAdminPodQuestionsList();
-        return;
-    }
-
-    // 2. IF PROJECTS / REAL-WORLD EXECUTION: Route to Project Builder
+    
+    // IF PROJECTS: Reroute to the new Project Builder Architecture!
     if (activeAdminModule === 'projects') {
         renderAdminProjectsList();
+        
+        // Trigger the initial editor load for projects without causing an infinite loop
         const projectsList = customProjectsDB[activeAdminMilestoneId] || [];
         if (activeAdminProjectId) {
             loadAdminProjectEditor(activeAdminProjectId);
         } else if (projectsList.length > 0) {
             loadAdminProjectEditor(projectsList[0].id);
         } else {
-            editor.innerHTML = `
+            document.getElementById('adminCheckinEditor').innerHTML = `
                 <div class="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl">
                     <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
                         <i class="fas fa-folder-plus text-2xl text-emerald-500"></i>
                     </div>
-                    <h4 class="text-lg font-bold text-white mb-2">No Projects Configured</h4>
-                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application challenge.</p>
+                    <h4 class="text-lg font-bold text-white mb-2">No Projects Yet</h4>
+                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application.</p>
                 </div>`;
         }
         return;
     }
 
-    // 3. IF ADVANCED CAPSTONE (PROBLEM-SOLUTION OR CORPORATE RESIDENCY)
-    if (activeAdminModule === 'problem_solution' || activeAdminModule === 'residency') {
-        const isRes = activeAdminModule === 'residency';
-        list.innerHTML = `
-            <div class="p-4 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
-                <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">${isRes ? 'Residency Placement' : 'Insight Engine Setup'}</h4>
-                <p class="text-[11px] text-slate-400">Configure deliverables, partner assignments, and evaluation criteria for Milestone 4.</p>
-            </div>
-        `;
-        editor.innerHTML = `
-            <div class="space-y-4 text-xs">
-                <div class="pb-3 border-b border-slate-800">
-                    <h3 class="text-sm font-bold text-white font-heading">${isRes ? 'Corporate Residency Immersion Brief' : 'Problem-Solution Insight Challenge'}</h3>
-                </div>
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Challenge Objective & Guidelines</label>
-                    <textarea rows="4" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 focus:outline-none" placeholder="Provide instructions for students..."></textarea>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-slate-400 font-bold mb-1.5">Total LC Reward</label>
-                        <input type="number" value="1000" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500" />
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 font-bold mb-1.5">Submission Format</label>
-                        <select class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500">
-                            <option value="pdf_deck">Executive PDF Deck + Loom Video</option>
-                            <option value="report">Written Capstone Report</option>
-                            <option value="code">GitHub Repo / Live Deployment</option>
-                        </select>
-                    </div>
-                </div>
-                <button onclick="alert('Capstone module brief saved!')" class="btn-primary w-full py-3 text-xs mt-4"><i class="fas fa-save mr-1"></i> Save Module Brief</button>
-            </div>
-        `;
-        return;
-    }
-
-    // 4. FOR DIP & IMMERSE (CALENDAR-BASED DAILY CHECK-IN SETUP)
+    // Ensure database paths exist for date-based modules
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
@@ -2056,389 +1927,3 @@ function startLiveSync() {
     }, 4000); // 4-second live bi-directional sync
 }
 startLiveSync();
-
-
-// ==============================================================
-// POD QUIZ ENGINE & QUESTION POOL BUILDER
-// ==============================================================
-let currentPodActiveQuestions = [];
-let currentPodDay = 1;
-let activeAdminPodQuestionId = null;
-
-function getPodQuestionsPool() {
-    let customPool = JSON.parse(localStorage.getItem('customPodQuestionsPool')) || [];
-    if (customPool.length > 0) return customPool;
-    if (typeof window !== 'undefined' && window.defaultPodQuestionsPool) return window.defaultPodQuestionsPool;
-    return [
-        { id: 'pod_q1', title: 'According to today’s POD audio, what is the core driver of long-term habit consistency?', type: 'mcq', options: ['Intrinsic Identity Shift & Daily Micro-actions', 'External Pressure only', 'Random Motivation Spikes', 'Waiting for perfect conditions'], correctOption: 0, pts: 11 },
-        { id: 'pod_q2', title: 'What primary method was recommended for handling unexpected daily schedule disruptions?', type: 'mcq', options: ['Implementation Intentions (If-Then Planning)', 'Abandoning the week goal', 'Skipping without reflection', 'Immediate panic'], correctOption: 0, pts: 11 },
-        { id: 'pod_q3', title: 'Which mindset separates a Challenge Embracer from a passive student?', type: 'mcq', options: ['Viewing friction & feedback as fuel for growth', 'Avoiding all challenging tasks', 'Seeking quick shortcuts', 'Focusing solely on certificates'], correctOption: 0, pts: 11 }
-    ];
-}
-
-function openPodQuizModal(dayNum) {
-    const modal = document.getElementById('podQuizModal');
-    if (!modal) return;
-
-    currentPodDay = dayNum;
-    document.getElementById('podQuizDayBadge').innerText = 'cMPLi POD Day ' + dayNum;
-    
-    const pool = [...getPodQuestionsPool()];
-    const shuffled = pool.sort(() => 0.5 - Math.random());
-    currentPodActiveQuestions = shuffled.slice(0, 3);
-
-    const container = document.getElementById('podQuizQuestionsList');
-    if (container) {
-        container.innerHTML = currentPodActiveQuestions.map((q, idx) => {
-            if (q.type === 'mcq' && Array.isArray(q.options) && q.options.length > 0) {
-                return `
-                <div class="glass-card p-5 border-slate-800 space-y-3">
-                    <p class="text-xs font-bold text-indigo-300">Question ${idx + 1} of 3</p>
-                    <h4 class="text-sm font-semibold text-white">${q.title}</h4>
-                    <div class="space-y-2 pt-1">
-                        ${q.options.map((opt, optIdx) => `
-                            <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 cursor-pointer transition-colors">
-                                <input type="radio" name="pod_q_${idx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
-                                <span class="text-xs text-slate-200">${opt}</span>
-                            </label>
-                        `).join('')}
-                    </div>
-                </div>`;
-            } else {
-                return `
-                <div class="glass-card p-5 border-slate-800 space-y-3">
-                    <p class="text-xs font-bold text-indigo-300">Question ${idx + 1} of 3</p>
-                    <h4 class="text-sm font-semibold text-white">${q.title}</h4>
-                    <textarea id="pod_text_ans_${idx}" rows="3" placeholder="Type your 1-2 sentence answer here..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"></textarea>
-                </div>`;
-            }
-        }).join('');
-    }
-
-    document.getElementById('podQuizError')?.classList.add('hidden');
-    modal.classList.remove('hidden');
-}
-
-function closePodQuizModal() {
-    const modal = document.getElementById('podQuizModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function submitPodQuiz() {
-    if (!currentUser) return alert('Please login first.');
-
-    const answers = [];
-    let allAnswered = true;
-
-    currentPodActiveQuestions.forEach((q, idx) => {
-        if (q.type === 'mcq') {
-            const selected = document.querySelector(`input[name="pod_q_${idx}"]:checked`);
-            if (!selected) {
-                allAnswered = false;
-            } else {
-                answers.push({ qId: q.id, answerIndex: parseInt(selected.value), correct: parseInt(selected.value) === q.correctOption });
-            }
-        } else {
-            const textVal = document.getElementById(`pod_text_ans_${idx}`)?.value.trim();
-            if (!textVal) {
-                allAnswered = false;
-            } else {
-                answers.push({ qId: q.id, text: textVal });
-            }
-        }
-    });
-
-    if (!allAnswered) {
-        const err = document.getElementById('podQuizError');
-        if (err) err.classList.remove('hidden');
-        return;
-    }
-
-    const subData = {
-        userId: currentUser._id,
-        userEmail: currentUser.email || '',
-        userName: currentUser.name || 'Learner',
-        milestoneId: activeMilestoneId || 1,
-        type: 'pod',
-        day: currentPodDay,
-        date: new Date().toISOString().split('T')[0],
-        timestamp: new Date().toISOString(),
-        lcReward: 33,
-        status: 'completed',
-        answers: answers
-    };
-
-    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    localDB.push(subData);
-    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-
-    recordLevelUpReward(currentUser._id, 'pod', activeMilestoneId || 1, 33, 'cMPLi POD Day ' + currentPodDay + ' Quiz Complete');
-
-    try {
-        await fetch('/api/submissions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(subData)
-        });
-    } catch (e) {
-        console.error('Server sync error for POD quiz:', e);
-    }
-
-    closePodQuizModal();
-    alert('🎉 Awesome! cMPLi POD Day ' + currentPodDay + ' Quiz completed. +33 LCs earned!');
-    if (typeof switchMilestoneTab === 'function') {
-        switchMilestoneTab('pod');
-    }
-}
-
-function renderAdminPodQuestionsList() {
-    const list = document.getElementById('adminCheckinDaysList');
-    const editor = document.getElementById('adminCheckinEditor');
-    if (!list || !editor) return;
-
-    const pool = getPodQuestionsPool();
-    if (!activeAdminPodQuestionId && pool.length > 0) {
-        activeAdminPodQuestionId = pool[0].id;
-    }
-
-    list.innerHTML = `
-        <div class="mb-4 p-3 bg-slate-900 rounded-xl border border-slate-800 flex justify-between items-center">
-            <div>
-                <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">POD Question Pool</h4>
-                <p class="text-[10px] text-slate-400">${pool.length} Questions in Pool</p>
-            </div>
-            <button onclick="createNewPodQuestion()" class="btn-primary py-1.5 px-3 text-[11px]">
-                <i class="fas fa-plus"></i> New
-            </button>
-        </div>
-        <div class="space-y-2">
-            ${pool.map((q, idx) => {
-                const isActive = q.id === activeAdminPodQuestionId;
-                return `
-                <div onclick="loadAdminPodQuestionEditor('${q.id}')" class="p-3 rounded-xl border cursor-pointer transition-all ${isActive ? 'bg-indigo-950/40 border-indigo-500 text-white' : 'bg-slate-900/50 border-slate-800 text-slate-300 hover:border-slate-700'}">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="badge-pill ${q.type === 'mcq' ? 'badge-indigo' : 'badge-amber'} text-[10px]">Q${idx + 1} • ${q.type.toUpperCase()}</span>
-                        <span class="text-[10px] font-bold text-amber-400">+${q.pts || 11} LCs</span>
-                    </div>
-                    <p class="text-xs font-semibold line-clamp-2">${q.title}</p>
-                </div>`;
-            }).join('')}
-        </div>
-    `;
-
-    if (activeAdminPodQuestionId) {
-        loadAdminPodQuestionEditor(activeAdminPodQuestionId);
-    } else {
-        editor.innerHTML = `
-            <div class="p-12 text-center border border-dashed border-slate-800 rounded-2xl">
-                <i class="fas fa-podcast text-3xl text-indigo-400 mb-3"></i>
-                <h4 class="text-sm font-bold text-white mb-1">No Questions in Pool</h4>
-                <p class="text-xs text-slate-400 mb-4">Click "New" on the left to add a question for this podcast quiz.</p>
-            </div>`;
-    }
-}
-
-function createNewPodQuestion() {
-    const newQ = {
-        id: 'pod_q_' + Date.now(),
-        title: 'New POD Comprehension Question',
-        type: 'mcq',
-        options: ['Option A', 'Option B', 'Option C', 'Option D'],
-        correctOption: 0,
-        pts: 11
-    };
-    let pool = getPodQuestionsPool();
-    pool.push(newQ);
-    localStorage.setItem('customPodQuestionsPool', JSON.stringify(pool));
-    activeAdminPodQuestionId = newQ.id;
-    renderAdminPodQuestionsList();
-}
-
-function loadAdminPodQuestionEditor(qId) {
-    activeAdminPodQuestionId = qId;
-    const editor = document.getElementById('adminCheckinEditor');
-    if (!editor) return;
-
-    const pool = getPodQuestionsPool();
-    const q = pool.find(item => item.id === qId);
-    if (!q) return;
-
-    editor.innerHTML = `
-        <div class="space-y-4 text-xs">
-            <div class="flex justify-between items-center pb-3 border-b border-slate-800">
-                <h3 class="text-sm font-bold text-white font-heading">Edit POD Quiz Question</h3>
-                <button onclick="deletePodQuestion('${q.id}')" class="text-red-400 hover:text-red-300 text-xs font-bold">
-                    <i class="fas fa-trash mr-1"></i> Delete
-                </button>
-            </div>
-
-            <div>
-                <label class="block text-slate-400 font-bold mb-1.5">Question Prompt</label>
-                <textarea id="editPodTitle" rows="3" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-indigo-500 focus:outline-none">${q.title || ''}</textarea>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Question Type</label>
-                    <select id="editPodType" onchange="togglePodEditorType(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500">
-                        <option value="mcq" ${q.type === 'mcq' ? 'selected' : ''}>Multiple Choice (MCQ)</option>
-                        <option value="text" ${q.type === 'text' ? 'selected' : ''}>Short Text Answer</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-slate-400 font-bold mb-1.5">Reward Points</label>
-                    <input type="number" id="editPodPts" value="${q.pts || 11}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500" />
-                </div>
-            </div>
-
-            <div id="podMcqOptionsArea" class="${q.type === 'text' ? 'hidden' : ''} space-y-3 pt-2">
-                <label class="block text-slate-400 font-bold">MCQ Options & Correct Answer</label>
-                ${[0, 1, 2, 3].map(i => `
-                    <div class="flex items-center gap-3">
-                        <input type="radio" name="editPodCorrect" value="${i}" ${q.correctOption === i ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
-                        <input type="text" id="editPodOpt_${i}" value="${(q.options && q.options[i]) || ''}" placeholder="Option ${String.fromCharCode(65 + i)}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white focus:border-indigo-500" />
-                    </div>
-                `).join('')}
-            </div>
-
-            <button onclick="saveAdminPodQuestion('${q.id}')" class="btn-primary w-full py-3 text-xs mt-4">
-                <i class="fas fa-save"></i> Save Question to Pool
-            </button>
-        </div>
-    `;
-}
-
-function togglePodEditorType(val) {
-    const area = document.getElementById('podMcqOptionsArea');
-    if (area) {
-        if (val === 'text') area.classList.add('hidden');
-        else area.classList.remove('hidden');
-    }
-}
-
-function saveAdminPodQuestion(qId) {
-    const title = document.getElementById('editPodTitle').value.trim();
-    const type = document.getElementById('editPodType').value;
-    const pts = parseInt(document.getElementById('editPodPts').value) || 11;
-    
-    let pool = getPodQuestionsPool();
-    const idx = pool.findIndex(item => item.id === qId);
-    if (idx > -1) {
-        pool[idx].title = title;
-        pool[idx].type = type;
-        pool[idx].pts = pts;
-        
-        if (type === 'mcq') {
-            pool[idx].options = [
-                document.getElementById('editPodOpt_0').value.trim() || 'Option A',
-                document.getElementById('editPodOpt_1').value.trim() || 'Option B',
-                document.getElementById('editPodOpt_2').value.trim() || 'Option C',
-                document.getElementById('editPodOpt_3').value.trim() || 'Option D'
-            ];
-            const checked = document.querySelector('input[name="editPodCorrect"]:checked');
-            pool[idx].correctOption = checked ? parseInt(checked.value) : 0;
-        }
-        localStorage.setItem('customPodQuestionsPool', JSON.stringify(pool));
-        alert('Question saved to POD Pool!');
-        renderAdminPodQuestionsList();
-    }
-}
-
-function deletePodQuestion(qId) {
-    if (!confirm('Are you sure you want to delete this question from the POD pool?')) return;
-    let pool = getPodQuestionsPool().filter(item => item.id !== qId);
-    localStorage.setItem('customPodQuestionsPool', JSON.stringify(pool));
-    activeAdminPodQuestionId = pool.length > 0 ? pool[0].id : null;
-    renderAdminPodQuestionsList();
-}
-
-// --- LEARNER 4-MILESTONES GRID RENDERER ---
-function renderMilestoneGrid() {
-    const gridContainer = document.getElementById('milestoneGridContainer');
-    const detailContainer = document.getElementById('milestoneDetailContainer');
-    const btnBack = document.getElementById('btnBackToGrid');
-    
-    if (detailContainer) detailContainer.classList.add('hidden');
-    if (btnBack) btnBack.classList.add('hidden');
-    if (!gridContainer) return;
-    
-    gridContainer.classList.remove('hidden');
-
-    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
-    const isGodMode = typeof isTestUser === 'function' ? isTestUser() : false;
-
-    gridContainer.innerHTML = milestoneConfig.map(ms => {
-        const isUnlocked = isGodMode || isAdminLogin || ms.id <= highestUnlocked;
-        const isCurrent = ms.id === highestUnlocked;
-        const activeMods = getEnabledModulesForMilestone(ms.id);
-
-        return `
-        <div class="glass-card p-6 md:p-8 border-slate-800 flex flex-col justify-between relative overflow-hidden transition-all duration-300 ${isUnlocked ? 'hover:border-indigo-500/50 hover:shadow-2xl cursor-pointer' : 'opacity-60 bg-slate-950/60'}" onclick="${isUnlocked ? `openMilestone(${ms.id})` : `alert('Complete Milestone ${ms.id - 1} to unlock ${ms.name}')`}">
-            
-            ${isCurrent ? '<div class="absolute top-0 right-0 w-28 h-28 bg-indigo-500/10 rounded-bl-full pointer-events-none"></div>' : ''}
-
-            <div>
-                <div class="flex justify-between items-start mb-3">
-                    <span class="badge-pill ${isUnlocked ? 'badge-indigo' : 'bg-slate-800 text-slate-500'}">Milestone ${ms.id}</span>
-                    <span class="text-xs font-bold ${isCurrent ? 'text-indigo-400' : (isUnlocked ? 'text-emerald-400' : 'text-slate-500')}">
-                        ${isCurrent ? '<i class="fas fa-play-circle mr-1"></i> Current Level' : (isUnlocked ? '<i class="fas fa-check-circle mr-1"></i> Unlocked' : '<i class="fas fa-lock mr-1"></i> Locked')}
-                    </span>
-                </div>
-
-                <h3 class="text-xl font-bold text-white font-heading mt-1">${ms.name}</h3>
-                <p class="text-xs text-indigo-300 font-semibold mb-2">${ms.subtitle}</p>
-                <p class="text-xs text-slate-400 leading-relaxed mb-4">${ms.desc}</p>
-
-                <div class="flex flex-wrap gap-1.5 pt-2">
-                    ${activeMods.map(mCode => {
-                        const mObj = ALL_PLATFORM_MODULES.find(m => m.code === mCode) || { name: mCode, icon: 'fa-cube' };
-                        return `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300"><i class="fas ${mObj.icon} mr-1"></i>${mObj.name}</span>`;
-                    }).join('')}
-                </div>
-            </div>
-
-            <div class="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                <span class="text-xs text-slate-400 font-medium">${ms.durationDays} Days Duration</span>
-                <button class="btn-primary py-1.5 px-3 text-xs ${!isUnlocked ? 'opacity-50 pointer-events-none' : ''}">
-                    <span>${isUnlocked ? 'Enter Milestone' : 'Locked'}</span> <i class="fas fa-arrow-right text-[10px] ml-1"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function closeMilestoneView() {
-    activeMilestoneId = null;
-    renderMilestoneGrid();
-}
-
-// --- STUDENT PROMOTION ENGINE ---
-function openPromoteModal(userId, userName) {
-    const modal = document.getElementById('promoteStudentModal');
-    if (!modal) return;
-    document.getElementById('promoteUserId').value = userId;
-    document.getElementById('promoteUserName').innerText = userName || 'Student';
-    modal.classList.remove('hidden');
-}
-
-function closePromoteModal() {
-    const modal = document.getElementById('promoteStudentModal');
-    if (modal) modal.classList.add('hidden');
-}
-
-async function confirmStudentPromotion() {
-    const userId = document.getElementById('promoteUserId').value;
-    const targetMsId = parseInt(document.getElementById('promoteTargetMilestone').value) || 2;
-    
-    if (!userMilestoneState[userId]) {
-        userMilestoneState[userId] = { highestUnlocked: 1, viewedTerms: [] };
-    }
-    userMilestoneState[userId].highestUnlocked = targetMsId;
-    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
-
-    closePromoteModal();
-    alert('🎓 Student promoted successfully to Milestone ' + targetMsId + '!');
-    if (typeof renderAdminCohortSubmissions === 'function') {
-        renderAdminCohortSubmissions();
-    }
-}
