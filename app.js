@@ -164,27 +164,70 @@ async function syncGlobalServerData() {
             fetch('/api/levelup-access').then(r => r.json())
         ]);
 
-        // 1. Authoritative Milestone Configs Sync (Cross-Browser Question Setup)
+        // 1. Milestone Configs Sync (Bidirectional Safe Merge)
         if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
             const serverConfigs = configsRes.value.data;
-            if (serverConfigs && typeof serverConfigs === 'object') {
-                customMilestoneConfigs = serverConfigs;
+            let localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+
+            if (Object.keys(serverConfigs).length === 0 && Object.keys(localConfigs).length > 0) {
+                // Seed server with local configurations if server is empty
+                fetch('/api/milestone-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allConfigs: localConfigs })
+                }).catch(() => {});
+            } else {
+                for (const ms in serverConfigs) {
+                    if (!localConfigs[ms]) localConfigs[ms] = {};
+                    for (const mod in serverConfigs[ms]) {
+                        if (!localConfigs[ms][mod]) localConfigs[ms][mod] = {};
+                        Object.assign(localConfigs[ms][mod], serverConfigs[ms][mod]);
+                    }
+                }
+                customMilestoneConfigs = localConfigs;
                 localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
             }
         }
 
-        // 2. Submissions Sync
+        // 2. Submissions Sync (Bidirectional Safe Merge & Credit ONLY upon 'completed')
         if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             const serverData = subsRes.value.data;
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(serverData));
-            
-            // Check if any current user submission got approved on server
-            if (currentUser) {
+            let localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+
+            if (serverData.length === 0 && localData.length > 0) {
+                // Seed server with local submissions if server restarted
+                localData.forEach(sub => {
+                    fetch('/api/submissions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(sub)
+                    }).catch(() => {});
+                });
+            } else {
                 serverData.forEach(s => {
-                    if (s.userId === currentUser._id && s.status === 'completed' && s.lcReward) {
-                        recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type} Day ${s.day} Complete`);
+                    const idx = localData.findIndex(l => (
+                        (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
+                        String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
+                        normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
+                        String(l.day !== undefined && l.day !== null ? l.day : l.date) === String(s.day !== undefined && s.day !== null ? s.day : s.date)
+                    ));
+
+                    if (idx > -1) {
+                        const prevStatus = localData[idx].status;
+                        localData[idx] = { ...localData[idx], ...s };
+
+                        // Credit points ONLY when Make.com or Creator transitions status from 'evaluating' to 'completed'
+                        if (prevStatus === 'evaluating' && s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
+                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
+                        }
+                    } else {
+                        localData.push(s);
+                        if (s.status === 'completed' && s.lcReward && currentUser && String(s.userId) === String(currentUser._id)) {
+                            recordLevelUpReward(currentUser._id, s.type, s.milestoneId || 1, s.lcReward, `cMPLi ${s.type.toUpperCase()} Day ${s.day} Verified & Approved`);
+                        }
                     }
                 });
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
             }
         }
 
@@ -195,11 +238,11 @@ async function syncGlobalServerData() {
         }
 
     } catch (e) {
-        console.warn('Server sync offline/error:', e);
+        console.warn('Server sync offline mode:', e);
     }
 }
 syncGlobalServerData();
-setInterval(syncGlobalServerData, 5000); // Live poll every 5 seconds for cross-browser sync
+setInterval(syncGlobalServerData, 4000); // Live poll every 5 seconds for cross-browser sync
 
 let campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
     'campus@partners.com': ['6a168e4213e4e9a10984b164'    ] // We will use this to test!
@@ -5400,7 +5443,7 @@ async function submitPodSessionQuiz() {
         date: activePodSessionDateKey,
         submittedAt: new Date().toISOString(),
         lcReward: calculatedPoints,
-        status: 'evaluating', // 18s lag time evaluation
+        status: 'evaluating', // PENDING EVALUATION (NO PREMATURE POINTS)
         responses: answers
     };
 
@@ -5415,38 +5458,14 @@ async function submitPodSessionQuiz() {
         body: JSON.stringify(subData)
     }).catch(e => console.error('Server sync error for POD quiz:', e));
 
+    if (typeof sendToKVM1Database === 'function') {
+        sendToKVM1Database(subData).catch(() => {});
+    }
+
     document.getElementById('podSessionModal')?.remove();
     showPendingEvaluationPopup(calculatedPoints);
 
     if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
-
-    // 18-second automatic evaluation lag
-    setTimeout(async () => {
-        subData.status = 'completed';
-        recordLevelUpReward(currentUser._id, 'pod', activeMilestoneId || 1, calculatedPoints, `cMPLi POD Day ${activePodSessionDay} Quiz Passed`);
-
-        let currentDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-        const idx = currentDB.findIndex(s => s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay));
-        if (idx > -1) {
-            currentDB[idx].status = 'completed';
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(currentDB));
-        }
-
-        try {
-            await fetch('/api/submissions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(subData)
-            });
-        } catch (e) {}
-
-        if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
-            switchMilestoneTab('pod');
-        }
-        if (typeof updateDashboardUI === 'function') {
-            updateDashboardUI();
-        }
-    }, 18000);
 }
 
 
@@ -5487,6 +5506,7 @@ function uploadPodAudioFile(input) {
 
 function saveAdminPodCheckinConfig(dateKey) {
     const msId = activeAdminMilestoneId || 1;
+    if (!customMilestoneConfigs) customMilestoneConfigs = {};
     if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
     if (!customMilestoneConfigs[msId]['pod']) customMilestoneConfigs[msId]['pod'] = {};
 
@@ -5522,11 +5542,24 @@ function saveAdminPodCheckinConfig(dateKey) {
         endTime: document.getElementById('configEndTime')?.value || '17:00',
         audioTitle: document.getElementById('podAudioTitle')?.value.trim() || 'cMPLi POD Audio',
         audioUrl: document.getElementById('podAudioUrl')?.value.trim() || '',
-        questions: questions.length > 0 ? questions : getPodQuestionsPool()
+        questions: questions.length > 0 ? questions : (typeof getPodQuestionsPool === 'function' ? getPodQuestionsPool() : [])
     };
 
     customMilestoneConfigs[msId]['pod'][dateKey] = dayConfig;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+
+    // Instant save indicator on button
+    const btn = document.getElementById('btnSaveConfig');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-check mr-1.5"></i> Saved!';
+        btn.className = 'btn-primary py-2 px-4 text-xs bg-emerald-600 border-emerald-500';
+        setTimeout(() => {
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-save mr-1.5"></i> Save POD Day Setup';
+                btn.className = 'btn-primary py-2 px-4 text-xs';
+            }
+        }, 2000);
+    }
 
     // Sync to backend Web Service
     fetch('/api/milestone-configs', {

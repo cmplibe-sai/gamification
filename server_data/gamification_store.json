@@ -39,6 +39,23 @@
               "type": "text"
             }
           ]
+        },
+        "2026-08-29": {
+          "date": "2026-08-29",
+          "lcOnTime": 33,
+          "lcLate": 3,
+          "startTime": "05:00",
+          "endTime": "17:00",
+          "questions": [
+            {
+              "title": "Name",
+              "type": "text"
+            },
+            {
+              "title": "Email",
+              "type": "audio"
+            }
+          ]
         }
       }
     }

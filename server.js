@@ -117,22 +117,6 @@ app.get('/api/config', (req, res) => {
 // Get all submissions or filter by user
 app.get('/api/submissions', (req, res) => {
     let list = store.submissions || [];
-    const now = Date.now();
-    let hasChanges = false;
-
-    // Automatic Evaluation Approval: If in 'evaluating' status for >= 18 seconds, finalize it!
-    list.forEach(s => {
-        if (s.status === 'evaluating') {
-            const subTime = new Date(s.submittedAt || s.timestamp || s.date || 0).getTime();
-            if (now - subTime >= 18000) { // 18 seconds
-                s.status = 'completed';
-                hasChanges = true;
-            }
-        }
-    });
-
-    if (hasChanges) saveStore();
-
     const { userId, milestoneId } = req.query;
     if (userId) {
         list = list.filter(s => String(s.userId) === String(userId));
