@@ -1,3 +1,73 @@
+function updateDashboardUI() {
+    if (!currentUser) {
+        try {
+            const saved = JSON.parse(localStorage.getItem('currentUser'));
+            if (saved) currentUser = saved;
+        } catch(e) {}
+    }
+    if (!currentUser) return;
+
+    const userSubs = getUserSubmissionsByUserId(currentUser._id || currentUser);
+    const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+    const currentScore = earnedLcs > 0 ? earnedLcs : 36;
+
+    const pointsEl = document.getElementById('userPoints');
+    if (pointsEl) pointsEl.innerText = currentScore;
+
+    const welcomeEl = document.getElementById('dashWelcomeName');
+    if (welcomeEl) welcomeEl.innerText = `Welcome, ${currentUser.name || 'Learner'}`;
+
+    const userDetailsEl = document.getElementById('userDetailsContent');
+    if (userDetailsEl) {
+        const uId = currentUser._id || 'usr_000';
+        const uFanId = currentUser.fanId || (currentUser._id ? String(currentUser._id).slice(-8) : 'cbtm0292');
+        userDetailsEl.innerHTML = `
+            <div class="flex items-center gap-4 pb-3 border-b border-slate-800">
+                <img src="${currentUser.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-14 h-14 rounded-2xl border-2 border-indigo-500/50 object-cover shadow-lg" onerror="this.src='https://via.placeholder.com/80'">
+                <div>
+                    <h4 class="text-base font-extrabold text-white font-heading">${currentUser.name || 'Learner'}</h4>
+                    <span class="badge-pill badge-indigo text-[10px] font-mono mt-1"><i class="fas fa-id-card mr-1"></i> ID: ${uFanId}</span>
+                </div>
+            </div>
+            <div class="space-y-2 pt-1 text-xs">
+                <div class="flex justify-between"><span class="text-slate-400">Email Address:</span> <span class="text-slate-200 font-semibold truncate max-w-[200px]">${currentUser.email || 'learner@cmplibe.com'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Phone Number:</span> <span class="text-slate-200 font-semibold">${currentUser.phone || '+91 98454 21644'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Active Milestone:</span> <span class="text-emerald-400 font-bold">Milestone 1: cMPLi Challenge Embracer</span></div>
+            </div>
+        `;
+    }
+
+    const pointsContentEl = document.getElementById('pointsContent');
+    if (pointsContentEl) {
+        pointsContentEl.innerHTML = `
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total Earned</span>
+                    <span class="text-2xl font-black text-amber-400 font-mono">${currentScore}</span>
+                    <span class="text-[9px] text-slate-500 uppercase font-bold block mt-0.5">LCs Balance</span>
+                </div>
+                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-center">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Weekly Target</span>
+                    <span class="text-2xl font-black text-emerald-400 font-mono">198</span>
+                    <span class="text-[9px] text-slate-500 uppercase font-bold block mt-0.5">LCs Target</span>
+                </div>
+            </div>
+            <div class="mt-3 p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 flex items-center justify-between text-xs">
+                <span class="text-slate-300 font-semibold"><i class="fas fa-wallet text-indigo-400 mr-1.5"></i> In-Community TagMango Wallet:</span>
+                <span class="text-emerald-400 font-bold font-mono">Connected & Active</span>
+            </div>
+        `;
+    }
+
+    if (typeof renderSubmissionsAndReflections === 'function') {
+        renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
+    }
+    if (typeof renderTimelineGrid === 'function') {
+        renderTimelineGrid(currentUser.email, 'completionGrid');
+    }
+}
+window.updateDashboardUI = updateDashboardUI;
+
 // =========================================================================
 // CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)
 // =========================================================================
@@ -118,13 +188,27 @@ function renderAdminMangoToggles() {
     const container = document.getElementById('adminMangoToggles');
     if (!container) return;
 
+    const searchInput = document.getElementById('adminLevelUpSearch');
+    const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const pricingFilter = document.getElementById('adminLevelUpPricing') ? document.getElementById('adminLevelUpPricing').value : 'all';
+
     let mangos = allAdminMangos || [];
     if (isCampusPartner) {
         mangos = mangos.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
     }
 
+    if (pricingFilter === 'paid') {
+        mangos = mangos.filter(m => (m.amount > 0 || m.price > 0 || m.isPaid));
+    } else if (pricingFilter === 'free') {
+        mangos = mangos.filter(m => (!m.amount && !m.price && !m.isPaid));
+    }
+
+    if (searchVal) {
+        mangos = mangos.filter(m => (m.title && m.title.toLowerCase().includes(searchVal)) || (m.name && m.name.toLowerCase().includes(searchVal)));
+    }
+
     if (mangos.length === 0) {
-        container.innerHTML = '<p class="text-xs text-slate-500 italic p-3">No solutions found for access configuration.</p>';
+        container.innerHTML = '<p class="col-span-full text-xs text-slate-500 italic p-4 text-center">No matching solutions found.</p>';
         return;
     }
 
@@ -132,14 +216,16 @@ function renderAdminMangoToggles() {
         const mId = m._id || m.id;
         const isEnabled = levelUpAccessConfig.includes(mId);
         return `
-            <div class="glass-card p-3 rounded-xl border-slate-800 flex items-center justify-between gap-3">
+            <div class="glass-card p-4 rounded-xl border-slate-800 hover:border-indigo-500/40 transition-all flex items-center justify-between gap-4">
                 <div class="min-w-0 flex-1">
-                    <h5 class="text-xs font-bold text-white truncate">${m.title || m.name}</h5>
-                    <span class="text-[10px] text-slate-400 font-mono">${m.subscribersCount || 0} Registered</span>
+                    <h5 class="text-xs font-bold text-white truncate" title="${m.title || m.name}">${m.title || m.name}</h5>
+                    <span class="text-[10px] text-slate-400 font-mono block mt-0.5">${m.subscribersCount || 0} Registered Learners</span>
                 </div>
-                <button onclick="toggleLevelUpAccess('${mId}')" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
-                    ${isEnabled ? '<i class="fas fa-check mr-1"></i> Access Granted' : 'Locked'}
-                </button>
+                <!-- iOS Style Slide Switch -->
+                <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mId}')" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 border border-slate-700"></div>
+                </label>
             </div>
         `;
     }).join('');
@@ -3552,3 +3638,13 @@ function switchMilestoneTab(moduleName, btnElement) {
     container.innerHTML = cardsHtml;
 }
 window.switchMilestoneTab = switchMilestoneTab;
+
+// Automatic high-frequency cross-browser sync (every 2 seconds)
+if (typeof window !== 'undefined') {
+    if (window._cmpliSyncInterval) clearInterval(window._cmpliSyncInterval);
+    window._cmpliSyncInterval = setInterval(() => {
+        if (typeof syncGlobalServerData === 'function') {
+            syncGlobalServerData().catch(() => {});
+        }
+    }, 2000);
+}
