@@ -4193,5 +4193,5 @@ if (typeof window !== 'undefined') {
         if (typeof syncGlobalServerData === 'function') {
             syncGlobalServerData().catch(() => {});
         }
-    }, 2000);
+    }, 1500);
 }

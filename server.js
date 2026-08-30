@@ -448,11 +448,11 @@ app.post('/api/projects', (req, res) => {
 });
 
 // --- LEVEL-UP ACCESS CONFIG SYNC ---
-app.get(['/api/levelup-access', '/api/level-up-access'], (req, res) => {
+function handleGetLevelUpAccess(req, res) {
     res.json({ success: true, data: store.levelUpAccessConfig || [] });
-});
+}
 
-app.post(['/api/levelup-access', '/api/level-up-access'], (req, res) => {
+function handlePostLevelUpAccess(req, res) {
     try {
         const accessArr = req.body.config || req.body.levelUpAccess || req.body.access || [];
         store.levelUpAccessConfig = Array.isArray(accessArr) ? accessArr : [];
@@ -461,7 +461,12 @@ app.post(['/api/levelup-access', '/api/level-up-access'], (req, res) => {
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
-});
+}
+
+app.get('/api/levelup-access', handleGetLevelUpAccess);
+app.get('/api/level-up-access', handleGetLevelUpAccess);
+app.post('/api/levelup-access', handlePostLevelUpAccess);
+app.post('/api/level-up-access', handlePostLevelUpAccess);
 
 // --- MILESTONE START DATES SYNC ---
 app.get('/api/milestone-start-dates', (req, res) => {
