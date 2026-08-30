@@ -1,5 +1,3 @@
-
-// Universal API Base Resolver (Works on root / as well as subpaths like /gamification/)
 const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && window.location.pathname.startsWith('/gamification')) ? '/gamification' : '';
 
 function apiFetch(endpoint, options = {}) {
@@ -1824,7 +1822,7 @@ async function displayAdminLearnerDataById(userId) {
                 <img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500 shadow-md" onerror="this.src='https://via.placeholder.com/80'">
                 <div>
                     <h3 class="text-xl font-bold text-white">${learner.name || 'Learner'}</h3>
-                    <p class="text-xs text-indigo-400 mt-0.5 font-mono">${learner.email || learner.phone || learner._id}</p>
+                    <p class="text-xs text-indigo-400 mt-0.5 font-mono">ID: ${learner.fanId || (learner._id && learner._id.startsWith('usr_') ? learner._id : ('ID: ' + (learner._id || 'N/A')))}</p>
                 </div>
             </div>
             <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3 space-y-1">
@@ -3609,12 +3607,14 @@ function switchMilestoneTab(moduleName, btnElement = null) {
 
     const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
 
-    // --- BULLETPROOF START DATE ---
-    let milestoneStartDate = new Date('2026-08-29T00:00:00');
-    const savedStartDates = JSON.parse(localStorage.getItem('milestoneStartDates')) || { 1: '2026-08-29', 2: '2026-08-21', 3: '2026-11-21' };
-    if (savedStartDates[activeMilestoneId]) {
-        const pDate = new Date(savedStartDates[activeMilestoneId] + 'T00:00:00');
-        if (!isNaN(pDate.getTime())) milestoneStartDate = pDate;
+    // --- DYNAMIC LEARNER JOIN / START DATE ---
+    const userJoinIso = (typeof getUserMilestoneJoinDate === 'function') 
+        ? getUserMilestoneJoinDate(currentUser ? currentUser._id : '', activeMilestoneId)
+        : getLocalDateKey(new Date());
+
+    let milestoneStartDate = new Date(userJoinIso + 'T00:00:00');
+    if (isNaN(milestoneStartDate.getTime())) {
+        milestoneStartDate = new Date();
     }
     milestoneStartDate.setHours(0,0,0,0);
 
@@ -3705,6 +3705,14 @@ function switchMilestoneTab(moduleName, btnElement = null) {
             let isEvaluating = existingSub && existingSub.status === 'evaluating';
 
             let buttonHtml = '';
+            // Test Mode (God Mode) allows testing all check-ins freely
+            if (testMode && !existingSub) {
+                if (moduleName === 'pod') {
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-flask mr-1.5"></i> Test Check-in</button>`;
+                } else {
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-flask mr-1.5"></i> Test Check-in</button>`;
+                }
+            } else
             if (existingSub) {
                 if (isEvaluating) {
                     buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
