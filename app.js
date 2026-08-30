@@ -34,20 +34,40 @@ var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {
 
 async function syncGlobalServerData() {
     try {
+        let localData = [];
+        try {
+            localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+        } catch(e) {}
+
         const [subsRes, configsRes, accessRes] = await Promise.allSettled([
             fetch('/api/submissions').then(r => r.json()),
             fetch('/api/milestone-configs').then(r => r.json()),
             fetch('/api/levelup-access').then(r => r.json())
         ]);
 
-        // 1. SUBMISSIONS & CROSS-BROWSER USER SYNC
+        // 1. SUBMISSIONS TWO-WAY CROSS-BROWSER SYNC
         if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             const serverData = subsRes.value.data;
-            let localData = [];
-            try {
-                localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            } catch(e) {}
 
+            // PUSH: Upload any locally created submissions that are missing on the server
+            const missingOnServer = localData.filter(loc => !serverData.some(srv => (
+                (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
+                String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
+                normalizeLevelUpType(srv.type) === normalizeLevelUpType(loc.type) &&
+                String(srv.day !== undefined && srv.day !== null ? srv.day : (srv.date || srv.dateKey)) === String(loc.day !== undefined && loc.day !== null ? loc.day : (loc.date || loc.dateKey))
+            )));
+
+            if (missingOnServer.length > 0) {
+                missingOnServer.forEach(missingSub => {
+                    fetch('/api/submissions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(missingSub)
+                    }).catch(() => {});
+                });
+            }
+
+            // PULL: Merge server data into local database
             serverData.forEach(s => {
                 const idx = localData.findIndex(l => (
                     (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
@@ -62,25 +82,16 @@ async function syncGlobalServerData() {
                     localData.push(s);
                 }
 
-                // Also populate levelUpSubmissions dictionary
-                const userKey = s.userId || s.userEmail;
-                if (userKey) {
-                    if (typeof levelUpSubmissions === 'undefined') levelUpSubmissions = {};
-                    if (!levelUpSubmissions[userKey]) levelUpSubmissions[userKey] = [];
-                    const existInLus = levelUpSubmissions[userKey].findIndex(e => String(e.id || e._id) === String(s.id || s._id));
-                    if (existInLus > -1) levelUpSubmissions[userKey][existInLus] = s;
-                    else levelUpSubmissions[userKey].push(s);
-                }
-
-                // Ensure user exists in adminRealtimeUsers and actualUsers
-                if (s.userId && (s.userName || s.userEmail)) {
+                // Ensure user profile exists in adminRealtimeUsers
+                if (s.userId) {
                     const uId = String(s.userId);
-                    const existInAdmin = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && s.userEmail && u.email.toLowerCase() === s.userEmail.toLowerCase()));
+                    const userEmail = s.userEmail || (String(s.userId).includes('@') ? s.userId : '');
+                    const existInAdmin = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmail && u.email.toLowerCase() === userEmail.toLowerCase()));
                     if (!existInAdmin) {
                         const newU = {
                             _id: uId,
-                            name: s.userName || (s.userEmail ? s.userEmail.split('@')[0] : 'Learner'),
-                            email: s.userEmail || '',
+                            name: s.userName || (userEmail ? userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
+                            email: userEmail,
                             phone: s.userPhone || '',
                             subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
                         };
@@ -94,9 +105,6 @@ async function syncGlobalServerData() {
 
             try {
                 localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
-                if (typeof LEVELUP_SUBMISSIONS_KEY !== 'undefined') {
-                    localStorage.setItem(LEVELUP_SUBMISSIONS_KEY, JSON.stringify(levelUpSubmissions));
-                }
             } catch(e) {}
 
             if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
@@ -110,13 +118,11 @@ async function syncGlobalServerData() {
             }
         }
 
-        // 2. MILESTONE CONFIGS SYNC (FIXES POD LOSS ISSUE #3)
+        // 2. MILESTONE CONFIGS SYNC
         if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
             const serverConfigs = configsRes.value.data;
             if (typeof serverConfigs === 'object' && Object.keys(serverConfigs).length > 0) {
                 if (!customMilestoneConfigs) customMilestoneConfigs = {};
-                
-                // Deep merge server configs into local configs
                 for (const msId in serverConfigs) {
                     if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
                     for (const mod in serverConfigs[msId]) {
@@ -126,7 +132,6 @@ async function syncGlobalServerData() {
                         }
                     }
                 }
-
                 try {
                     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
                 } catch(e) {}
@@ -141,7 +146,7 @@ async function syncGlobalServerData() {
             } catch(e) {}
         }
     } catch(e) {
-        console.warn('Sync offline mode:', e);
+        console.warn('Two-way sync warning:', e);
     }
 }
 window.syncGlobalServerData = syncGlobalServerData;
@@ -659,17 +664,9 @@ async function switchTab(tab) {
     }
     
     if(tab === 'levelUpTab') {
-        const hasAccess = isAdminLogin || (currentUser && currentUser.subscribedMangoes && currentUser.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId)));
-        
-        if (!hasAccess) {
-            document.getElementById('levelUpNoAccess').classList.remove('hidden');
-            document.getElementById('milestoneGridContainer').classList.add('hidden');
-            document.getElementById('milestoneDetailContainer').classList.add('hidden');
-        } else {
-            document.getElementById('levelUpNoAccess').classList.add('hidden');
-            document.getElementById('milestoneGridContainer').classList.remove('hidden');
-            renderMilestoneGrid();
-        }
+        document.getElementById('levelUpNoAccess')?.classList.add('hidden');
+        document.getElementById('milestoneGridContainer')?.classList.remove('hidden');
+        renderMilestoneGrid();
     }
 }
 
@@ -4272,7 +4269,7 @@ function renderAdminCohortSubmissions() {
                     const dateLabel = matchingSub.dateKey ? matchingSub.dateKey : matchingSub.day;
                     const tooltip = matchingSub.date ? `${new Date(matchingSub.date).toLocaleDateString('en-GB')} • ${matchingSub.lcReward || 0} LCs` : `Day ${actualDay}`;
                     const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
-                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${dateLabel}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${statusLabel}</span></div></td>`;
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${statusLabel}</span></div></td>`;
                 } else {
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
                 }
@@ -5955,6 +5952,33 @@ window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
 window.saveAdminCheckinConfig = saveAdminCheckinConfig;
 window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;
 window.viewCustomerSubmission = viewCustomerSubmission;
+
+function viewSubmissionById(subId, userId, dayLabel, type) {
+    let allSubs = [];
+    try {
+        allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    } catch(e) {}
+    
+    let sub = null;
+    if (subId) {
+        sub = allSubs.find(s => String(s.id || s._id) === String(subId));
+    }
+    
+    if (!sub) {
+        const userSubs = getUserSubmissionsByUserId(userId);
+        sub = userSubs.find(s => String(s.day) === String(dayLabel) && normalizeLevelUpType(s.type) === normalizeLevelUpType(type))
+           || userSubs.find(s => String(s.day) === String(dayLabel))
+           || userSubs[0];
+    }
+    
+    if (sub) {
+        renderSubmissionDetailModal(sub, userId, dayLabel, type);
+    } else {
+        viewCustomerSubmission(userId, dayLabel, type);
+    }
+}
+window.viewSubmissionById = viewSubmissionById;
+
 window.viewMySubmission = viewMySubmission;
 window.renderSubmissionDetailModal = renderSubmissionDetailModal;
 window.closeAdminMilestoneView = closeAdminMilestoneView;
