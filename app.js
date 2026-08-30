@@ -3124,6 +3124,55 @@ function showRewardPopup(title, reward) {
 // ---------------------------------------------------------
 // COMPLEX TIMELINE & RULES GENERATION
 // ---------------------------------------------------------
+
+// Helper to get or initialize a user's join date for a milestone
+function getUserMilestoneJoinDate(userId, msId) {
+    if (!userId) return getLocalDateKey(new Date());
+    
+    let state = {};
+    try {
+        state = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {};
+    } catch(e) {}
+
+    if (state[userId] && state[userId][msId]) {
+        return state[userId][msId];
+    }
+
+    // Check if user has an existing earlier submission for this milestone
+    const userSubs = getUserSubmissionsByUserId(userId);
+    const msSubs = userSubs.filter(s => String(s.milestoneId || 1) === String(msId));
+    
+    if (msSubs.length > 0) {
+        let earliestDate = null;
+        msSubs.forEach(s => {
+            const raw = s.submittedAt || s.date || s.dateKey;
+            if (raw) {
+                const d = new Date(raw);
+                if (!isNaN(d.getTime())) {
+                    const iso = getLocalDateKey(d);
+                    if (!earliestDate || iso < earliestDate) earliestDate = iso;
+                }
+            }
+        });
+        if (earliestDate) {
+            if (!state[userId]) state[userId] = {};
+            state[userId][msId] = earliestDate;
+            try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
+            return earliestDate;
+        }
+    }
+
+    // Default to today as the user's start date
+    const todayIso = getLocalDateKey(new Date());
+    if (!state[userId]) state[userId] = {};
+    state[userId][msId] = todayIso;
+    try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
+    
+    return todayIso;
+}
+window.getUserMilestoneJoinDate = getUserMilestoneJoinDate;
+
+
 function switchMilestoneTab(moduleName, btnElement = null) {
     if (!moduleName || moduleName === 'undefined') moduleName = 'dip';
 
