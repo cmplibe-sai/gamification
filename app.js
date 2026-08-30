@@ -940,12 +940,67 @@ async function verifyOTP() {
                 loadGlobalSettings().catch(() => {});
                 if (typeof initAdminApp === 'function') initAdminApp().catch(() => {});
             } else {
-                currentUser = realtimeCustomer || (Array.isArray(actualUsers) && actualUsers.length > 0 ? actualUsers[0] : {
-                    _id: 'usr_' + Date.now(),
-                    name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
-                    email: tempLoginId || 'learner@cmplibe.com',
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
-                });
+                // Resolve the exact customer profile who is logging in
+                const loginStr = (tempLoginId || (document.getElementById('loginId')?.value || '')).toLowerCase().trim();
+                const cleanPhone = loginStr.replace(/\D/g, '').slice(-10);
+                
+                let resolvedUser = null;
+
+                // A. Check if user was resolved during requestOTP
+                if (currentUser && (
+                    (currentUser.email && currentUser.email.toLowerCase() === loginStr) ||
+                    (cleanPhone && currentUser.phone && String(currentUser.phone).slice(-10) === cleanPhone)
+                )) {
+                    resolvedUser = { ...currentUser };
+                }
+
+                // B. Check in historical timelineData (for legacy learners like Thejas M N, etc.)
+                if (!resolvedUser && typeof timelineData !== 'undefined') {
+                    const flatTimeline = timelineData.flat();
+                    const tUser = flatTimeline.find(t => (t.email && t.email.toLowerCase() === loginStr));
+                    if (tUser) {
+                        resolvedUser = {
+                            _id: tUser['cMPLiBe ID'] || ('cb_' + tUser.email.split('@')[0]),
+                            fanId: tUser['cMPLiBe ID'] || 'cbtm0292',
+                            name: tUser.Name || (loginStr.split('@')[0]),
+                            email: tUser.email,
+                            phone: '',
+                            subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                        };
+                    }
+                }
+
+                // C. Check in actualUsers or adminRealtimeUsers
+                if (!resolvedUser) {
+                    const knownUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
+                    const matched = knownUsers.find(u => 
+                        (u.email && u.email.toLowerCase() === loginStr) ||
+                        (cleanPhone && u.phone && String(u.phone).slice(-10) === cleanPhone)
+                    ) || (typeof adminRealtimeUsers !== 'undefined' ? adminRealtimeUsers : []).find(u => 
+                        (u.email && u.email.toLowerCase() === loginStr) ||
+                        (cleanPhone && u.phone && String(u.phone).slice(-10) === cleanPhone)
+                    );
+                    if (matched) {
+                        resolvedUser = { ...matched };
+                    }
+                }
+
+                // D. Fallback if new registered learner
+                if (!resolvedUser) {
+                    const isEmail = loginStr.includes('@');
+                    const fallbackName = isEmail ? loginStr.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner';
+                    resolvedUser = {
+                        _id: 'usr_' + (isEmail ? loginStr.replace(/[^a-zA-Z0-9]/g, '_') : (cleanPhone || Date.now())),
+                        fanId: 'fan_' + (cleanPhone || Math.floor(100000 + Math.random() * 900000)),
+                        name: fallbackName,
+                        email: isEmail ? loginStr : '',
+                        phone: cleanPhone || '',
+                        subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                    };
+                }
+
+                currentUser = resolvedUser;
+                try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
 
                 if(!localLedgers[currentUser._id]) localLedgers[currentUser._id] = [];
                 currentScoreObj = { totalScore: 0, points: [], displayScore: 0 };
@@ -957,52 +1012,39 @@ async function verifyOTP() {
                 loadGlobalSettings().catch(() => {});
                 if (typeof updateDashboardUI === 'function') updateDashboardUI();
                 if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-
-                if (typeof fetchLivePoints === 'function') {
-                    fetchLivePoints(currentUser._id).then(liveScoreData => {
-                        if (liveScoreData) {
-                            currentScoreObj = liveScoreData;
-                            let localPointsSum = (localLedgers[currentUser._id] || []).reduce((sum, item) => sum + item.score, 0);
-                            currentScoreObj.displayScore = (currentScoreObj.totalScore || 0) + localPointsSum;
-                            if (typeof updateDashboardUI === 'function') updateDashboardUI();
-                        }
-                    }).catch(() => {});
-                }
             }
-        } catch (e) {
-            console.error("Login transition error:", e);
-            document.getElementById('loginScreen')?.style.setProperty('display', 'none', 'important');
-            document.getElementById('mainApp')?.classList.remove('hidden');
-        } finally {
-            if (btn) {
-                btn.innerText = "Verify & Enter Arena";
-                btn.disabled = false;
-            }
+        } catch(e) {
+            console.error("Login verification error:", e);
         }
-    } else { 
-        alert("Invalid OTP. Hint: Use 1234"); 
+    } else {
+        alert("Invalid OTP. Enter universal demo OTP 1234.");
         if (btn) {
-            btn.innerText = "Verify & Enter Arena";
+            btn.innerText = "Verify & Access";
             btn.disabled = false;
         }
     }
 }
-
+window.verifyOTP = verifyOTP;
 
 function logout() {
     currentUser = null;
     isAdminLogin = false;
-    isCampusPartner = false; // FIX: Reset Partner Role
-    partnerAllowedMangoes = []; // FIX: Reset Partner Access
+    isCampusPartner = false;
+    partnerAllowedMangoes = [];
     tempLoginId = '';
+    try { localStorage.removeItem('currentUser'); } catch(e) {}
     
-    document.getElementById('loginId').value = '';
-    document.getElementById('otpCode').value = '';
-    document.getElementById('step1').classList.remove('hidden');
-    document.getElementById('step2').classList.add('hidden');
+    const loginInp = document.getElementById('loginId');
+    if (loginInp) loginInp.value = '';
+    const otpInp = document.getElementById('otpCode');
+    if (otpInp) otpInp.value = '';
     
-    document.getElementById('mainApp').classList.add('hidden');
-    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('step1')?.classList.remove('hidden');
+    document.getElementById('step2')?.classList.add('hidden');
+    
+    document.getElementById('mainApp')?.classList.add('hidden');
+    const loginScr = document.getElementById('loginScreen');
+    if (loginScr) loginScr.style.display = 'flex';
 }
 
 async function switchTab(tab) {
@@ -1822,7 +1864,7 @@ async function displayAdminLearnerDataById(userId) {
                 <img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500 shadow-md" onerror="this.src='https://via.placeholder.com/80'">
                 <div>
                     <h3 class="text-xl font-bold text-white">${learner.name || 'Learner'}</h3>
-                    <p class="text-xs text-indigo-400 mt-0.5 font-mono">ID: ${learner.fanId || (learner._id && learner._id.startsWith('usr_') ? learner._id : ('ID: ' + (learner._id || 'N/A')))}</p>
+                    <p class="text-xs text-indigo-400 mt-0.5 font-mono">ID: ${learner.fanId || learner._id || "N/A"}</p>
                 </div>
             </div>
             <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3 space-y-1">
