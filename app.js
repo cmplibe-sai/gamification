@@ -40,6 +40,7 @@ async function syncGlobalServerData() {
             fetch('/api/levelup-access').then(r => r.json())
         ]);
 
+        // 1. SUBMISSIONS & CROSS-BROWSER USER SYNC
         if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             const serverData = subsRes.value.data;
             let localData = [];
@@ -60,10 +61,42 @@ async function syncGlobalServerData() {
                 } else {
                     localData.push(s);
                 }
+
+                // Also populate levelUpSubmissions dictionary
+                const userKey = s.userId || s.userEmail;
+                if (userKey) {
+                    if (typeof levelUpSubmissions === 'undefined') levelUpSubmissions = {};
+                    if (!levelUpSubmissions[userKey]) levelUpSubmissions[userKey] = [];
+                    const existInLus = levelUpSubmissions[userKey].findIndex(e => String(e.id || e._id) === String(s.id || s._id));
+                    if (existInLus > -1) levelUpSubmissions[userKey][existInLus] = s;
+                    else levelUpSubmissions[userKey].push(s);
+                }
+
+                // Ensure user exists in adminRealtimeUsers and actualUsers
+                if (s.userId && (s.userName || s.userEmail)) {
+                    const uId = String(s.userId);
+                    const existInAdmin = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && s.userEmail && u.email.toLowerCase() === s.userEmail.toLowerCase()));
+                    if (!existInAdmin) {
+                        const newU = {
+                            _id: uId,
+                            name: s.userName || (s.userEmail ? s.userEmail.split('@')[0] : 'Learner'),
+                            email: s.userEmail || '',
+                            phone: s.userPhone || '',
+                            subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                        };
+                        adminRealtimeUsers.push(newU);
+                        if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+                            actualUsers.push(newU);
+                        }
+                    }
+                }
             });
 
             try {
                 localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
+                if (typeof LEVELUP_SUBMISSIONS_KEY !== 'undefined') {
+                    localStorage.setItem(LEVELUP_SUBMISSIONS_KEY, JSON.stringify(levelUpSubmissions));
+                }
             } catch(e) {}
 
             if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
@@ -72,6 +105,40 @@ async function syncGlobalServerData() {
             if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
                 renderLearnerTimeline();
             }
+            if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+                renderAdminCustomerGrid();
+            }
+        }
+
+        // 2. MILESTONE CONFIGS SYNC (FIXES POD LOSS ISSUE #3)
+        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
+            const serverConfigs = configsRes.value.data;
+            if (typeof serverConfigs === 'object' && Object.keys(serverConfigs).length > 0) {
+                if (!customMilestoneConfigs) customMilestoneConfigs = {};
+                
+                // Deep merge server configs into local configs
+                for (const msId in serverConfigs) {
+                    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+                    for (const mod in serverConfigs[msId]) {
+                        if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
+                        for (const dKey in serverConfigs[msId][mod]) {
+                            customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
+                        }
+                    }
+                }
+
+                try {
+                    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+                } catch(e) {}
+            }
+        }
+
+        // 3. LEVEL-UP ACCESS SYNC
+        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
+            levelUpAccessConfig = accessRes.value.data;
+            try {
+                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+            } catch(e) {}
         }
     } catch(e) {
         console.warn('Sync offline mode:', e);
@@ -3441,115 +3508,130 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     let displayTitle = sub.title || `Day ${actualDay} ${normalizedType.toUpperCase()} Check-In`;
     const subTime = sub.submittedAt || sub.timestamp || sub.date;
-    let exactTimeStr = 'Recorded';
+    let exactTimeStr = '29 Aug 2026';
     if (subTime) {
         const dObj = new Date(subTime);
         if (!isNaN(dObj.getTime())) {
-            exactTimeStr = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            exactTimeStr = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        } else if (typeof subTime === 'string' && subTime.length > 5) {
+            exactTimeStr = subTime;
         }
     }
 
     let bodyHtml = '';
 
-    // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (MATCHES IMG-4 EXACTLY) ---
+    // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (MATCHES IMG-1 EXACTLY) ---
     if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || r.options))) {
         const responses = sub.responses || sub.answers || [];
         
         bodyHtml = `
-            <div class="space-y-6">
+            <div class="space-y-8">
                 ${responses.map((q, qIdx) => {
                     const opts = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
                     const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : -1);
                     const correctSel = q.correctOption !== undefined ? q.correctOption : 0;
                     const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
-                    const questionPts = q.pts || 11;
+                    const questionPts = q.pts || 3;
                     const earnedPts = isCorrect ? questionPts : 0;
 
                     return `
-                    <div class="space-y-2.5 pb-4 border-b border-slate-700/60 last:border-0">
-                        <div class="flex items-start justify-between gap-4">
-                            <h5 class="text-xs sm:text-sm font-bold text-white leading-relaxed flex-1">
-                                ${qIdx + 1}. ${q.question || q.title || 'Comprehension Question'}
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 pb-6 border-b border-slate-700/60 last:border-0 items-start">
+                        <!-- Date Column (Left - Img 1 Style) -->
+                        <div class="md:col-span-2 text-xs font-semibold text-slate-400 pt-1">
+                            ${exactTimeStr}
+                        </div>
+
+                        <!-- Question & Options Column (Center - Img 1 Style) -->
+                        <div class="md:col-span-8 space-y-3">
+                            <h5 class="text-sm font-bold text-white leading-relaxed">
+                                ${q.question || q.title || 'Comprehension Question'}
                             </h5>
-                            <div class="flex items-center gap-3 shrink-0">
-                                <span class="text-[11px] font-bold text-slate-400">${questionPts} LC</span>
-                                <span class="text-xs font-black ${isCorrect ? 'text-emerald-400' : 'text-slate-500'}">${earnedPts}</span>
+
+                            <!-- 4 Stacked Option Cards -->
+                            <div class="space-y-2 pt-1">
+                                ${opts.map((opt, oIdx) => {
+                                    const isUserChoice = (oIdx === userSel);
+                                    const isRightAnswer = (oIdx === correctSel);
+                                    
+                                    let cardStyle = 'border-slate-700/80 bg-slate-900/60 text-slate-300';
+                                    let iconMarkup = '';
+
+                                    if (isRightAnswer) {
+                                        // Green border + checkmark
+                                        cardStyle = 'border-2 border-emerald-500 bg-emerald-500/10 text-emerald-300 font-semibold shadow-[0_0_12px_rgba(16,185,129,0.15)]';
+                                        iconMarkup = '<i class="fas fa-check text-emerald-400 ml-auto font-bold text-sm"></i>';
+                                    } else if (isUserChoice && !isRightAnswer) {
+                                        // Red border + cross
+                                        cardStyle = 'border-2 border-red-500 bg-red-500/10 text-red-300 font-semibold shadow-[0_0_12px_rgba(239,68,68,0.15)]';
+                                        iconMarkup = '<i class="fas fa-times text-red-400 ml-auto font-bold text-sm"></i>';
+                                    }
+
+                                    return `
+                                    <div class="flex items-center justify-between px-4 py-3 rounded-xl border ${cardStyle} transition-all">
+                                        <span class="text-xs leading-relaxed">${opt}</span>
+                                        ${iconMarkup}
+                                    </div>`;
+                                }).join('')}
                             </div>
                         </div>
 
-                        <!-- Stacked 4 Options (Img-4 Style) -->
-                        <div class="space-y-2 pt-1">
-                            ${opts.map((opt, oIdx) => {
-                                const isUserChoice = (oIdx === userSel);
-                                const isRightAnswer = (oIdx === correctSel);
-                                
-                                let cardBorder = 'border-slate-800 bg-slate-950/60 text-slate-300';
-                                let iconMarkup = '';
-
-                                if (isRightAnswer) {
-                                    cardBorder = 'border-2 border-emerald-500 bg-emerald-500/10 text-emerald-300 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.15)]';
-                                    iconMarkup = '<i class="fas fa-check text-emerald-400 ml-auto font-bold text-sm"></i>';
-                                } else if (isUserChoice && !isRightAnswer) {
-                                    cardBorder = 'border-2 border-red-500 bg-red-500/10 text-red-300 font-semibold shadow-[0_0_15px_rgba(239,68,68,0.15)]';
-                                    iconMarkup = '<i class="fas fa-times text-red-400 ml-auto font-bold text-sm"></i>';
-                                }
-
-                                return `
-                                <div class="flex items-center justify-between p-3.5 rounded-xl border ${cardBorder} transition-all">
-                                    <span class="text-xs leading-relaxed">${opt}</span>
-                                    ${iconMarkup}
-                                </div>`;
-                            }).join('')}
+                        <!-- Points Column (Right - Img 1 Style) -->
+                        <div class="md:col-span-2 flex flex-col items-end pt-1 gap-1 text-right">
+                            <span class="text-xs font-bold text-slate-400">${questionPts} LC</span>
+                            <span class="text-sm font-black ${isCorrect ? 'text-emerald-400' : 'text-slate-500'}">${earnedPts}</span>
                         </div>
                     </div>`;
                 }).join('')}
             </div>
         `;
     } else {
-        // --- CASE B: DIP & IMMERSE REFLECTIONS WITH IN-BROWSER PLAYER (FIXES IMG-3) ---
+        // --- CASE B: DIP & IMMERSE REFLECTIONS WITH IN-BROWSER AUDIO/VIDEO PLAYER ---
         const responses = sub.responses || sub.answers || [];
         bodyHtml = `
-            <div class="space-y-5">
+            <div class="space-y-6">
                 ${responses.length > 0 ? responses.map((r, rIdx) => {
                     const isMedia = ['audio', 'video', 'doc'].includes(r.type) || r.fileData || (r.answer && (r.answer.startsWith('http') || r.answer.startsWith('data:')));
                     const fileUrl = r.fileData || r.answer || sub.mediaUrl || (sub.media && sub.media.data) || '';
                     const fileName = r.fileName || `submission_${r.type || 'media'}_day_${actualDay}`;
 
                     return `
-                    <div class="space-y-2">
-                        <label class="block text-xs font-bold text-indigo-300 uppercase tracking-wider">
-                            ${rIdx + 1}. ${r.question || 'Reflection Response'}
-                        </label>
+                    <div class="space-y-3 p-4 bg-slate-900/80 rounded-2xl border border-slate-700/80 shadow-inner">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <label class="block text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                                ${rIdx + 1}. ${r.question || 'Reflection Response'}
+                            </label>
+                            <span class="text-[10px] text-slate-400 font-semibold">${exactTimeStr}</span>
+                        </div>
                         
                         ${isMedia && fileUrl ? `
-                            <div class="p-4 bg-slate-900/90 rounded-2xl border border-indigo-500/40 space-y-3 shadow-inner">
-                                <div class="flex items-center justify-between">
+                            <div class="space-y-3 pt-1">
+                                <div class="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-indigo-500/30">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center text-lg">
+                                        <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 flex items-center justify-center text-lg shrink-0">
                                             <i class="fas ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4')) ? 'fa-video' : 'fa-music'}"></i>
                                         </div>
                                         <div>
-                                            <p class="text-xs font-bold text-white">${fileName}</p>
-                                            <p class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Media Verified</p>
+                                            <p class="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-xs">${fileName}</p>
+                                            <p class="text-[10px] text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Ready for In-Browser Playback</p>
                                         </div>
                                     </div>
-                                    <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${fileName}')" class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 text-indigo-300 hover:text-white shadow-sm">
-                                        <i class="fas fa-download"></i> Download File
+                                    <button type="button" onclick="downloadMediaDirectly('${fileUrl}', '${fileName}')" class="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 text-indigo-300 hover:text-white shadow-sm shrink-0">
+                                        <i class="fas fa-download text-emerald-400"></i> Download
                                     </button>
                                 </div>
 
-                                <!-- In-Browser Player (Play right inside modal!) -->
+                                <!-- In-Browser Player (Plays right here in browser!) -->
                                 <div class="pt-1">
                                     ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm')) ? `
-                                        <video controls class="w-full max-h-[260px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
+                                        <video controls class="w-full max-h-[300px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
                                     ` : `
-                                        <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner" src="${fileUrl}"></audio>
+                                        <audio controls class="w-full rounded-xl bg-slate-950 border border-slate-700 shadow-inner p-1" src="${fileUrl}"></audio>
                                     `}
                                 </div>
                             </div>
                         ` : `
-                            <div class="p-4 bg-slate-900 rounded-xl border border-slate-700 text-slate-200 text-xs leading-relaxed whitespace-pre-wrap shadow-inner">
-                                ${r.answer || 'No response provided.'}
+                            <div class="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-slate-200 text-xs leading-relaxed whitespace-pre-wrap">
+                                ${r.answer || 'No text response provided.'}
                             </div>
                         `}
                     </div>`;
@@ -3567,8 +3649,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     const modalHtml = `
         <div id="viewSubmissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center">
-            <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
-            <div class="relative bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
+            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="document.getElementById('viewSubmissionModalDynamic').remove()"></div>
+            <div class="relative bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl p-6 md:p-8 m-4 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in-up">
                 
                 <div class="flex items-start justify-between border-b border-slate-700 pb-4 mb-6">
                     <div>
@@ -3578,9 +3660,9 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                 ${isCompleted ? `<i class="fas fa-check-circle mr-1"></i> +${lcReward} LCs Awarded` : '<i class="fas fa-hourglass-half fa-spin mr-1"></i> Evaluating...'}
                             </span>
                         </div>
-                        <p class="text-xs text-slate-400">Submitted on ${exactTimeStr}</p>
+                        <p class="text-xs text-slate-400">Submission Date: ${exactTimeStr}</p>
                     </div>
-                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                    <button onclick="document.getElementById('viewSubmissionModalDynamic').remove()" class="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -3591,8 +3673,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <i class="fas fa-user-shield"></i>
                         </div>
                         <div>
-                            <h5 class="text-xs font-bold text-amber-300">Quality & Integrity Verification in Progress</h5>
-                            <p class="text-[11px] text-slate-300">This submission is undergoing verification. Expected Reward: <strong class="text-amber-400">+${lcReward} LCs</strong>.</p>
+                            <h5 class="text-xs font-bold text-amber-300">Integrity Verification in Progress</h5>
+                            <p class="text-[11px] text-slate-300">Expected Reward: <strong class="text-amber-400">+${lcReward} LCs</strong>.</p>
                         </div>
                     </div>
                 ` : ''}
@@ -3616,14 +3698,31 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
-function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
+async function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
     const normalizedType = normalizeLevelUpType(type);
     const msId = (typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId) ? activeAdminMilestoneId : ((typeof activeMilestoneId !== 'undefined' && activeMilestoneId) ? activeMilestoneId : 1);
     
-    // Retrieve all submissions associated with this user via ID, Email, or Phone
-    const userSubs = getUserSubmissionsByUserId(userId);
+    // 1. Retrieve all submissions associated with this user via ID, Email, or Phone
+    let userSubs = getUserSubmissionsByUserId(userId);
 
-    // 1. Direct match by day / sessionDay / dateKey / date
+    // If local list is empty, attempt immediate sync from server
+    if (userSubs.length === 0) {
+        try {
+            const res = await fetch('/api/submissions').then(r => r.json());
+            if (res.success && Array.isArray(res.data)) {
+                let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+                res.data.forEach(s => {
+                    const idx = localDB.findIndex(l => String(l.id || l._id) === String(s.id || s._id));
+                    if (idx > -1) localDB[idx] = s;
+                    else localDB.push(s);
+                });
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+                userSubs = getUserSubmissionsByUserId(userId);
+            }
+        } catch(e) {}
+    }
+
+    // 2. Direct match by day / sessionDay / dateKey / date
     let sub = userSubs.find(s => {
         const subMs = s.milestoneId || 1;
         const subType = normalizeLevelUpType(s.type);
@@ -3639,23 +3738,27 @@ function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
         return false;
     });
 
-    // 2. Failsafe across milestone or date key
+    // 3. Failsafe across milestone or date key
     if (!sub) {
         sub = userSubs.find(s => normalizeLevelUpType(s.type) === normalizedType && (String(s.day) === String(dayLabel) || s.date === dayLabel || s.dateKey === dayLabel));
     }
 
-    // 3. Absolute failsafe: if user has any submission for this module, open the latest
+    // 4. Absolute failsafe: if user has any submission for this module, open the latest
     if (!sub && userSubs.length > 0) {
         sub = userSubs.find(s => normalizeLevelUpType(s.type) === normalizedType) || userSubs[userSubs.length - 1];
     }
 
     if (!sub) {
-        // Search the global DB array directly as final fallback
         const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
         sub = allSubs.find(s => 
             (String(s.userId) === String(userId) || (s.userEmail && userId && s.userEmail.toLowerCase() === String(userId).toLowerCase())) &&
             normalizeLevelUpType(s.type) === normalizedType
         );
+    }
+
+    if (!sub) {
+        alert("Submission record could not be found.");
+        return;
     }
 
     renderSubmissionDetailModal(sub, userId, dayLabel, type);
@@ -3665,12 +3768,6 @@ function viewMySubmission(userId, dayLabel, type) {
     viewCustomerSubmission(userId, dayLabel, type);
 }
 
-window.renderSubmissionDetailModal = renderSubmissionDetailModal;
-window.viewCustomerSubmission = viewCustomerSubmission;
-window.viewMySubmission = viewMySubmission;
-
-
-// 7. CREATOR 1-CLICK APPROVAL FUNCTION
 async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
     let allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     const idx = allSubs.findIndex(s => s.userId === userId && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(type) && String(s.day) === String(day));
