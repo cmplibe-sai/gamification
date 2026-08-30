@@ -21,6 +21,15 @@ var partnerAllowedMangoes = [];
 var activeAdminMilestoneId = 1;
 var activeMilestoneId = 1;
 var activeAdminModule = 'dip';
+var ALL_PLATFORM_MODULES = [
+    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400' },
+    { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
+    { code: 'projects', name: 'Real-World Execution', icon: 'fa-briefcase text-purple-400' },
+    { code: 'problem_solution', name: 'Problem-Solution Briefing', icon: 'fa-brain text-emerald-400' },
+    { code: 'residency', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
+];
+window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
 var tempLoginId = '';
 var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || ['6a168e4213e4e9a10984b164'];
 var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
@@ -38,6 +47,21 @@ var activePodSessionDay = 1;
 var activePodSessionDateKey = '';
 var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
+function isTestUser() {
+    if (!currentUser) return false;
+    const email = (currentUser.email || '').toLowerCase().trim();
+    const phone = String(currentUser.phone || '').replace(/\D/g, '').slice(-10);
+    const id = String(currentUser._id || '').toLowerCase().trim();
+    const testAccounts = [
+        'saiyedamala02@gmail.com',
+        'engineersai02@gmail.com',
+        'test@cmplibe.com',
+        'tester@cmplibe.com'
+    ];
+    return testAccounts.includes(email) || phone === '6309764212' || phone === '6309764213' || id.includes('test') || id.includes('saiyedamala') || id.includes('engineersai');
+}
+window.isTestUser = isTestUser;
+
 var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
 
 
@@ -1178,7 +1202,7 @@ async function openMilestone(id) {
     if (titleEl) titleEl.innerText = `Milestone ${ms.id}: ${ms.name}`;
     if (descEl) descEl.innerText = ms.desc;
 
-    // Render Enabled Modules Sub-Nav
+    // Render Enabled Modules Sub-Nav based on Creator Toggles
     const enabledMods = getEnabledModulesForMilestone(activeMilestoneId);
     const subNav = document.getElementById('milestoneSubNav');
     if (subNav) {
@@ -2142,8 +2166,21 @@ function renderTimelineGrid(learnerEmail, gridId) {
     if (!userTimeline) return grid.innerHTML = '<p class="text-slate-500 col-span-full">No timeline data found for this user.</p>';
     grid.innerHTML = ''; 
 
-    for (const [month, activities] of Object.entries(activeReferenceData)) {
-        let boxHtml = `<div class="month-card"><div class="month-title">${month}</div>`;
+    const activeRef = (typeof referenceData !== 'undefined') ? referenceData : {
+        "Aug 2025": { "Dip": 25 },
+        "Sep 2025": { "Dip": 26, "Immerse-ECC&C": 11 },
+        "Oct 2025": { "Dip": 24, "Immerse-ECC&C": 10, "iOS Check-In": 1 },
+        "Nov 2025": { "Dip": 25, "Immerse-ECC&C": 9, "iOS Check-In": 4 },
+        "Dec 2025": { "Dip": 26, "RXpE Check-In": 12 },
+        "Jan 2026": { "Dip": 26, "Immerse-ECC&C": 6, "Quiz": 2 },
+        "Feb 2026": { "Dip": 23, "Immerse-ECC&C": 10 },
+        "Mar 2026": { "Dip": 25, "Immerse-ECC&C": 6, "Quiz": 1, "Speak2Camera": 0 },
+        "Apr 2026": { "Dip": 26, "Immerse-ECC&C": 6, "Speak2Camera": 0, "121 Interventions": 0 },
+        "May 2026": { "Dip": 25, "Immerse-ECC&C": 8, "Quiz": 3, "Speak2Camera": 0, "121 Interventions": 0 },
+        "June 2026": { "Dip": 26, "Immerse-ECC&C": 6, "Quiz": 4, "Speak2Camera": 0, "121 Interventions": 0 }
+    };
+    for (const [month, activities] of Object.entries(activeRef)) {
+        let boxHtml = `<div class="month-card glass p-4 rounded-xl border border-slate-700 shadow-sm mb-3"><div class="month-title font-bold text-xs text-white uppercase tracking-wider mb-2 border-b border-slate-700 pb-1">${month}</div>`;
         for (const [activityName, targetScore] of Object.entries(activities)) {
             const jsonKey = `${month} - ${activityName}`;
             let userScore = (userTimeline[jsonKey] !== undefined && userTimeline[jsonKey] !== "") ? userTimeline[jsonKey] : 0;
@@ -2153,9 +2190,9 @@ function renderTimelineGrid(learnerEmail, gridId) {
             if (targetScore !== 0) {
                 let percentage = Math.min((userScore / targetScore) * 100, 100);
                 let barColor = percentage >= 100 ? '#34d399' : (percentage >= 50 ? '#fbbf24' : '#ef4444');
-                progressBarHtml = `<div class="progress-track mt-1"><div class="progress-fill" style="width: ${percentage}%; background-color: ${barColor};"></div></div>`;
+                progressBarHtml = `<div class="progress-track w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1"><div class="progress-fill h-full rounded-full transition-all" style="width: ${percentage}%; background-color: ${barColor};"></div></div>`;
             }
-            boxHtml += `<div class="activity-container"><div class="activity-header"><span class="activity-name">${activityName}</span><span class="activity-score">${scoreDisplay}</span></div>${progressBarHtml}</div>`;
+            boxHtml += `<div class="activity-container mb-2 last:mb-0"><div class="activity-header flex justify-between text-[11px] font-semibold"><span class="activity-name text-slate-300">${activityName}</span><span class="activity-score text-indigo-400 font-mono">${scoreDisplay}</span></div>${progressBarHtml}</div>`;
         }
         grid.innerHTML += boxHtml + `</div>`;
     }
