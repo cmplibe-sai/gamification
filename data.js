@@ -24,35 +24,34 @@ var ALL_PLATFORM_MODULES = [
 var milestoneConfig = [
     {
         id: 1,
-        name: 'Milestone 1: Simply Challenge Embracer',
+        name: 'cMPLi Challenge Embracer',
         desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
         defaultModules: ['dip', 'pod'],
         modules: ['dip', 'pod']
     },
     {
         id: 2,
-        name: 'Milestone 2: Emerging Professional',
-        desc: '30-day deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
-        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
-        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
+        name: 'cMPLi Curious',
+        desc: 'Deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
+        defaultModules: ['dip', 'pod', 'immerse', 'projects'],
+        modules: ['dip', 'pod', 'immerse', 'projects']
     },
     {
         id: 3,
-        name: 'Milestone 3: Industry Ready Candidate',
-        desc: 'Advanced sector projects, mentor coaching reviews, and corporate readiness training.',
-        defaultModules: ['dip', 'pod', 'immerse', 'ios', 'projects'],
-        modules: ['dip', 'pod', 'immerse', 'ios', 'projects']
+        name: 'cMPLi Committed',
+        desc: 'Problem-Solution briefing, strategic problem framing, and advanced cross-functional mastery.',
+        defaultModules: ['dip', 'pod', 'immerse', 'projects', 'problem_solution'],
+        modules: ['dip', 'pod', 'immerse', 'projects', 'problem_solution']
     },
     {
         id: 4,
-        name: 'Milestone 4: Corporate Residency / Placement',
-        desc: 'Full corporate immersion, live client project delivery, and final portfolio defense.',
-        defaultModules: ['corporate', 'projects'],
-        modules: ['corporate', 'projects']
+        name: 'cMPLi futuREadi earliTalent',
+        desc: 'Corporate residency, institutional capstones, and industry readiness deployment.',
+        defaultModules: ['dip', 'pod', 'immerse', 'projects', 'residency'],
+        modules: ['dip', 'pod', 'immerse', 'projects', 'residency']
     }
 ];
-
-var defaultPodQuestionsPool = [
+window.milestoneConfig = milestoneConfig;var defaultPodQuestionsPool = [
     {
         id: 'pod_q1',
         title: 'According to today’s POD audio, what is the core driver of long-term habit consistency?',

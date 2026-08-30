@@ -4703,7 +4703,15 @@ function renderAdminCohortSubmissions() {
         validCohort.push({ ...user, completionPct, isPending, isApproved, earnedLcs });
     });
 
-    validCohort.sort((a, b) => (b.earnedLcs || 0) - (a.earnedLcs || 0));
+    validCohort.sort((a, b) => {
+        const diffLcs = (b.earnedLcs || 0) - (a.earnedLcs || 0);
+        if (diffLcs !== 0) return diffLcs;
+        const diffPct = (b.completionPct || 0) - (a.completionPct || 0);
+        if (diffPct !== 0) return diffPct;
+        const nameA = String(a.name || a.email || a._id || '').toLowerCase();
+        const nameB = String(b.name || b.email || b._id || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
 
     document.getElementById('adminMsStatsBar').innerHTML = `
         <span class="text-xs font-bold bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/50">Active Customers: ${validCohort.length}</span>
