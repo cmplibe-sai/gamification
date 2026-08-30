@@ -792,46 +792,44 @@ async function requestOTP() {
     const rawInput = (document.getElementById('loginId')?.value || '').trim();
     const loginId = rawInput.toLowerCase();
     const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
-    if (!loginId) return alert("Please enter email or phone number.");
+    if (!loginId) return alert("Please enter your email or 10-digit mobile number.");
     
-    // Strict Format Validation: Only valid Email or 10-digit Phone allowed
+    // Strict Format Validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmailValid = emailRegex.test(loginId);
     const isPhoneValid = (cleanPhone && cleanPhone.length === 10 && /^[6-9]\d{9}$/.test(cleanPhone));
     
     if (!isEmailValid && !isPhoneValid) {
-        return alert("⚠️ Invalid Credentials\n\nPlease enter a valid email address (e.g. name@domain.com) or a valid 10-digit Indian mobile number.");
+        return alert("⚠️ Invalid Format\n\nPlease enter a valid email address (e.g. user@gmail.com) or a valid 10-digit mobile number.");
     }
-    
+
     const btn = document.querySelector('#step1 button');
     if (btn) {
-        btn.innerText = "Verifying...";
+        btn.innerText = "Verifying with learn.cmplibe.com...";
         btn.disabled = true;
     }
 
     try {
-        // 1. SAFE ADMIN & PARTNER CHECK
+        // 1. CREATOR CHECK (Exact Admin Email Match)
         const defaultAdmins = [
             'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
             'admin@cmplibe.com', 'saikumaryadiki@gmail.com'
         ];
         const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
         
-        // Strict Creator Check: Exact match on creator email only
-        isAdminLogin = adminEmails.some(e => {
-            const normE = String(e).toLowerCase().trim();
-            return normE === loginId;
-        });
+        isAdminLogin = adminEmails.some(e => String(e).toLowerCase().trim() === loginId);
         
+        // 2. CAMPUS PARTNER CHECK
         isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
         if (isCampusPartner) {
             partnerAllowedMangoes = campusPartnersDB[loginId] || campusPartnersDB[cleanPhone] || [];
         }
 
-        // 2. CUSTOMER / TESTER LOGIN FLOW
+        // 3. CUSTOMER / TEST USER CHECK & VERIFICATION
         if (!isAdminLogin && !isCampusPartner) {
             let foundUser = null;
 
+            // A. Check TagMango API (learn.cmplibe.com)
             try {
                 if (typeof window.fetchTagMango === 'function' && window.TagMangoAPI?.Users?.lookup) {
                     const isEmail = loginId.includes('@');
@@ -845,49 +843,69 @@ async function requestOTP() {
                     foundUser = response.result || response.user || (Array.isArray(response) ? response[0] : null);
                 }
             } catch (apiErr) {
-                console.warn("TagMango API lookup bypassed/timed out:", apiErr.message);
+                console.warn("TagMango API lookup notice:", apiErr.message);
             }
 
-            if (!foundUser || !foundUser._id) {
-                if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) {
-                    foundUser = actualUsers.find(u =>
-                        (u.email && u.email.toLowerCase() === loginId) ||
-                        (u.phone && String(u.phone).trim() === loginId) ||
-                        (cleanPhone && u.phone && String(u.phone).includes(cleanPhone)) ||
-                        (u._id && String(u._id) === loginId)
-                    );
-                }
-            }
+            // B. Check Registered Database & Test Emails
+            const knownUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
+            const localMatched = knownUsers.find(u => 
+                (u.email && u.email.toLowerCase() === loginId) || 
+                (cleanPhone && u.phone && String(u.phone).slice(-10) === cleanPhone)
+            );
 
-            if (!foundUser || !foundUser._id) {
-                const isEmail = loginId.includes('@');
-                foundUser = {
-                    _id: 'usr_' + Math.abs(loginId.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)).toString(16),
-                    name: isEmail ? loginId.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : `Learner ${cleanPhone}`,
-                    email: isEmail ? loginId : `${cleanPhone}@learn.cmplibe.com`,
-                    phone: cleanPhone || loginId,
+            const isTest = (typeof TEST_EMAILS !== 'undefined') && TEST_EMAILS.some(t => t.toLowerCase() === loginId);
+
+            if (foundUser) {
+                currentUser = {
+                    _id: foundUser._id || foundUser.id || ('usr_' + Date.now()),
+                    name: foundUser.name || foundUser.fullName || (loginId.includes('@') ? loginId.split('@')[0] : 'Learner'),
+                    email: foundUser.email || (loginId.includes('@') ? loginId : ''),
+                    phone: foundUser.phone || cleanPhone || '',
+                    subscribedMangoes: foundUser.subscribedMangoes || ['6a168e4213e4e9a10984b164']
+                };
+            } else if (localMatched) {
+                currentUser = { ...localMatched };
+            } else if (isTest) {
+                currentUser = {
+                    _id: 'usr_test_' + Date.now(),
+                    name: 'Test Learner (' + loginId.split('@')[0] + ')',
+                    email: loginId,
+                    phone: cleanPhone || '9876543210',
                     subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
                 };
+            } else {
+                // User is not enrolled/registered on TagMango (learn.cmplibe.com)
+                if (btn) {
+                    btn.innerText = "Request OTP";
+                    btn.disabled = false;
+                }
+                return alert(`⚠️ Account Not Found on learn.cmplibe.com\n\nWe could not find an enrolled account for "${rawInput}".\n\nPlease ensure you have enrolled in a cMPLi solution using this email/phone, or verify your credentials.`);
             }
-
-            realtimeCustomer = foundUser;
         }
 
-        // 3. SUCCESS: Transition to OTP Screen
-        document.getElementById('step1')?.classList.add('hidden');
-        document.getElementById('step2')?.classList.remove('hidden');
+        // Save session state & switch to OTP entry screen
         tempLoginId = loginId;
+        const s1 = document.getElementById('step1');
+        const s2 = document.getElementById('step2');
+        if (s1) s1.classList.add('hidden');
+        if (s2) s2.classList.remove('hidden');
 
-    } catch (err) {
-        console.error("Login initialization error:", err);
-        document.getElementById('step1')?.classList.add('hidden');
-        document.getElementById('step2')?.classList.remove('hidden');
-        tempLoginId = loginId;
-    } finally {
+        const otpInfo = document.getElementById('otpSentInfo');
+        if (otpInfo) {
+            otpInfo.innerText = `OTP sent to ${rawInput} (Universal Demo OTP: 1234)`;
+        }
+
         if (btn) {
             btn.innerText = "Request OTP";
             btn.disabled = false;
         }
+    } catch (err) {
+        console.error("Login verification error:", err);
+        if (btn) {
+            btn.innerText = "Request OTP";
+            btn.disabled = false;
+        }
+        alert("An error occurred during verification. Please try again.");
     }
 }
 
@@ -3507,19 +3525,26 @@ function getUserMilestoneJoinDate(userId, msId) {
         }
     }
 
-    // Milestone 1 default cohort start date is 2026-08-29
-    const defaultStart = '2026-08-29';
+    // For a brand new customer joining milestone today:
+    // If today is Sunday (rest day), Day 1 begins tomorrow on Monday.
+    // Otherwise Day 1 begins today!
+    const today = new Date();
+    if (today.getDay() === 0) { // Sunday
+        today.setDate(today.getDate() + 1); // Monday
+    }
+    const userStartDate = getLocalDateKey(today);
+
     if (userId) {
         if (!state[userId]) state[userId] = {};
-        state[userId][msId] = defaultStart;
+        state[userId][msId] = userStartDate;
         try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
         fetch('/api/user-join-dates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, msId, joinDate: defaultStart, allJoinDates: state })
+            body: JSON.stringify({ userId, msId, joinDate: userStartDate, allJoinDates: state })
         }).catch(() => {});
     }
-    return defaultStart;
+    return userStartDate;
 }
 window.getUserMilestoneJoinDate = getUserMilestoneJoinDate;
 
