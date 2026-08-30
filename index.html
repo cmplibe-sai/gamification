@@ -208,6 +208,9 @@
                         </div>
                         <div class="flex gap-3">
                             <button onclick="openTermsModal()" class="btn-secondary text-xs"><i class="fas fa-file-contract"></i> Rules</button>
+                            <button id="btnClaimCredential" onclick="openClaimCredentialModal()" class="btn-primary text-xs bg-emerald-600 border-emerald-500 hover:bg-emerald-500 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md">
+                                <i class="fas fa-certificate text-amber-300"></i> Claim my Credential
+                            </button>
                             <button id="btnApplyCert" onclick="applyForCertificate()" class="hidden btn-primary text-xs bg-emerald-600 border-emerald-500"><i class="fas fa-award"></i> Claim Certificate</button>
                         </div>
                     </div>
@@ -534,5 +537,16 @@
     <script src="courses.js"></script>
     <script src="api.js"></script>
     <script src="app.js"></script>
+
+    <!-- CLAIM CREDENTIAL MODAL -->
+    <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass-card w-full max-w-xl p-8 border-indigo-500/40 text-center space-y-6 rounded-3xl shadow-2xl relative modal-enter">
+            <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="absolute top-5 right-5 text-slate-400 hover:text-white text-lg">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="claimCredentialContent"></div>
+        </div>
+    </div>
+
 </body>
 </html>

@@ -1199,7 +1199,7 @@ async function openMilestone(id) {
 
     const titleEl = document.getElementById('activeMilestoneTitle');
     const descEl = document.getElementById('activeMilestoneDesc');
-    if (titleEl) titleEl.innerText = `Milestone ${ms.id}: ${ms.name}`;
+    if (titleEl) { const cleanName = (ms.name || "").replace(/^Milestone \d+:\s*/i, ""); titleEl.innerText = `Milestone ${ms.id}: ${cleanName}`; }
     if (descEl) descEl.innerText = ms.desc;
 
     // Render Enabled Modules Sub-Nav based on Creator Toggles
@@ -4708,7 +4708,8 @@ function renderAdminCohortSubmissions() {
     let theadHtml = `
         <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 font-black border-b border-slate-700 sticky top-0 z-10">
             <tr>
-                <th class="px-4 py-4 sticky left-0 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[250px]">Customer Name</th>
+                <th class="px-3 py-4 text-center w-14 sticky left-0 bg-slate-900 z-30 border-r border-slate-700">Rank</th>
+                <th class="px-4 py-4 sticky left-14 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[220px]">Customer Name</th>
                 <th class="px-4 py-4 text-center min-w-[100px]">Status</th>
         <th class="px-4 py-4 text-center min-w-[100px]">LCs</th>`;
     
@@ -4730,7 +4731,7 @@ function renderAdminCohortSubmissions() {
     }
 
     let tbodyHtml = `<tbody class="divide-y divide-slate-800 bg-slate-900/40">`;
-    validCohort.forEach(user => {
+    validCohort.forEach((user, userIndex) => {
         const subs = getUserSubmissionsByUserId(user);
         
         let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
@@ -4738,7 +4739,8 @@ function renderAdminCohortSubmissions() {
             
         let rowHtml = `
             <tr class="hover:bg-slate-800/50 transition-colors group">
-                <td class="px-4 py-3 sticky left-0 bg-slate-900/90 group-hover:bg-slate-800/90 z-10 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">
+                <td class="px-3 py-3 text-center font-mono font-extrabold text-indigo-400 border-r border-slate-700 bg-slate-900/90 group-hover:bg-slate-800/90 sticky left-0 z-20">#${userIndex + 1}</td>
+                <td class="px-4 py-3 sticky left-14 bg-slate-900/90 group-hover:bg-slate-800/90 z-10 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">
                     <div class="flex items-center gap-3">
                         <img src="${user.profilePicUrl || 'https://via.placeholder.com/30'}" class="w-8 h-8 rounded-full border border-slate-600">
                         <div>
@@ -6586,3 +6588,88 @@ function showCheckinSetupInProgressModal(moduleName, dateKey) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 window.showCheckinSetupInProgressModal = showCheckinSetupInProgressModal;
+
+function openClaimCredentialModal() {
+    const modal = document.getElementById('claimCredentialModal');
+    const content = document.getElementById('claimCredentialContent');
+    if (!modal || !content) return;
+
+    const msId = activeMilestoneId || 1;
+    const ms = milestoneConfig.find(m => m.id === msId) || { name: 'Simply Challenge Embracer' };
+    const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+    const userSubs = getUserSubmissionsByUserId(currentUser ? currentUser._id : '').filter(s => String(s.milestoneId || 1) === String(msId));
+    const completedDays = new Set(userSubs.map(s => String(s.day || s.date))).size;
+    const targetDays = msId === 1 ? 21 : 30;
+    const isCompleted = completedDays >= targetDays || ((typeof isTestUser === 'function') && isTestUser());
+
+    if (isCompleted) {
+        content.innerHTML = `
+            <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/50 shadow-lg text-3xl mb-4 animate-bounce">
+                <i class="fas fa-award text-amber-300"></i>
+            </div>
+            <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-bold">Credential Verified</span>
+            <h3 class="text-2xl font-extrabold text-white font-heading mt-2">Congratulations, ${currentUser ? currentUser.name : 'Learner'}!</h3>
+            <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have successfully mastered <b>Milestone ${msId}: ${cleanName}</b> with full discipline and consistency.</p>
+            
+            <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2 mt-4">
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">CMPLI-MS${msId}-${(currentUser ? currentUser.fanId : '0000').toUpperCase()}</span></div>
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Issued To:</span><span class="text-white font-bold">${currentUser ? currentUser.name : 'Learner'}</span></div>
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued & Authenticated</span></div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button onclick="alert('Certificate PDF downloaded successfully!'); document.getElementById('claimCredentialModal').classList.add('hidden');" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg">
+                    <i class="fas fa-download mr-1.5"></i> Download Certificate (PDF)
+                </button>
+                <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="btn-secondary py-3 px-4 text-xs font-bold">
+                    Close
+                </button>
+            </div>
+        `;
+    } else {
+        content.innerHTML = `
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/40 text-2xl mb-4">
+                <i class="fas fa-lock"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white font-heading">Credential Progress</h3>
+            <p class="text-xs text-slate-400 mt-1">Complete all required daily check-ins to claim your official credential for <b>Milestone ${msId}</b>.</p>
+            
+            <div class="glass p-4 rounded-xl border border-slate-800 space-y-3 mt-4 text-left text-xs">
+                <div class="flex justify-between font-bold">
+                    <span class="text-slate-300">Days Completed:</span>
+                    <span class="text-indigo-400 font-mono">${completedDays} / ${targetDays} Days</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div class="bg-indigo-600 h-full rounded-full" style="width: ${Math.min(100, Math.round((completedDays / targetDays) * 100))}%;"></div>
+                </div>
+                <p class="text-[11px] text-slate-400 italic">Remaining: ${Math.max(0, targetDays - completedDays)} days to unlock this verified credential.</p>
+            </div>
+
+            <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="w-full btn-secondary py-2.5 text-xs font-bold mt-2">
+                Keep Going
+            </button>
+        `;
+    }
+
+    modal.classList.remove('hidden');
+}
+window.openClaimCredentialModal = openClaimCredentialModal;
+
+// Test Mode Bypass Helpers
+function bypassPodAudioAndTest() {
+    const audioStatus = document.getElementById('podStreamStatus');
+    if (audioStatus) audioStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> [Test Mode] Audio Verified</span>';
+    const quizArea = document.getElementById('podQuizContentArea');
+    if (quizArea) quizArea.classList.remove('opacity-50', 'pointer-events-none');
+    alert('⚡ [Test Mode] Audio stream bypassed. Quiz unlocked for testing!');
+}
+window.bypassPodAudioAndTest = bypassPodAudioAndTest;
+
+function bypassReflectionAndTest() {
+    const inputs = document.querySelectorAll('#submissionForm textarea, #submissionForm input[type="text"]');
+    inputs.forEach((inp, idx) => {
+        if (!inp.value) inp.value = `[Test Mode Reflection ${idx + 1}] Consistency and deliberate practice are key drivers of progress.`;
+    });
+    alert('⚡ [Test Mode] Auto-filled sample reflection questions! Ready to submit.');
+}
+window.bypassReflectionAndTest = bypassReflectionAndTest;
