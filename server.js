@@ -350,8 +350,10 @@ app.get('/api/milestone-module-access', (req, res) => {
 app.post('/api/milestone-module-access', (req, res) => {
     try {
         const { msId, moduleAccess, allModuleAccess } = req.body;
-        if (allModuleAccess && typeof allModuleAccess === 'object') {
-            store.customMilestoneModuleAccess = allModuleAccess;
+        const fullMap = allModuleAccess || (moduleAccess && typeof moduleAccess === 'object' && !Array.isArray(moduleAccess) ? moduleAccess : null);
+        
+        if (fullMap) {
+            store.customMilestoneModuleAccess = fullMap;
         } else if (msId && Array.isArray(moduleAccess)) {
             if (!store.customMilestoneModuleAccess) store.customMilestoneModuleAccess = {};
             store.customMilestoneModuleAccess[msId] = moduleAccess;
@@ -391,9 +393,20 @@ app.get('/api/milestone-configs', (req, res) => {
 
 app.post('/api/milestone-configs', (req, res) => {
     try {
-        const { milestoneId, moduleName, dateKey, config, allConfigs } = req.body;
-        if (allConfigs) {
-            store.customMilestoneConfigs = allConfigs;
+        const { milestoneId, moduleName, dateKey, config, allConfigs, configs, customMilestoneConfigs } = req.body;
+        const fullConfigs = allConfigs || configs || customMilestoneConfigs;
+
+        if (fullConfigs && typeof fullConfigs === 'object') {
+            if (!store.customMilestoneConfigs) store.customMilestoneConfigs = {};
+            for (const ms in fullConfigs) {
+                if (!store.customMilestoneConfigs[ms]) store.customMilestoneConfigs[ms] = {};
+                for (const mod in fullConfigs[ms]) {
+                    if (!store.customMilestoneConfigs[ms][mod]) store.customMilestoneConfigs[ms][mod] = {};
+                    for (const dKey in fullConfigs[ms][mod]) {
+                        store.customMilestoneConfigs[ms][mod][dKey] = fullConfigs[ms][mod][dKey];
+                    }
+                }
+            }
         } else if (milestoneId && moduleName && dateKey && config) {
             if (!store.customMilestoneConfigs) store.customMilestoneConfigs = {};
             if (!store.customMilestoneConfigs[milestoneId]) store.customMilestoneConfigs[milestoneId] = {};
@@ -435,13 +448,14 @@ app.post('/api/projects', (req, res) => {
 });
 
 // --- LEVEL-UP ACCESS CONFIG SYNC ---
-app.get('/api/levelup-access', (req, res) => {
+app.get(['/api/levelup-access', '/api/level-up-access'], (req, res) => {
     res.json({ success: true, data: store.levelUpAccessConfig || [] });
 });
 
-app.post('/api/levelup-access', (req, res) => {
+app.post(['/api/levelup-access', '/api/level-up-access'], (req, res) => {
     try {
-        store.levelUpAccessConfig = req.body.config || [];
+        const accessArr = req.body.config || req.body.levelUpAccess || req.body.access || [];
+        store.levelUpAccessConfig = Array.isArray(accessArr) ? accessArr : [];
         saveStore();
         res.json({ success: true, message: 'Access config updated', data: store.levelUpAccessConfig });
     } catch (err) {
