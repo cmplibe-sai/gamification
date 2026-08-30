@@ -1138,36 +1138,35 @@ function handleLockedClick(id, isUnlocked) {
 
 // Function to let the learner enter the milestone view (UPDATED WITH START DATE)
 async function openMilestone(id) {
-    await syncGlobalServerData();
-    activeMilestoneId = id;
-    const ms = milestoneConfig.find(m => m.id === id) || milestoneConfig[0];
+    if (typeof syncGlobalServerData === 'function') {
+        try { await syncGlobalServerData(); } catch(e) {}
+    }
+    activeMilestoneId = Number(id);
+    const ms = milestoneConfig.find(m => m.id === activeMilestoneId) || milestoneConfig[0];
     
+    if (!currentUser) return;
     if (!userMilestoneState[currentUser._id]) {
         userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
     }
-    
-    // Anchor start date from Day 1 submission
-    const userSubs = getUserSubmissionsByUserId(currentUser._id).filter(s => normalizeLevelUpType(s.type) === 'dip');
-    const day1Sub = userSubs.find(s => String(s.day) === '1');
-    
-    if (day1Sub) {
-        const rawTime = day1Sub.dateKey || day1Sub.date || day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt;
-        if (rawTime) {
-            userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date(rawTime));
-        }
-    } else {
-        userMilestoneState[currentUser._id].startDate = getLocalDateKey(new Date());
+
+    const testMode = (typeof isTestUser === 'function') && isTestUser();
+    if (testMode) {
+        userMilestoneState[currentUser._id].highestUnlocked = 4;
     }
-    localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+    
+    // Dynamic per-user start date
+    const uStart = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser._id, activeMilestoneId) : getLocalDateKey(new Date());
+    userMilestoneState[currentUser._id].startDate = uStart;
+    try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
 
     if (!userMilestoneState[currentUser._id].viewedTerms) {
         userMilestoneState[currentUser._id].viewedTerms = [];
     }
     
-    if (id === 1 && !userMilestoneState[currentUser._id].viewedTerms.includes(id)) {
+    if (activeMilestoneId === 1 && !userMilestoneState[currentUser._id].viewedTerms.includes(activeMilestoneId) && !testMode) {
         if (typeof openTermsModal === 'function') openTermsModal();
-        userMilestoneState[currentUser._id].viewedTerms.push(id);
-        localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState));
+        userMilestoneState[currentUser._id].viewedTerms.push(activeMilestoneId);
+        try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
     }
     
     document.getElementById('milestoneGridContainer')?.classList.add('hidden');
@@ -1175,17 +1174,15 @@ async function openMilestone(id) {
     document.getElementById('milestoneDetailContainer')?.classList.remove('hidden');
 
     const titleEl = document.getElementById('activeMilestoneTitle');
-    if(titleEl) titleEl.innerText = ms.name;
-    
     const descEl = document.getElementById('activeMilestoneDesc');
-    if(descEl) descEl.innerText = ms.desc || "Must maintain strict compliance to avoid a complete reset.";
-    
-    // Get ONLY enabled modules configured by Creator
-    const activeMods = getEnabledModulesForMilestone(id);
+    if (titleEl) titleEl.innerText = `Milestone ${ms.id}: ${ms.name}`;
+    if (descEl) descEl.innerText = ms.desc;
 
-    const subNavEl = document.getElementById('milestoneSubNav');
-    if(subNavEl) {
-        subNavEl.innerHTML = activeMods.map((modCode, i) => {
+    // Render Enabled Modules Sub-Nav
+    const enabledMods = getEnabledModulesForMilestone(activeMilestoneId);
+    const subNav = document.getElementById('milestoneSubNav');
+    if (subNav) {
+        subNav.innerHTML = enabledMods.map((modCode, i) => {
             const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
             return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
@@ -1193,17 +1190,13 @@ async function openMilestone(id) {
             </button>`;
         }).join('');
     }
-    
-    const btnCert = document.getElementById('btnApplyCert');
-    if (btnCert) {
-        btnCert.classList.remove('hidden');
-        btnCert.innerHTML = '<i class="fas fa-award mr-1"></i> Claim My Credential';
-    }
-    
-    if (activeMods.length > 0 && typeof switchMilestoneTab === 'function') {
-        switchMilestoneTab(activeMods[0]);
+
+    const firstMod = enabledMods[0] || 'dip';
+    if (typeof switchMilestoneTab === 'function') {
+        switchMilestoneTab(firstMod);
     }
 }
+window.openMilestone = openMilestone;
 
 function closeMilestoneView() {
     activeMilestoneId = null;
@@ -3747,25 +3740,17 @@ function switchMilestoneTab(moduleName, btnElement = null) {
             let isEvaluating = existingSub && existingSub.status === 'evaluating';
 
             let buttonHtml = '';
-            // Test Mode (God Mode) allows testing all check-ins freely
-            if (testMode && !existingSub) {
-                if (moduleName === 'pod') {
-                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-flask mr-1.5"></i> Test Check-in</button>`;
-                } else {
-                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-flask mr-1.5"></i> Test Check-in</button>`;
-                }
-            } else
             if (existingSub) {
                 if (isEvaluating) {
                     buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
                 } else {
                     buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
                 }
-            } else if (isToday) {
+            } else if (isToday || testMode) {
                 if (moduleName === 'pod') {
-                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] animate-pulse"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] ${isToday ? 'animate-pulse' : ''}"><i class="fas fa-podcast mr-1.5"></i> ${testMode && !isToday ? 'Test Check-in' : 'Start Check-in'}</button>`;
                 } else {
-                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] animate-pulse"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] ${isToday ? 'animate-pulse' : ''}"><i class="fas fa-play-circle mr-1"></i> ${testMode && !isToday ? 'Test Check-in' : 'Start Check-in'}</button>`;
                 }
             } else if (isPast) {
                 buttonHtml = `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50"><i class="fas fa-times-circle mr-1"></i> Missed</span>`;
