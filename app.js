@@ -474,13 +474,14 @@ async function requestOTP() {
         // 1. SAFE ADMIN & PARTNER CHECK
         const defaultAdmins = [
             'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
-            '6309764212', '9845421644', 'admin@cmplibe.com', 'saikumaryadiki@gmail.com'
+            'admin@cmplibe.com', 'saikumaryadiki@gmail.com'
         ];
         const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
         
+        // Strict Creator Check: Exact match on creator email only
         isAdminLogin = adminEmails.some(e => {
             const normE = String(e).toLowerCase().trim();
-            return normE === loginId || (cleanPhone && normE === cleanPhone) || (cleanPhone && normE.endsWith(cleanPhone)) || loginId.includes('cmplibesai') || loginId.includes('admin');
+            return normE === loginId;
         });
         
         isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
@@ -3311,7 +3312,19 @@ function switchMilestoneTab(moduleName, btnElement = null) {
                 }
             }
 
-            const iconClass = existingSub ? (isEvaluating ? 'fa-hourglass-half text-amber-400' : 'fa-check-circle text-emerald-400') : (isToday ? 'fa-play-circle text-emerald-500' : (isPast ? 'fa-times-circle text-red-400' : 'fa-flask text-indigo-400'));
+            const moduleIconMap = {
+                dip: 'fa-sun text-amber-400',
+                pod: 'fa-podcast text-indigo-400',
+                immerse: 'fa-water text-cyan-400',
+                projects: 'fa-briefcase text-purple-400',
+                ios: 'fa-chalkboard-teacher text-emerald-400',
+                problem_solution: 'fa-brain text-emerald-400',
+                residency: 'fa-building text-blue-400'
+            };
+            const baseModIcon = moduleIconMap[moduleName] || 'fa-podcast text-indigo-400';
+            const iconClass = existingSub 
+                ? (isEvaluating ? 'fa-hourglass-half text-amber-400' : 'fa-check-circle text-emerald-400') 
+                : (isToday ? 'fa-play-circle text-emerald-400 animate-pulse' : (isPast ? 'fa-times-circle text-red-400' : baseModIcon));
             const borderClass = existingSub ? (isEvaluating ? 'border-amber-500/50 bg-amber-950/20' : 'border-emerald-500/30') : (isToday ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]' : (isPast ? 'border-amber-500/30' : 'border-slate-700'));
 
             html += `
