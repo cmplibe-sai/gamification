@@ -187,6 +187,26 @@ function processBuiltinAiEvaluation(submissionRecord) {
 
 
 // Get all submissions or filter by user
+// UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
+app.get('/api/sync', (req, res) => {
+    res.json({
+        success: true,
+        data: {
+            submissions: store.submissions || [],
+            milestoneConfigs: store.customMilestoneConfigs || {},
+            moduleAccess: store.customMilestoneModuleAccess || {
+                "1": ["dip", "pod"],
+                "2": ["dip", "pod", "immerse", "projects"],
+                "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
+                "4": ["dip", "pod", "immerse", "projects", "residency"]
+            },
+            joinDates: store.userMilestoneJoinDates || {},
+            levelUpAccess: store.levelUpAccessConfig || ["6a168e4213e4e9a10984b164"],
+            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
+        }
+    });
+});
+
 app.get('/api/submissions', (req, res) => {
     let list = store.submissions || [];
     const { userId, milestoneId } = req.query;

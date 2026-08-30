@@ -32,7 +32,13 @@ var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || {
 var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
 
 
+let lastSyncSignature = '';
+let isSyncInProgress = false;
+
 async function syncGlobalServerData() {
+    if (isSyncInProgress) return;
+    isSyncInProgress = true;
+
     try {
         let localData = [];
         try { localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
@@ -46,18 +52,27 @@ async function syncGlobalServerData() {
         let localJoinDates = {};
         try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
 
-        const [subsRes, configsRes, accessRes, moduleAccessRes, joinDatesRes] = await Promise.allSettled([
-            fetch('/api/submissions').then(r => r.json()),
-            fetch('/api/milestone-configs').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json()),
-            fetch('/api/milestone-module-access').then(r => r.json()),
-            fetch('/api/user-join-dates').then(r => r.json())
-        ]);
+        // Single consolidated ultra-fast fetch
+        const response = await fetch('/api/sync').then(r => r.json()).catch(() => null);
+        if (!response || !response.success || !response.data) {
+            isSyncInProgress = false;
+            return;
+        }
+
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
+        
+        // Fast signature check to avoid redundant DOM re-renders
+        const currentSignature = JSON.stringify({
+            subsLen: (serverData || []).length,
+            configsCount: Object.keys(serverConfigs || {}).length,
+            moduleAccess: serverModuleAccess,
+            joinDatesCount: Object.keys(serverJoinDates || {}).length
+        });
+
+        let dataChanged = (currentSignature !== lastSyncSignature);
 
         // 1. SUBMISSIONS TWO-WAY SYNC
-        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
-            const serverData = subsRes.value.data;
-
+        if (Array.isArray(serverData)) {
             // Push locally created submissions missing on server
             const missingOnServer = localData.filter(loc => !serverData.some(srv => (
                 (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
@@ -114,131 +129,108 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
         }
 
-        // 2. MILESTONE CONFIGS (POD/DIP QUESTIONS & AUDIO) TWO-WAY SYNC
-        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
-            const serverConfigs = configsRes.value.data;
-            let hasNewServerConfigs = false;
-
-            if (serverConfigs && typeof serverConfigs === 'object') {
-                if (!customMilestoneConfigs) customMilestoneConfigs = {};
-                for (const msId in serverConfigs) {
-                    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
-                    for (const mod in serverConfigs[msId]) {
-                        if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
-                        for (const dKey in serverConfigs[msId][mod]) {
-                            customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
-                            hasNewServerConfigs = true;
-                        }
+        // 2. MILESTONE CONFIGS TWO-WAY SYNC
+        if (serverConfigs && typeof serverConfigs === 'object') {
+            if (!customMilestoneConfigs) customMilestoneConfigs = {};
+            for (const msId in serverConfigs) {
+                if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+                for (const mod in serverConfigs[msId]) {
+                    if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
+                    for (const dKey in serverConfigs[msId][mod]) {
+                        customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
                     }
                 }
             }
-
-            // Check if local has configs not yet on server
-            if (Object.keys(localConfigs).length > 0) {
-                fetch('/api/milestone-configs', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ allConfigs: customMilestoneConfigs })
-                }).catch(() => {});
-            }
-
             try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
         }
 
-        // 3. MODULE ACCESS TWO-WAY SYNC (DIP, POD, IMMERSE TOGGLES)
-        if (moduleAccessRes.status === 'fulfilled' && moduleAccessRes.value && moduleAccessRes.value.success && moduleAccessRes.value.data) {
-            const serverModuleAccess = moduleAccessRes.value.data;
-            if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0) {
-                try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
-            }
+        // 3. MODULE ACCESS TWO-WAY SYNC
+        if (serverModuleAccess && typeof serverModuleAccess === 'object') {
+            try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
         }
 
         // 4. USER JOIN DATES TWO-WAY SYNC
-        if (joinDatesRes.status === 'fulfilled' && joinDatesRes.value && joinDatesRes.value.success && joinDatesRes.value.data) {
-            const serverJoinDates = joinDatesRes.value.data;
-            if (serverJoinDates && typeof serverJoinDates === 'object') {
-                let mergedJoinDates = { ...localJoinDates, ...serverJoinDates };
-                try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
-            }
+        if (serverJoinDates && typeof serverJoinDates === 'object') {
+            let mergedJoinDates = { ...localJoinDates, ...serverJoinDates };
+            try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
         }
 
-        // 5. LEVEL-UP ACCESS SYNC
-        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
-            levelUpAccessConfig = accessRes.value.data;
+        // 5. LEVEL-UP ACCESS
+        if (Array.isArray(serverLevelUpAccess)) {
+            levelUpAccessConfig = serverLevelUpAccess;
             try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
         }
 
-        // Refresh UI components if rendered
-        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-            renderAdminCohortSubmissions();
-        }
-        if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
-            renderLearnerTimeline();
-        }
-        if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
-            renderAdminCustomerGrid();
-        }
+        // 6. EFFICIENT SELECTIVE UI UPDATES (Only when data changed)
+        if (dataChanged) {
+            lastSyncSignature = currentSignature;
 
-        // LIVE RE-RENDER FOR CREATOR & LEARNER ACROSS ALL BROWSERS
-        
-        // A. If Creator Milestone Setup is open, live update the ON/OFF badges and configured dates list
-        const adminDetail = document.getElementById('adminMilestoneDetailContainer');
-        if (adminDetail && !adminDetail.classList.contains('hidden')) {
-            const subNavEl = document.getElementById('adminMilestoneSubNav');
-            if (subNavEl) {
-                const enabledForStudents = getEnabledModulesForMilestone(activeAdminMilestoneId);
-                subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
-                    const parent = btn.parentElement;
-                    const toggleBtn = parent.querySelector('button:last-child');
-                    // Find module code from onclick
-                    const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
-                    if (match && toggleBtn) {
-                        const modCode = match[1];
-                        const isEnabled = enabledForStudents.includes(modCode);
-                        toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
-                        toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+            // Creator Views
+            const adminDetail = document.getElementById('adminMilestoneDetailContainer');
+            if (adminDetail && !adminDetail.classList.contains('hidden')) {
+                const subNavEl = document.getElementById('adminMilestoneSubNav');
+                if (subNavEl) {
+                    const enabledForStudents = getEnabledModulesForMilestone(activeAdminMilestoneId);
+                    subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
+                        const parent = btn.parentElement;
+                        const toggleBtn = parent.querySelector('button:last-child');
+                        const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
+                        if (match && toggleBtn) {
+                            const modCode = match[1];
+                            const isEnabled = enabledForStudents.includes(modCode);
+                            toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
+                            toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+                        }
+                    });
+                }
+                
+                const checkinsView = document.getElementById('adminCheckinsConfigView');
+                if (checkinsView && !checkinsView.classList.contains('hidden')) {
+                    renderAdminCheckinsList();
+                }
+            }
+
+            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                renderAdminCohortSubmissions();
+            }
+            if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+                renderAdminCustomerGrid();
+            }
+
+            // Learner View
+            const learnerDetail = document.getElementById('milestoneDetailContainer');
+            if (learnerDetail && !learnerDetail.classList.contains('hidden')) {
+                const learnerSubNav = document.getElementById('milestoneSubNav');
+                if (learnerSubNav) {
+                    const activeMods = getEnabledModulesForMilestone(activeMilestoneId);
+                    const activeNavBtn = learnerSubNav.querySelector('.border-indigo-500');
+                    let currentMod = 'dip';
+                    if (activeNavBtn) {
+                        const txt = activeNavBtn.innerText.toLowerCase();
+                        if (txt.includes('pod')) currentMod = 'pod';
+                        else if (txt.includes('immerse')) currentMod = 'immerse';
+                        else if (txt.includes('project') || txt.includes('real-world')) currentMod = 'projects';
                     }
-                });
-            }
-            
-            const checkinsView = document.getElementById('adminCheckinsConfigView');
-            if (checkinsView && !checkinsView.classList.contains('hidden')) {
-                renderAdminCheckinsList();
-            }
-        }
+                    if (!activeMods.includes(currentMod)) currentMod = activeMods[0] || 'dip';
 
-        // B. If Learner Milestone Detail is open, live update module tabs & timeline
-        const learnerDetail = document.getElementById('milestoneDetailContainer');
-        if (learnerDetail && !learnerDetail.classList.contains('hidden')) {
-            const learnerSubNav = document.getElementById('milestoneSubNav');
-            if (learnerSubNav) {
-                const activeMods = getEnabledModulesForMilestone(activeMilestoneId);
-                const activeNavBtn = learnerSubNav.querySelector('.border-indigo-500');
-                let currentMod = 'dip';
-                if (activeNavBtn) {
-                    const txt = activeNavBtn.innerText.toLowerCase();
-                    if (txt.includes('pod')) currentMod = 'pod';
-                    else if (txt.includes('immerse')) currentMod = 'immerse';
-                    else if (txt.includes('project') || txt.includes('real-world')) currentMod = 'projects';
-                }
-                if (!activeMods.includes(currentMod)) currentMod = activeMods[0] || 'dip';
+                    learnerSubNav.innerHTML = activeMods.map((modCode, i) => {
+                        const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
+                        const activeClass = modCode === currentMod ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+                        return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
+                            <i class="fas ${modObj.icon}"></i> ${modObj.name}
+                        </button>`;
+                    }).join('');
 
-                learnerSubNav.innerHTML = activeMods.map((modCode, i) => {
-                    const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
-                    const activeClass = modCode === currentMod ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-                    return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
-                        <i class="fas ${modObj.icon}"></i> ${modObj.name}
-                    </button>`;
-                }).join('');
-
-                if (typeof switchMilestoneTab === 'function') {
-                    switchMilestoneTab(currentMod);
+                    if (typeof switchMilestoneTab === 'function') {
+                        switchMilestoneTab(currentMod);
+                    }
                 }
             }
         }
-
     } catch(e) {
-        console.warn('Two-way sync warning:', e);
+        console.warn('Sync notice:', e);
+    } finally {
+        isSyncInProgress = false;
     }
 }
 window.syncGlobalServerData = syncGlobalServerData;
@@ -801,6 +793,15 @@ async function requestOTP() {
     const loginId = rawInput.toLowerCase();
     const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
     if (!loginId) return alert("Please enter email or phone number.");
+    
+    // Strict Format Validation: Only valid Email or 10-digit Phone allowed
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailValid = emailRegex.test(loginId);
+    const isPhoneValid = (cleanPhone && cleanPhone.length === 10 && /^[6-9]\d{9}$/.test(cleanPhone));
+    
+    if (!isEmailValid && !isPhoneValid) {
+        return alert("⚠️ Invalid Credentials\n\nPlease enter a valid email address (e.g. name@domain.com) or a valid 10-digit Indian mobile number.");
+    }
     
     const btn = document.querySelector('#step1 button');
     if (btn) {
