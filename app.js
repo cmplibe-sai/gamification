@@ -3783,11 +3783,17 @@ function switchMilestoneTab(moduleName, btnElement = null) {
                 } else {
                     buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
                 }
-            } else if (isToday || testMode) {
+            } else if (isToday) {
                 if (moduleName === 'pod') {
-                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] ${isToday ? 'animate-pulse' : ''}"><i class="fas fa-podcast mr-1.5"></i> ${testMode && !isToday ? 'Test Check-in' : 'Start Check-in'}</button>`;
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] animate-pulse"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
                 } else {
-                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] ${isToday ? 'animate-pulse' : ''}"><i class="fas fa-play-circle mr-1"></i> ${testMode && !isToday ? 'Test Check-in' : 'Start Check-in'}</button>`;
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] animate-pulse"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                }
+            } else if (testMode) {
+                if (moduleName === 'pod') {
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}', true)" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full text-xs font-extrabold transition-all shadow-md flex items-center gap-1.5"><i class="fas fa-bolt"></i> Bypass & Enter Check-in</button>`;
+                } else {
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}', true)" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-full text-xs font-extrabold transition-all shadow-md flex items-center gap-1.5"><i class="fas fa-bolt"></i> Bypass & Enter Check-in</button>`;
                 }
             } else if (isPast) {
                 buttonHtml = `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50"><i class="fas fa-times-circle mr-1"></i> Missed</span>`;
@@ -4506,21 +4512,33 @@ function switchAdminMilestoneTab(tabName) {
     const viewCheckins = document.getElementById('adminCheckinsConfigView');
     const viewCompletion = document.getElementById('adminCompletionView');
     
-    if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-    if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-    if (viewCheckins) viewCheckins.classList.add('hidden');
-    if (viewCompletion) viewCompletion.classList.add('hidden');
-    
     if (tabName === 'checkins') {
         if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (viewCheckins) viewCheckins.classList.remove('hidden');
-        renderAdminCheckinsList(); 
+        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+        if (viewCheckins) {
+            viewCheckins.classList.remove('hidden');
+            viewCheckins.style.display = 'block';
+        }
+        if (viewCompletion) {
+            viewCompletion.classList.add('hidden');
+            viewCompletion.style.display = 'none';
+        }
+        
         const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
         activeAdminDateKey = todayKey;
+        renderAdminCheckinsList(); 
         loadAdminCheckinEditor(todayKey);
     } else {
         if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (viewCompletion) viewCompletion.classList.remove('hidden');
+        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+        if (viewCompletion) {
+            viewCompletion.classList.remove('hidden');
+            viewCompletion.style.display = 'block';
+        }
+        if (viewCheckins) {
+            viewCheckins.classList.add('hidden');
+            viewCheckins.style.display = 'none';
+        }
         renderAdminCohortSubmissions(); 
     }
 }
@@ -6597,29 +6615,40 @@ function openClaimCredentialModal() {
     const msId = activeMilestoneId || 1;
     const ms = milestoneConfig.find(m => m.id === msId) || { name: 'Simply Challenge Embracer' };
     const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+    
     const userSubs = getUserSubmissionsByUserId(currentUser ? currentUser._id : '').filter(s => String(s.milestoneId || 1) === String(msId));
-    const completedDays = new Set(userSubs.map(s => String(s.day || s.date))).size;
+    const dipSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === 'dip');
+    const podSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === 'pod');
+    
     const targetDays = msId === 1 ? 21 : 30;
-    const isCompleted = completedDays >= targetDays || ((typeof isTestUser === 'function') && isTestUser());
+    const dipCompleted = new Set(dipSubs.map(s => String(s.day || s.date))).size;
+    const podCompleted = new Set(podSubs.map(s => String(s.day || s.date))).size;
+    const totalEarnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+    const targetLcs = msId === 1 ? (21 * 33) : (30 * 133);
+
+    const isTest = (typeof isTestUser === 'function') && isTestUser();
+    const isCompleted = (dipCompleted >= targetDays && podCompleted >= targetDays) || (dipCompleted >= targetDays && msId === 1);
 
     if (isCompleted) {
         content.innerHTML = `
-            <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/50 shadow-lg text-3xl mb-4 animate-bounce">
+            <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/50 shadow-lg text-3xl mb-3 animate-bounce">
                 <i class="fas fa-award text-amber-300"></i>
             </div>
-            <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-bold">Credential Verified</span>
+            <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-bold">Verified & Authenticated</span>
             <h3 class="text-2xl font-extrabold text-white font-heading mt-2">Congratulations, ${currentUser ? currentUser.name : 'Learner'}!</h3>
-            <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have successfully mastered <b>Milestone ${msId}: ${cleanName}</b> with full discipline and consistency.</p>
+            <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have mastered all completion prerequisites for <b>Milestone ${msId}: ${cleanName}</b>.</p>
             
-            <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2 mt-4">
-                <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">CMPLI-MS${msId}-${(currentUser ? currentUser.fanId : '0000').toUpperCase()}</span></div>
-                <div class="flex justify-between text-xs"><span class="text-slate-400">Issued To:</span><span class="text-white font-bold">${currentUser ? currentUser.name : 'Learner'}</span></div>
+            <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2.5 mt-4">
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">CMPLI-MS${msId}-${(currentUser && currentUser.fanId ? String(currentUser.fanId) : (currentUser ? String(currentUser._id) : '0000')).toUpperCase().slice(-8)}</span></div>
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Recipient Name:</span><span class="text-white font-bold">${currentUser ? currentUser.name : 'Learner'}</span></div>
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Completed Check-ins:</span><span class="text-emerald-400 font-mono font-bold">${dipCompleted} / ${targetDays} Days (100%)</span></div>
+                <div class="flex justify-between text-xs"><span class="text-slate-400">Total LCs Earned:</span><span class="text-amber-400 font-mono font-bold">${totalEarnedLcs} LCs</span></div>
                 <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued & Authenticated</span></div>
             </div>
 
             <div class="flex gap-3 pt-2">
-                <button onclick="alert('Certificate PDF downloaded successfully!'); document.getElementById('claimCredentialModal').classList.add('hidden');" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg">
-                    <i class="fas fa-download mr-1.5"></i> Download Certificate (PDF)
+                <button onclick="alert('Credential Certificate PDF generated and downloaded!'); document.getElementById('claimCredentialModal').classList.add('hidden');" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg">
+                    <i class="fas fa-download mr-1.5"></i> Download Credential Certificate
                 </button>
                 <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="btn-secondary py-3 px-4 text-xs font-bold">
                     Close
@@ -6627,27 +6656,51 @@ function openClaimCredentialModal() {
             </div>
         `;
     } else {
+        // SHOW DETAILED PREREQUISITES WARNING
         content.innerHTML = `
-            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/40 text-2xl mb-4">
-                <i class="fas fa-lock"></i>
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto border border-amber-500/40 text-2xl mb-3">
+                <i class="fas fa-exclamation-triangle text-amber-400"></i>
             </div>
-            <h3 class="text-xl font-bold text-white font-heading">Credential Progress</h3>
-            <p class="text-xs text-slate-400 mt-1">Complete all required daily check-ins to claim your official credential for <b>Milestone ${msId}</b>.</p>
+            <span class="badge-pill badge-amber uppercase tracking-wider text-[10px] font-bold">Prerequisites Incomplete</span>
+            <h3 class="text-xl font-extrabold text-white font-heading mt-2">Cannot Claim Credential Yet</h3>
+            <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">You must fulfill all milestone completion prerequisites before claiming your official credential.</p>
             
-            <div class="glass p-4 rounded-xl border border-slate-800 space-y-3 mt-4 text-left text-xs">
-                <div class="flex justify-between font-bold">
-                    <span class="text-slate-300">Days Completed:</span>
-                    <span class="text-indigo-400 font-mono">${completedDays} / ${targetDays} Days</span>
+            <div class="glass p-5 rounded-2xl border border-slate-800 text-left space-y-3.5 mt-4">
+                <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/60 pb-1.5">Milestone ${msId} Completion Requirements</h5>
+                
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-300"><i class="fas fa-sun text-amber-400 mr-1.5"></i> cMPLi Dip Check-ins:</span>
+                        <span class="font-mono font-bold ${dipCompleted >= targetDays ? 'text-emerald-400' : 'text-amber-400'}">${dipCompleted} / ${targetDays} Days ${dipCompleted >= targetDays ? '<i class="fas fa-check-circle ml-1"></i>' : ''}</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-amber-500 h-full rounded-full" style="width: ${Math.min(100, Math.round((dipCompleted / targetDays) * 100))}%;"></div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2">
+                        <span class="text-slate-300"><i class="fas fa-podcast text-indigo-400 mr-1.5"></i> cMPLi POD Audio & Quiz:</span>
+                        <span class="font-mono font-bold ${podCompleted >= targetDays ? 'text-emerald-400' : 'text-amber-400'}">${podCompleted} / ${targetDays} Days ${podCompleted >= targetDays ? '<i class="fas fa-check-circle ml-1"></i>' : ''}</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div class="bg-indigo-500 h-full rounded-full" style="width: ${Math.min(100, Math.round((podCompleted / targetDays) * 100))}%;"></div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                        <span class="text-slate-300"><i class="fas fa-coins text-amber-400 mr-1.5"></i> Minimum LCs Target:</span>
+                        <span class="font-mono font-bold ${totalEarnedLcs >= targetLcs ? 'text-emerald-400' : 'text-slate-400'}">${totalEarnedLcs} / ${targetLcs} LCs</span>
+                    </div>
                 </div>
-                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div class="bg-indigo-600 h-full rounded-full" style="width: ${Math.min(100, Math.round((completedDays / targetDays) * 100))}%;"></div>
-                </div>
-                <p class="text-[11px] text-slate-400 italic">Remaining: ${Math.max(0, targetDays - completedDays)} days to unlock this verified credential.</p>
             </div>
 
-            <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="w-full btn-secondary py-2.5 text-xs font-bold mt-2">
-                Keep Going
-            </button>
+            <div class="flex gap-3 pt-2">
+                <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="flex-1 btn-primary py-2.5 text-xs font-bold">
+                    <i class="fas fa-arrow-left mr-1.5"></i> Return & Continue Journey
+                </button>
+                ${isTest ? `
+                <button onclick="previewTestCredential()" class="btn-secondary py-2.5 px-3 text-xs text-amber-400 font-bold border-amber-500/40">
+                    <i class="fas fa-bolt mr-1"></i> [Test Bypass] Preview
+                </button>` : ''}
+            </div>
         `;
     }
 
