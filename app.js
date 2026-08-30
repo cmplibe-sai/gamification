@@ -152,9 +152,18 @@ async function syncGlobalServerData() {
 window.syncGlobalServerData = syncGlobalServerData;
 
 
-var actualUsers = (typeof window !== 'undefined' && window.actualUsers) ? window.actualUsers : [
-    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
+
+var actualUsers = [
+    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68a805cf8c448ccc00abc23f', name: 'Sai Yedamala', email: 'engineersai02@gmail.com', phone: '6309764212', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d38fe3824e7a950617f8af', name: 'Chandra', email: 'chandrasai349@gmail.com', phone: '9845421644', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d390422f70f039556c040b', name: 'SaiMaruthi', email: 'cvs.cmplifutureadi@gmail.com', phone: '7013451593', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d3909e2f70f039556c05d7', name: 'SaiChandu', email: 'britencloud@gmail.com', phone: '9492163908', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391002f70f039556c0701', name: 'Sai Yedamala', email: 'y.saidigitalexpert@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391202f70f039556c0802', name: 'Pooja', email: 'poojalp10@gmail.com', phone: '9876543210', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391502f70f039556c0903', name: 'Keshava Karanth', email: 'keshavakaranth618@gmail.com', phone: '9880012345', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
 ];
+
 var TEST_EMAILS = ['test@learner.com', 'vip@student.com', 'sai@cmplibe.com', 'test@test.com', 'saiyedamala02@gmail.com'];
 
 
@@ -3132,24 +3141,12 @@ function switchMilestoneTab(moduleName, btnElement = null) {
     const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
 
     // --- BULLETPROOF START DATE ---
-    let startDate = new Date();
-    const allUserSubs = getUserSubmissionsByUserId(currentUser);
-    const day1Sub = allUserSubs.find(s => normalizeLevelUpType(s.type) === 'dip' && String(s.day) === '1' && String(s.milestoneId || 1) === '1');
-
-    if (day1Sub) {
-        const rawTime = day1Sub.submittedAt || day1Sub.timestamp || day1Sub.createdAt || day1Sub.date || day1Sub.dateKey;
-        if (rawTime) {
-            const parsedDate = new Date(rawTime);
-            if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() >= 2023) {
-                startDate = parsedDate;
-            }
-        }
+    let milestoneStartDate = new Date('2026-08-29T00:00:00');
+    const savedStartDates = JSON.parse(localStorage.getItem('milestoneStartDates')) || { 1: '2026-08-29', 2: '2026-08-21', 3: '2026-11-21' };
+    if (savedStartDates[activeMilestoneId]) {
+        const pDate = new Date(savedStartDates[activeMilestoneId] + 'T00:00:00');
+        if (!isNaN(pDate.getTime())) milestoneStartDate = pDate;
     }
-    startDate.setHours(0,0,0,0);
-
-    let milestoneStartDate = new Date(startDate);
-    const msOffsets = { 1: 0, 2: 21, 3: 141, 4: 261 };
-    milestoneStartDate.setDate(milestoneStartDate.getDate() + (msOffsets[activeMilestoneId] || 0));
     milestoneStartDate.setHours(0,0,0,0);
 
     const today = new Date(); today.setHours(0,0,0,0);
@@ -3202,6 +3199,7 @@ function switchMilestoneTab(moduleName, btnElement = null) {
     <div class="space-y-4 relative pl-8 border-l-2 border-slate-800 ml-4">
     `;
 
+    const allUserSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser) : [];
     const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId));
 
     let totalSessions = (activeMilestoneId === 1) ? 21 : 60;
@@ -3288,7 +3286,7 @@ function switchMilestoneTab(moduleName, btnElement = null) {
         }
         
         calendarDate.setDate(calendarDate.getDate() + 1);
-        if (Math.floor((calendarDate - startDate) / (1000 * 60 * 60 * 24)) > 500) break; 
+        if (Math.floor((calendarDate - milestoneStartDate) / (1000 * 60 * 60 * 24)) > 500) break; 
     }
 
     html += `</div>`;
@@ -4898,33 +4896,49 @@ function getSubmissionBucketForUser(user) {
 }
 
 function getUserSubmissionsByUserId(userIdentifier) {
-    const localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    const legacySubs = typeof userSubmissions !== 'undefined' ? userSubmissions : [];
+    let localDB = [];
+    try {
+        localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    } catch(e) {}
     
-    let targetId = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier._id : userIdentifier;
-    let targetEmail = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.email : null;
-    let targetPhone = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.phone : null;
+    let targetId = typeof userIdentifier === 'object' && userIdentifier ? (userIdentifier._id || userIdentifier.id) : userIdentifier;
+    let targetEmail = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.email : (String(userIdentifier).includes('@') ? String(userIdentifier).toLowerCase().trim() : null);
+    let targetPhone = typeof userIdentifier === 'object' && userIdentifier ? userIdentifier.phone : (!String(userIdentifier).includes('@') && String(userIdentifier).length >= 10 ? String(userIdentifier).trim() : null);
 
-    if (!targetEmail && targetId && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-        const found = actualUsers.find(u => String(u._id) === String(targetId));
-        if (found) {
-            targetEmail = found.email;
-            targetPhone = found.phone;
-        }
+    const knownUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
+    const matchedUser = knownUsers.find(u => 
+        (targetId && String(u._id) === String(targetId)) ||
+        (targetEmail && u.email && u.email.toLowerCase() === targetEmail.toLowerCase()) ||
+        (targetPhone && u.phone && String(u.phone).trim() === String(targetPhone))
+    );
+
+    if (matchedUser) {
+        if (!targetId || String(targetId).startsWith('usr_')) targetId = matchedUser._id;
+        if (!targetEmail) targetEmail = matchedUser.email;
+        if (!targetPhone) targetPhone = matchedUser.phone;
     }
 
-    const map = new Map();
-    [...legacySubs, ...localDB].forEach(sub => {
-        if (!sub) return;
-        const key = `${sub.userId || sub.userEmail}_${sub.milestoneId || 1}_${normalizeLevelUpType(sub.type)}_${sub.day || sub.date || sub.dateKey}`;
-        map.set(key, sub);
-    });
-
-    return Array.from(map.values()).filter(sub => {
+    return localDB.filter(sub => {
         if (!sub) return false;
-        if (targetId && String(sub.userId) === String(targetId)) return true;
-        if (targetEmail && sub.userEmail && sub.userEmail.toLowerCase() === targetEmail.toLowerCase()) return true;
-        if (targetPhone && sub.userPhone && String(sub.userPhone) === String(targetPhone)) return true;
+        
+        // 1. Direct ID match
+        if (targetId && (String(sub.userId) === String(targetId) || (matchedUser && String(sub.userId) === String(matchedUser._id)))) return true;
+        
+        // 2. Email match (case-insensitive)
+        if (targetEmail && sub.userEmail && sub.userEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) return true;
+        
+        // 3. Phone match
+        if (targetPhone && sub.userPhone && String(sub.userPhone).trim() === String(targetPhone).trim()) return true;
+        
+        // 4. Cross-link: check if sub.userId belongs to this user in knownUsers
+        if (sub.userId && knownUsers.length > 0) {
+            const subOwner = knownUsers.find(u => String(u._id) === String(sub.userId));
+            if (subOwner) {
+                if (targetEmail && subOwner.email && subOwner.email.toLowerCase() === targetEmail.toLowerCase()) return true;
+                if (targetId && String(subOwner._id) === String(targetId)) return true;
+            }
+        }
+        
         return false;
     });
 }

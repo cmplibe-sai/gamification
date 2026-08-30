@@ -23,6 +23,489 @@
       "status": "completed",
       "submittedAt": "2026-08-27T12:54:19.767Z",
       "updatedAt": "2026-08-27T12:54:19.767Z"
+    },
+    {
+      "id": "sub_1787999238340_tsdemm",
+      "userId": "68fb27f707ccf937418d41c6",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "Name",
+          "answer": "Sai",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Video",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787999236/fbw0szyfvpky2zmivpcy.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787999236/fbw0szyfvpky2zmivpcy.webm",
+          "fileName": "submission_audio.mp3"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T10:27:17.280Z",
+      "updatedAt": "2026-08-30T05:51:32.309Z"
+    },
+    {
+      "id": "sub_1788005638564_5ijc1o",
+      "userId": "68d3902b54f6579550414e74",
+      "userEmail": "britencloud@gmail.com",
+      "userName": "SaiChandu",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "pod",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "Which mindset separates a Challenge Embracer from a passive learner?",
+          "answer": "Viewing friction & feedback as fuel for growth",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        },
+        {
+          "question": "What is the core driver of long-term habit consistency discussed in today's podcast?",
+          "answer": "Intrinsic Identity Shift & Daily Micro-actions",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        },
+        {
+          "question": "What is the recommended approach to high-friction tasks?",
+          "answer": "Tackle them in the first 90 minutes of the morning",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T12:13:58.285Z",
+      "updatedAt": "2026-08-30T05:51:34.688Z"
+    },
+    {
+      "id": "sub_1787928890026_e0mal0",
+      "userId": "68a805cf8c448ccc00abc23f",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "2",
+      "date": "2026-08-30",
+      "title": "Day 2 Check-in",
+      "responses": [
+        {
+          "question": "Your Name",
+          "answer": "sai",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Email ID",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787925734/cvwdniujatqjei6iukcg.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787925734/cvwdniujatqjei6iukcg.webm",
+          "fileName": "submission_audio.mp3"
+        },
+        {
+          "question": "Place",
+          "answer": "Anantapuram",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Had your Lunch",
+          "answer": "yes",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 3,
+      "status": "completed",
+      "submittedAt": "2026-08-28T14:02:14.462Z",
+      "updatedAt": "2026-08-30T05:53:49.508Z",
+      "evaluatedAt": "2026-08-30T05:54:04.730Z",
+      "aiFeedback": "Verified & Approved: Excellent reflection and alignment with Milestone-1 rubrics."
+    },
+    {
+      "id": "sub_1787925331877_m4i1ok",
+      "userId": "68d3902b54f6579550414e74",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "1",
+      "date": "2026-08-30",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "The Sector is about",
+          "answer": "Marketing",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Upload Proof of Work",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787833776/yqaumvxqrw2p2d8yyhzv.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787833776/yqaumvxqrw2p2d8yyhzv.webm",
+          "fileName": "submission_audio.mp3"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-27T12:29:38.431Z",
+      "updatedAt": "2026-08-30T05:53:49.502Z",
+      "evaluatedAt": "2026-08-30T05:54:04.503Z",
+      "aiFeedback": "Verified & Approved: Excellent reflection and alignment with Milestone-1 rubrics."
+    },
+    {
+      "id": "sub_1788004511662_n00meu",
+      "userId": "68d38fe3824e7a950617f8af",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "Name",
+          "answer": "sai",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Email",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1788004510/nhphgrgmzwznrcdjhqc5.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1788004510/nhphgrgmzwznrcdjhqc5.webm",
+          "fileName": "submission_audio.mp3"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 3,
+      "status": "completed",
+      "submittedAt": "2026-08-29T11:55:10.806Z",
+      "updatedAt": "2026-08-30T05:51:34.700Z"
+    },
+    {
+      "id": "sub_1788068835587_vawqxp",
+      "userId": "usr_test_123",
+      "userEmail": "test123@example.com",
+      "userName": "Test Learner 123",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": 1,
+      "date": "2026-08-30",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "Q1",
+          "answer": "Ans1"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-30T05:47:15.587Z",
+      "updatedAt": "2026-08-30T05:51:32.312Z",
+      "evaluatedAt": "2026-08-30T05:47:30.600Z",
+      "aiFeedback": "Verified & Approved: Excellent reflection and alignment with Milestone-1 rubrics."
+    },
+    {
+      "id": "sub_1787928890037_x1lc07",
+      "userId": "68a805cf8c448ccc00abc23f",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "1",
+      "date": "2026-08-30",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "The Sector is about",
+          "answer": "Marketing",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Upload Proof of Work",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787926477/bther3kjfk7br1zgybh0.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787926477/bther3kjfk7br1zgybh0.webm",
+          "fileName": "submission_audio.mp3"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-28T14:14:37.930Z",
+      "updatedAt": "2026-08-30T05:53:49.509Z",
+      "evaluatedAt": "2026-08-30T05:54:04.733Z",
+      "aiFeedback": "Verified & Approved: Excellent reflection and alignment with Milestone-1 rubrics."
+    },
+    {
+      "id": "sub_1787928890025_ooulk1",
+      "userId": "68d38fc02f70f039556bf3da",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "2",
+      "date": "2026-08-30",
+      "title": "Day 2 Check-in",
+      "responses": [
+        {
+          "question": "Your Name",
+          "answer": "Sai",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Email ID",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787925550/ympr1fortkfxmqfbuvxx.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1787925550/ympr1fortkfxmqfbuvxx.webm",
+          "fileName": "submission_audio.mp3"
+        },
+        {
+          "question": "Place",
+          "answer": "Anantapuram",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Had your Lunch",
+          "answer": "Yes",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 3,
+      "status": "completed",
+      "submittedAt": "2026-08-28T13:59:11.254Z",
+      "updatedAt": "2026-08-28T14:54:50.025Z",
+      "evaluatedAt": "2026-08-30T05:54:04.825Z",
+      "aiFeedback": "Verified & Approved: Excellent reflection and alignment with Milestone-1 rubrics."
+    },
+    {
+      "id": "sub_1788020939232_tjopgm",
+      "userId": "68d38fc02f70f039556bf3da",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "pod",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 22,
+      "status": "completed",
+      "submittedAt": "2026-08-29T16:28:59.232Z",
+      "updatedAt": "2026-08-30T05:51:34.752Z"
+    },
+    {
+      "id": "sub_1788020856255_mznhgi",
+      "userId": "68a805cf8c448ccc00abc23f",
+      "userEmail": "",
+      "userName": "",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "pod",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T16:27:36.255Z",
+      "updatedAt": "2026-08-30T05:51:34.741Z"
+    },
+    {
+      "id": "sub_1788005702246_8r2xz1",
+      "userId": "68d38fe3824e7a950617f8af",
+      "userEmail": "chandrasai349@gmail.com",
+      "userName": "Chandra",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "pod",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "What is the recommended approach to high-friction tasks?",
+          "answer": "Tackle them in the first 90 minutes of the morning",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        },
+        {
+          "question": "What is the core driver of long-term habit consistency discussed in today's podcast?",
+          "answer": "Intrinsic Identity Shift & Daily Micro-actions",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        },
+        {
+          "question": "How does deliberate daily reflection impact skill acquisition?",
+          "answer": "Consolidates neural pathways and converts experience into intuition",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T12:15:01.992Z",
+      "updatedAt": "2026-08-30T05:51:34.690Z"
+    },
+    {
+      "id": "sub_1788006824269_bf8d4u",
+      "userId": "68d390422f70f039556c040b",
+      "userEmail": "cvs.cmplifutureadi@gmail.com",
+      "userName": "SaiMaruthi",
+      "userPhone": 7013451593,
+      "milestoneId": 1,
+      "type": "pod",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "What is the core driver of long-term habit consistency discussed in today's podcast?",
+          "answer": "Intrinsic Identity Shift & Daily Micro-actions",
+          "type": "mcq",
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true
+        },
+        {
+          "question": "How does deliberate daily reflection impact skill acquisition?",
+          "answer": "Has no noticeable effect",
+          "type": "mcq",
+          "selectedOption": 1,
+          "correctOption": 0,
+          "isCorrect": false
+        },
+        {
+          "question": "What primary method was recommended for handling unexpected daily schedule disruptions?",
+          "answer": "Immediate panic",
+          "type": "mcq",
+          "selectedOption": 3,
+          "correctOption": 0,
+          "isCorrect": false
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T12:33:44.007Z",
+      "updatedAt": "2026-08-30T05:51:34.696Z"
+    },
+    {
+      "id": "sub_1788007748497_u90exs",
+      "userId": "68d38fc02f70f039556bf3da",
+      "userEmail": "saiyedamala02@gmail.com",
+      "userName": "Sai Yedamala",
+      "userPhone": 6309764213,
+      "milestoneId": 1,
+      "type": "dip",
+      "day": "1",
+      "date": "2026-08-29",
+      "title": "Day 1 Check-in",
+      "responses": [
+        {
+          "question": "Name",
+          "answer": "sai Yedamala",
+          "type": "text",
+          "fileData": null,
+          "fileName": null
+        },
+        {
+          "question": "Email",
+          "answer": "https://res.cloudinary.com/wkub1q4f/video/upload/v1788007747/cbf8bbqz74jmklbi24hl.webm",
+          "type": "audio",
+          "fileData": "https://res.cloudinary.com/wkub1q4f/video/upload/v1788007747/cbf8bbqz74jmklbi24hl.webm",
+          "fileName": "submission_audio_1"
+        }
+      ],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "https://res.cloudinary.com/wkub1q4f/video/upload/v1788007747/cbf8bbqz74jmklbi24hl.webm",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-29T12:49:08.239Z",
+      "updatedAt": "2026-08-30T05:51:34.704Z"
     }
   ],
   "customMilestoneConfigs": {
@@ -142,6 +625,7 @@
       "createdAt": "2026-08-29T06:13:02.921Z"
     }
   ],
+  "coachingActionItems": [],
   "courseProgress": {
     "test_sai_01": {
       "course_dip": {

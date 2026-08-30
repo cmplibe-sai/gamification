@@ -1,3 +1,15 @@
+
+var actualUsers = [
+    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68a805cf8c448ccc00abc23f', name: 'Sai Yedamala', email: 'engineersai02@gmail.com', phone: '6309764212', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d38fe3824e7a950617f8af', name: 'Chandra', email: 'chandrasai349@gmail.com', phone: '9845421644', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d390422f70f039556c040b', name: 'SaiMaruthi', email: 'cvs.cmplifutureadi@gmail.com', phone: '7013451593', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d3909e2f70f039556c05d7', name: 'SaiChandu', email: 'britencloud@gmail.com', phone: '9492163908', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391002f70f039556c0701', name: 'Sai Yedamala', email: 'y.saidigitalexpert@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391202f70f039556c0802', name: 'Pooja', email: 'poojalp10@gmail.com', phone: '9876543210', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391502f70f039556c0903', name: 'Keshava Karanth', email: 'keshavakaranth618@gmail.com', phone: '9880012345', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
+];
+
 // data.js - cMPLi Be Gamification Core Configurations & Projects
 
 var ALL_PLATFORM_MODULES = [
