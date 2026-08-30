@@ -35,21 +35,30 @@ var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {
 async function syncGlobalServerData() {
     try {
         let localData = [];
-        try {
-            localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-        } catch(e) {}
+        try { localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
 
-        const [subsRes, configsRes, accessRes] = await Promise.allSettled([
+        let localConfigs = {};
+        try { localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {}; } catch(e) {}
+
+        let localModuleAccess = {};
+        try { localModuleAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
+
+        let localJoinDates = {};
+        try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
+
+        const [subsRes, configsRes, accessRes, moduleAccessRes, joinDatesRes] = await Promise.allSettled([
             fetch('/api/submissions').then(r => r.json()),
             fetch('/api/milestone-configs').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json())
+            fetch('/api/levelup-access').then(r => r.json()),
+            fetch('/api/milestone-module-access').then(r => r.json()),
+            fetch('/api/user-join-dates').then(r => r.json())
         ]);
 
-        // 1. SUBMISSIONS TWO-WAY CROSS-BROWSER SYNC
+        // 1. SUBMISSIONS TWO-WAY SYNC
         if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
             const serverData = subsRes.value.data;
 
-            // PUSH: Upload any locally created submissions that are missing on the server
+            // Push locally created submissions missing on server
             const missingOnServer = localData.filter(loc => !serverData.some(srv => (
                 (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
                 String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
@@ -67,7 +76,7 @@ async function syncGlobalServerData() {
                 });
             }
 
-            // PULL: Merge server data into local database
+            // Pull server submissions into local DB
             serverData.forEach(s => {
                 const idx = localData.findIndex(l => (
                     (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
@@ -82,7 +91,6 @@ async function syncGlobalServerData() {
                     localData.push(s);
                 }
 
-                // Ensure user profile exists in adminRealtimeUsers
                 if (s.userId) {
                     const uId = String(s.userId);
                     const userEmail = s.userEmail || (String(s.userId).includes('@') ? s.userId : '');
@@ -103,25 +111,15 @@ async function syncGlobalServerData() {
                 }
             });
 
-            try {
-                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData));
-            } catch(e) {}
-
-            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-                renderAdminCohortSubmissions();
-            }
-            if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
-                renderLearnerTimeline();
-            }
-            if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
-                renderAdminCustomerGrid();
-            }
+            try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
         }
 
-        // 2. MILESTONE CONFIGS SYNC
+        // 2. MILESTONE CONFIGS (POD/DIP QUESTIONS & AUDIO) TWO-WAY SYNC
         if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
             const serverConfigs = configsRes.value.data;
-            if (typeof serverConfigs === 'object' && Object.keys(serverConfigs).length > 0) {
+            let hasNewServerConfigs = false;
+
+            if (serverConfigs && typeof serverConfigs === 'object') {
                 if (!customMilestoneConfigs) customMilestoneConfigs = {};
                 for (const msId in serverConfigs) {
                     if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
@@ -129,21 +127,299 @@ async function syncGlobalServerData() {
                         if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
                         for (const dKey in serverConfigs[msId][mod]) {
                             customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
+                            hasNewServerConfigs = true;
                         }
                     }
                 }
-                try {
-                    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
-                } catch(e) {}
+            }
+
+            // Check if local has configs not yet on server
+            if (Object.keys(localConfigs).length > 0) {
+                fetch('/api/milestone-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allConfigs: customMilestoneConfigs })
+                }).catch(() => {});
+            }
+
+            try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+        }
+
+        // 3. MODULE ACCESS TWO-WAY SYNC (DIP, POD, IMMERSE TOGGLES)
+        if (moduleAccessRes.status === 'fulfilled' && moduleAccessRes.value && moduleAccessRes.value.success && moduleAccessRes.value.data) {
+            const serverModuleAccess = moduleAccessRes.value.data;
+            if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0) {
+                try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
             }
         }
 
-        // 3. LEVEL-UP ACCESS SYNC
+        // 4. USER JOIN DATES TWO-WAY SYNC
+        if (joinDatesRes.status === 'fulfilled' && joinDatesRes.value && joinDatesRes.value.success && joinDatesRes.value.data) {
+            const serverJoinDates = joinDatesRes.value.data;
+            if (serverJoinDates && typeof serverJoinDates === 'object') {
+                let mergedJoinDates = { ...localJoinDates, ...serverJoinDates };
+                try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
+            }
+        }
+
+        // 5. LEVEL-UP ACCESS SYNC
         if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
             levelUpAccessConfig = accessRes.value.data;
-            try {
-                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-            } catch(e) {}
+            try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+        }
+
+        // Refresh UI components if rendered
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
+        }
+        if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
+            renderLearnerTimeline();
+        }
+        if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+            renderAdminCustomerGrid();
+        }
+    } catch(e) {
+        console.warn('Two-way sync warning:', e);
+    }
+}
+window.syncGlobalServerData = syncGlobalServerData;
+
+
+
+var actualUsers = [
+    { _id: '68d38fc02f70f039556bf3da', name: 'Sai Yedamala', email: 'saiyedamala02@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68a805cf8c448ccc00abc23f', name: 'Sai Yedamala', email: 'engineersai02@gmail.com', phone: '6309764212', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d38fe3824e7a950617f8af', name: 'Chandra', email: 'chandrasai349@gmail.com', phone: '9845421644', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d390422f70f039556c040b', name: 'SaiMaruthi', email: 'cvs.cmplifutureadi@gmail.com', phone: '7013451593', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d3909e2f70f039556c05d7', name: 'SaiChandu', email: 'britencloud@gmail.com', phone: '9492163908', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391002f70f039556c0701', name: 'Sai Yedamala', email: 'y.saidigitalexpert@gmail.com', phone: '6309764213', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391202f70f039556c0802', name: 'Pooja', email: 'poojalp10@gmail.com', phone: '9876543210', subscribedMangoes: ['6a168e4213e4e9a10984b164'] },
+    { _id: '68d391502f70f039556c0903', name: 'Keshava Karanth', email: 'keshavakaranth618@gmail.com', phone: '9880012345', subscribedMangoes: ['6a168e4213e4e9a10984b164'] }
+];
+
+var TEST_EMAILS = ['test@learner.com', 'vip@student.com', 'sai@cmplibe.com', 'test@test.com', 'saiyedamala02@gmail.com'];
+
+
+// Safe global state declarations
+currentUser = currentUser || null;
+isAdminLogin = isAdminLogin || false;
+
+function getEnabledModulesForMilestone(msId) {
+    const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
+        return saved[msId].filter(m => m && m !== 'undefined');
+    }
+    if (typeof milestoneConfig !== 'undefined' && Array.isArray(milestoneConfig)) {
+        const ms = milestoneConfig.find(m => m.id === Number(msId));
+        if (ms && ms.defaultModules) return [...ms.defaultModules];
+    }
+    return ['dip', 'pod'];
+}
+
+function toggleMilestoneModuleAccess(msId, moduleCode) {
+    let saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    let current = getEnabledModulesForMilestone(msId);
+    if (current.includes(moduleCode)) {
+        if (current.length === 1) {
+            alert('At least one module must remain active in this milestone.');
+            return;
+        }
+        current = current.filter(m => m !== moduleCode);
+    } else {
+        current.push(moduleCode);
+    }
+    saved[msId] = current;
+    try {
+        localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
+    } catch(e) {}
+
+    // Push to server immediately
+    fetch('/api/milestone-module-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msId: msId, moduleAccess: current, allModuleAccess: saved })
+    }).catch(() => {});
+
+    renderAdminMilestoneDetail(Number(msId));
+}
+window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
+var currentUser = null;
+var currentScoreObj = null;
+var currentView = 'sector';
+var currentFilter = 'All';
+var customerProjectFilter = 'All';
+var selectedProject = null;
+var isAdminLogin = false;
+var isCampusPartner = false;
+var partnerAllowedMangoes = [];
+var activeAdminMilestoneId = 1;
+var activeMilestoneId = 1;
+var activeAdminModule = 'dip';
+var tempLoginId = '';
+var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || ['6a168e4213e4e9a10984b164'];
+var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
+var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
+var allAdminMangos = [
+    { _id: '6a168e4213e4e9a10984b164', title: 'cMPLi Standard Level-Up Cohort', amount: 0, isPaid: false },
+    { _id: '6682734e120c766a6e5af59c', title: 'cMPLi Executive Track', amount: 4999, isPaid: true }
+];
+var adminRealtimeUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? [...actualUsers] : [];
+var activeSubmissionFilter = {};
+var currentSubmissionState = {};
+var activePodSessionQuestions = [];
+var activePodSessionDay = 1;
+var activePodSessionDateKey = '';
+var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
+var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
+var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+
+
+async function syncGlobalServerData() {
+    try {
+        let localData = [];
+        try { localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
+
+        let localConfigs = {};
+        try { localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {}; } catch(e) {}
+
+        let localModuleAccess = {};
+        try { localModuleAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
+
+        let localJoinDates = {};
+        try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
+
+        const [subsRes, configsRes, accessRes, moduleAccessRes, joinDatesRes] = await Promise.allSettled([
+            fetch('/api/submissions').then(r => r.json()),
+            fetch('/api/milestone-configs').then(r => r.json()),
+            fetch('/api/levelup-access').then(r => r.json()),
+            fetch('/api/milestone-module-access').then(r => r.json()),
+            fetch('/api/user-join-dates').then(r => r.json())
+        ]);
+
+        // 1. SUBMISSIONS TWO-WAY SYNC
+        if (subsRes.status === 'fulfilled' && subsRes.value && subsRes.value.success && Array.isArray(subsRes.value.data)) {
+            const serverData = subsRes.value.data;
+
+            // Push locally created submissions missing on server
+            const missingOnServer = localData.filter(loc => !serverData.some(srv => (
+                (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
+                String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
+                normalizeLevelUpType(srv.type) === normalizeLevelUpType(loc.type) &&
+                String(srv.day !== undefined && srv.day !== null ? srv.day : (srv.date || srv.dateKey)) === String(loc.day !== undefined && loc.day !== null ? loc.day : (loc.date || loc.dateKey))
+            )));
+
+            if (missingOnServer.length > 0) {
+                missingOnServer.forEach(missingSub => {
+                    fetch('/api/submissions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(missingSub)
+                    }).catch(() => {});
+                });
+            }
+
+            // Pull server submissions into local DB
+            serverData.forEach(s => {
+                const idx = localData.findIndex(l => (
+                    (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
+                    String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
+                    normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
+                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
+                ));
+
+                if (idx > -1) {
+                    localData[idx] = { ...localData[idx], ...s };
+                } else {
+                    localData.push(s);
+                }
+
+                if (s.userId) {
+                    const uId = String(s.userId);
+                    const userEmail = s.userEmail || (String(s.userId).includes('@') ? s.userId : '');
+                    const existInAdmin = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmail && u.email.toLowerCase() === userEmail.toLowerCase()));
+                    if (!existInAdmin) {
+                        const newU = {
+                            _id: uId,
+                            name: s.userName || (userEmail ? userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
+                            email: userEmail,
+                            phone: s.userPhone || '',
+                            subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                        };
+                        adminRealtimeUsers.push(newU);
+                        if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+                            actualUsers.push(newU);
+                        }
+                    }
+                }
+            });
+
+            try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
+        }
+
+        // 2. MILESTONE CONFIGS (POD/DIP QUESTIONS & AUDIO) TWO-WAY SYNC
+        if (configsRes.status === 'fulfilled' && configsRes.value && configsRes.value.success && configsRes.value.data) {
+            const serverConfigs = configsRes.value.data;
+            let hasNewServerConfigs = false;
+
+            if (serverConfigs && typeof serverConfigs === 'object') {
+                if (!customMilestoneConfigs) customMilestoneConfigs = {};
+                for (const msId in serverConfigs) {
+                    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+                    for (const mod in serverConfigs[msId]) {
+                        if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
+                        for (const dKey in serverConfigs[msId][mod]) {
+                            customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
+                            hasNewServerConfigs = true;
+                        }
+                    }
+                }
+            }
+
+            // Check if local has configs not yet on server
+            if (Object.keys(localConfigs).length > 0) {
+                fetch('/api/milestone-configs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allConfigs: customMilestoneConfigs })
+                }).catch(() => {});
+            }
+
+            try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+        }
+
+        // 3. MODULE ACCESS TWO-WAY SYNC (DIP, POD, IMMERSE TOGGLES)
+        if (moduleAccessRes.status === 'fulfilled' && moduleAccessRes.value && moduleAccessRes.value.success && moduleAccessRes.value.data) {
+            const serverModuleAccess = moduleAccessRes.value.data;
+            if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0) {
+                try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
+            }
+        }
+
+        // 4. USER JOIN DATES TWO-WAY SYNC
+        if (joinDatesRes.status === 'fulfilled' && joinDatesRes.value && joinDatesRes.value.success && joinDatesRes.value.data) {
+            const serverJoinDates = joinDatesRes.value.data;
+            if (serverJoinDates && typeof serverJoinDates === 'object') {
+                let mergedJoinDates = { ...localJoinDates, ...serverJoinDates };
+                try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
+            }
+        }
+
+        // 5. LEVEL-UP ACCESS SYNC
+        if (accessRes.status === 'fulfilled' && accessRes.value && accessRes.value.success && Array.isArray(accessRes.value.data)) {
+            levelUpAccessConfig = accessRes.value.data;
+            try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+        }
+
+        // Refresh UI components if rendered
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
+        }
+        if (typeof renderLearnerTimeline === 'function' && document.getElementById('learnerTimelineContainer')) {
+            renderLearnerTimeline();
+        }
+        if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+            renderAdminCustomerGrid();
         }
     } catch(e) {
         console.warn('Two-way sync warning:', e);
@@ -2308,7 +2584,7 @@ function createTimelineNode(dayNum, dateObj, type) {
 }
 
 // --- HELPER: Global Cohort Start Date ---
-let milestoneStartDates = JSON.parse(localStorage.getItem('milestoneStartDates')) || { 1: '2026-07-31', 2: '2026-08-21', 3: '2026-11-21' };
+let milestoneStartDates = JSON.parse(localStorage.getItem('milestoneStartDates')) || { 1: '2026-08-29', 2: '2026-08-21', 3: '2026-11-21' };
 
 function getMilestoneStartDate(msId) {
     return new Date(milestoneStartDates[msId] || new Date().toISOString().split('T')[0]);
@@ -3128,14 +3404,12 @@ function showRewardPopup(title, reward) {
 
 // Helper to get or initialize a user's join date for a milestone
 function getUserMilestoneJoinDate(userId, msId) {
-    if (!userId) return getLocalDateKey(new Date());
-    
     let state = {};
     try {
         state = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {};
     } catch(e) {}
 
-    if (state[userId] && state[userId][msId]) {
+    if (userId && state[userId] && state[userId][msId]) {
         return state[userId][msId];
     }
 
@@ -3156,20 +3430,33 @@ function getUserMilestoneJoinDate(userId, msId) {
             }
         });
         if (earliestDate) {
-            if (!state[userId]) state[userId] = {};
-            state[userId][msId] = earliestDate;
-            try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
+            if (userId) {
+                if (!state[userId]) state[userId] = {};
+                state[userId][msId] = earliestDate;
+                try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
+                fetch('/api/user-join-dates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, msId, joinDate: earliestDate, allJoinDates: state })
+                }).catch(() => {});
+            }
             return earliestDate;
         }
     }
 
-    // Default to today as the user's start date
-    const todayIso = getLocalDateKey(new Date());
-    if (!state[userId]) state[userId] = {};
-    state[userId][msId] = todayIso;
-    try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
-    
-    return todayIso;
+    // Milestone 1 default cohort start date is 2026-08-29
+    const defaultStart = '2026-08-29';
+    if (userId) {
+        if (!state[userId]) state[userId] = {};
+        state[userId][msId] = defaultStart;
+        try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
+        fetch('/api/user-join-dates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, msId, joinDate: defaultStart, allJoinDates: state })
+        }).catch(() => {});
+    }
+    return defaultStart;
 }
 window.getUserMilestoneJoinDate = getUserMilestoneJoinDate;
 
@@ -3288,28 +3575,20 @@ function switchMilestoneTab(moduleName, btnElement = null) {
             let buttonHtml = '';
             if (existingSub) {
                 if (isEvaluating) {
-                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
+                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
                 } else {
-                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
+                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser ? currentUser._id : ''}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
                 }
             } else if (isToday) {
                 if (moduleName === 'pod') {
-                    buttonHtml = `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] animate-pulse"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
                 } else {
-                    buttonHtml = `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] animate-pulse"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
                 }
             } else if (isPast) {
-                if (moduleName === 'pod') {
-                    buttonHtml = `<button type="button" onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
-                } else {
-                    buttonHtml = `<button type="button" onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
-                }
+                buttonHtml = `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50"><i class="fas fa-times-circle mr-1"></i> Missed</span>`;
             } else {
-                if (moduleName === 'pod') {
-                    buttonHtml = testMode ? `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
-                } else {
-                    buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Future</button>` : `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
-                }
+                buttonHtml = `<span class="text-xs font-bold text-slate-500"><i class="fas fa-lock mr-1"></i> Locked</span>`;
             }
 
             const moduleIconMap = {
@@ -6097,3 +6376,30 @@ window.renderMilestoneGrid = renderMilestoneGrid;
 window.openAdminMilestone = openAdminMilestone;
 window.openMilestone = openMilestone;
 window.closeMilestoneView = closeMilestoneView;
+
+
+
+function saveAdminDayConfig(msId, modCode, dateKey, configObj) {
+    if (!customMilestoneConfigs) customMilestoneConfigs = {};
+    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+    if (!customMilestoneConfigs[msId][modCode]) customMilestoneConfigs[msId][modCode] = {};
+    
+    customMilestoneConfigs[msId][modCode][dateKey] = configObj;
+    try {
+        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    } catch(e) {}
+
+    // POST to backend server
+    fetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: msId,
+            moduleName: modCode,
+            dateKey: dateKey,
+            config: configObj,
+            allConfigs: customMilestoneConfigs
+        })
+    }).catch(err => console.warn('Could not save milestone config to server:', err));
+}
+window.saveAdminDayConfig = saveAdminDayConfig;

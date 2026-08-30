@@ -316,6 +316,55 @@ app.post('/api/submissions/approve', async (req, res) => {
 
 // --- CUSTOM MILESTONE CONFIGS SYNC (Fixes Question Loss Issue #3) ---
 
+// MILESTONE MODULE ACCESS
+app.get('/api/milestone-module-access', (req, res) => {
+    const defaultAccess = {
+        "1": ["dip", "pod"],
+        "2": ["dip", "pod", "immerse", "projects"],
+        "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
+        "4": ["dip", "pod", "immerse", "projects", "residency"]
+    };
+    res.json({ success: true, data: store.customMilestoneModuleAccess || defaultAccess });
+});
+
+app.post('/api/milestone-module-access', (req, res) => {
+    try {
+        const { msId, moduleAccess, allModuleAccess } = req.body;
+        if (allModuleAccess && typeof allModuleAccess === 'object') {
+            store.customMilestoneModuleAccess = allModuleAccess;
+        } else if (msId && Array.isArray(moduleAccess)) {
+            if (!store.customMilestoneModuleAccess) store.customMilestoneModuleAccess = {};
+            store.customMilestoneModuleAccess[msId] = moduleAccess;
+        }
+        saveStore();
+        res.json({ success: true, message: 'Module access saved', data: store.customMilestoneModuleAccess });
+    } catch(e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// USER JOIN DATES
+app.get('/api/user-join-dates', (req, res) => {
+    res.json({ success: true, data: store.userMilestoneJoinDates || {} });
+});
+
+app.post('/api/user-join-dates', (req, res) => {
+    try {
+        const { userId, msId, joinDate, allJoinDates } = req.body;
+        if (allJoinDates && typeof allJoinDates === 'object') {
+            store.userMilestoneJoinDates = allJoinDates;
+        } else if (userId && msId && joinDate) {
+            if (!store.userMilestoneJoinDates) store.userMilestoneJoinDates = {};
+            if (!store.userMilestoneJoinDates[userId]) store.userMilestoneJoinDates[userId] = {};
+            store.userMilestoneJoinDates[userId][msId] = joinDate;
+        }
+        saveStore();
+        res.json({ success: true, message: 'User join dates saved', data: store.userMilestoneJoinDates });
+    } catch(e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.get('/api/milestone-configs', (req, res) => {
     res.json({ success: true, data: store.customMilestoneConfigs || {} });
 });
