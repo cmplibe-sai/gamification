@@ -1,3 +1,17 @@
+function getLocalDateKey(dateObj) {
+    if (!dateObj) return null;
+    const d = new Date(dateObj);
+    if (Number.isNaN(d.getTime())) return null;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+window.getLocalDateKey = getLocalDateKey;
+
+var activeAdminDateKey = getLocalDateKey(new Date());
+window.activeAdminDateKey = activeAdminDateKey;
+
 function displayAdminLearnerDataById(userId) {
     const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [u.email || u.phone || u._id, u])).values());
     const user = allUsersPool.find(u => String(u._id) === String(userId) || (u.email && String(u.email).toLowerCase() === String(userId).toLowerCase()));
@@ -203,227 +217,298 @@ window.updateDashboardUI = updateDashboardUI;
 // CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)
 // =========================================================================
 
-// =========================================================================
-// PURE LIVE TAGMANGO API & COHORT ENGINE
-// =========================================================================
+// ================= ADMINISTRATOR LOGIC (UPGRADED) =================
 
+// Store real-time subscribers globally for the admin view
+// --- GLOBAL ADMIN FILTER STATE ---
 var allAdminMangos = [];
-var adminRealtimeUsers = [];
-var currentAdminStatusFilter = 'All';
+var adminRealtimeUsers = (typeof actualUsers !== "undefined" && Array.isArray(actualUsers)) ? [...actualUsers] : [];
 
 async function initAdminApp() {
-    try {
-        // 1. Fetch live solutions/mangos directly from TagMango API
-        if (window.fetchTagMango && window.TagMangoAPI && window.TagMangoAPI.Mangos) {
-            const mangoRes = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
-            const rawMangos = mangoRes.result || mangoRes.mangos || (Array.isArray(mangoRes) ? mangoRes : []);
-            if (rawMangos.length > 0) {
-                allAdminMangos = rawMangos.filter(m => !m.isDeleted).map(m => {
-                    const isZero = m.zeroCostMango || m.price === 0 || !m.price;
-                    const priceLabel = isZero ? 'Free' : `₹${m.price}`;
-                    return {
-                        _id: m._id || m.id,
-                        id: m._id || m.id,
-                        title: m.title || m.name || 'Untitled Solution',
-                        name: m.title || m.name || 'Untitled Solution',
-                        price: m.price || 0,
-                        zeroCostMango: isZero,
-                        priceLabel: priceLabel,
-                        isPaid: !isZero,
-                        subscribersCount: m.subscribersCount || 0
-                    };
-                });
-            }
-
-            // 2. Fetch all registered subscribers/customers directly from TagMango API
-            const subRes = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
-            const rawUsers = subRes.result || subRes.users || (Array.isArray(subRes) ? subRes : []);
-            if (rawUsers.length > 0) {
-                adminRealtimeUsers = rawUsers.map(u => ({
-                    _id: u._id,
-                    name: u.name || 'Learner',
-                    email: u.email || '',
-                    phone: u.phone ? ((u.dialCode || '') + ' ' + u.phone).trim() : '',
-                    profilePicUrl: u.profilePicUrl || 'https://via.placeholder.com/80',
-                    subscribedMangoes: Array.isArray(u.subscribedMangoes) ? u.subscribedMangoes : []
-                }));
-            }
-        }
-    } catch(err) {
-        console.warn('TagMango live fetch warning:', err);
-    }
-
-    // Fallback to embedded data only if live API was unreachable
-    if (allAdminMangos.length === 0 && typeof coursesData !== 'undefined' && coursesData.result) {
-        allAdminMangos = coursesData.result.subscriptions.map(s => ({
-            _id: s.mangoId,
-            id: s.mangoId,
-            title: s.mangoTitle,
-            name: s.mangoTitle,
-            price: s.count > 0 ? 99 : 0,
-            zeroCostMango: s.count === 0,
-            priceLabel: s.count > 0 ? '₹99' : 'Free',
-            isPaid: s.count > 0,
-            subscribersCount: s.count
-        }));
-    }
-
-    if (adminRealtimeUsers.length === 0 && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-        adminRealtimeUsers = [...actualUsers];
-    }
-
-    filterMangosByPricing();
-    populateAdminCohortFilters();
-    renderAdminMangoToggles();
-    renderAdminCustomerGrid();
-}
-window.initAdminApp = initAdminApp;
-
-function filterMangosByPricing() {
-    const pricingFilter = document.getElementById('pricingFilter') ? document.getElementById('pricingFilter').value : 'all';
     const courseSelect = document.getElementById('courseSelect');
-    if (!courseSelect) return;
+    const pricingSelect = document.getElementById('pricingFilter');
+    
+    if (courseSelect) courseSelect.innerHTML = '<option value="">-- Fetching Live Mangoes... --</option>';
+    
+    // --- DYNAMIC UI ADJUSTMENT ---
+    if (typeof updateRoleBadge === 'function') updateRoleBadge();
 
-    let filtered = allAdminMangos || [];
-
-    if (isCampusPartner) {
-        filtered = filtered.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
-    } else {
-        if (pricingFilter === 'paid') {
-            filtered = filtered.filter(m => m.isPaid || (!m.zeroCostMango && m.price > 0));
-        } else if (pricingFilter === 'free') {
-            filtered = filtered.filter(m => !m.isPaid || m.zeroCostMango || m.price === 0);
+    // 1. Update Headings
+    const headings = document.querySelectorAll('#adminTab h1, #adminTab h2, .creator-home-title');
+    headings.forEach(h => {
+        if(h.innerText.includes('Creator') || h.innerText.includes('Partner') || h.innerText.includes('Home')) {
+            h.innerHTML = isCampusPartner ? 'Campus Partner <span class="text-indigo-400">Home</span>' : 'Creator <span class="text-indigo-400">Home</span>';
         }
-    }
-
-    courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
-    filtered.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m._id || m.id;
-        opt.innerText = `${m.title || m.name} (${m.priceLabel || (m.isPaid ? 'Paid' : 'Free')})`;
-        courseSelect.appendChild(opt);
     });
 
+    // 2. Remove Serial Numbers (1., 2., 3.) robustly by targeting text nodes only
+    document.querySelectorAll('label, h3, h4, h5, p, span').forEach(el => {
+        Array.from(el.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) { // Only touch the text, ignore the icons
+                let text = node.nodeValue;
+                if (text.includes('1. Solution Type')) node.nodeValue = text.replace('1. Solution Type', 'Solution Type');
+                if (text.includes('2. Select Mango')) node.nodeValue = text.replace('2. Select Mango / Cohort', 'Select Mango / Cohort');
+                if (text.includes('3. Customer Health Status')) node.nodeValue = text.replace('3. Customer Health Status', 'Customer Health Status');
+            }
+        });
+    });
+    
+    // 3. Hide Solution Type Dropdown for Partners
+    if (pricingSelect) {
+        const pricingContainer = pricingSelect.closest('div');
+        if (pricingContainer) pricingContainer.style.display = isCampusPartner ? 'none' : '';
+    }
+
+    // 4. HIDE "Level-Up Solution Access" entirely for Partners in Level-Up Tab
+    const toggleSearch = document.getElementById('adminLevelUpSearch');
+    if (toggleSearch) {
+        const accessBox = toggleSearch.closest('.glass') || toggleSearch.parentElement.parentElement;
+        if (accessBox) accessBox.style.display = isCampusPartner ? 'none' : '';
+    }
+    const toggleContainer = document.getElementById('adminMangoToggles');
+    if (toggleContainer) {
+        const wrapper = toggleContainer.closest('.glass') || toggleContainer.parentElement;
+        if (wrapper) wrapper.style.display = isCampusPartner ? 'none' : '';
+    }
+
+    // 5. Remove the old misplaced search bar (from Issue 1)
+    const oldSearch = document.getElementById('creatorSolutionSearchContainer');
+    if (oldSearch) oldSearch.remove();
+
+    // 6. Inject "Manage Campus Partners" Button safely into the DOM
+    let manageBtnContainer = document.getElementById('managePartnersBtnContainer');
+    if (!manageBtnContainer) {
+        const filtersRow = courseSelect ? courseSelect.closest('.grid') || courseSelect.parentElement.parentElement : null;
+        if (filtersRow && filtersRow.parentNode) {
+            manageBtnContainer = document.createElement('div');
+            manageBtnContainer.id = 'managePartnersBtnContainer';
+            manageBtnContainer.className = 'w-full flex justify-end mb-4';
+            filtersRow.parentNode.insertBefore(manageBtnContainer, filtersRow);
+        }
+    }
+    
+    if (manageBtnContainer) {
+        if (isAdminLogin && !isCampusPartner) {
+            manageBtnContainer.innerHTML = `
+                <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                    <i class="fas fa-university mr-2"></i> Manage Campus Partners
+                </button>`;
+        } else {
+            manageBtnContainer.innerHTML = ''; 
+        }
+    }
+
+    try {
+        const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
+        allAdminMangos = response.result || response.mangos || [];
+        
+        if (typeof filterMangosByPricing === 'function') filterMangosByPricing();
+        if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+
+        const subResponse = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
+        adminRealtimeUsers = subResponse.result || subResponse.users || [];
+        
+    } catch (error) {
+        console.error("Failed to load admin filters:", error);
+        if (courseSelect) courseSelect.innerHTML = '<option value="">-- Error Loading Mangoes --</option>';
+        adminRealtimeUsers = [];
+    }
+    
+    if (typeof updateLearnerDropdown === 'function') updateLearnerDropdown();
+}
+
+// ---------------------------------------------------------
+// UPGRADED ADMIN TOGGLES (With Search & Pricing Filters)
+// ---------------------------------------------------------
+function renderAdminMangoToggles() {
+    const container = document.getElementById('adminMangoToggles');
+    const searchInput = document.getElementById('adminLevelUpSearch');
+    const pricingSelect = document.getElementById('adminLevelUpPricing');
+    
+    if (!container || allAdminMangos.length === 0) return;
+
+    // FIX: COMPLETELY HIDE CONFIGURATION TOOLS FROM PARTNERS
+    const parentBox = container.closest('.glass') || container.parentElement;
+    if (isCampusPartner) {
+        if (parentBox) parentBox.style.display = 'none';
+        if (pricingSelect) pricingSelect.style.display = 'none';
+        return; // Stop rendering toggles immediately
+    } else {
+        if (parentBox) parentBox.style.display = '';
+        if (pricingSelect) pricingSelect.style.display = '';
+    }
+
+    let filteredMangos = allAdminMangos;
+
+    // Apply Search Filter
+    if (searchInput && searchInput.value) {
+        const term = searchInput.value.toLowerCase();
+        filteredMangos = filteredMangos.filter(m => m.title && m.title.toLowerCase().includes(term));
+    }
+
+    // Apply Pricing Filter
+    if (pricingSelect && pricingSelect.value !== 'all') {
+        filteredMangos = filteredMangos.filter(m => {
+            const isPaid = (m.amount > 0 || m.price > 0 || m.isPaid || m.type === 'paid');
+            return pricingSelect.value === 'paid' ? isPaid : !isPaid;
+        });
+    }
+
+    container.innerHTML = filteredMangos.map(mango => {
+        const isEnabled = levelUpAccessConfig.includes(mango._id);
+        const priceLabel = (mango.amount > 0 || mango.price > 0) ? `<span class="text-[9px] text-amber-400 bg-amber-900/40 px-1.5 rounded border border-amber-700/50">PAID</span>` : `<span class="text-[9px] text-emerald-400 bg-emerald-900/40 px-1.5 rounded border border-emerald-700/50">FREE</span>`;
+
+        return `
+        <div class="flex items-center justify-between p-3 glass border border-slate-700 rounded-xl bg-slate-800/50 hover:border-indigo-500/50 transition-colors">
+            <div class="overflow-hidden pr-3">
+                <p class="text-sm font-bold text-white truncate" title="${mango.title}">${mango.title}</p>
+                <div class="flex items-center gap-2 mt-1">
+                    <p class="text-[10px] text-slate-400">ID: ${mango._id.substring(0,8)}...</p>
+                    ${priceLabel}
+                </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" class="sr-only peer" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mango._id}', this.checked)">
+                <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+        </div>`;
+    }).join('');
+}
+
+// --- ADMIN CUSTOMER HEALTH ENGINE ---
+let currentAdminStatusFilter = 'All';
+
+function calculateCustomerHealth(user) {
+    const subs = getUserSubmissionsByUserId(user._id) || [];
+    let earnedLcs = 0;
+    
+    // Sum all earned points from their submission history
+    subs.forEach(s => { earnedLcs += (Number(s.lcReward) || 0); });
+    
+    // Add any legacy/manually assigned LCs if they exist in the DB
+    earnedLcs += (Number(user.lcs) || 0);
+
+    const msState = userMilestoneState[user._id] || { highestUnlocked: 1 };
+    const highestMs = msState.highestUnlocked;
+
+    // Define the realistic expected LC targets based on the user's current milestone journey.
+    // (You can adjust these exact target numbers based on your final point configurations)
+    const msExpectedMap = {
+        1: 693,         // Example: 21 days * 33 LCs
+        2: 2693,        // Cumulative: MS1 + MS2 expected points
+        3: 5193,        // Cumulative: MS1 + MS2 + MS3 expected points
+        4: 7693,
+        5: 10193,
+        6: 12693
+    };
+
+    let expectedLcs = msExpectedMap[highestMs] || 1;
+    if (expectedLcs === 0) expectedLcs = 1; // Failsafe to prevent division by zero
+
+    let pct = Math.round((earnedLcs / expectedLcs) * 100);
+    
+    // STRICT CAP: Prevent percentages from exceeding 100%
+    if (pct > 100) pct = 100; 
+    
+    let label = 'Low';
+    if (pct >= 81) label = 'High';
+    else if (pct >= 50) label = 'Moderate';
+
+    return { 
+        earnedLcs: earnedLcs, 
+        expectedLcs: expectedLcs, 
+        healthPct: pct, 
+        label: label, 
+        highestMs: highestMs // Passed along for the UI badge!
+    };
+}
+
+function filterAdminCustomersByStatus(status, btnElement) {
+    currentAdminStatusFilter = status;
+    document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+        btn.classList.add('bg-slate-700');
+    });
+    btnElement.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+    btnElement.classList.remove('bg-slate-700');
     renderAdminCustomerGrid();
 }
-window.filterMangosByPricing = filterMangosByPricing;
 
 function renderAdminCustomerGrid() {
     const selectedCourseId = document.getElementById('courseSelect') ? document.getElementById('courseSelect').value : '';
-    const searchVal = document.getElementById('adminCustomerSearch') ? document.getElementById('adminCustomerSearch').value.toLowerCase().trim() : '';
+    const searchVal = document.getElementById('adminCustomerSearch') ? document.getElementById('adminCustomerSearch').value.toLowerCase() : '';
     
     const grid = document.getElementById('adminCustomerGrid');
     if (!grid) return;
 
-    // Combine TagMango live users + fallback actualUsers (deduplicated by _id / email)
-    const userMap = new Map();
-    (adminRealtimeUsers || []).forEach(u => userMap.set(String(u._id || u.email), u));
-    if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-        actualUsers.forEach(u => {
-            const key = String(u._id || u.email);
-            if (!userMap.has(key)) userMap.set(key, u);
-        });
-    }
-    const allUsersPool = Array.from(userMap.values());
+    document.getElementById('adminReportContainer')?.classList.add('hidden');
 
-    let filteredUsers = allUsersPool;
+    let filteredUsers = adminRealtimeUsers;
 
-    // 1. Campus Partner Gating
     if (isCampusPartner) {
         filteredUsers = filteredUsers.filter(u => 
             u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId))
         );
     }
 
-    // 2. Specific Mango / Solution Filter (when creator selects a solution)
     if (selectedCourseId) {
         filteredUsers = filteredUsers.filter(u => 
             u.subscribedMangoes && u.subscribedMangoes.includes(selectedCourseId)
         );
     }
     
-    // 3. Search Filter (by name, email, or phone)
     if (searchVal) {
         filteredUsers = filteredUsers.filter(u => 
             (u.name && u.name.toLowerCase().includes(searchVal)) || 
-            (u.email && u.email.toLowerCase().includes(searchVal)) ||
-            (u.phone && String(u.phone).includes(searchVal))
+            (u.email && u.email.toLowerCase().includes(searchVal))
         );
     }
 
-    // 4. Milestone Distribution Metric Box (4 Milestones)
-    const msCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    // --- NEW: MILESTONE DISTRIBUTION METRICS WIDGET ---
+    const msCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
     filteredUsers.forEach(u => {
-        const uSubs = getUserSubmissionsByUserId(u);
-        const m1Done = uSubs.filter(s => String(s.milestoneId || 1) === '1' && normalizeLevelUpType(s.type) === 'dip').length >= 21;
-        const m2Done = uSubs.filter(s => String(s.milestoneId) === '2').length >= 30;
-        const m3Done = uSubs.filter(s => String(s.milestoneId) === '3').length >= 30;
-
-        let activeMs = 1;
-        if (m1Done) activeMs = 2;
-        if (m2Done) activeMs = 3;
-        if (m3Done) activeMs = 4;
-
-        const recordedHighest = (userMilestoneState[u._id] || {}).highestUnlocked;
-        if (recordedHighest && recordedHighest > activeMs) {
-            activeMs = Math.min(4, Math.max(1, recordedHighest));
-        }
-
-        if (msCounts[activeMs] !== undefined) msCounts[activeMs]++;
-        else msCounts[1]++;
+        const highest = (userMilestoneState[u._id] || { highestUnlocked: 1 }).highestUnlocked;
+        if (msCounts[highest] !== undefined) msCounts[highest]++;
     });
 
     let statsBox = document.getElementById('dynamicMsStatsBox');
     if (!statsBox) {
         statsBox = document.createElement('div');
         statsBox.id = 'dynamicMsStatsBox';
-        statsBox.className = 'mt-6';
+        statsBox.className = 'mt-6'; // Adds breathing room
 
+        // EXACT PLACEMENT: Find the row with the dropdowns and insert right below it
         const filterSelect = document.getElementById('courseSelect');
         const filterRow = filterSelect ? (filterSelect.closest('.grid') || filterSelect.parentElement.parentElement) : null;
 
         if (filterRow && filterRow.parentNode) {
+            // Insert immediately AFTER the filter row
             filterRow.parentNode.insertBefore(statsBox, filterRow.nextSibling);
         } else {
+            // Fallback just in case
             grid.parentElement.insertBefore(statsBox, grid);
         }
     }
 
-    const isFiltered = Boolean(selectedCourseId || searchVal || currentAdminStatusFilter !== 'All');
-
     statsBox.innerHTML = `
         <div class="mb-6 p-5 glass border border-slate-700 rounded-xl shadow-inner">
-            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex justify-between items-center">
-                <span><i class="fas fa-chart-pie text-indigo-400 mr-2"></i> CUSTOMERS PER MILESTONE</span>
-                <span class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-600 font-mono">
-                    ${isFiltered ? `FILTERED TOTAL: ${filteredUsers.length}` : `TOTAL: ${filteredUsers.length}`}
-                </span>
+            <h4 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex justify-between items-center">
+                <span><i class="fas fa-chart-pie text-indigo-400 mr-2"></i> Customers per Milestone</span>
+                <span class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-600">Filtered Total: ${filteredUsers.length}</span>
             </h4>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                ${milestoneConfig.map(ms => `
-                    <div class="bg-slate-900/80 border border-slate-700 p-4 rounded-xl text-center transition-all ${msCounts[ms.id] > 0 ? 'border-b-4 border-b-indigo-500 shadow-md' : 'opacity-60'}">
-                        <p class="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1 truncate" title="${ms.name}">MILESTONE ${ms.id}</p>
-                        <p class="text-2xl font-black ${msCounts[ms.id] > 0 ? 'text-white' : 'text-slate-600'} font-mono">${msCounts[ms.id] || 0}</p>
+            <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
+                ${[1,2,3,4,5,6].map(i => `
+                    <div class="bg-slate-900/80 border border-slate-700 p-3 rounded-xl text-center transition-all ${msCounts[i] > 0 ? 'border-b-4 border-b-indigo-500 shadow-md' : 'opacity-60'}">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Milestone ${i}</p>
+                        <p class="text-2xl font-black ${msCounts[i] > 0 ? 'text-indigo-400' : 'text-slate-600'}">${msCounts[i]}</p>
                     </div>
                 `).join('')}
             </div>
         </div>
     `;
+    // --------------------------------------------------
 
-    // 5. Calculate Health for each user
-    const usersWithHealth = filteredUsers.map(user => {
-        const uSubs = getUserSubmissionsByUserId(user);
-        const earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-        const expectedLcs = 693;
-        const pct = Math.min(100, Math.round((earnedLcs / expectedLcs) * 100));
-        let label = 'Low';
-        if (pct >= 81) label = 'High';
-        else if (pct >= 50) label = 'Moderate';
-        return {
-            ...user,
-            health: { earnedLcs, expectedLcs, healthPct: pct, label }
-        };
-    });
+    const usersWithHealth = filteredUsers.map(user => ({ ...user, health: calculateCustomerHealth(user) }));
     
     const finalUsers = currentAdminStatusFilter === 'All' 
         ? usersWithHealth 
@@ -437,408 +522,209 @@ function renderAdminCustomerGrid() {
         return;
     }
 
-    // 6. Render Customer Cards matching Img-2 exactly
-    grid.innerHTML = finalUsers.map(user => {
-        const healthColor = user.health.healthPct >= 80 ? 'text-emerald-400' : (user.health.healthPct >= 50 ? 'text-amber-400' : 'text-red-400');
-        const highestMs = (userMilestoneState[user._id] || {}).highestUnlocked || 1;
-
+    grid.innerHTML = finalUsers.map(u => {
+        const healthColor = u.health.label === 'High' ? 'text-emerald-400' : (u.health.label === 'Moderate' ? 'text-amber-400' : 'text-red-400');
+        const borderClass = u.health.label === 'High' ? 'border-emerald-500/50' : (u.health.label === 'Moderate' ? 'border-amber-500/50' : 'border-red-500/50');
+        const bgClass = u.health.label === 'High' ? 'bg-emerald-900/10' : (u.health.label === 'Moderate' ? 'bg-amber-900/10' : 'bg-red-900/10');
+        
         return `
-            <div onclick="displayAdminLearnerDataById('${user._id}')" class="glass-card p-5 rounded-2xl border-slate-800 hover:border-indigo-500/50 transition-all cursor-pointer group flex flex-col justify-between">
-                <div>
-                    <div class="flex items-start justify-between gap-3 mb-3">
-                        <div class="flex items-center gap-3">
-                            <img src="${user.profilePicUrl || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-slate-700 object-cover" onerror="this.src='https://via.placeholder.com/40'" />
-                            <div>
-                                <h4 class="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">${user.name || 'Learner'}</h4>
-                                <p class="text-[11px] text-slate-400 truncate max-w-[140px]">${user.email || user.phone || 'N/A'}</p>
-                            </div>
-                        </div>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-500/30 text-indigo-300">MS ${highestMs}</span>
-                    </div>
-                </div>
-                
-                <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono">
-                    <span class="font-bold ${healthColor}">HEALTH: ${user.health.healthPct}%</span>
-                    <span class="text-slate-400">EARNED / EXPECTED: ${user.health.earnedLcs} / 693</span>
+        <div onclick='displayAdminLearnerDataById("${u._id}")' class="glass ${bgClass} p-4 rounded-xl border ${borderClass} hover:border-indigo-500 cursor-pointer transition-all hover:-translate-y-1 shadow-lg relative">
+            
+            <!-- NEW: Milestone Status Badge -->
+            <div class="absolute top-3 right-3 z-10">
+                <span class="text-[9px] font-black tracking-widest uppercase bg-indigo-900/80 text-indigo-300 px-2.5 py-1 rounded-md border border-indigo-700/50 shadow-sm shadow-indigo-900/20">
+                    MS ${u.health.highestMs}
+                </span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-4 border-b border-slate-700/50 pb-3 pr-12">
+                <img src="${u.profilePicUrl || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-slate-600 object-cover">
+                <div class="overflow-hidden">
+                    <p class="text-sm font-bold text-white truncate">${u.name || 'Unknown User'}</p>
+                    <p class="text-[10px] text-slate-400 truncate">${u.email || u.phone}</p>
                 </div>
             </div>
-        `;
+            <div class="flex justify-between items-end">
+                <div>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Health</p>
+                    <p class="text-lg font-black ${healthColor}">${u.health.healthPct}%</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Earned / Expected</p>
+                    <p class="text-xs font-bold text-indigo-400">${u.health.earnedLcs} / ${u.health.expectedLcs}</p>
+                </div>
+            </div>
+        </div>`;
     }).join('');
 }
-window.renderAdminCustomerGrid = renderAdminCustomerGrid;
 
-function displayAdminLearnerDataById(userId) {
-    const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [u.email || u.phone || u._id, u])).values());
-    const user = allUsersPool.find(u => String(u._id) === String(userId) || (u.email && String(u.email).toLowerCase() === String(userId).toLowerCase()));
-
-    if (!user) return alert("Customer record not found.");
-
-    const reportContainer = document.getElementById('adminReportContainer');
-    if (!reportContainer) return;
-
-    reportContainer.classList.remove('hidden');
-
-    const uSubs = getUserSubmissionsByUserId(user._id || user);
-    const earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    const health = calculateCustomerHealth(user);
-
-    const userDetailsEl = document.getElementById('adminLearnerDetails') || document.querySelector('#adminReportContainer .glass-card:first-child');
-    if (userDetailsEl) {
-        userDetailsEl.innerHTML = `
-            <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800">Learner Overview</h3>
-            <div class="flex items-center gap-4 pb-4 border-b border-slate-800">
-                <img src="${user.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500/50 object-cover shadow-xl" onerror="this.src='https://via.placeholder.com/80'">
-                <div>
-                    <h3 class="text-xl font-extrabold text-white font-heading">${user.name || 'Learner'}</h3>
-                    <p class="text-xs text-indigo-400 font-mono mt-0.5">ID: ${user._id || 'N/A'}</p>
-                </div>
-            </div>
-            <div class="space-y-2 pt-3 text-xs">
-                <div class="flex justify-between"><span class="text-slate-400">Email Address:</span> <span class="text-white font-semibold">${user.email || 'N/A'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Phone Number:</span> <span class="text-white font-semibold">${user.phone || 'N/A'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Compliance Health:</span> <span class="font-bold ${health.healthPct >= 80 ? 'text-emerald-400' : (health.healthPct >= 50 ? 'text-amber-400' : 'text-red-400')}">${health.healthPct}% (${health.label})</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Active Milestone:</span> <span class="text-indigo-400 font-bold">Milestone ${health.highestMs || 1}</span></div>
-            </div>
-        `;
+function toggleLevelUpAccess(mangoId, isEnabled) {
+    if (!Array.isArray(levelUpAccessConfig)) {
+        levelUpAccessConfig = [];
     }
 
-    if (typeof renderSubmissionsAndReflections === 'function') {
-        renderSubmissionsAndReflections(user._id, 'adminLearnerProjects', 'all');
+    if (isEnabled && !levelUpAccessConfig.includes(mangoId)) {
+        levelUpAccessConfig.push(mangoId);
+    } else if (!isEnabled) {
+        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
+    }
+    
+    // 1. Save to local storage immediately
+    localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
+    
+    // 2. Re-populate cohort dropdown filters
+    if (typeof populateAdminCohortFilters === 'function') {
+        populateAdminCohortFilters();
     }
 
-    if (typeof renderTimelineGrid === 'function') {
-        renderTimelineGrid(user.email, 'adminCompletionGrid');
-    }
-
-    reportContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // 3. Save directly to Render server backend (Single Source of Truth)
+    fetch('/api/levelup-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: levelUpAccessConfig })
+    })
+    .then(res => res.json())
+    .then(data => console.log('✅ Level-Up Access saved to Render backend:', levelUpAccessConfig))
+    .catch(err => console.error('Error saving access to server:', err));
 }
-window.displayAdminLearnerDataById = displayAdminLearnerDataById;
 
-
-
-function updateDashboardUI() {
-    if (!currentUser) {
-        try {
-            const saved = JSON.parse(localStorage.getItem('currentUser'));
-            if (saved) currentUser = saved;
-        } catch(e) {}
-    }
-    if (!currentUser) return;
-
-    // Find actual matching user record from actualUsers
-    const matchedActual = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers))
-        ? actualUsers.find(u => (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || String(u._id) === String(currentUser._id))
-        : null;
-
-    const displayUser = matchedActual || currentUser;
-    const userSubs = getUserSubmissionsByUserId(displayUser._id || displayUser);
-    const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    const totalXP = earnedLcs > 0 ? (6505 + earnedLcs) : 6541;
-
-    const pointsEl = document.getElementById('userPoints');
-    if (pointsEl) pointsEl.innerText = totalXP;
-
-    const welcomeEl = document.getElementById('dashWelcomeName');
-    if (welcomeEl) welcomeEl.innerHTML = 'Learner <span class="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Performance</span>';
-
-    // 1. Learner Details (Left Box - Matches Img-3 Exactly)
-    const userDetailsEl = document.getElementById('userDetailsContent');
-    if (userDetailsEl) {
-        const uId = displayUser._id || '68a805cf8c448ccc00abc23f';
-        const profilePic = displayUser.profilePicUrl || 'https://res.cloudinary.com/tagmango/image/upload/v1724911762/users/6682734e120c766a6e5af59c/u_6682734e120c766a6e5af59d.jpg';
-        const phoneStr = displayUser.phone ? (displayUser.phone.startsWith('+') ? displayUser.phone : '+91 ' + displayUser.phone) : '+91 9703764212';
-
-        userDetailsEl.innerHTML = `
-            <div class="flex items-center gap-4 pb-4">
-                <img src="${profilePic}" class="w-16 h-16 rounded-full border-2 border-indigo-500/50 object-cover shadow-xl" onerror="this.src='https://via.placeholder.com/80'">
-                <div>
-                    <h3 class="text-lg font-extrabold text-white font-heading">${displayUser.name || 'Sai Yedamala'}</h3>
-                    <p class="text-xs text-indigo-400/80 font-mono mt-0.5">ID: ${uId}</p>
-                </div>
-            </div>
-            <div class="space-y-2.5 pt-2 text-xs border-t border-slate-800">
-                <p><span class="text-slate-400 font-medium">Email:</span> <span class="text-white font-semibold">${displayUser.email || 'engineersai02@gmail.com'}</span></p>
-                <p><span class="text-slate-400 font-medium">Phone:</span> <span class="text-white font-semibold">${phoneStr}</span></p>
-            </div>
-        `;
-    }
-
-    // 2. cMPLi Learning Currencies (Right Box - Matches Img-3 Exactly)
-    const pointsContentEl = document.getElementById('pointsContent');
-    if (pointsContentEl) {
-        pointsContentEl.innerHTML = `
-            <div class="text-center pb-4 border-b border-slate-800">
-                <div class="text-3xl font-black text-cyan-400 font-mono tracking-tight">${totalXP} XP</div>
-            </div>
-            <div class="space-y-2 pt-3 text-xs font-semibold">
-                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
-                    <span class="text-slate-300">C M P Li Dip</span>
-                    <span class="text-emerald-400 font-mono font-bold">+339</span>
-                </div>
-                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
-                    <span class="text-slate-300">Daily Active</span>
-                    <span class="text-emerald-400 font-mono font-bold">+333</span>
-                </div>
-                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
-                    <span class="text-slate-300">Dip</span>
-                    <span class="text-emerald-400 font-mono font-bold">+253</span>
-                </div>
-                <div class="flex justify-between items-center py-1">
-                    <span class="text-slate-300">Levelup Quiz</span>
-                    <span class="text-emerald-400 font-mono font-bold">+138</span>
-                </div>
-            </div>
-        `;
-    }
-
-    // 3. Course Progress (Bottom Box - Matches Img-3 Exactly)
-    let courseProgressSection = document.getElementById('dashCourseProgressBox');
-    if (!courseProgressSection) {
-        courseProgressSection = document.createElement('div');
-        courseProgressSection.id = 'dashCourseProgressBox';
-        courseProgressSection.className = 'glass-card p-6 border-slate-800 mt-6';
-        
-        const myProjectsEl = document.getElementById('myProjects')?.closest('.glass-card') || document.getElementById('myProjects');
-        if (myProjectsEl && myProjectsEl.parentElement) {
-            myProjectsEl.parentElement.insertBefore(courseProgressSection, myProjectsEl);
-        }
-    }
-
-    courseProgressSection.innerHTML = `
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-            <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <i class="fas fa-layer-group text-indigo-400"></i> Course Progress
-            </h3>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">Active Courses: 1</span>
-        </div>
-        <div class="glass p-4 rounded-xl border border-slate-800 space-y-2">
-            <div class="flex justify-between items-center">
-                <h4 class="text-xs font-bold text-white">cMPLi Dip</h4>
-                <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40 uppercase">ENROLLED</span>
-            </div>
-            <div class="flex justify-between text-[10px] text-slate-400 font-mono pt-1">
-                <span><i class="fas fa-tasks text-slate-500 mr-1"></i> In Progress</span>
-                <span class="font-bold text-white">0.0%</span>
-            </div>
-            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                <div class="bg-indigo-500 h-full rounded-full" style="width: 0%;"></div>
-            </div>
-        </div>
-    `;
-
-    if (typeof renderSubmissionsAndReflections === 'function') {
-        renderSubmissionsAndReflections(displayUser._id, 'myProjects', 'all');
-    }
-    if (typeof renderTimelineGrid === 'function') {
-        renderTimelineGrid(displayUser.email, 'completionGrid');
-    }
-}
-window.updateDashboardUI = updateDashboardUI;
-
-// =========================================================================
-// CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)
-// =========================================================================
-
-var allAdminMangos = (function() {
-    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
-        return coursesData.result.subscriptions.map(s => ({
-            _id: s.mangoId,
-            id: s.mangoId,
-            title: s.mangoTitle,
-            name: s.mangoTitle,
-            amount: s.count > 0 ? 1 : 0,
-            price: s.count > 0 ? 1 : 0,
-            isPaid: s.count > 0,
-            subscribersCount: s.count
-        }));
-    }
-    return [];
-})();
-
-var adminRealtimeUsers = (function() {
-    if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) {
-        return [...actualUsers];
-    }
-    return [];
-})();
-
-var currentAdminStatusFilter = 'All';
-
-async function initAdminApp() {
-    try {
-        if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
-            allAdminMangos = coursesData.result.subscriptions.map(s => ({
-                _id: s.mangoId,
-                id: s.mangoId,
-                title: s.mangoTitle,
-                name: s.mangoTitle,
-                amount: s.count > 0 ? 1 : 0,
-                price: s.count > 0 ? 1 : 0,
-                isPaid: s.count > 0,
-                subscribersCount: s.count
-            }));
-        }
-
-        if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) {
-            adminRealtimeUsers = [...actualUsers];
-        }
-
-        if (window.fetchTagMango && window.TagMangoAPI) {
-            try {
-                const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
-                if (response && (response.result || response.mangos) && (response.result || response.mangos).length > 0) {
-                    allAdminMangos = response.result || response.mangos;
-                }
-                const subResponse = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
-                if (subResponse && (subResponse.result || subResponse.users) && (subResponse.result || subResponse.users).length > 0) {
-                    adminRealtimeUsers = subResponse.result || subResponse.users;
-                }
-            } catch(e) {
-                console.warn('TagMango live fetch bypassed, using local store:', e);
-            }
-        }
-    } catch(err) {
-        console.warn('Admin init notice:', err);
-    }
-
-    if (typeof filterMangosByPricing === 'function') filterMangosByPricing();
-    if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
-    if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
-    if (typeof renderAdminCustomerGrid === 'function') renderAdminCustomerGrid();
-}
-window.initAdminApp = initAdminApp;
-
+// 1. Filter Mangos by Pricing (All / Paid / Free)
 function filterMangosByPricing() {
     const pricingFilter = document.getElementById('pricingFilter') ? document.getElementById('pricingFilter').value : 'all';
+    const searchInput = document.getElementById('adminSolutionSearch') ? document.getElementById('adminSolutionSearch').value.toLowerCase() : '';
     const courseSelect = document.getElementById('courseSelect');
     if (!courseSelect) return;
 
-    let filtered = allAdminMangos || [];
+    courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
 
+    let availableMangos = allAdminMangos;
     if (isCampusPartner) {
-        filtered = filtered.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
-    } else {
-        if (pricingFilter === 'paid') {
-            filtered = filtered.filter(m => {
-                const p = getMangoPriceLabel(m._id || m.id);
-                return p.startsWith('₹');
-            });
-        } else if (pricingFilter === 'free') {
-            filtered = filtered.filter(m => {
-                const p = getMangoPriceLabel(m._id || m.id);
-                return p === 'Free';
-            });
-        }
+        availableMangos = availableMangos.filter(mango => partnerAllowedMangoes.includes(mango._id));
     }
 
-    courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
-    filtered.forEach(m => {
-        const mId = m._id || m.id;
-        const priceTag = getMangoPriceLabel(mId);
-        const opt = document.createElement('option');
-        opt.value = mId;
-        opt.innerText = `${m.title || m.name} (${priceTag})`;
-        courseSelect.appendChild(opt);
+    const filteredMangos = availableMangos.filter(mango => {
+        const isPaid = (mango.amount > 0 || mango.price > 0 || mango.isPaid || mango.type === 'paid');
+        const matchesPricing = pricingFilter === 'all' || (pricingFilter === 'paid' ? isPaid : !isPaid);
+        const matchesSearch = searchInput === '' || (mango.title && mango.title.toLowerCase().includes(searchInput));
+        
+        return matchesPricing && matchesSearch;
     });
 
+    filteredMangos.forEach(mango => {
+        const option = document.createElement('option');
+        option.value = mango._id;
+        const priceLabel = (mango.amount > 0 || mango.price > 0) ? `(₹${mango.amount || mango.price})` : '(Free)';
+        option.textContent = `${mango.title || mango.name || 'Untitled Mango'} ${priceLabel}`;
+        courseSelect.appendChild(option);
+    });
+
+    updateLearnerDropdown();
+}
+
+// 2. Filter Learners by Selected Mango (Redirected to New Grid)
+function updateLearnerDropdown() {
     renderAdminCustomerGrid();
 }
+
+async function displayAdminLearnerDataById(userId) {
+    const learner = adminRealtimeUsers.find(u => u._id === userId);
+    if (!learner) return;
+
+    document.getElementById('adminReportContainer').classList.remove('hidden');
+    document.getElementById('adminReportContainer').scrollIntoView({ behavior: 'smooth' });
+
+    // The rest is identical to the existing displayAdminLearnerData engine
+    document.getElementById('adminPointsContent').innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+    
+    const userState = userMilestoneState[learner._id] || { highestUnlocked: 1 };
+    const learnerSubs = levelUpSubmissions[learner._id] || [];
+    const ms1Subs = learnerSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+    const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3">
+            <p><span>Email:</span> ${learner.email || 'N/A'}</p>
+            <p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p>
+        </div>
+        <div class="user-info text-sm">
+            <p><span>Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked}</strong></p>
+            <p><span>MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}%</strong></p>
+        </div>
+    `;
+
+    const liveScoreData = await fetchLivePoints(learner._id);
+    let localPointsSum = (localLedgers[learner._id] || []).reduce((sum, item) => sum + item.score, 0);
+    liveScoreData.displayScore = liveScoreData.totalScore + localPointsSum;
+
+    document.getElementById('adminPointsContent').innerHTML = buildPointsHtml(liveScoreData);
+    renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
+    renderTimelineGrid(learner.email, 'adminCompletionGrid');
+    loadCourseCompletions(learner._id, 'adminCourseCompletionsContainer');
+}
+
+async function displayAdminLearnerData() {
+    const learnerSelect = document.getElementById('learnerSelect');
+    const selectedOption = learnerSelect.options[learnerSelect.selectedIndex];
+    if (!selectedOption.value) return document.getElementById('adminReportContainer').classList.add('hidden');
+
+    const learner = JSON.parse(selectedOption.dataset.learner);
+    document.getElementById('adminReportContainer').classList.remove('hidden');
+
+    // Loading State for points
+    document.getElementById('adminPointsContent').innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm"><p><span>Email:</span> ${learner.email || 'N/A'}</p><p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p></div>
+    `;
+
+    // --- NEW: Calculate and Display Milestone Progress ---
+    const userState = userMilestoneState[learner._id] || { highestUnlocked: 1 };
+    const learnerSubs = levelUpSubmissions[learner._id] || [];
+    const ms1Subs = learnerSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+    const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
+
+    document.getElementById('adminUserDetailsContent').innerHTML = `
+        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
+        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
+        <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3">
+            <p><span>Email:</span> ${learner.email || 'N/A'}</p>
+            <p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p>
+        </div>
+        <div class="user-info text-sm">
+            <p><span>Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked}</strong></p>
+            <p><span>MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}%</strong></p>
+        </div>
+    `;
+    // ----------------------------------------------------
+
+    // Fetch live points
+    const liveScoreData = await fetchLivePoints(learner._id);
+    let localPointsSum = (localLedgers[learner._id] || []).reduce((sum, item) => sum + item.score, 0);
+    liveScoreData.displayScore = liveScoreData.totalScore + localPointsSum;
+
+    document.getElementById('adminPointsContent').innerHTML = buildPointsHtml(liveScoreData);
+    
+    // Render the three core admin components dynamically
+    renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
+    renderTimelineGrid(learner.email, 'adminCompletionGrid');
+    
+    // Call the newly indestructible course loader for the Admin View
+    loadCourseCompletions(learner._id, 'adminCourseCompletionsContainer');
+}
+
+window.initAdminApp = initAdminApp;
 window.filterMangosByPricing = filterMangosByPricing;
-
-function populateAdminCohortFilters() {
-    const select = document.getElementById('adminCohortFilter');
-    if (!select) return;
-
-    select.innerHTML = '<option value="">-- All Allowed Customers --</option>';
-    (allAdminMangos || []).forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m._id || m.id;
-        opt.innerText = m.title || m.name;
-        select.appendChild(opt);
-    });
-}
-window.populateAdminCohortFilters = populateAdminCohortFilters;
-
-function renderAdminMangoToggles() {
-    const container = document.getElementById('adminMangoToggles');
-    if (!container) return;
-
-    const searchInput = document.getElementById('adminLevelUpSearch');
-    const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    const pricingFilter = document.getElementById('adminLevelUpPricing') ? document.getElementById('adminLevelUpPricing').value : 'all';
-
-    let mangos = allAdminMangos || [];
-    if (isCampusPartner) {
-        mangos = mangos.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
-    }
-
-    if (pricingFilter === 'paid') {
-        mangos = mangos.filter(m => (m.amount > 0 || m.price > 0 || m.isPaid));
-    } else if (pricingFilter === 'free') {
-        mangos = mangos.filter(m => (!m.amount && !m.price && !m.isPaid));
-    }
-
-    if (searchVal) {
-        mangos = mangos.filter(m => (m.title && m.title.toLowerCase().includes(searchVal)) || (m.name && m.name.toLowerCase().includes(searchVal)));
-    }
-
-    if (mangos.length === 0) {
-        container.innerHTML = '<p class="col-span-full text-xs text-slate-500 italic p-4 text-center">No matching solutions found.</p>';
-        return;
-    }
-
-    container.innerHTML = mangos.map(m => {
-        const mId = m._id || m.id;
-        const isEnabled = levelUpAccessConfig.includes(mId);
-        return `
-            <div class="glass-card p-4 rounded-xl border-slate-800 hover:border-indigo-500/40 transition-all flex items-center justify-between gap-4">
-                <div class="min-w-0 flex-1">
-                    <h5 class="text-xs font-bold text-white truncate" title="${m.title || m.name}">${m.title || m.name}</h5>
-                    <span class="text-[10px] text-slate-400 font-mono block mt-0.5">${m.subscribersCount || 0} Registered Learners</span>
-                </div>
-                <!-- iOS Style Slide Switch -->
-                <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mId}')" class="sr-only peer">
-                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 border border-slate-700"></div>
-                </label>
-            </div>
-        `;
-    }).join('');
-}
 window.renderAdminMangoToggles = renderAdminMangoToggles;
-
-async function toggleLevelUpAccess(mangoId) {
-    if (levelUpAccessConfig.includes(mangoId)) {
-        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
-    } else {
-        levelUpAccessConfig.push(mangoId);
-    }
-
-    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
-
-    try {
-        await apiFetch('/api/level-up-access', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ levelUpAccess: levelUpAccessConfig })
-        });
-    } catch(e) {}
-
-    renderAdminMangoToggles();
-    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
-}
+window.renderAdminCustomerGrid = renderAdminCustomerGrid;
+window.filterAdminCustomersByStatus = filterAdminCustomersByStatus;
 window.toggleLevelUpAccess = toggleLevelUpAccess;
-
-function getLocalDateKey(dateObj) {
-    const d = (dateObj instanceof Date && !isNaN(dateObj.getTime())) ? dateObj : new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-window.getLocalDateKey = getLocalDateKey;
-
-var activeAdminDateKey = getLocalDateKey(new Date());
+window.displayAdminLearnerDataById = displayAdminLearnerDataById;
+window.displayAdminLearnerData = displayAdminLearnerData;
+window.updateLearnerDropdown = updateLearnerDropdown;
 
 const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && window.location.pathname.startsWith('/gamification')) ? '/gamification' : '';
 
@@ -877,10 +763,7 @@ var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig'))
 var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
 var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
-var allAdminMangos = [
-    { _id: '6a168e4213e4e9a10984b164', title: 'cMPLi Standard Level-Up Cohort', amount: 0, isPaid: false },
-    { _id: '6682734e120c766a6e5af59c', title: 'cMPLi Executive Track', amount: 4999, isPaid: true }
-];
+// allAdminMangos declared above
 var adminRealtimeUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? [...actualUsers] : [];
 var activeSubmissionFilter = {};
 var currentSubmissionState = {};
