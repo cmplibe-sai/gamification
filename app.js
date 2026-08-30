@@ -1,3 +1,13 @@
+const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '';
+
+function apiFetch(endpoint, options = {}) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : ('/' + endpoint);
+    const url = APP_PATH_PREFIX + cleanEndpoint;
+    return fetch(url, options);
+}
+window.apiFetch = apiFetch;
+window.APP_PATH_PREFIX = APP_PATH_PREFIX;
+
 function getLocalDateKey(dateObj) {
     if (!dateObj) return null;
     const d = new Date(dateObj);
@@ -802,14 +812,7 @@ function displayAdminLearnerData() {
 window.displayAdminLearnerData = displayAdminLearnerData;
 window.updateLearnerDropdown = updateLearnerDropdown;
 
-const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && window.location.pathname.startsWith('/gamification')) ? '/gamification' : '';
 
-function apiFetch(endpoint, options = {}) {
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : ('/' + endpoint);
-    const url = APP_PATH_PREFIX + cleanEndpoint;
-    return fetch(url, options);
-}
-window.apiFetch = apiFetch;
 
 
 // ================= GLOBAL STATE =================
