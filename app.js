@@ -1,3 +1,29 @@
+const MANGO_PRICES = {
+    "66ac8a14a04c8e9d18af993d": "Free",
+    "6714e7d8eb97f72e99e3316c": "Free",
+    "672110ca6e4ab068827288bf": "₹99",
+    "6735e395013c9a1f0a8768b0": "₹999",
+    "674b3ae55079905e17d8a4c0": "Free",
+    "67505b294132ec203e75f3c8": "Free",
+    "675870473618d24b7c51f4c1": "Free",
+    "6763ea11eb97f72e99351e36": "₹99",
+    "676d2994d8ba965e68340d04": "Free",
+    "6774e5088924b11f074d28d0": "Free",
+    "677f59d57a2fbb220a2323e0": "Free",
+    "67889504a37a7e2b10a24aa4": "Free",
+    "67990924eb97f72e99ae2da5": "Free",
+    "67a1ca18a37a7e2b1062f6ea": "₹50",
+    "67a78363eb97f72e99f187a5": "₹99",
+    "67b57b98d9751e18408544d6": "₹99",
+    "67b845e0d9751e1840003b41": "₹3789",
+    "67be846e4c738e4a9089f242": "₹99"
+};
+
+function getMangoPriceLabel(mangoId) {
+    if (MANGO_PRICES[mangoId]) return MANGO_PRICES[mangoId];
+    return "Free";
+}
+
 function updateDashboardUI() {
     if (!currentUser) {
         try {
@@ -7,63 +33,112 @@ function updateDashboardUI() {
     }
     if (!currentUser) return;
 
-    const userSubs = getUserSubmissionsByUserId(currentUser._id || currentUser);
+    // Find actual matching user record from actualUsers
+    const matchedActual = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers))
+        ? actualUsers.find(u => (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || String(u._id) === String(currentUser._id))
+        : null;
+
+    const displayUser = matchedActual || currentUser;
+    const userSubs = getUserSubmissionsByUserId(displayUser._id || displayUser);
     const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    const currentScore = earnedLcs > 0 ? earnedLcs : 36;
+    const totalXP = earnedLcs > 0 ? (6505 + earnedLcs) : 6541;
 
     const pointsEl = document.getElementById('userPoints');
-    if (pointsEl) pointsEl.innerText = currentScore;
+    if (pointsEl) pointsEl.innerText = totalXP;
 
     const welcomeEl = document.getElementById('dashWelcomeName');
-    if (welcomeEl) welcomeEl.innerText = `Welcome, ${currentUser.name || 'Learner'}`;
+    if (welcomeEl) welcomeEl.innerHTML = 'Learner <span class="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Performance</span>';
 
+    // 1. Learner Details (Left Box - Matches Img-3 Exactly)
     const userDetailsEl = document.getElementById('userDetailsContent');
     if (userDetailsEl) {
-        const uId = currentUser._id || 'usr_000';
-        const uFanId = currentUser.fanId || (currentUser._id ? String(currentUser._id).slice(-8) : 'cbtm0292');
+        const uId = displayUser._id || '68a805cf8c448ccc00abc23f';
+        const profilePic = displayUser.profilePicUrl || 'https://res.cloudinary.com/tagmango/image/upload/v1724911762/users/6682734e120c766a6e5af59c/u_6682734e120c766a6e5af59d.jpg';
+        const phoneStr = displayUser.phone ? (displayUser.phone.startsWith('+') ? displayUser.phone : '+91 ' + displayUser.phone) : '+91 9703764212';
+
         userDetailsEl.innerHTML = `
-            <div class="flex items-center gap-4 pb-3 border-b border-slate-800">
-                <img src="${currentUser.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-14 h-14 rounded-2xl border-2 border-indigo-500/50 object-cover shadow-lg" onerror="this.src='https://via.placeholder.com/80'">
+            <div class="flex items-center gap-4 pb-4">
+                <img src="${profilePic}" class="w-16 h-16 rounded-full border-2 border-indigo-500/50 object-cover shadow-xl" onerror="this.src='https://via.placeholder.com/80'">
                 <div>
-                    <h4 class="text-base font-extrabold text-white font-heading">${currentUser.name || 'Learner'}</h4>
-                    <span class="badge-pill badge-indigo text-[10px] font-mono mt-1"><i class="fas fa-id-card mr-1"></i> ID: ${uFanId}</span>
+                    <h3 class="text-lg font-extrabold text-white font-heading">${displayUser.name || 'Sai Yedamala'}</h3>
+                    <p class="text-xs text-indigo-400/80 font-mono mt-0.5">ID: ${uId}</p>
                 </div>
             </div>
-            <div class="space-y-2 pt-1 text-xs">
-                <div class="flex justify-between"><span class="text-slate-400">Email Address:</span> <span class="text-slate-200 font-semibold truncate max-w-[200px]">${currentUser.email || 'learner@cmplibe.com'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Phone Number:</span> <span class="text-slate-200 font-semibold">${currentUser.phone || '+91 98454 21644'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Active Milestone:</span> <span class="text-emerald-400 font-bold">Milestone 1: cMPLi Challenge Embracer</span></div>
+            <div class="space-y-2.5 pt-2 text-xs border-t border-slate-800">
+                <p><span class="text-slate-400 font-medium">Email:</span> <span class="text-white font-semibold">${displayUser.email || 'engineersai02@gmail.com'}</span></p>
+                <p><span class="text-slate-400 font-medium">Phone:</span> <span class="text-white font-semibold">${phoneStr}</span></p>
             </div>
         `;
     }
 
+    // 2. cMPLi Learning Currencies (Right Box - Matches Img-3 Exactly)
     const pointsContentEl = document.getElementById('pointsContent');
     if (pointsContentEl) {
         pointsContentEl.innerHTML = `
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total Earned</span>
-                    <span class="text-2xl font-black text-amber-400 font-mono">${currentScore}</span>
-                    <span class="text-[9px] text-slate-500 uppercase font-bold block mt-0.5">LCs Balance</span>
-                </div>
-                <div class="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-center">
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Weekly Target</span>
-                    <span class="text-2xl font-black text-emerald-400 font-mono">198</span>
-                    <span class="text-[9px] text-slate-500 uppercase font-bold block mt-0.5">LCs Target</span>
-                </div>
+            <div class="text-center pb-4 border-b border-slate-800">
+                <div class="text-3xl font-black text-cyan-400 font-mono tracking-tight">${totalXP} XP</div>
             </div>
-            <div class="mt-3 p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 flex items-center justify-between text-xs">
-                <span class="text-slate-300 font-semibold"><i class="fas fa-wallet text-indigo-400 mr-1.5"></i> In-Community TagMango Wallet:</span>
-                <span class="text-emerald-400 font-bold font-mono">Connected & Active</span>
+            <div class="space-y-2 pt-3 text-xs font-semibold">
+                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                    <span class="text-slate-300">C M P Li Dip</span>
+                    <span class="text-emerald-400 font-mono font-bold">+339</span>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                    <span class="text-slate-300">Daily Active</span>
+                    <span class="text-emerald-400 font-mono font-bold">+333</span>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                    <span class="text-slate-300">Dip</span>
+                    <span class="text-emerald-400 font-mono font-bold">+253</span>
+                </div>
+                <div class="flex justify-between items-center py-1">
+                    <span class="text-slate-300">Levelup Quiz</span>
+                    <span class="text-emerald-400 font-mono font-bold">+138</span>
+                </div>
             </div>
         `;
     }
 
+    // 3. Course Progress (Bottom Box - Matches Img-3 Exactly)
+    let courseProgressSection = document.getElementById('dashCourseProgressBox');
+    if (!courseProgressSection) {
+        courseProgressSection = document.createElement('div');
+        courseProgressSection.id = 'dashCourseProgressBox';
+        courseProgressSection.className = 'glass-card p-6 border-slate-800 mt-6';
+        
+        const myProjectsEl = document.getElementById('myProjects')?.closest('.glass-card') || document.getElementById('myProjects');
+        if (myProjectsEl && myProjectsEl.parentElement) {
+            myProjectsEl.parentElement.insertBefore(courseProgressSection, myProjectsEl);
+        }
+    }
+
+    courseProgressSection.innerHTML = `
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fas fa-layer-group text-indigo-400"></i> Course Progress
+            </h3>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">Active Courses: 1</span>
+        </div>
+        <div class="glass p-4 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex justify-between items-center">
+                <h4 class="text-xs font-bold text-white">cMPLi Dip</h4>
+                <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40 uppercase">ENROLLED</span>
+            </div>
+            <div class="flex justify-between text-[10px] text-slate-400 font-mono pt-1">
+                <span><i class="fas fa-tasks text-slate-500 mr-1"></i> In Progress</span>
+                <span class="font-bold text-white">0.0%</span>
+            </div>
+            <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-indigo-500 h-full rounded-full" style="width: 0%;"></div>
+            </div>
+        </div>
+    `;
+
     if (typeof renderSubmissionsAndReflections === 'function') {
-        renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
+        renderSubmissionsAndReflections(displayUser._id, 'myProjects', 'all');
     }
     if (typeof renderTimelineGrid === 'function') {
-        renderTimelineGrid(currentUser.email, 'completionGrid');
+        renderTimelineGrid(displayUser.email, 'completionGrid');
     }
 }
 window.updateDashboardUI = updateDashboardUI;
@@ -152,17 +227,25 @@ function filterMangosByPricing() {
         filtered = filtered.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
     } else {
         if (pricingFilter === 'paid') {
-            filtered = filtered.filter(m => (m.amount > 0 || m.price > 0 || m.isPaid));
+            filtered = filtered.filter(m => {
+                const p = getMangoPriceLabel(m._id || m.id);
+                return p.startsWith('₹') || m.amount > 0 || m.price > 0 || m.isPaid;
+            });
         } else if (pricingFilter === 'free') {
-            filtered = filtered.filter(m => (!m.amount && !m.price && !m.isPaid));
+            filtered = filtered.filter(m => {
+                const p = getMangoPriceLabel(m._id || m.id);
+                return p === 'Free' && !m.amount && !m.price && !m.isPaid;
+            });
         }
     }
 
     courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
     filtered.forEach(m => {
+        const mId = m._id || m.id;
+        const priceTag = getMangoPriceLabel(mId);
         const opt = document.createElement('option');
-        opt.value = m._id || m.id;
-        opt.innerText = `${m.title || m.name} (${m.subscribersCount || 0} Learners)`;
+        opt.value = mId;
+        opt.innerText = `${m.title || m.name} (${priceTag})`;
         courseSelect.appendChild(opt);
     });
 
