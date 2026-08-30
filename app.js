@@ -4524,8 +4524,8 @@ function switchAdminMilestoneTab(tabName) {
         renderAdminCohortSubmissions(); 
     }
 }
+window.switchAdminMilestoneTab = switchAdminMilestoneTab;
 
-// Function to handle switching tabs in the Admin View
 function switchAdminModuleTab(mod, btnElement) {
     activeAdminModule = mod;
     if (btnElement) {
@@ -4535,67 +4535,15 @@ function switchAdminModuleTab(mod, btnElement) {
         btnElement.className = 'admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500';
     }
     
-    // Refresh the currently active view
-    const isCheckinsActive = !document.getElementById('adminCheckinsConfigView').classList.contains('hidden');
+    const isCheckinsActive = !document.getElementById('adminCheckinsConfigView')?.classList.contains('hidden');
     if (isCheckinsActive) {
         renderAdminCheckinsList();
     } else {
         renderAdminCohortSubmissions();
     }
 }
+window.switchAdminModuleTab = switchAdminModuleTab;
 
-function selectAdminConfigDate() {
-    const dateInput = document.getElementById('adminConfigDateInput');
-    if (dateInput && dateInput.value) {
-        loadAdminCheckinEditor(dateInput.value);
-    }
-}
-
-// --- NEW Admin State Management ---
-let activeAdminDateKey = null;
-
-function switchAdminMilestoneTab(tabName) {
-    const btnCheckins = document.getElementById('btnTabCheckins');
-    const btnCompletion = document.getElementById('btnTabCompletion');
-    const viewCheckins = document.getElementById('adminCheckinsConfigView');
-    const viewCompletion = document.getElementById('adminCompletionView');
-    
-    btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
-    btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-white';
-    viewCheckins.classList.add('hidden');
-    viewCompletion.classList.add('hidden');
-    
-    if (tabName === 'checkins') {
-        btnCheckins.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
-        viewCheckins.classList.remove('hidden');
-        renderAdminCheckinsList(); 
-        if (activeAdminDateKey) {
-            loadAdminCheckinEditor(activeAdminDateKey);
-        } else {
-            const todayKey = isoDateKey(new Date());
-            activeAdminDateKey = todayKey;
-            loadAdminCheckinEditor(todayKey);
-        }
-    } else {
-        btnCompletion.className = 'flex-1 py-2 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow-md';
-        viewCompletion.classList.remove('hidden');
-        renderAdminCohortSubmissions(); 
-    }
-}
-
-// --- ADMIN CHECKIN CONFIGURATOR (UPGRADED) ---
-function updateCohortStartDate() {
-    const input = document.getElementById('adminCohortStartDate');
-    if (input && input.value) {
-        milestoneStartDates[activeAdminMilestoneId] = input.value;
-        localStorage.setItem('milestoneStartDates', JSON.stringify(milestoneStartDates));
-        renderAdminCheckinsList();
-        loadAdminCheckinEditor(activeAdminDateKey);
-    }
-}
-
-// --- ADMIN CHECKIN CONFIGURATOR (CALENDAR BASED) ---
-// --- 3. UPGRADED: Render Configs by Active Module ---
 function renderAdminCheckinsList() {
     const list = document.getElementById('adminCheckinDaysList');
     
@@ -6607,3 +6555,34 @@ function saveAdminDayConfig(msId, modCode, dateKey, configObj) {
     }).catch(err => console.warn('Could not save milestone config to server:', err));
 }
 window.saveAdminDayConfig = saveAdminDayConfig;
+
+
+function showCheckinSetupInProgressModal(moduleName, dateKey) {
+    const modalId = 'checkinSetupModal';
+    document.getElementById(modalId)?.remove();
+
+    const modTitles = { dip: 'cMPLi Dip Reflection', pod: 'cMPLi POD Audio & Quiz', immerse: 'cMPLi Immerse Deep-Dive' };
+    const title = modTitles[moduleName] || 'Daily Check-in';
+
+    const modalHtml = `
+        <div id="${modalId}" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animation-fade-in">
+            <div class="glass-card max-w-md w-full p-8 border-indigo-500/40 text-center space-y-5 rounded-2xl shadow-2xl relative">
+                <div class="w-16 h-16 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto border border-indigo-500/40 text-2xl shadow-inner">
+                    <i class="fas fa-hourglass-half fa-spin text-amber-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white font-heading">Check-in Setup in Progress</h3>
+                    <p class="text-xs text-indigo-300 font-semibold mt-1 uppercase tracking-wide">${title} • ${dateKey}</p>
+                </div>
+                <p class="text-slate-300 text-xs leading-relaxed bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                    The Creator is currently preparing and publishing the questions and stream for this check-in. Please check back shortly to complete your check-in!
+                </p>
+                <button type="button" onclick="document.getElementById('${modalId}').remove()" class="w-full btn-primary py-2.5 px-4 text-xs font-bold shadow-lg">
+                    <i class="fas fa-check-circle mr-1.5"></i> Got It, I'll Check Back Soon
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+window.showCheckinSetupInProgressModal = showCheckinSetupInProgressModal;
