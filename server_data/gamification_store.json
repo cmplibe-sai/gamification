@@ -539,6 +539,23 @@
               "type": "audio"
             }
           ]
+        },
+        "2026-08-31": {
+          "date": "2026-08-31",
+          "lcOnTime": 33,
+          "lcLate": 3,
+          "startTime": "05:00",
+          "endTime": "17:00",
+          "questions": [
+            {
+              "title": "Day 2 Morning Reflection",
+              "type": "text"
+            },
+            {
+              "title": "Upload Reflection Audio (.mp3)",
+              "type": "audio"
+            }
+          ]
         }
       },
       "pod": {
@@ -588,9 +605,104 @@
               "pts": 11
             }
           ]
+        },
+        "2026-08-31": {
+          "date": "2026-08-31",
+          "lcOnTime": 33,
+          "lcLate": 3,
+          "startTime": "05:00",
+          "endTime": "17:00",
+          "audioTitle": "cMPLi POD Day 2: Deep Focus & Execution",
+          "audioUrl": "",
+          "questions": [
+            {
+              "id": "q1_d2",
+              "title": "In deep focus execution, what is the recommended minimum uninterrupted time block?",
+              "type": "mcq",
+              "options": [
+                "30 to 45 minutes of uninterrupted focus",
+                "2 minutes while chatting",
+                "6 hours without drinking water",
+                "10 seconds intervals"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q2_d2",
+              "title": "What separates high performers from passive learners during challenges?",
+              "type": "mcq",
+              "options": [
+                "Viewing friction as fuel for personal growth",
+                "Avoiding difficult problems",
+                "Waiting for external validation",
+                "Seeking effortless shortcuts"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q3_d2",
+              "title": "What method helps sustain energy across long working sprints?",
+              "type": "mcq",
+              "options": [
+                "Structured micro-breaks and hydration",
+                "Over-exhaustion without sleep",
+                "Consuming excessive sugar",
+                "Skipping all reflections"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            }
+          ]
+        }
+      },
+      "immerse": {
+        "2026-08-29": {
+          "date": "2026-08-29",
+          "lcOnTime": 133,
+          "lcLate": 13,
+          "startTime": "18:30",
+          "endTime": "19:00",
+          "questions": [
+            {
+              "title": "Weekly Deep-Dive Synthesis",
+              "type": "text"
+            },
+            {
+              "title": "Upload Audio/Video Recording",
+              "type": "video"
+            }
+          ]
         }
       }
     }
+  },
+  "customMilestoneModuleAccess": {
+    "1": [
+      "dip",
+      "pod"
+    ],
+    "2": [
+      "dip",
+      "pod",
+      "immerse",
+      "projects"
+    ],
+    "3": [
+      "dip",
+      "pod",
+      "immerse",
+      "projects",
+      "problem_solution"
+    ],
+    "4": [
+      "dip",
+      "pod",
+      "immerse",
+      "projects",
+      "residency"
+    ]
   },
   "customProjectsDB": {},
   "levelUpAccessConfig": [
@@ -607,6 +719,7 @@
     "2": "2026-08-21",
     "3": "2026-11-21"
   },
+  "userMilestoneJoinDates": {},
   "campusPartnersDB": {},
   "coachingSessions": [
     {

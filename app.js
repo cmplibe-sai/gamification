@@ -178,6 +178,65 @@ async function syncGlobalServerData() {
         if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
             renderAdminCustomerGrid();
         }
+
+        // LIVE RE-RENDER FOR CREATOR & LEARNER ACROSS ALL BROWSERS
+        
+        // A. If Creator Milestone Setup is open, live update the ON/OFF badges and configured dates list
+        const adminDetail = document.getElementById('adminMilestoneDetailContainer');
+        if (adminDetail && !adminDetail.classList.contains('hidden')) {
+            const subNavEl = document.getElementById('adminMilestoneSubNav');
+            if (subNavEl) {
+                const enabledForStudents = getEnabledModulesForMilestone(activeAdminMilestoneId);
+                subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
+                    const parent = btn.parentElement;
+                    const toggleBtn = parent.querySelector('button:last-child');
+                    // Find module code from onclick
+                    const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
+                    if (match && toggleBtn) {
+                        const modCode = match[1];
+                        const isEnabled = enabledForStudents.includes(modCode);
+                        toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
+                        toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+                    }
+                });
+            }
+            
+            const checkinsView = document.getElementById('adminCheckinsConfigView');
+            if (checkinsView && !checkinsView.classList.contains('hidden')) {
+                renderAdminCheckinsList();
+            }
+        }
+
+        // B. If Learner Milestone Detail is open, live update module tabs & timeline
+        const learnerDetail = document.getElementById('milestoneDetailContainer');
+        if (learnerDetail && !learnerDetail.classList.contains('hidden')) {
+            const learnerSubNav = document.getElementById('milestoneSubNav');
+            if (learnerSubNav) {
+                const activeMods = getEnabledModulesForMilestone(activeMilestoneId);
+                const activeNavBtn = learnerSubNav.querySelector('.border-indigo-500');
+                let currentMod = 'dip';
+                if (activeNavBtn) {
+                    const txt = activeNavBtn.innerText.toLowerCase();
+                    if (txt.includes('pod')) currentMod = 'pod';
+                    else if (txt.includes('immerse')) currentMod = 'immerse';
+                    else if (txt.includes('project') || txt.includes('real-world')) currentMod = 'projects';
+                }
+                if (!activeMods.includes(currentMod)) currentMod = activeMods[0] || 'dip';
+
+                learnerSubNav.innerHTML = activeMods.map((modCode, i) => {
+                    const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
+                    const activeClass = modCode === currentMod ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
+                    return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
+                        <i class="fas ${modObj.icon}"></i> ${modObj.name}
+                    </button>`;
+                }).join('');
+
+                if (typeof switchMilestoneTab === 'function') {
+                    switchMilestoneTab(currentMod);
+                }
+            }
+        }
+
     } catch(e) {
         console.warn('Two-way sync warning:', e);
     }
@@ -217,7 +276,9 @@ function getEnabledModulesForMilestone(msId) {
 }
 
 function toggleMilestoneModuleAccess(msId, moduleCode) {
-    let saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
+    
     let current = getEnabledModulesForMilestone(msId);
     if (current.includes(moduleCode)) {
         if (current.length === 1) {
@@ -229,9 +290,7 @@ function toggleMilestoneModuleAccess(msId, moduleCode) {
         current.push(moduleCode);
     }
     saved[msId] = current;
-    try {
-        localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved));
-    } catch(e) {}
+    try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved)); } catch(e) {}
 
     // Push to server immediately
     fetch('/api/milestone-module-access', {
@@ -240,7 +299,10 @@ function toggleMilestoneModuleAccess(msId, moduleCode) {
         body: JSON.stringify({ msId: msId, moduleAccess: current, allModuleAccess: saved })
     }).catch(() => {});
 
-    renderAdminMilestoneDetail(Number(msId));
+    // Re-render admin view immediately
+    if (typeof openAdminMilestone === 'function') {
+        openAdminMilestone(Number(msId));
+    }
 }
 window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
 var currentUser = null;
