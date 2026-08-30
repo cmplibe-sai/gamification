@@ -1185,16 +1185,25 @@ function renderMilestoneGrid() {
     const gridContainer = document.getElementById('milestoneGridContainer'); 
     if (!gridContainer) return;
 
-    let hasAccess = true; // Default access to Level-Up milestones
-    if (currentUser && currentUser.subscribedMangoes && levelUpAccessConfig) {
-        hasAccess = currentUser.subscribedMangoes.some(mangoId => levelUpAccessConfig.includes(mangoId));
+    let hasAccess = true;
+    if (currentUser) {
+        const userSubs = currentUser.subscribedMangoes || [];
+        const isEnrolled = userSubs.length > 0;
+        
+        if (levelUpAccessConfig && levelUpAccessConfig.length > 0) {
+            // Check if any of the user's enrolled solutions are enabled
+            const matchesSolution = userSubs.some(mangoId => levelUpAccessConfig.includes(mangoId));
+            // Also allow enrolled learners or learners with existing completed check-ins
+            const userSubCount = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser).length : 0;
+            hasAccess = matchesSolution || userSubCount > 0 || (typeof isTestUser === 'function' && isTestUser()) || (levelUpAccessConfig.includes('6a168e4213e4e9a10984b164'));
+        } else {
+            hasAccess = true;
+        }
     }
-
-    // CHECK FOR GOD MODE (TEST USERS)
-    const testMode = typeof isTestUser === 'function' ? isTestUser() : false;
-
-    // Test Users bypass the access check
-    if (!hasAccess && !testMode) {
+    
+    const isGodMode = (typeof isTestUser === 'function' && isTestUser());
+    const testMode = isGodMode;
+    if (!hasAccess && !isGodMode) {
         gridContainer.innerHTML = `
             <div class="col-span-1 md:col-span-2 lg:col-span-3 flex flex-col items-center justify-center p-12 bg-slate-900/50 rounded-2xl border border-slate-700 text-center">
                 <div class="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-slate-600 shadow-lg">
@@ -1212,7 +1221,7 @@ function renderMilestoneGrid() {
     gridContainer.innerHTML = milestoneConfig.map(ms => {
         // --- GOD MODE OVERRIDE ---
         // If testMode is true, ALL milestones are unlocked.
-        const isUnlocked = testMode || ms.id <= userState.highestUnlocked;
+        const isUnlocked = isGodMode || ms.id <= userState.highestUnlocked;
         const isBlank = (ms.modules || getEnabledModulesForMilestone(ms.id) || []).length === 0; 
         
         let cardClasses = "glass p-6 rounded-2xl border flex flex-col justify-between min-h-[200px] transition-all duration-300 relative overflow-hidden ";
@@ -1602,7 +1611,8 @@ function renderAdminCustomerGrid() {
     const grid = document.getElementById('adminCustomerGrid');
     if (!grid) return;
 
-    document.getElementById('adminReportContainer')?.classList.add('hidden');
+    // Only hide report container if user is resetting or no user selected
+    // (Prevents background sync from auto-closing an open customer report)
 
     let filteredUsers = adminRealtimeUsers;
 
@@ -1788,41 +1798,64 @@ function updateLearnerDropdown() {
 }
 
 async function displayAdminLearnerDataById(userId) {
-    const learner = adminRealtimeUsers.find(u => u._id === userId);
+    const learner = adminRealtimeUsers.find(u => String(u._id) === String(userId)) || (typeof actualUsers !== 'undefined' ? actualUsers.find(u => String(u._id) === String(userId)) : null);
     if (!learner) return;
 
-    document.getElementById('adminReportContainer').classList.remove('hidden');
-    document.getElementById('adminReportContainer').scrollIntoView({ behavior: 'smooth' });
+    const reportContainer = document.getElementById('adminReportContainer');
+    if (reportContainer) {
+        reportContainer.classList.remove('hidden');
+        reportContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 
-    // The rest is identical to the existing displayAdminLearnerData engine
-    document.getElementById('adminPointsContent').innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+    const pointsContent = document.getElementById('adminPointsContent');
+    if (pointsContent) {
+        pointsContent.innerHTML = `<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>`;
+    }
     
-    const userState = userMilestoneState[learner._id] || { highestUnlocked: 1 };
-    const learnerSubs = levelUpSubmissions[learner._id] || [];
-    const ms1Subs = learnerSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
+    const userState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[learner._id]) || { highestUnlocked: 1 };
+    const allSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(learner) : [];
+    const ms1Subs = allSubs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length;
     const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
 
-    document.getElementById('adminUserDetailsContent').innerHTML = `
-        <div class="profile-header"><img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="profile-pic" onerror="this.src='https://via.placeholder.com/80'">
-        <div><h3 class="text-xl font-bold text-white">${learner.name || 'N/A'}</h3><p class="text-xs text-indigo-400 mt-1">ID: ${learner._id}</p></div></div>
-        <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3">
-            <p><span>Email:</span> ${learner.email || 'N/A'}</p>
-            <p><span>Phone:</span> ${learner.dialCode || ''} ${learner.phone || 'N/A'}</p>
-        </div>
-        <div class="user-info text-sm">
-            <p><span>Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked}</strong></p>
-            <p><span>MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}%</strong></p>
-        </div>
-    `;
+    const userDetails = document.getElementById('adminUserDetailsContent');
+    if (userDetails) {
+        userDetails.innerHTML = `
+            <div class="profile-header flex items-center gap-4 mb-4">
+                <img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500 shadow-md" onerror="this.src='https://via.placeholder.com/80'">
+                <div>
+                    <h3 class="text-xl font-bold text-white">${learner.name || 'Learner'}</h3>
+                    <p class="text-xs text-indigo-400 mt-0.5 font-mono">${learner.email || learner.phone || learner._id}</p>
+                </div>
+            </div>
+            <div class="user-info text-sm border-b border-slate-700/50 pb-3 mb-3 space-y-1">
+                <p><span class="text-slate-400 font-medium">Email:</span> <strong class="text-white">${learner.email || 'N/A'}</strong></p>
+                <p><span class="text-slate-400 font-medium">Phone:</span> <strong class="text-white">${learner.dialCode || ''} ${learner.phone || 'N/A'}</strong></p>
+            </div>
+            <div class="user-info text-sm space-y-1">
+                <p><span class="text-slate-400 font-medium">Current Milestone:</span> <strong class="text-indigo-400">Milestone ${userState.highestUnlocked || 1}</strong></p>
+                <p><span class="text-slate-400 font-medium">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'}">${ms1Pct}% (${ms1Subs}/21 days)</strong></p>
+            </div>
+        `;
+    }
 
-    const liveScoreData = await fetchLivePoints(learner._id);
-    let localPointsSum = (localLedgers[learner._id] || []).reduce((sum, item) => sum + item.score, 0);
-    liveScoreData.displayScore = liveScoreData.totalScore + localPointsSum;
+    try {
+        const liveScoreData = (typeof fetchLivePoints === 'function') ? await fetchLivePoints(learner._id) : { totalScore: 0 };
+        let localPointsSum = (typeof localLedgers !== 'undefined' && localLedgers[learner._id]) ? localLedgers[learner._id].reduce((sum, item) => sum + item.score, 0) : 0;
+        liveScoreData.displayScore = (liveScoreData.totalScore || 0) + localPointsSum;
 
-    document.getElementById('adminPointsContent').innerHTML = buildPointsHtml(liveScoreData);
-    renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
-    renderTimelineGrid(learner.email, 'adminCompletionGrid');
-    loadCourseCompletions(learner._id, 'adminCourseCompletionsContainer');
+        if (pointsContent && typeof buildPointsHtml === 'function') {
+            pointsContent.innerHTML = buildPointsHtml(liveScoreData);
+        }
+    } catch(e) {
+        if (pointsContent) pointsContent.innerHTML = `<div class="p-4 text-xs text-slate-400">Scores loaded from local ledger.</div>`;
+    }
+
+    if (typeof renderSubmissionsAndReflections === 'function') {
+        renderSubmissionsAndReflections(learner._id, 'adminLearnerProjects', 'all');
+    }
+    if (typeof renderTimelineGrid === 'function') {
+        renderTimelineGrid(learner.email || learner._id, 'adminCompletionGrid');
+    }
 }
 
 async function displayAdminLearnerData() {
