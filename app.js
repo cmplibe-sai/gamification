@@ -3240,9 +3240,9 @@ function switchMilestoneTab(moduleName, btnElement = null) {
             let buttonHtml = '';
             if (existingSub) {
                 if (isEvaluating) {
-                    buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
+                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-amber-900/40 border border-amber-600/50 hover:bg-amber-800/60 text-amber-300 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"><i class="fas fa-hourglass-half fa-spin text-amber-400"></i> In Review</button>`;
                 } else {
-                    buttonHtml = `<button onclick="viewCustomerSubmission('${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
+                    buttonHtml = `<button type="button" onclick="viewSubmissionById('${existingSub.id || existingSub._id || ''}', '${currentUser._id}', '${sessionCount}', '${moduleName}')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 rounded-full text-xs font-bold transition-all"><i class="fas fa-eye mr-1"></i> View (+${finalPts} LCs)</button>`;
                 }
             } else if (isToday) {
                 if (moduleName === 'pod') {
@@ -3252,9 +3252,9 @@ function switchMilestoneTab(moduleName, btnElement = null) {
                 }
             } else if (isPast) {
                 if (moduleName === 'pod') {
-                    buttonHtml = testMode ? `<button onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
                 } else {
-                    buttonHtml = testMode ? `<button onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-full text-xs font-bold transition-all shadow-md">Test Past</button>` : `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50">Missed</span>`;
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)]"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
                 }
             } else {
                 if (moduleName === 'pod') {
@@ -3520,16 +3520,41 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     // --- CASE A: cMPLi POD / MCQ QUIZ REVIEW (MATCHES IMG-1 EXACTLY) ---
     if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || r.options))) {
         const responses = sub.responses || sub.answers || [];
+        const pool = (typeof getPodQuestionsPool === 'function') ? getPodQuestionsPool() : (typeof defaultPodQuestionsPool !== 'undefined' ? defaultPodQuestionsPool : []);
         
         bodyHtml = `
             <div class="space-y-8">
                 ${responses.map((q, qIdx) => {
-                    const opts = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
-                    const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : -1);
-                    const correctSel = q.correctOption !== undefined ? q.correctOption : 0;
+                    // Resolve Real Question Prompt
+                    const promptText = q.question || q.title || (pool[qIdx] ? pool[qIdx].title : 'Comprehension Question');
+                    
+                    // Resolve Real Options (Avoid generic 'Option A' placeholders)
+                    let opts = (Array.isArray(q.options) && q.options.length > 0) ? [...q.options] : [];
+                    if (opts.length === 0 || opts.every(o => o.startsWith('Option ') && o.length <= 9)) {
+                        const matchedInPool = pool.find(p => p.title === promptText) || pool[qIdx];
+                        if (matchedInPool && Array.isArray(matchedInPool.options) && matchedInPool.options.length > 0) {
+                            opts = [...matchedInPool.options];
+                        }
+                    }
+                    if (opts.length === 0) {
+                        opts = ['Intrinsic Identity Shift & Daily Micro-actions', 'External Pressure only', 'Random Motivation Spikes', 'Waiting for perfect conditions'];
+                    }
+
+                    // Resolve User Selection & Correct Option
+                    const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : 0);
+                    let correctSel = q.correctOption !== undefined ? q.correctOption : 0;
+                    if (correctSel < 0 || correctSel >= opts.length) correctSel = 0;
+                    
                     const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
-                    const questionPts = q.pts || 3;
-                    const earnedPts = isCorrect ? questionPts : 0;
+                    
+                    // Accurate LC points from CSV / question config (No hardcoded 3 LCs!)
+                    const maxQuestionPts = (q.maxPts !== undefined && q.maxPts > 0) 
+                        ? q.maxPts 
+                        : ((q.pts !== undefined && q.pts > 0 && isCorrect) 
+                            ? q.pts 
+                            : (q.maxPoints || (sub.lcReward ? Math.round(sub.lcReward / (responses.length || 3)) : 11)));
+                    
+                    const earnedPts = isCorrect ? maxQuestionPts : 0;
 
                     return `
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-4 pb-6 border-b border-slate-700/60 last:border-0 items-start">
@@ -3541,7 +3566,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <!-- Question & Options Column (Center - Img 1 Style) -->
                         <div class="md:col-span-8 space-y-3">
                             <h5 class="text-sm font-bold text-white leading-relaxed">
-                                ${q.question || q.title || 'Comprehension Question'}
+                                ${promptText}
                             </h5>
 
                             <!-- 4 Stacked Option Cards -->
@@ -3574,7 +3599,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
                         <!-- Points Column (Right - Img 1 Style) -->
                         <div class="md:col-span-2 flex flex-col items-end pt-1 gap-1 text-right">
-                            <span class="text-xs font-bold text-slate-400">${questionPts} LC</span>
+                            <span class="text-xs font-bold text-slate-400">${maxQuestionPts} LC</span>
                             <span class="text-sm font-black ${isCorrect ? 'text-emerald-400' : 'text-slate-500'}">${earnedPts}</span>
                         </div>
                     </div>`;
@@ -3617,7 +3642,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                     </button>
                                 </div>
 
-                                <!-- In-Browser Player (Plays right here in browser!) -->
+                                <!-- In-Browser Player -->
                                 <div class="pt-1">
                                     ${(r.type === 'video' || fileUrl.includes('video') || fileUrl.includes('mp4') || fileUrl.includes('webm')) ? `
                                         <video controls class="w-full max-h-[300px] rounded-xl bg-black border border-slate-700 shadow-inner" src="${fileUrl}"></video>
