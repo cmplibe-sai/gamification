@@ -898,12 +898,13 @@ async function syncGlobalServerData() {
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         
-        // Fast signature check to avoid redundant DOM re-renders
+        // Fast signature check to detect real-time changes across browsers
         const currentSignature = JSON.stringify({
             subsLen: (serverData || []).length,
             configsCount: Object.keys(serverConfigs || {}).length,
             moduleAccess: serverModuleAccess,
-            joinDatesCount: Object.keys(serverJoinDates || {}).length
+            joinDatesCount: Object.keys(serverJoinDates || {}).length,
+            levelUpAccess: serverLevelUpAccess
         });
 
         let dataChanged = (currentSignature !== lastSyncSignature);
@@ -1027,11 +1028,20 @@ async function syncGlobalServerData() {
                 }
             }
 
+            if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
+                renderAdminMangoToggles();
+            }
+            if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
+                populateAdminCohortFilters();
+            }
             if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
                 renderAdminCohortSubmissions();
             }
             if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
                 renderAdminCustomerGrid();
+            }
+            if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
+                renderMilestoneGrid();
             }
 
             // Learner View
