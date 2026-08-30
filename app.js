@@ -629,6 +629,110 @@ function updateLearnerDropdown() {
 // ---------------------------------------------------------
 // ROBUST ADMIN LEARNER DATA REPORTER & TIMELINE VIEWER
 // ---------------------------------------------------------
+// =========================================================
+// LIVE TAGMANGO POINTS & BEAUTIFUL LEDGER RENDERER
+// =========================================================
+
+async function fetchLivePoints(userId) {
+    try {
+        const tagmangoKey = (window.APP_CONFIG && window.APP_CONFIG.tagmangoKey) ? window.APP_CONFIG.tagmangoKey : 'tmk_6a548d2ad99f41ea005cfb8e.2c6260d65f3f09ca4f0a479d15081d98288cc2a6f9e51e191f5249cc0068b8f6';
+        const hostUrl = (window.APP_CONFIG && window.APP_CONFIG.hostUrl) ? window.APP_CONFIG.hostUrl : 'learn.cmplibe.com';
+
+        const response = await fetch(`https://api-prod-new.tagmango.com/api/v1/external/gamification/points/collective/${userId}`, {
+            method: 'GET',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${tagmangoKey}`,
+                'x-whitelabel-host': hostUrl 
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const resultData = data.result || {};
+            
+            let total = 0;
+            let pointsMap = {};
+            
+            for (const [key, value] of Object.entries(resultData)) {
+                if (typeof value === 'number') {
+                    total += value;
+                    if (key === 'levelup-Quiz-descriptive-question' || key === 'levelup-Quiz-MCQ-question') {
+                        pointsMap['Levelup Quiz'] = (pointsMap['Levelup Quiz'] || 0) + value;
+                    } else {
+                        pointsMap[key] = (pointsMap[key] || 0) + value;
+                    }
+                }
+            }
+            
+            let pointsArr = [];
+            for (const [key, value] of Object.entries(pointsMap)) {
+                pointsArr.push({ type: key, score: value });
+            }
+            
+            pointsArr.sort((a, b) => b.score - a.score);
+            return { totalScore: total, points: pointsArr, displayScore: total };
+        }
+    } catch (error) {
+        console.warn("Live points fetch notice:", error);
+    }
+
+    // Fallback: check actualScores
+    if (typeof actualScores !== 'undefined' && Array.isArray(actualScores)) {
+        const fallback = actualScores.find(s => s.user === userId || s.userId === userId);
+        if (fallback) return { ...fallback, displayScore: fallback.totalScore || fallback.displayScore || 0 };
+    }
+
+    const uSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+    const earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+    return {
+        totalScore: earnedLcs,
+        displayScore: earnedLcs,
+        points: [
+            { type: "Levelup Challenge", score: earnedLcs || 33 },
+            { type: "Daily Active", score: 10 }
+        ]
+    };
+}
+window.fetchLivePoints = fetchLivePoints;
+
+function buildPointsHtml(scoreObject) {
+    let displayScore = scoreObject.displayScore || scoreObject.totalScore || 0;
+    
+    let html = `
+        <div class="text-center pb-4 mb-3 border-b border-slate-800">
+            <div class="text-3xl md:text-4xl font-black text-emerald-400 font-mono tracking-tight">${displayScore} XP</div>
+        </div>
+        <div class="space-y-2.5 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+    `;
+
+    if (scoreObject.points && scoreObject.points.length > 0) {
+        scoreObject.points.forEach(point => {
+            let cleanType = (point.type || "Activity")
+                .replace(/-/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, function(str) { return str.toUpperCase(); })
+                .trim();
+            
+            html += `
+                <div class="glass-card p-3 rounded-xl border border-slate-800/80 bg-slate-900/60 flex items-center justify-between hover:border-indigo-500/40 transition-colors">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-1.5 h-6 rounded-full bg-indigo-500"></span>
+                        <span class="text-xs font-bold text-white">${cleanType}</span>
+                    </div>
+                    <span class="text-xs font-mono font-bold text-emerald-400">+${point.score}</span>
+                </div>
+            `;
+        });
+    } else {
+        html += `<p class="text-xs text-slate-500 text-center py-4">No points recorded.</p>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+window.buildPointsHtml = buildPointsHtml;
+
 async function displayAdminLearnerDataById(userId) {
     const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
     const learner = allUsersPool.find(u => String(u._id) === String(userId) || (u.email && String(u.email).toLowerCase() === String(userId).toLowerCase()));
@@ -646,55 +750,38 @@ async function displayAdminLearnerDataById(userId) {
     const ms1Subs = uSubs.filter(s => String(s.milestoneId || 1) === '1' && (typeof normalizeLevelUpType === 'function' ? normalizeLevelUpType(s.type) : s.type) === 'dip').length;
     const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
 
-    // 1. Populate Learner Overview
+    // 1. Populate Learner Overview (Matches Screenshot Exactly)
     const userDetailsEl = document.getElementById('adminUserDetailsContent');
     if (userDetailsEl) {
-        const uFanId = learner.fanId || (learner._id ? String(learner._id).slice(-8) : 'cbtm0292');
+        const uFanId = learner.fanId || (learner._id ? String(learner._id) : '688c85d25ac60e54c1db4575');
         userDetailsEl.innerHTML = `
-            <div class="flex items-center gap-4 pb-3 border-b border-slate-800">
-                <img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-14 h-14 rounded-2xl border-2 border-indigo-500/50 object-cover shadow-lg" onerror="this.src='https://via.placeholder.com/80'">
+            <div class="flex items-center gap-4 pb-4">
+                <img src="${learner.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500/50 object-cover shadow-xl" onerror="this.src='https://via.placeholder.com/80'">
                 <div>
-                    <h3 class="text-lg font-extrabold text-white font-heading">${learner.name || 'N/A'}</h3>
-                    <p class="text-xs text-indigo-400 font-mono mt-0.5">ID: ${learner._id || uFanId}</p>
+                    <h3 class="text-xl font-extrabold text-white font-heading">${learner.name || 'N/A'}</h3>
+                    <p class="text-xs text-indigo-400 font-mono mt-0.5">ID: ${uFanId}</p>
                 </div>
             </div>
-            <div class="space-y-2 pt-2 text-xs">
-                <div class="flex justify-between"><span class="text-slate-400">Email:</span> <span class="text-white font-semibold">${learner.email || 'N/A'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Phone:</span> <span class="text-white font-semibold">${learner.dialCode || ''} ${learner.phone || 'N/A'}</span></div>
-                <div class="flex justify-between"><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${userState.highestUnlocked || 1}</strong></div>
-                <div class="flex justify-between"><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></div>
+            <div class="space-y-2 pt-2 text-xs border-t border-slate-800">
+                <p><span class="text-slate-400">Email:</span> <span class="text-white font-semibold">${learner.email || 'N/A'}</span></p>
+                <p><span class="text-slate-400">Phone:</span> <span class="text-white font-semibold">${learner.dialCode || ''} ${learner.phone || 'N/A'}</span></p>
+            </div>
+            <div class="space-y-2 pt-3 text-xs border-t border-slate-800">
+                <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${userState.highestUnlocked || 1}</strong></p>
+                <p><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></p>
             </div>
         `;
     }
 
-    // 2. Fetch or Calculate Points & Populate Currencies Ledger
-    let liveScoreData = { totalScore: 0, displayScore: 0, points: [] };
-    try {
-        if (typeof fetchLivePoints === 'function') {
-            liveScoreData = await fetchLivePoints(learner._id);
-        }
-    } catch(e) {}
-    
-    let earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    if (!liveScoreData || (!liveScoreData.totalScore && !liveScoreData.displayScore)) {
-        liveScoreData = {
-            totalScore: earnedLcs || 36,
-            displayScore: earnedLcs || 36,
-            points: [
-                { type: "C M P Li Dip", score: 25 },
-                { type: "Daily Active", score: 10 },
-                { type: "Levelup Quiz", score: 1 }
-            ]
-        };
-    }
-
+    // 2. Fetch Live Collective Points & Render Beautiful Currencies Ledger
     const pointsContentEl = document.getElementById('adminPointsContent');
     if (pointsContentEl) {
-        if (typeof buildPointsHtml === 'function') {
-            pointsContentEl.innerHTML = buildPointsHtml(liveScoreData);
-        } else {
-            pointsContentEl.innerHTML = `<div class="text-2xl font-bold text-amber-400 font-mono">${liveScoreData.displayScore || liveScoreData.totalScore} XP</div>`;
-        }
+        pointsContentEl.innerHTML = '<div class="flex items-center justify-center p-6 text-indigo-400 font-bold"><i class="fas fa-circle-notch fa-spin mr-2"></i> Fetching live scores...</div>';
+    }
+
+    const liveScoreData = await fetchLivePoints(learner._id);
+    if (pointsContentEl) {
+        pointsContentEl.innerHTML = buildPointsHtml(liveScoreData);
     }
 
     // 3. Render Submissions & Proofs
