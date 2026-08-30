@@ -1,3 +1,50 @@
+function displayAdminLearnerDataById(userId) {
+    const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [u.email || u.phone || u._id, u])).values());
+    const user = allUsersPool.find(u => String(u._id) === String(userId) || (u.email && String(u.email).toLowerCase() === String(userId).toLowerCase()));
+
+    if (!user) return alert("Customer record not found.");
+
+    const reportContainer = document.getElementById('adminReportContainer');
+    if (!reportContainer) return;
+
+    reportContainer.classList.remove('hidden');
+
+    const uSubs = getUserSubmissionsByUserId(user._id || user);
+    const earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+    const health = calculateCustomerHealth(user);
+
+    const userDetailsEl = document.getElementById('adminLearnerDetails') || document.querySelector('#adminReportContainer .glass-card:first-child');
+    if (userDetailsEl) {
+        userDetailsEl.innerHTML = `
+            <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800">Learner Overview</h3>
+            <div class="flex items-center gap-4 pb-4 border-b border-slate-800">
+                <img src="${user.profilePicUrl || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-full border-2 border-indigo-500/50 object-cover shadow-xl" onerror="this.src='https://via.placeholder.com/80'">
+                <div>
+                    <h3 class="text-xl font-extrabold text-white font-heading">${user.name || 'Learner'}</h3>
+                    <p class="text-xs text-indigo-400 font-mono mt-0.5">ID: ${user._id || 'N/A'}</p>
+                </div>
+            </div>
+            <div class="space-y-2 pt-3 text-xs">
+                <div class="flex justify-between"><span class="text-slate-400">Email Address:</span> <span class="text-white font-semibold">${user.email || 'N/A'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Phone Number:</span> <span class="text-white font-semibold">${user.phone || 'N/A'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Compliance Health:</span> <span class="font-bold ${health.healthPct >= 80 ? 'text-emerald-400' : (health.healthPct >= 50 ? 'text-amber-400' : 'text-red-400')}">${health.healthPct}% (${health.label})</span></div>
+                <div class="flex justify-between"><span class="text-slate-400">Active Milestone:</span> <span class="text-indigo-400 font-bold">Milestone ${health.highestMs || 1}</span></div>
+            </div>
+        `;
+    }
+
+    if (typeof renderSubmissionsAndReflections === 'function') {
+        renderSubmissionsAndReflections(user._id, 'adminLearnerProjects', 'all');
+    }
+
+    if (typeof renderTimelineGrid === 'function') {
+        renderTimelineGrid(user.email, 'adminCompletionGrid');
+    }
+
+    reportContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.displayAdminLearnerDataById = displayAdminLearnerDataById;
+
 const MANGO_PRICES = {
     "66ac8a14a04c8e9d18af993d": "Free",
     "6714e7d8eb97f72e99e3316c": "Free",
@@ -6,21 +53,30 @@ const MANGO_PRICES = {
     "674b3ae55079905e17d8a4c0": "Free",
     "67505b294132ec203e75f3c8": "Free",
     "675870473618d24b7c51f4c1": "Free",
-    "6763ea11eb97f72e99351e36": "₹99",
-    "676d2994d8ba965e68340d04": "Free",
-    "6774e5088924b11f074d28d0": "Free",
-    "677f59d57a2fbb220a2323e0": "Free",
-    "67889504a37a7e2b10a24aa4": "Free",
-    "67990924eb97f72e99ae2da5": "Free",
-    "67a1ca18a37a7e2b1062f6ea": "₹50",
-    "67a78363eb97f72e99f187a5": "₹99",
-    "67b57b98d9751e18408544d6": "₹99",
-    "67b845e0d9751e1840003b41": "₹3789",
-    "67be846e4c738e4a9089f242": "₹99"
+    "67656afa87ad140605306541": "₹99",
+    "676652cb439408919633ab1b": "Free",
+    "677299bd355fae9bfce8d65f": "Free",
+    "6774e8f11576209b5ea26867": "Free",
+    "67778d0c3923986fdc77558b": "Free",
+    "67779a7b21378d20ce1659e9": "Free",
+    "677bf53c4684018fb05dbc0a": "₹50",
+    "677cbefe9dbd65bb515ea25f": "₹99",
+    "67b712ae5b71fea527d8ba71": "₹99",
+    "67b713c2e8b82c8cc5a5b06c": "₹3789",
+    "67bd770be0d56663563d9243": "₹99",
+    "67bd8e2b6132267977e3a601": "Free",
+    "67d13beeec34e7c90dccb6a3": "Free",
+    "67e517096a70bf196ed9b521": "Free",
+    "67f775301bfad8e07154c0d9": "Free",
+    "67ff3f1db47928b3cdf4dd3d": "Free",
+    "683fda621ac30a70e4edf91a": "Free",
+    "685fbe233d9a5e594b449fba": "Free",
+    "688c4827f83e075e455125d0": "Free",
+    "689d7d2bf791c890c86bb2e7": "Free"
 };
 
 function getMangoPriceLabel(mangoId) {
-    if (MANGO_PRICES[mangoId]) return MANGO_PRICES[mangoId];
+    if (mangoId && MANGO_PRICES[mangoId]) return MANGO_PRICES[mangoId];
     return "Free";
 }
 
@@ -229,12 +285,12 @@ function filterMangosByPricing() {
         if (pricingFilter === 'paid') {
             filtered = filtered.filter(m => {
                 const p = getMangoPriceLabel(m._id || m.id);
-                return p.startsWith('₹') || m.amount > 0 || m.price > 0 || m.isPaid;
+                return p.startsWith('₹');
             });
         } else if (pricingFilter === 'free') {
             filtered = filtered.filter(m => {
                 const p = getMangoPriceLabel(m._id || m.id);
-                return p === 'Free' && !m.amount && !m.price && !m.isPaid;
+                return p === 'Free';
             });
         }
     }
