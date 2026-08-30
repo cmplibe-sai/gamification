@@ -1,3 +1,173 @@
+// =========================================================================
+// CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)
+// =========================================================================
+
+var allAdminMangos = (function() {
+    if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
+        return coursesData.result.subscriptions.map(s => ({
+            _id: s.mangoId,
+            id: s.mangoId,
+            title: s.mangoTitle,
+            name: s.mangoTitle,
+            amount: s.count > 0 ? 1 : 0,
+            price: s.count > 0 ? 1 : 0,
+            isPaid: s.count > 0,
+            subscribersCount: s.count
+        }));
+    }
+    return [];
+})();
+
+var adminRealtimeUsers = (function() {
+    if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) {
+        return [...actualUsers];
+    }
+    return [];
+})();
+
+var currentAdminStatusFilter = 'All';
+
+async function initAdminApp() {
+    try {
+        if (typeof coursesData !== 'undefined' && coursesData.result && Array.isArray(coursesData.result.subscriptions)) {
+            allAdminMangos = coursesData.result.subscriptions.map(s => ({
+                _id: s.mangoId,
+                id: s.mangoId,
+                title: s.mangoTitle,
+                name: s.mangoTitle,
+                amount: s.count > 0 ? 1 : 0,
+                price: s.count > 0 ? 1 : 0,
+                isPaid: s.count > 0,
+                subscribersCount: s.count
+            }));
+        }
+
+        if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) {
+            adminRealtimeUsers = [...actualUsers];
+        }
+
+        if (window.fetchTagMango && window.TagMangoAPI) {
+            try {
+                const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
+                if (response && (response.result || response.mangos) && (response.result || response.mangos).length > 0) {
+                    allAdminMangos = response.result || response.mangos;
+                }
+                const subResponse = await window.fetchTagMango(window.TagMangoAPI.Subscriptions.getByCreator);
+                if (subResponse && (subResponse.result || subResponse.users) && (subResponse.result || subResponse.users).length > 0) {
+                    adminRealtimeUsers = subResponse.result || subResponse.users;
+                }
+            } catch(e) {
+                console.warn('TagMango live fetch bypassed, using local store:', e);
+            }
+        }
+    } catch(err) {
+        console.warn('Admin init notice:', err);
+    }
+
+    if (typeof filterMangosByPricing === 'function') filterMangosByPricing();
+    if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+    if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
+    if (typeof renderAdminCustomerGrid === 'function') renderAdminCustomerGrid();
+}
+window.initAdminApp = initAdminApp;
+
+function filterMangosByPricing() {
+    const pricingFilter = document.getElementById('pricingFilter') ? document.getElementById('pricingFilter').value : 'all';
+    const courseSelect = document.getElementById('courseSelect');
+    if (!courseSelect) return;
+
+    let filtered = allAdminMangos || [];
+
+    if (isCampusPartner) {
+        filtered = filtered.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
+    } else {
+        if (pricingFilter === 'paid') {
+            filtered = filtered.filter(m => (m.amount > 0 || m.price > 0 || m.isPaid));
+        } else if (pricingFilter === 'free') {
+            filtered = filtered.filter(m => (!m.amount && !m.price && !m.isPaid));
+        }
+    }
+
+    courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
+    filtered.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m._id || m.id;
+        opt.innerText = `${m.title || m.name} (${m.subscribersCount || 0} Learners)`;
+        courseSelect.appendChild(opt);
+    });
+
+    renderAdminCustomerGrid();
+}
+window.filterMangosByPricing = filterMangosByPricing;
+
+function populateAdminCohortFilters() {
+    const select = document.getElementById('adminCohortFilter');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- All Allowed Customers --</option>';
+    (allAdminMangos || []).forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m._id || m.id;
+        opt.innerText = m.title || m.name;
+        select.appendChild(opt);
+    });
+}
+window.populateAdminCohortFilters = populateAdminCohortFilters;
+
+function renderAdminMangoToggles() {
+    const container = document.getElementById('adminMangoToggles');
+    if (!container) return;
+
+    let mangos = allAdminMangos || [];
+    if (isCampusPartner) {
+        mangos = mangos.filter(m => partnerAllowedMangoes.includes(m._id || m.id));
+    }
+
+    if (mangos.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-500 italic p-3">No solutions found for access configuration.</p>';
+        return;
+    }
+
+    container.innerHTML = mangos.map(m => {
+        const mId = m._id || m.id;
+        const isEnabled = levelUpAccessConfig.includes(mId);
+        return `
+            <div class="glass-card p-3 rounded-xl border-slate-800 flex items-center justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                    <h5 class="text-xs font-bold text-white truncate">${m.title || m.name}</h5>
+                    <span class="text-[10px] text-slate-400 font-mono">${m.subscribersCount || 0} Registered</span>
+                </div>
+                <button onclick="toggleLevelUpAccess('${mId}')" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
+                    ${isEnabled ? '<i class="fas fa-check mr-1"></i> Access Granted' : 'Locked'}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+window.renderAdminMangoToggles = renderAdminMangoToggles;
+
+async function toggleLevelUpAccess(mangoId) {
+    if (levelUpAccessConfig.includes(mangoId)) {
+        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
+    } else {
+        levelUpAccessConfig.push(mangoId);
+    }
+
+    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+
+    try {
+        await apiFetch('/api/level-up-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ levelUpAccess: levelUpAccessConfig })
+        });
+    } catch(e) {}
+
+    renderAdminMangoToggles();
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.toggleLevelUpAccess = toggleLevelUpAccess;
+
 function getLocalDateKey(dateObj) {
     const d = (dateObj instanceof Date && !isNaN(dateObj.getTime())) ? dateObj : new Date();
     const year = d.getFullYear();
