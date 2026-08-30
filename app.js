@@ -1,4 +1,15 @@
 
+// Universal API Base Resolver (Works on root / as well as subpaths like /gamification/)
+const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && window.location.pathname.startsWith('/gamification')) ? '/gamification' : '';
+
+function apiFetch(endpoint, options = {}) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : ('/' + endpoint);
+    const url = APP_PATH_PREFIX + cleanEndpoint;
+    return fetch(url, options);
+}
+window.apiFetch = apiFetch;
+
+
 // ================= GLOBAL STATE =================
 var currentUser = null;
 var currentScoreObj = null;
@@ -53,7 +64,7 @@ async function syncGlobalServerData() {
         try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
 
         // Single consolidated ultra-fast fetch
-        const response = await fetch('/api/sync').then(r => r.json()).catch(() => null);
+        const response = await apiFetch('/api/sync').then(r => r.json()).catch(() => null);
         if (!response || !response.success || !response.data) {
             isSyncInProgress = false;
             return;
@@ -83,7 +94,7 @@ async function syncGlobalServerData() {
 
             if (missingOnServer.length > 0) {
                 missingOnServer.forEach(missingSub => {
-                    fetch('/api/submissions', {
+                    apiFetch('/api/submissions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(missingSub)
@@ -285,7 +296,7 @@ function toggleMilestoneModuleAccess(msId, moduleCode) {
     try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved)); } catch(e) {}
 
     // Push to server immediately
-    fetch('/api/milestone-module-access', {
+    apiFetch('/api/milestone-module-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ msId: msId, moduleAccess: current, allModuleAccess: saved })
@@ -344,11 +355,11 @@ async function syncGlobalServerData() {
         try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
 
         const [subsRes, configsRes, accessRes, moduleAccessRes, joinDatesRes] = await Promise.allSettled([
-            fetch('/api/submissions').then(r => r.json()),
-            fetch('/api/milestone-configs').then(r => r.json()),
-            fetch('/api/levelup-access').then(r => r.json()),
-            fetch('/api/milestone-module-access').then(r => r.json()),
-            fetch('/api/user-join-dates').then(r => r.json())
+            apiFetch('/api/submissions').then(r => r.json()),
+            apiFetch('/api/milestone-configs').then(r => r.json()),
+            apiFetch('/api/levelup-access').then(r => r.json()),
+            apiFetch('/api/milestone-module-access').then(r => r.json()),
+            apiFetch('/api/user-join-dates').then(r => r.json())
         ]);
 
         // 1. SUBMISSIONS TWO-WAY SYNC
@@ -365,7 +376,7 @@ async function syncGlobalServerData() {
 
             if (missingOnServer.length > 0) {
                 missingOnServer.forEach(missingSub => {
-                    fetch('/api/submissions', {
+                    apiFetch('/api/submissions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(missingSub)
@@ -432,7 +443,7 @@ async function syncGlobalServerData() {
 
             // Check if local has configs not yet on server
             if (Object.keys(localConfigs).length > 0) {
-                fetch('/api/milestone-configs', {
+                apiFetch('/api/milestone-configs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ allConfigs: customMilestoneConfigs })
@@ -1728,7 +1739,7 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
     }
 
     // 3. Save directly to Render server backend (Single Source of Truth)
-    fetch('/api/levelup-access', {
+    apiFetch('/api/levelup-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ config: levelUpAccessConfig })
@@ -3114,7 +3125,7 @@ async function submitDynamicCheckIn(dayNum, totalQuestions, type) {
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allUserSubsDB));
     
     // 3. Sync to Render Backend Server
-    fetch('/api/submissions', {
+    apiFetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -3515,7 +3526,7 @@ function getUserMilestoneJoinDate(userId, msId) {
                 if (!state[userId]) state[userId] = {};
                 state[userId][msId] = earliestDate;
                 try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
-                fetch('/api/user-join-dates', {
+                apiFetch('/api/user-join-dates', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId, msId, joinDate: earliestDate, allJoinDates: state })
@@ -3538,7 +3549,7 @@ function getUserMilestoneJoinDate(userId, msId) {
         if (!state[userId]) state[userId] = {};
         state[userId][msId] = userStartDate;
         try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(state)); } catch(e) {}
-        fetch('/api/user-join-dates', {
+        apiFetch('/api/user-join-dates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId, msId, joinDate: userStartDate, allJoinDates: state })
@@ -3669,9 +3680,9 @@ function switchMilestoneTab(moduleName, btnElement = null) {
                 }
             } else if (isToday) {
                 if (moduleName === 'pod') {
-                    buttonHtml = `<button type="button" onclick="openPodSessionModal('${sessionCount}', '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] animate-pulse"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openPodSessionModal(${sessionCount}, '${isoDate}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] animate-pulse"><i class="fas fa-podcast mr-1.5"></i> Start Check-in</button>`;
                 } else {
-                    buttonHtml = `<button type="button" onclick="openSubmissionModal('${sessionCount}', '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] animate-pulse"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
+                    buttonHtml = `<button type="button" onclick="openSubmissionModal(${sessionCount}, '${moduleName}', '${isoDate}')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-bold transition-all shadow-[0_0_10px_rgba(5,150,105,0.4)] animate-pulse"><i class="fas fa-play-circle mr-1"></i> Start Check-in</button>`;
                 }
             } else if (isPast) {
                 buttonHtml = `<span class="text-xs font-bold text-red-400 bg-red-900/20 px-3 py-1 rounded-full border border-red-800/50"><i class="fas fa-times-circle mr-1"></i> Missed</span>`;
@@ -4157,7 +4168,7 @@ async function viewCustomerSubmission(userId, dayLabel, type = 'dip') {
     // If local list is empty, attempt immediate sync from server
     if (userSubs.length === 0) {
         try {
-            const res = await fetch('/api/submissions').then(r => r.json());
+            const res = await apiFetch('/api/submissions').then(r => r.json());
             if (res.success && Array.isArray(res.data)) {
                 let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
                 res.data.forEach(s => {
@@ -4236,7 +4247,7 @@ async function approveLearnerSubmission(userId, msId, type, day, lcReward) {
 
     // 3. Sync update to Render Web Service
     try {
-        await fetch('/api/submissions', {
+        await apiFetch('/api/submissions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -5196,7 +5207,7 @@ function saveAdminCheckinConfig(dateKey) {
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
     
     // Sync to Server backend for cross-browser persistence
-    fetch('/api/milestone-configs', {
+    apiFetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5256,7 +5267,7 @@ function duplicateAdminCheckinConfig(sourceDateKey) {
     customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][targetStr] = cloned;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
 
-    fetch('/api/milestone-configs', {
+    apiFetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5895,7 +5906,7 @@ let lastConfigSyncTime = 0;
 
 async function loadGlobalSettings(forceSync = false) {
     try {
-        const res = await fetch('/api/levelup-access');
+        const res = await apiFetch('/api/levelup-access');
         if (res.ok) {
             const data = await res.json();
             if (data.success && Array.isArray(data.data) && data.data.length > 0) {
@@ -5907,7 +5918,7 @@ async function loadGlobalSettings(forceSync = false) {
                 const savedLocal = JSON.parse(localStorage.getItem('adminLevelUpConfig'));
                 if (Array.isArray(savedLocal) && savedLocal.length > 0) {
                     levelUpAccessConfig = savedLocal;
-                    fetch('/api/levelup-access', {
+                    apiFetch('/api/levelup-access', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ config: levelUpAccessConfig })
@@ -5935,7 +5946,7 @@ async function approveSubmissionManually(userId, day, type) {
         subs[idx].status = 'completed';
         localStorage.setItem('allUserSubmissionsDB', JSON.stringify(subs));
     }
-    await fetch('/api/submissions/update-status', {
+    await apiFetch('/api/submissions/update-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, milestoneId: activeAdminMilestoneId || 1, type, day, status: 'completed' })
@@ -6247,7 +6258,7 @@ async function submitPodSessionQuiz() {
     };
 
     // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
-    fetch('/api/submissions', {
+    apiFetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subData)
@@ -6380,7 +6391,7 @@ function saveAdminPodCheckinConfig(passedDateKey) {
     }
 
     // Sync to backend server
-    fetch('/api/milestone-configs', {
+    apiFetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -6478,7 +6489,7 @@ function saveAdminDayConfig(msId, modCode, dateKey, configObj) {
     } catch(e) {}
 
     // POST to backend server
-    fetch('/api/milestone-configs', {
+    apiFetch('/api/milestone-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
