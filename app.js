@@ -571,10 +571,16 @@ function renderAdminCustomerGrid() {
 
 
 // ==============================================================
-// LEVEL-UP ACCESS CONTROLLER & DATABASE SYNC
+// LEVEL-UP ACCESS CONTROLLER & DEDICATED DATABASE SYNC
 // ==============================================================
+var lastLocalToggleTime = 0;
 
 async function fetchServerLevelUpAccess() {
+    // Prevent sync from overwriting local state right after user interaction (3s grace period)
+    if (Date.now() - lastLocalToggleTime < 3000) {
+        return levelUpAccessConfig || [];
+    }
+
     try {
         const res = await apiFetch('/api/level-up-access').then(r => r.json());
         if (res && res.success && Array.isArray(res.data)) {
@@ -608,6 +614,8 @@ async function fetchServerLevelUpAccess() {
 window.fetchServerLevelUpAccess = fetchServerLevelUpAccess;
 
 function toggleLevelUpAccess(mangoId, isEnabled) {
+    lastLocalToggleTime = Date.now(); // Record user action timestamp
+
     if (!Array.isArray(levelUpAccessConfig)) {
         levelUpAccessConfig = [];
     }
@@ -1075,10 +1083,26 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
         }
 
-        // 5. LEVEL-UP ACCESS
-        if (Array.isArray(serverLevelUpAccess)) {
-            levelUpAccessConfig = serverLevelUpAccess;
-            try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+        // 5. LEVEL-UP ACCESS (Protected against race conditions)
+        if (Array.isArray(serverLevelUpAccess) && (Date.now() - lastLocalToggleTime > 3000)) {
+            const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
+            const nextKey = serverLevelUpAccess.slice().sort().join(',');
+            if (prevKey !== nextKey) {
+                levelUpAccessConfig = serverLevelUpAccess;
+                try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+                if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
+                    renderAdminMangoToggles();
+                }
+                if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
+                    populateAdminCohortFilters();
+                }
+                if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
+                    renderMilestoneGrid();
+                }
+                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                    renderAdminCohortSubmissions();
+                }
+            }
         }
 
         // 6. EFFICIENT SELECTIVE UI UPDATES (Only when data changed)
