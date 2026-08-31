@@ -364,6 +364,22 @@ function renderAdminMangoToggles() {
         });
     }
 
+    // KEY FIX: If a toggle was recently clicked (within 4s grace period),
+    // ONLY update the checked attribute on existing checkboxes — DO NOT rebuild innerHTML.
+    // Rebuilding innerHTML during an active click event causes the snap-back bug.
+    const isWithinGracePeriod = (Date.now() - lastLocalToggleTime) < 4000;
+    const existingItems = container.querySelectorAll('input[type="checkbox"]');
+    if (isWithinGracePeriod && existingItems.length > 0) {
+        existingItems.forEach(cb => {
+            const mangoId = cb.getAttribute('data-mango-id');
+            if (mangoId) {
+                cb.checked = levelUpAccessConfig.includes(mangoId);
+            }
+        });
+        return; // Exit early — do NOT rebuild innerHTML
+    }
+
+    // Full rebuild only when safe (no recent user click)
     container.innerHTML = filteredMangos.map(mango => {
         const isEnabled = levelUpAccessConfig.includes(mango._id);
         const priceLabel = (mango.amount > 0 || mango.price > 0) ? `<span class="text-[9px] text-amber-400 bg-amber-900/40 px-1.5 rounded border border-amber-700/50">PAID</span>` : `<span class="text-[9px] text-emerald-400 bg-emerald-900/40 px-1.5 rounded border border-emerald-700/50">FREE</span>`;
@@ -378,7 +394,7 @@ function renderAdminMangoToggles() {
                 </div>
             </div>
             <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input type="checkbox" class="sr-only peer" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mango._id}', this.checked)">
+                <input type="checkbox" class="sr-only peer" data-mango-id="${mango._id}" ${isEnabled ? 'checked' : ''} onchange="toggleLevelUpAccess('${mango._id}', this.checked)">
                 <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
             </label>
         </div>`;
@@ -924,7 +940,7 @@ var ALL_PLATFORM_MODULES = [
 ];
 window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
 var tempLoginId = '';
-var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || ['6a168e4213e4e9a10984b164'];
+var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || [];
 var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
 var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
@@ -6292,33 +6308,27 @@ async function loadAIEvaluations() {
 let lastConfigSyncTime = 0; 
 
 async function loadGlobalSettings(forceSync = false) {
+    // NOTE: This function only syncs the levelUpAccessConfig variable.
+    // It intentionally does NOT call renderAdminMangoToggles() to avoid
+    // destroying the checkbox DOM during active user toggle clicks (snap-back bug).
     try {
-        const res = await apiFetch('/api/levelup-access');
+        const res = await apiFetch('/api/level-up-access');
         if (res.ok) {
             const data = await res.json();
-            if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-                levelUpAccessConfig = data.data;
-                localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-                console.log("✅ Level-Up Access Config loaded from server:", levelUpAccessConfig);
-            } else {
-                // If server is empty but local storage has active choices, sync local up to server
-                const savedLocal = JSON.parse(localStorage.getItem('adminLevelUpConfig'));
-                if (Array.isArray(savedLocal) && savedLocal.length > 0) {
-                    levelUpAccessConfig = savedLocal;
-                    apiFetch('/api/levelup-access', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ config: levelUpAccessConfig })
-                    }).catch(e => console.error(e));
+            if (data.success && Array.isArray(data.data)) {
+                // Only update variable if NOT within the 4s toggle grace period
+                if (Date.now() - lastLocalToggleTime > 4000) {
+                    const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
+                    const nextKey = data.data.slice().sort().join(',');
+                    if (prevKey !== nextKey) {
+                        levelUpAccessConfig = data.data;
+                        try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+                    }
                 }
             }
         }
     } catch (e) {
-        console.warn("Using local Level-Up config fallback:", e);
-    }
-    
-    if (typeof renderAdminMangoToggles === 'function') {
-        renderAdminMangoToggles();
+        console.warn("Level-Up config sync:", e);
     }
 }
 
