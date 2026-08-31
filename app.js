@@ -570,6 +570,87 @@ function renderAdminCustomerGrid() {
 
 
 
+// ==============================================================
+// LEVEL-UP ACCESS CONTROLLER & DATABASE SYNC
+// ==============================================================
+
+async function fetchServerLevelUpAccess() {
+    try {
+        const res = await apiFetch('/api/level-up-access').then(r => r.json());
+        if (res && res.success && Array.isArray(res.data)) {
+            const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
+            const nextKey = res.data.slice().sort().join(',');
+            if (prevKey !== nextKey) {
+                console.log('[LevelUp Sync] Received server update:', res.data);
+                levelUpAccessConfig = res.data;
+                try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+                
+                if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
+                    renderAdminMangoToggles();
+                }
+                if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
+                    populateAdminCohortFilters();
+                }
+                if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
+                    renderMilestoneGrid();
+                }
+                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                    renderAdminCohortSubmissions();
+                }
+            }
+            return res.data;
+        }
+    } catch(e) {
+        console.warn('Level-up sync notice:', e);
+    }
+    return levelUpAccessConfig || [];
+}
+window.fetchServerLevelUpAccess = fetchServerLevelUpAccess;
+
+function toggleLevelUpAccess(mangoId, isEnabled) {
+    if (!Array.isArray(levelUpAccessConfig)) {
+        levelUpAccessConfig = [];
+    }
+
+    if (isEnabled === undefined) {
+        isEnabled = !levelUpAccessConfig.includes(mangoId);
+    }
+
+    if (isEnabled) {
+        if (!levelUpAccessConfig.includes(mangoId)) {
+            levelUpAccessConfig.push(mangoId);
+        }
+    } else {
+        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
+    }
+    
+    // 1. Instant local state & localStorage persistence
+    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+    
+    // 2. Immediate local UI re-rendering
+    if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+    if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
+    if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+
+    // 3. Post to server database endpoint
+    if (typeof apiFetch === 'function') {
+        apiFetch('/api/level-up-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: levelUpAccessConfig, levelUpAccess: levelUpAccessConfig })
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log('✅ Level-Up Access persisted to server database:', data);
+        })
+        .catch(err => {
+            console.error('Error saving access to server DB:', err);
+        });
+    }
+}
+window.toggleLevelUpAccess = toggleLevelUpAccess;
+
 function populateAdminCohortFilters() {
     const filterEl = document.getElementById('adminCohortFilter');
     if (!filterEl) return;
