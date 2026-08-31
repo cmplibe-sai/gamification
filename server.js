@@ -186,267 +186,6 @@ function processBuiltinAiEvaluation(submissionRecord) {
 }
 
 
-// Get all submissions or filter by user
-// UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
-app.get('/api/sync', (req, res) => {
-    res.json({
-        success: true,
-        data: {
-            submissions: store.submissions || [],
-            milestoneConfigs: store.customMilestoneConfigs || {},
-            moduleAccess: store.customMilestoneModuleAccess || {
-                "1": ["dip", "pod"],
-                "2": ["dip", "pod", "immerse", "projects"],
-                "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
-                "4": ["dip", "pod", "immerse", "projects", "residency"]
-            },
-            joinDates: store.userMilestoneJoinDates || {},
-            levelUpAccess: store.levelUpAccessConfig || ["6a168e4213e4e9a10984b164"],
-            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
-        }
-    });
-});
-
-app.get('/api/submissions', (req, res) => {
-    let list = store.submissions || [];
-    const { userId, milestoneId } = req.query;
-    if (userId) {
-        list = list.filter(s => String(s.userId) === String(userId));
-    }
-    if (milestoneId) {
-        list = list.filter(s => String(s.milestoneId) === String(milestoneId));
-    }
-    res.json({ success: true, count: list.length, data: list });
-});
-
-// Create or update a submission
-app.post('/api/submissions', (req, res) => {
-    try {
-        const subData = req.body;
-        if (!subData.userId) {
-            return res.status(400).json({ success: false, error: 'userId is required' });
-        }
-
-        if (!store.submissions) store.submissions = [];
-
-        const subMsId = subData.milestoneId || 1;
-        const subType = (subData.type || '').toLowerCase().trim();
-        const subDay = String(subData.day !== undefined && subData.day !== null ? subData.day : (subData.date || ''));
-
-        const existingIdx = store.submissions.findIndex(s => {
-            const sameUser = String(s.userId) === String(subData.userId) || 
-                (s.userEmail && subData.userEmail && s.userEmail.toLowerCase() === subData.userEmail.toLowerCase());
-            const sameMs = String(s.milestoneId || 1) === String(subMsId);
-            const sameType = (s.type || '').toLowerCase().trim() === subType;
-            const sameDay = String(s.day !== undefined && s.day !== null ? s.day : (s.date || '')) === subDay;
-            return sameUser && sameMs && sameType && sameDay;
-        });
-
-        let targetRecord = null;
-
-        if (existingIdx > -1) {
-            store.submissions[existingIdx] = {
-                ...store.submissions[existingIdx],
-                ...subData,
-                responses: (subData.responses && Array.isArray(subData.responses) && subData.responses.length > 0)
-                    ? subData.responses
-                    : store.submissions[existingIdx].responses,
-                submittedAt: store.submissions[existingIdx].submittedAt || subData.submittedAt || new Date().toISOString()
-            };
-            targetRecord = store.submissions[existingIdx];
-        } else {
-            targetRecord = {
-                id: subData.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-                userId: subData.userId,
-                userEmail: subData.userEmail || '',
-                userName: subData.userName || '',
-                userPhone: subData.userPhone || '',
-                milestoneId: subMsId,
-                type: subType,
-                day: subData.day,
-                date: subData.date || subData.dateKey || new Date().toISOString().split('T')[0],
-                title: subData.title || `Day ${subData.day} Check-in`,
-                responses: subData.responses || [],
-                summary: subData.summary || '',
-                media: subData.media || null,
-                mediaUrl: subData.mediaUrl || '',
-                lcReward: Number(subData.lcReward) || 33,
-                status: subData.status || 'evaluating',
-                submittedAt: subData.submittedAt || new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            store.submissions.push(targetRecord);
-        }
-
-        saveStore();
-
-        // Trigger native automated AI evaluation & TagMango auto-credit
-        if (targetRecord.status === 'evaluating') {
-            processBuiltinAiEvaluation(targetRecord);
-        }
-
-        res.json({ success: true, message: 'Submission synced successfully', data: targetRecord });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// Update submission status & trigger TagMango assign upon manual Creator approval
-app.post('/api/submissions/approve', async (req, res) => {
-    try {
-        const { userId, milestoneId, type, day, lcReward } = req.body;
-        if (!store.submissions) store.submissions = [];
-
-        const subMsId = milestoneId || 1;
-        const subType = (type || '').toLowerCase().trim();
-
-        const match = store.submissions.find(s => 
-            String(s.userId) === String(userId) &&
-            String(s.milestoneId || 1) === String(subMsId) &&
-            (s.type || '').toLowerCase().trim() === subType &&
-            (String(s.day) === String(day) || String(s.date) === String(day))
-        );
-
-        const earnedLcs = (lcReward !== undefined && lcReward !== null) ? Number(lcReward) : (match && match.lcReward !== undefined ? Number(match.lcReward) : 33);
-        const description = `[Manual Approved] Milestone-${subMsId} Day-${day} ${subType.toUpperCase()} Check-in`;
-
-        let alreadyCompleted = match && match.status === 'completed';
-
-        if (match) {
-            match.status = 'completed';
-            match.lcReward = earnedLcs;
-            match.updatedAt = new Date().toISOString();
-        }
-
-        saveStore();
-
-        let tmRes = null;
-        // PREVENT DUPLICATE CREDIT: Only call TagMango API if not already completed by AI worker
-        if (!alreadyCompleted && earnedLcs > 0) {
-            tmRes = await assignTagMangoPointsOnServer(userId, earnedLcs, description);
-        } else {
-            console.log(`[TagMango Sync Skipped] Points already awarded earlier for user ${userId}.`);
-        }
-
-        res.json({ success: true, message: 'Submission marked as approved', tagmango: tmRes, alreadyAwarded: alreadyCompleted });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// --- CUSTOM MILESTONE CONFIGS SYNC (Fixes Question Loss Issue #3) ---
-
-// MILESTONE MODULE ACCESS
-app.get('/api/milestone-module-access', (req, res) => {
-    const defaultAccess = {
-        "1": ["dip", "pod"],
-        "2": ["dip", "pod", "immerse", "projects"],
-        "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
-        "4": ["dip", "pod", "immerse", "projects", "residency"]
-    };
-    res.json({ success: true, data: store.customMilestoneModuleAccess || defaultAccess });
-});
-
-app.post('/api/milestone-module-access', (req, res) => {
-    try {
-        const { msId, moduleAccess, allModuleAccess } = req.body;
-        const fullMap = allModuleAccess || (moduleAccess && typeof moduleAccess === 'object' && !Array.isArray(moduleAccess) ? moduleAccess : null);
-        
-        if (fullMap) {
-            store.customMilestoneModuleAccess = fullMap;
-        } else if (msId && Array.isArray(moduleAccess)) {
-            if (!store.customMilestoneModuleAccess) store.customMilestoneModuleAccess = {};
-            store.customMilestoneModuleAccess[msId] = moduleAccess;
-        }
-        saveStore();
-        res.json({ success: true, message: 'Module access saved', data: store.customMilestoneModuleAccess });
-    } catch(e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-// USER JOIN DATES
-app.get('/api/user-join-dates', (req, res) => {
-    res.json({ success: true, data: store.userMilestoneJoinDates || {} });
-});
-
-app.post('/api/user-join-dates', (req, res) => {
-    try {
-        const { userId, msId, joinDate, allJoinDates } = req.body;
-        if (allJoinDates && typeof allJoinDates === 'object') {
-            store.userMilestoneJoinDates = allJoinDates;
-        } else if (userId && msId && joinDate) {
-            if (!store.userMilestoneJoinDates) store.userMilestoneJoinDates = {};
-            if (!store.userMilestoneJoinDates[userId]) store.userMilestoneJoinDates[userId] = {};
-            store.userMilestoneJoinDates[userId][msId] = joinDate;
-        }
-        saveStore();
-        res.json({ success: true, message: 'User join dates saved', data: store.userMilestoneJoinDates });
-    } catch(e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.get('/api/milestone-configs', (req, res) => {
-    res.json({ success: true, data: store.customMilestoneConfigs || {} });
-});
-
-app.post('/api/milestone-configs', (req, res) => {
-    try {
-        const { milestoneId, moduleName, dateKey, config, allConfigs, configs, customMilestoneConfigs } = req.body;
-        const fullConfigs = allConfigs || configs || customMilestoneConfigs;
-
-        if (fullConfigs && typeof fullConfigs === 'object') {
-            if (!store.customMilestoneConfigs) store.customMilestoneConfigs = {};
-            for (const ms in fullConfigs) {
-                if (!store.customMilestoneConfigs[ms]) store.customMilestoneConfigs[ms] = {};
-                for (const mod in fullConfigs[ms]) {
-                    if (!store.customMilestoneConfigs[ms][mod]) store.customMilestoneConfigs[ms][mod] = {};
-                    for (const dKey in fullConfigs[ms][mod]) {
-                        store.customMilestoneConfigs[ms][mod][dKey] = fullConfigs[ms][mod][dKey];
-                    }
-                }
-            }
-        } else if (milestoneId && moduleName && dateKey && config) {
-            if (!store.customMilestoneConfigs) store.customMilestoneConfigs = {};
-            if (!store.customMilestoneConfigs[milestoneId]) store.customMilestoneConfigs[milestoneId] = {};
-            if (!store.customMilestoneConfigs[milestoneId][moduleName]) store.customMilestoneConfigs[milestoneId][moduleName] = {};
-            store.customMilestoneConfigs[milestoneId][moduleName][dateKey] = config;
-        }
-        saveStore();
-        res.json({ success: true, message: 'Milestone configurations saved successfully', data: store.customMilestoneConfigs });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// --- CUSTOM PROJECTS SYNC ---
-app.get('/api/projects', (req, res) => {
-    res.json({ success: true, data: store.customProjectsDB || {} });
-});
-
-app.post('/api/projects', (req, res) => {
-    try {
-        const { milestoneId, project, allProjects } = req.body;
-        if (allProjects) {
-            store.customProjectsDB = allProjects;
-        } else if (milestoneId && project) {
-            if (!store.customProjectsDB) store.customProjectsDB = {};
-            if (!store.customProjectsDB[milestoneId]) store.customProjectsDB[milestoneId] = [];
-            const idx = store.customProjectsDB[milestoneId].findIndex(p => p.id === project.id);
-            if (idx > -1) {
-                store.customProjectsDB[milestoneId][idx] = project;
-            } else {
-                store.customProjectsDB[milestoneId].push(project);
-            }
-        }
-        saveStore();
-        res.json({ success: true, message: 'Projects saved', data: store.customProjectsDB });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
 // ==============================================================
 // DEDICATED LEVEL-UP ACCESS DATABASE ENGINE
 // ==============================================================
@@ -498,6 +237,64 @@ app.get('/api/levelup-access', handleGetLevelUpAccess);
 app.get('/api/level-up-access', handleGetLevelUpAccess);
 app.post('/api/levelup-access', handlePostLevelUpAccess);
 app.post('/api/level-up-access', handlePostLevelUpAccess);
+
+// UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
+app.get('/api/sync', (req, res) => {
+    const liveLevelUpAccess = getLevelUpAccessFromDb();
+    res.json({
+        success: true,
+        data: {
+            submissions: store.submissions || [],
+            milestoneConfigs: store.customMilestoneConfigs || {},
+            moduleAccess: store.customMilestoneModuleAccess || {
+                "1": ["dip", "pod"],
+                "2": ["dip", "pod", "immerse", "projects"],
+                "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
+                "4": ["dip", "pod", "immerse", "projects", "residency"]
+            },
+            joinDates: store.userMilestoneJoinDates || {},
+            levelUpAccess: liveLevelUpAccess,
+            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
+        }
+    });
+});
+
+// SUBMISSIONS ENDPOINTS
+app.get('/api/submissions', (req, res) => {
+    const { userId, milestoneId, type } = req.query;
+    let list = store.submissions || [];
+    if (userId) list = list.filter(s => String(s.userId) === String(userId));
+    if (milestoneId) list = list.filter(s => String(s.milestoneId) === String(milestoneId));
+    if (type) list = list.filter(s => String(s.type).toLowerCase() === String(type).toLowerCase());
+    res.json({ success: true, count: list.length, data: list });
+});
+
+app.post('/api/submissions', (req, res) => {
+    try {
+        const sub = req.body;
+        if (!sub || !sub.userId) return res.status(400).json({ success: false, error: 'userId required' });
+        if (!store.submissions) store.submissions = [];
+        
+        const newSub = {
+            id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            userId: sub.userId,
+            userEmail: sub.userEmail || '',
+            userName: sub.userName || '',
+            milestoneId: Number(sub.milestoneId) || 1,
+            type: sub.type || 'dip',
+            day: sub.day || 1,
+            status: sub.status || 'completed',
+            lcReward: Number(sub.lcReward) || 33,
+            answers: sub.answers || {},
+            submittedAt: new Date().toISOString()
+        };
+        store.submissions.push(newSub);
+        saveStore();
+        res.json({ success: true, message: 'Submission saved', data: newSub });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // --- MILESTONE START DATES SYNC ---
 app.get('/api/milestone-start-dates', (req, res) => {
