@@ -570,14 +570,11 @@ function renderAdminCustomerGrid() {
 
 
 
-// ==============================================================
-// LEVEL-UP ACCESS CONTROLLER & DEDICATED DATABASE SYNC
-// ==============================================================
 var lastLocalToggleTime = 0;
 
 async function fetchServerLevelUpAccess() {
-    // Prevent sync from overwriting local state right after user interaction (3s grace period)
-    if (Date.now() - lastLocalToggleTime < 3000) {
+    // 3.5s grace period after user click to allow POST & server write
+    if (Date.now() - lastLocalToggleTime < 3500) {
         return levelUpAccessConfig || [];
     }
 
@@ -635,13 +632,12 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
     // 1. Instant local state & localStorage persistence
     try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
     
-    // 2. Immediate local UI re-rendering
+    // 2. Immediate local UI re-rendering without destroying active element
     if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
     if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
     if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-    if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
 
-    // 3. Post to server database endpoint
+    // 3. Post to dedicated server database endpoint
     if (typeof apiFetch === 'function') {
         apiFetch('/api/level-up-access', {
             method: 'POST',
