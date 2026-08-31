@@ -587,10 +587,11 @@ function renderAdminCustomerGrid() {
 
 
 var lastLocalToggleTime = 0;
+var _toggleConfirmInterval = null; // Interval that keeps refreshing the lock until server confirms
 
 async function fetchServerLevelUpAccess() {
-    // 3.5s grace period after user click to allow POST & server write
-    if (Date.now() - lastLocalToggleTime < 3500) {
+    // 10s grace period after user toggle — only polls server once confirmed POST completes
+    if (Date.now() - lastLocalToggleTime < 10000) {
         return levelUpAccessConfig || [];
     }
 
@@ -600,21 +601,13 @@ async function fetchServerLevelUpAccess() {
             const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
             const nextKey = res.data.slice().sort().join(',');
             if (prevKey !== nextKey) {
-                console.log('[LevelUp Sync] Received server update:', res.data);
                 levelUpAccessConfig = res.data;
                 try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
-                
                 if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
                     renderAdminMangoToggles();
                 }
                 if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
                     populateAdminCohortFilters();
-                }
-                if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
-                    renderMilestoneGrid();
-                }
-                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-                    renderAdminCohortSubmissions();
                 }
             }
             return res.data;
@@ -627,7 +620,14 @@ async function fetchServerLevelUpAccess() {
 window.fetchServerLevelUpAccess = fetchServerLevelUpAccess;
 
 function toggleLevelUpAccess(mangoId, isEnabled) {
-    lastLocalToggleTime = Date.now(); // Record user action timestamp
+    // Step 1: Lock the grace period immediately on click
+    lastLocalToggleTime = Date.now();
+
+    // Step 2: Cancel any previous pending confirmation interval
+    if (_toggleConfirmInterval) {
+        clearInterval(_toggleConfirmInterval);
+        _toggleConfirmInterval = null;
+    }
 
     if (!Array.isArray(levelUpAccessConfig)) {
         levelUpAccessConfig = [];
@@ -644,32 +644,61 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
     } else {
         levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
     }
-    
-    // 1. Instant local state & localStorage persistence
-    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
-    
-    // 2. Immediate local UI re-rendering without destroying active element
+
+    // Step 3: Persist locally
+    const configSnapshot = [...levelUpAccessConfig];
+    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(configSnapshot)); } catch(e) {}
+
+    // Step 4: Update other UI sections (NOT the toggle list — avoid DOM destroy)
     if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
     if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
     if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
 
-    // 3. Post to dedicated server database endpoint
-    if (typeof apiFetch === 'function') {
-        apiFetch('/api/level-up-access', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config: levelUpAccessConfig, levelUpAccess: levelUpAccessConfig })
-        })
-        .then(res => res.json())
-        .then(data => {
-            console.log('✅ Level-Up Access persisted to server database:', data);
-        })
-        .catch(err => {
-            console.error('Error saving access to server DB:', err);
-        });
-    }
+    // Step 5: POST to server — keep refreshing lock every 500ms until confirmed
+    let attempts = 0;
+    _toggleConfirmInterval = setInterval(() => {
+        lastLocalToggleTime = Date.now(); // Keep refreshing lock while waiting
+    }, 500);
+
+    apiFetch('/api/level-up-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: configSnapshot, levelUpAccess: configSnapshot })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('✅ Level-Up saved to server DB:', data);
+        // Server confirmed — clear lock so polling resumes after 10s
+        if (_toggleConfirmInterval) {
+            clearInterval(_toggleConfirmInterval);
+            _toggleConfirmInterval = null;
+        }
+        // Reset lastLocalToggleTime to exactly 10s ago so next poll picks up immediately
+        lastLocalToggleTime = Date.now() - 10500;
+    })
+    .catch(err => {
+        console.error('❌ Failed to save to server DB — will retry:', err);
+        // On failure, retry once more after 1 second
+        setTimeout(() => {
+            apiFetch('/api/level-up-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: configSnapshot, levelUpAccess: configSnapshot })
+            }).then(r => r.json()).then(d => {
+                console.log('✅ Level-Up retry save succeeded:', d);
+            }).catch(e2 => {
+                console.error('❌ Retry also failed:', e2);
+            });
+            if (_toggleConfirmInterval) {
+                clearInterval(_toggleConfirmInterval);
+                _toggleConfirmInterval = null;
+            }
+            lastLocalToggleTime = Date.now() - 10500;
+        }, 1000);
+    });
 }
 window.toggleLevelUpAccess = toggleLevelUpAccess;
+
 
 function populateAdminCohortFilters() {
     const filterEl = document.getElementById('adminCohortFilter');
@@ -1095,8 +1124,8 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(mergedJoinDates)); } catch(e) {}
         }
 
-        // 5. LEVEL-UP ACCESS (Protected against race conditions)
-        if (Array.isArray(serverLevelUpAccess) && (Date.now() - lastLocalToggleTime > 3000)) {
+        // 5. LEVEL-UP ACCESS (Protected against race conditions \u2014 10s grace matches toggle confirmation lock)
+        if (Array.isArray(serverLevelUpAccess) && (Date.now() - lastLocalToggleTime > 10000)) {
             const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
             const nextKey = serverLevelUpAccess.slice().sort().join(',');
             if (prevKey !== nextKey) {
