@@ -15,6 +15,17 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Universal Subpath Proxy Normalizer (Supports /gamification/* seamlessly)
+app.use((req, res, next) => {
+    if (req.url.startsWith('/gamification/api/')) {
+        req.url = req.url.replace('/gamification/api/', '/api/');
+    } else if (req.url === '/gamification' || req.url === '/gamification/') {
+        req.url = '/';
+    } else if (req.url.startsWith('/gamification/')) {
+        req.url = req.url.replace('/gamification/', '/');
+    }
+    next();
+});
 
 // -------------------------------------------------------------
 // Local JSON File Database Storage (for server-side sync)
@@ -233,13 +244,13 @@ function handlePostLevelUpAccess(req, res) {
     }
 }
 
-app.get('/api/levelup-access', handleGetLevelUpAccess);
-app.get('/api/level-up-access', handleGetLevelUpAccess);
-app.post('/api/levelup-access', handlePostLevelUpAccess);
-app.post('/api/level-up-access', handlePostLevelUpAccess);
+app.get(['/api/levelup-access', '/gamification/api/levelup-access'], handleGetLevelUpAccess);
+app.get(['/api/level-up-access', '/gamification/api/level-up-access'], handleGetLevelUpAccess);
+app.post(['/api/levelup-access', '/gamification/api/levelup-access'], handlePostLevelUpAccess);
+app.post(['/api/level-up-access', '/gamification/api/level-up-access'], handlePostLevelUpAccess);
 
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
-app.get('/api/sync', (req, res) => {
+app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();
     res.json({
         success: true,
