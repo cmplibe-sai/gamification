@@ -575,12 +575,18 @@ function populateAdminCohortFilters() {
     if (!filterEl) return;
 
     const currentVal = filterEl.value;
-    let html = `<option value="all">All Allowed Customers (${(levelUpAccessConfig || []).length} solutions active)</option>`;
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
+    let totalEnrolled = pool.filter(u => u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId))).length;
+    let html = `<option value="all">All Allowed Customers (${totalEnrolled} active learners)</option>`;
 
     if (Array.isArray(allAdminMangos) && allAdminMangos.length > 0) {
         const allowedMangos = allAdminMangos.filter(m => (levelUpAccessConfig || []).includes(m._id));
         allowedMangos.forEach(m => {
-            html += `<option value="${m._id}">${m.title || 'Solution'}</option>`;
+            const count = pool.filter(u => u.subscribedMangoes && u.subscribedMangoes.includes(m._id)).length;
+            html += `<option value="${m._id}">${m.title || 'Solution'} (${count} learners)</option>`;
         });
     }
 
@@ -4847,7 +4853,7 @@ function renderAdminCohortSubmissions() {
     const table = document.getElementById('adminCompletionTable');
     if (!table) return;
 
-    const filterMango = (document.getElementById('adminCohortFilter')?.value || '').trim();
+    const filterMango = (document.getElementById('adminCohortFilter')?.value || 'all').trim();
     const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
     const searchText = (document.getElementById('adminSearchUser')?.value || '').toLowerCase().trim();
 
@@ -4857,7 +4863,7 @@ function renderAdminCohortSubmissions() {
 
     // 1. FILTER LOGIC: ONLY USERS WITH ENROLLED SOLUTIONS IN LEVEL-UP ACCESS
     let cohort = pool.filter(u => {
-        const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId));
+        const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
         const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
         
         if (isCampusPartner) {
@@ -4872,7 +4878,7 @@ function renderAdminCohortSubmissions() {
     }
 
     if (searchText) {
-        cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)));
+        cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)) || (u.phone && String(u.phone).includes(searchText)));
     }
 
     let totalPending = 0;
@@ -4910,10 +4916,13 @@ function renderAdminCohortSubmissions() {
         return nameA.localeCompare(nameB);
     });
 
-    document.getElementById('adminMsStatsBar').innerHTML = `
-        <span class="text-xs font-bold bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/50">Active Customers: ${validCohort.length}</span>
-        <span class="text-xs font-bold bg-amber-900/40 text-amber-300 px-3 py-1 rounded-full border border-amber-700/50">Pending Approvals: ${totalPending}</span>
-    `;
+    const statsBar = document.getElementById('adminMsStatsBar');
+    if (statsBar) {
+        statsBar.innerHTML = `
+            <span class="text-xs font-bold bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/50">Active Customers: ${validCohort.length}</span>
+            <span class="text-xs font-bold bg-amber-900/40 text-amber-300 px-3 py-1 rounded-full border border-amber-700/50">Pending Approvals: ${totalPending}</span>
+        `;
+    }
 
     // Calculate max display days based on Milestone AND active module
     let maxDays = 21;
@@ -4921,7 +4930,7 @@ function renderAdminCohortSubmissions() {
     let projectHeaders = [];
 
     if (isProjectGrid) {
-        projectHeaders = (customProjectsDB[activeAdminMilestoneId] || []);
+        projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []);
         maxDays = projectHeaders.length; 
     } else if (activeAdminMilestoneId === 2 || activeAdminMilestoneId === 3) {
         if (activeAdminModule === 'dip' || activeAdminModule === 'immerse') maxDays = 30;
@@ -4934,10 +4943,9 @@ function renderAdminCohortSubmissions() {
                 <th class="px-3 py-4 text-center w-14 sticky left-0 bg-slate-900 z-30 border-r border-slate-700">Rank</th>
                 <th class="px-4 py-4 sticky left-14 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[220px]">Customer Name</th>
                 <th class="px-4 py-4 text-center min-w-[100px]">Status</th>
-        <th class="px-4 py-4 text-center min-w-[100px]">LCs</th>`;
+                <th class="px-4 py-4 text-center min-w-[100px]">LCs</th>`;
     
     if (isProjectGrid) {
-        // FIX 1: Generate clean, sequential headers (P1, P2, P3) without sector names
         for (let i = 0; i < maxDays; i++) {
             theadHtml += `<th class="px-2 py-4 text-center w-24 border-l border-slate-700/50">P${i + 1}</th>`;
         }
@@ -4949,7 +4957,12 @@ function renderAdminCohortSubmissions() {
     theadHtml += `</tr></thead>`;
 
     if (validCohort.length === 0 || (isProjectGrid && projectHeaders.length === 0)) {
-        table.innerHTML = `${theadHtml}<tbody><tr><td colspan="${maxDays + 3}" class="text-center p-8 text-slate-500 font-medium">${isProjectGrid && projectHeaders.length === 0 ? 'Create projects in "Check-ins Setup" first.' : 'No customers found matching these criteria.'}</td></tr></tbody>`;
+        const emptyMsg = (!levelUpAccessConfig || levelUpAccessConfig.length === 0)
+            ? 'No solutions enabled in Level-Up Access yet. Please enable solutions under the "Level-Up Access" tab.'
+            : (isProjectGrid && projectHeaders.length === 0 
+                ? 'Create projects in "Check-ins Setup" first.' 
+                : 'No customers found with access to currently enabled Level-Up solutions.');
+        table.innerHTML = `${theadHtml}<tbody><tr><td colspan="${maxDays + 4}" class="text-center p-8 text-amber-400/80 font-semibold bg-slate-900/30">${emptyMsg}</td></tr></tbody>`;
         return;
     }
 
@@ -4965,7 +4978,7 @@ function renderAdminCohortSubmissions() {
                 <td class="px-3 py-3 text-center font-mono font-extrabold text-indigo-400 border-r border-slate-700 bg-slate-900/90 group-hover:bg-slate-800/90 sticky left-0 z-20">#${userIndex + 1}</td>
                 <td class="px-4 py-3 sticky left-14 bg-slate-900/90 group-hover:bg-slate-800/90 z-10 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">
                     <div class="flex items-center gap-3">
-                        <img src="${user.profilePicUrl || 'https://via.placeholder.com/30'}" class="w-8 h-8 rounded-full border border-slate-600">
+                        <img src="${user.profilePicUrl || 'https://via.placeholder.com/30'}" class="w-8 h-8 rounded-full border border-slate-600 object-cover" onerror="this.src='https://via.placeholder.com/30'">
                         <div>
                             <p class="text-sm font-bold text-white truncate w-40">${user.name || 'Customer'}</p>
                             <p class="text-[10px] text-slate-400 truncate w-40">${user.email || user.phone}</p>
@@ -4977,18 +4990,13 @@ function renderAdminCohortSubmissions() {
         `;
 
         if (isProjectGrid) {
-            // FIX 2: Filter to get ALL project submissions for this user, then fill them sequentially
             const userProjectSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === 'projects');
-            
-            // Loop through the maximum available projects to create the cells
             for (let i = 0; i < maxDays; i++) {
-                const matchingSub = userProjectSubs[i]; // If they submitted 2, it fills index 0 (P1) and 1 (P2)
-                
+                const matchingSub = userProjectSubs[i];
                 if (matchingSub) {
                     const originalProjId = matchingSub.day; 
                     const projectDef = projectHeaders.find(p => String(p.id) === String(originalProjId)) || {};
                     const lcReward = matchingSub.lcReward || projectDef.pts || 0;
-                    
                     const tooltip = `${new Date(matchingSub.submittedAt || matchingSub.timestamp).toLocaleDateString('en-GB')} • ${lcReward} LCs`;
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${originalProjId}', 'projects')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${lcReward} LCs</span></div></td>`;
                 } else {
@@ -5007,7 +5015,6 @@ function renderAdminCohortSubmissions() {
                 });
                 
                 if (matchingSub) {
-                    const dateLabel = matchingSub.dateKey ? matchingSub.dateKey : matchingSub.day;
                     const tooltip = matchingSub.date ? `${new Date(matchingSub.date).toLocaleDateString('en-GB')} • ${matchingSub.lcReward || 0} LCs` : `Day ${actualDay}`;
                     const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${statusLabel}</span></div></td>`;
@@ -5023,7 +5030,8 @@ function renderAdminCohortSubmissions() {
 
     tbodyHtml += `</tbody>`;
     table.innerHTML = theadHtml + tbodyHtml;
-}   
+}
+window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;   
 
 customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 
