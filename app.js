@@ -4856,8 +4856,12 @@ function renderAdminCohortSubmissions() {
     const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
     const searchText = (document.getElementById('adminSearchUser')?.value || '').toLowerCase().trim();
 
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
     // 1. FILTER LOGIC: ONLY USERS WITH ENROLLED SOLUTIONS IN LEVEL-UP ACCESS
-    let cohort = adminRealtimeUsers.filter(u => {
+    let cohort = pool.filter(u => {
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId));
         const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
         
@@ -4875,12 +4879,6 @@ function renderAdminCohortSubmissions() {
     if (searchText) {
         cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)));
     }
-    
-    cohort = cohort.filter(u => {
-        if (TEST_EMAILS.includes(u.email) || TEST_EMAILS.includes(u.phone)) return true;
-        const highest = (userMilestoneState[u._id] || { highestUnlocked: 1 }).highestUnlocked;
-        return highest >= activeAdminMilestoneId;
-    });
 
     let totalPending = 0;
     let validCohort = [];
@@ -4891,14 +4889,14 @@ function renderAdminCohortSubmissions() {
 
         let calculatedLcs = 0;
         subs.forEach(s => {
-            if (String(s.milestoneId || 1) === String(activeAdminMilestoneId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule)) {
+            if (String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1) && normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule)) {
                 calculatedLcs += Number(s.lcReward) || 0;
             }
         });
         const earnedLcs = calculatedLcs;
 
-        let completionPct = activeAdminMilestoneId === 1 ? Math.round(((subs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length) / 21) * 100) : 100;
-        let isApproved = mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId}`] === true;
+        let completionPct = (activeAdminMilestoneId || 1) === 1 ? Math.round(((subs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length) / 21) * 100) : 100;
+        let isApproved = mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`] === true;
         const isPending = completionPct >= 90 && !isApproved; 
         
         if (isPending) totalPending++;
