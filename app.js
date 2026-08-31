@@ -7324,17 +7324,20 @@ async function switchTab(tab) {
         if (typeof renderLeaderboard === 'function') renderLeaderboard('all');
     }
 
-    if (tab === 'adminTab') {
-        if (typeof initAdminApp === 'function') await initAdminApp();
-        if (typeof renderAdminCustomerGrid === 'function') renderAdminCustomerGrid();
-    }
-
-    if (tab === 'adminLevelUpTab') {
-        const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
-        if (togglesArea) togglesArea.style.display = '';
-        if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
-        if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
-        if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+    if (tab === 'adminTab' || tab === 'adminLevelUpTab') {
+        if (allAdminMangos.length === 0 && typeof initAdminApp === 'function') {
+            await initAdminApp();
+        }
+        if (tab === 'adminTab' && typeof renderAdminCustomerGrid === 'function') {
+            renderAdminCustomerGrid();
+        }
+        if (tab === 'adminLevelUpTab') {
+            const togglesArea = document.getElementById('adminMangoToggles')?.closest('.glass-card') || document.getElementById('adminMangoToggles')?.closest('.glass') || document.getElementById('adminMangoToggles')?.parentElement;
+            if (togglesArea) togglesArea.style.display = '';
+            if (typeof renderAdminMilestoneGrid === 'function') renderAdminMilestoneGrid();
+            if (typeof populateAdminCohortFilters === 'function') populateAdminCohortFilters();
+            if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
+        }
     }
 
     if (tab === 'levelUpTab') {
