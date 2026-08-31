@@ -7694,11 +7694,15 @@ window.switchMilestoneTab = switchMilestoneTab;
 // Automatic high-frequency cross-browser sync (every 2 seconds)
 if (typeof window !== 'undefined') {
     if (window._cmpliSyncInterval) clearInterval(window._cmpliSyncInterval);
-    window._cmpliSyncInterval = setInterval(() => {
-        if (typeof syncGlobalServerData === 'function') {
-            syncGlobalServerData().catch(() => {});
-        }
-    }, 1500);
+    window._cmpliSyncInterval = // Fast 1.0s dedicated level-up access database poller across separate browsers
+setInterval(() => {
+    if (typeof fetchServerLevelUpAccess === 'function') {
+        fetchServerLevelUpAccess().catch(() => {});
+    }
+    if (typeof syncGlobalServerData === 'function') {
+        syncGlobalServerData().catch(() => {});
+    }
+}, 1000);
 }
 
 // ---------------------------------------------------------

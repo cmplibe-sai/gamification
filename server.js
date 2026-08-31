@@ -447,17 +447,48 @@ app.post('/api/projects', (req, res) => {
     }
 });
 
-// --- LEVEL-UP ACCESS CONFIG SYNC ---
+// ==============================================================
+// DEDICATED LEVEL-UP ACCESS DATABASE ENGINE
+// ==============================================================
+const LEVELUP_ACCESS_FILE = path.join(DATA_DIR, 'levelup_access.json');
+
+function getLevelUpAccessFromDb() {
+    try {
+        if (fs.existsSync(LEVELUP_ACCESS_FILE)) {
+            const raw = fs.readFileSync(LEVELUP_ACCESS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading levelup_access.json:', e);
+    }
+    return store.levelUpAccessConfig || ["6714e7d8eb97f72e99e3316c"];
+}
+
+function saveLevelUpAccessToDb(accessArray) {
+    try {
+        const arr = Array.isArray(accessArray) ? accessArray : [];
+        fs.writeFileSync(LEVELUP_ACCESS_FILE, JSON.stringify(arr, null, 2), 'utf8');
+        store.levelUpAccessConfig = arr;
+        saveStore();
+        return arr;
+    } catch(e) {
+        console.error('Error writing levelup_access.json:', e);
+        return [];
+    }
+}
+
 function handleGetLevelUpAccess(req, res) {
-    res.json({ success: true, data: store.levelUpAccessConfig || [] });
+    const list = getLevelUpAccessFromDb();
+    res.json({ success: true, data: list, count: list.length });
 }
 
 function handlePostLevelUpAccess(req, res) {
     try {
         const accessArr = req.body.config || req.body.levelUpAccess || req.body.access || [];
-        store.levelUpAccessConfig = Array.isArray(accessArr) ? accessArr : [];
-        saveStore();
-        res.json({ success: true, message: 'Access config updated', data: store.levelUpAccessConfig });
+        const saved = saveLevelUpAccessToDb(accessArr);
+        console.log(`[Level-Up DB] Saved ${saved.length} enabled solutions to ${LEVELUP_ACCESS_FILE}`);
+        res.json({ success: true, message: 'Level-Up Access saved to dedicated database', data: saved });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
