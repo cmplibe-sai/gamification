@@ -4852,16 +4852,15 @@ function renderAdminCohortSubmissions() {
     const table = document.getElementById('adminCompletionTable');
     if (!table) return;
 
-    const filterMango = document.getElementById('adminCohortFilter').value;
-    const filterStatus = document.getElementById('adminStatusFilter').value;
-    const searchText = document.getElementById('adminSearchUser').value.toLowerCase();
+    const filterMango = (document.getElementById('adminCohortFilter')?.value || '').trim();
+    const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
+    const searchText = (document.getElementById('adminSearchUser')?.value || '').toLowerCase().trim();
 
-    // 1. FILTER LOGIC: VIP PASS FOR TEST EMAILS & PARTNER BOUNDARIES
+    // 1. FILTER LOGIC: ONLY USERS WITH ENROLLED SOLUTIONS IN LEVEL-UP ACCESS
     let cohort = adminRealtimeUsers.filter(u => {
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => levelUpAccessConfig.includes(mId));
-        const isTestUserEmail = TEST_EMAILS.includes(u.email) || TEST_EMAILS.includes(u.phone);
+        const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
         
-        // NEW: If Campus Partner, ONLY allow users who possess the partner's specifically assigned mangoes
         if (isCampusPartner) {
             return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
         }
@@ -4869,7 +4868,7 @@ function renderAdminCohortSubmissions() {
         return hasAccess || isTestUserEmail; 
     });
 
-    if (filterMango !== 'all') {
+    if (filterMango && filterMango !== 'all') {
         cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
     }
 
@@ -7138,39 +7137,44 @@ async function requestOTP() {
         // 2. CUSTOMER / TEST USER LOGIN FLOW
         if (!isAdminLogin && !isCampusPartner) {
             let foundUser = null;
+            const isEmailInput = loginId.includes('@');
 
-            if (typeof timelineData !== 'undefined') {
-                const flatTimeline = timelineData.flat();
-                const tUser = flatTimeline.find(t => (t.email && t.email.toLowerCase() === loginId));
-                if (tUser) {
-                    foundUser = {
-                        _id: tUser['cMPLiBe ID'] || ('cb_' + tUser.email.split('@')[0]),
-                        fanId: tUser['cMPLiBe ID'] || 'cbtm0292',
-                        name: tUser.Name || loginId.split('@')[0],
-                        email: tUser.email,
-                        phone: '',
-                        subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
-                    };
+            if (isEmailInput) {
+                // Strict Email lookup in timelineData and actualUsers
+                if (typeof timelineData !== 'undefined') {
+                    const flatTimeline = timelineData.flat();
+                    const tUser = flatTimeline.find(t => t.email && t.email.toLowerCase().trim() === loginId);
+                    if (tUser) {
+                        foundUser = {
+                            _id: tUser['cMPLiBe ID'] || ('cb_' + tUser.email.split('@')[0]),
+                            fanId: tUser['cMPLiBe ID'] || 'cbtm0292',
+                            name: tUser.Name || loginId.split('@')[0],
+                            email: tUser.email.toLowerCase().trim(),
+                            phone: '',
+                            subscribedMangoes: ['6714e7d8eb97f72e99e3316c', '6735e395013c9a1f0a8768b0']
+                        };
+                    }
+                }
+
+                if (!foundUser && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+                    foundUser = actualUsers.find(u => u.email && u.email.toLowerCase().trim() === loginId);
+                }
+            } else {
+                // Strict Phone lookup (must have at least 10 digits)
+                if (cleanPhone && cleanPhone.length >= 10 && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+                    foundUser = actualUsers.find(u => u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone));
                 }
             }
 
-            if (!foundUser && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-                foundUser = actualUsers.find(u =>
-                    (u.email && u.email.toLowerCase() === loginId) ||
-                    (u.phone && String(u.phone).trim() === loginId) ||
-                    (cleanPhone && u.phone && String(u.phone).includes(cleanPhone))
-                );
-            }
-
             if (!foundUser) {
-                const isEmail = loginId.includes('@');
+                const uName = isEmailInput ? loginId.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : `Learner ${cleanPhone}`;
                 foundUser = {
-                    _id: 'usr_' + (isEmail ? loginId.replace(/[^a-zA-Z0-9]/g, '_') : (cleanPhone || Date.now())),
+                    _id: 'usr_' + (isEmailInput ? loginId.replace(/[^a-zA-Z0-9]/g, '_') : cleanPhone),
                     fanId: 'fan_' + (cleanPhone || Math.floor(100000 + Math.random() * 900000)),
-                    name: isEmail ? loginId.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : `Learner ${cleanPhone}`,
-                    email: isEmail ? loginId : `${cleanPhone}@learn.cmplibe.com`,
-                    phone: cleanPhone || loginId,
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                    name: uName,
+                    email: isEmailInput ? loginId : `${cleanPhone}@learn.cmplibe.com`,
+                    phone: cleanPhone || '',
+                    subscribedMangoes: []
                 };
             }
 
