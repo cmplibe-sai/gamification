@@ -568,35 +568,30 @@ function renderAdminCustomerGrid() {
     }).join('');
 }
 
-function toggleLevelUpAccess(mangoId, isEnabled) {
-    if (!Array.isArray(levelUpAccessConfig)) {
-        levelUpAccessConfig = [];
+
+
+function populateAdminCohortFilters() {
+    const filterEl = document.getElementById('adminCohortFilter');
+    if (!filterEl) return;
+
+    const currentVal = filterEl.value;
+    let html = `<option value="all">All Allowed Customers (${(levelUpAccessConfig || []).length} solutions active)</option>`;
+
+    if (Array.isArray(allAdminMangos) && allAdminMangos.length > 0) {
+        const allowedMangos = allAdminMangos.filter(m => (levelUpAccessConfig || []).includes(m._id));
+        allowedMangos.forEach(m => {
+            html += `<option value="${m._id}">${m.title || 'Solution'}</option>`;
+        });
     }
 
-    if (isEnabled && !levelUpAccessConfig.includes(mangoId)) {
-        levelUpAccessConfig.push(mangoId);
-    } else if (!isEnabled) {
-        levelUpAccessConfig = levelUpAccessConfig.filter(id => id !== mangoId);
+    filterEl.innerHTML = html;
+    if (currentVal && (currentVal === 'all' || (levelUpAccessConfig || []).includes(currentVal))) {
+        filterEl.value = currentVal;
+    } else {
+        filterEl.value = 'all';
     }
-    
-    // 1. Save to local storage immediately
-    localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig));
-    
-    // 2. Re-populate cohort dropdown filters
-    if (typeof populateAdminCohortFilters === 'function') {
-        populateAdminCohortFilters();
-    }
-
-    // 3. Save directly to Render server backend (Single Source of Truth)
-    fetch('/api/levelup-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: levelUpAccessConfig })
-    })
-    .then(res => res.json())
-    .then(data => console.log('✅ Level-Up Access saved to Render backend:', levelUpAccessConfig))
-    .catch(err => console.error('Error saving access to server:', err));
 }
+window.populateAdminCohortFilters = populateAdminCohortFilters;
 
 // 1. Filter Mangos by Pricing (All / Paid / Free)
 function filterMangosByPricing() {
