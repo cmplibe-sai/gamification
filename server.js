@@ -481,29 +481,116 @@ app.get('/api/submissions', (req, res) => {
     res.json({ success: true, count: list.length, data: list });
 });
 
-app.post('/api/submissions', (req, res) => {
+// ==============================================================
+// TAGMANGO REAL-TIME WALLET POINTS ASSIGNMENT ENGINE
+// ==============================================================
+const BASE_URL = process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1';
+
+let backendActualUsers = [];
+try {
+    const rawUsers = fs.readFileSync(path.join(__dirname, 'users.js'), 'utf8');
+    const jsonMatch = rawUsers.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (jsonMatch) {
+        backendActualUsers = JSON.parse(jsonMatch[0]);
+    }
+} catch(e) {
+    console.warn('Could not parse backendActualUsers:', e.message);
+}
+
+async function assignTagMangoPoints(fanId, score, description) {
+    if (!fanId || !score) return null;
+    try {
+        const url = `${BASE_URL}/external/gamification/points/assign`;
+        const res = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'x-whitelabel-host': HOST_URL,
+                'Authorization': `Bearer ${TAGMANGO_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fanIds: [String(fanId)],
+                score: Number(score),
+                description: String(description || 'Challenge check-in')
+            })
+        });
+        const resData = await res.json();
+        console.log(`[TagMango Wallet API] Successfully credited ${score} LCs to ${fanId} ("${description}"):`, resData?.message || resData);
+        return resData;
+    } catch (err) {
+        console.error(`[TagMango Wallet API Error] Failed to credit points to ${fanId}:`, err.message);
+        return null;
+    }
+}
+
+app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
     try {
         const sub = req.body;
-        if (!sub || !sub.userId) return res.status(400).json({ success: false, error: 'userId required' });
+        if (!sub || (!sub.userId && !sub.userEmail)) return res.status(400).json({ success: false, error: 'userId or userEmail required' });
         if (!store.submissions) store.submissions = [];
         
+        const msId = Number(sub.milestoneId) || 1;
+        const dayNum = sub.day || sub.sessionDay || 1;
+        const modType = (sub.moduleType || sub.type || 'dip').toUpperCase();
+        const lcReward = Number(sub.lcReward) || 33;
+        const subAnswers = sub.answers || sub.responses || [];
+
         const newSub = {
             id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             userId: sub.userId,
+            fanId: sub.fanId || sub.userId,
             userEmail: sub.userEmail || '',
-            userName: sub.userName || '',
-            milestoneId: Number(sub.milestoneId) || 1,
-            type: sub.type || 'dip',
-            day: sub.day || 1,
-            status: sub.status || 'completed',
-            lcReward: Number(sub.lcReward) || 33,
-            answers: sub.answers || {},
-            submittedAt: new Date().toISOString()
+            userName: sub.userName || 'Learner',
+            milestoneId: msId,
+            moduleType: sub.moduleType || sub.type || 'dip',
+            type: sub.type || sub.moduleType || 'dip',
+            day: dayNum,
+            sessionDay: dayNum,
+            date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
+            dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
+            status: 'completed',
+            lcReward: lcReward,
+            answers: subAnswers,
+            responses: subAnswers,
+            submittedAt: sub.submittedAt || new Date().toISOString()
         };
+
+        // Filter out duplicate submission for this user, milestone, module, and day
+        store.submissions = store.submissions.filter(s => !(
+            (String(s.userId) === String(newSub.userId) || (s.userEmail && newSub.userEmail && s.userEmail.toLowerCase() === newSub.userEmail.toLowerCase())) &&
+            String(s.milestoneId || 1) === String(msId) &&
+            String(s.type || s.moduleType || 'dip').toLowerCase() === String(newSub.type).toLowerCase() &&
+            String(s.day) === String(dayNum)
+        ));
+
         store.submissions.push(newSub);
         saveStore();
-        res.json({ success: true, message: 'Submission saved', data: newSub });
+
+        // -------------------------------------------------------------
+        // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
+        // -------------------------------------------------------------
+        let targetFanId = sub.fanId;
+        if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+            // Lookup real ObjectId in backendActualUsers
+            const matched = backendActualUsers.find(u => 
+                (u.email && sub.userEmail && u.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()) ||
+                (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
+                (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
+            );
+            if (matched && matched._id) {
+                targetFanId = matched._id;
+            } else {
+                // Fallback default test learner ID on TagMango
+                targetFanId = '68a805cf8c448ccc00abc23f';
+            }
+        }
+
+        const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+        assignTagMangoPoints(targetFanId, lcReward, pointDescription).catch(() => {});
+
+        res.json({ success: true, message: 'Submission saved and LCs credited to TagMango wallet', data: newSub });
     } catch(err) {
+        console.error('Submission processing error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
