@@ -7480,7 +7480,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         ? dayConfig.questions 
         : [
             { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
+            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
         ];
 
     const answers = [];
@@ -7498,14 +7498,14 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             const recData = document.getElementById(`checkin_audio_data_${idx}`)?.value || '';
             const previewEl = document.getElementById(`audio_preview_${idx}`);
             const fileInp = document.getElementById(`checkin_input_${idx}`);
-            audioUrl = recData || previewEl?.src || (fileInp?.files?.[0]?.name || '');
-            val = audioUrl || 'Audio reflection recorded';
+            audioUrl = recData || (previewEl?.src && previewEl.src.startsWith('data:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+            val = audioUrl ? 'Audio Reflection Recorded (Playable)' : 'Audio reflection recorded';
         } else if (qType === 'video') {
             const recData = document.getElementById(`checkin_video_data_${idx}`)?.value || '';
             const previewEl = document.getElementById(`video_preview_${idx}`);
             const fileInp = document.getElementById(`checkin_input_${idx}`);
-            videoUrl = recData || previewEl?.src || (fileInp?.files?.[0]?.name || '');
-            val = videoUrl || 'Video response recorded';
+            videoUrl = recData || (previewEl?.src && previewEl.src.startsWith('data:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+            val = videoUrl ? 'Video Reflection Recorded (Playable)' : 'Video response recorded';
         } else {
             const inp = document.getElementById(`checkin_input_${idx}`);
             val = inp ? inp.value.trim() : '';
@@ -7551,16 +7551,9 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     // Close submission form modal
     document.getElementById('submissionModalDynamic')?.remove();
 
-    // Show AI evaluating progress modal with realistic lagtime (3 seconds)
-    showAiEvaluatingLagtime(pointsAwarded, () => {
-        // 1. Post to server (Server assigns points to TagMango Wallet directly)
-        apiFetch('/api/submissions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(subData)
-        }).catch(e => console.error('Submission sync error:', e));
-
-        // 2. Save locally
+    // Show AI evaluating progress modal with realistic lagtime (18 seconds with 5 stages)
+    showAiEvaluatingLagtime(pointsAwarded, async () => {
+        // 1. Immediately update Local Storage DB
         let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
         localDB = localDB.filter(s => !(
             (String(s.userId) === String(currentUser._id) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
@@ -7571,18 +7564,36 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         localDB.push(subData);
         localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
 
+        // 2. Immediately award LCs to current session & update Dashboard
+        if (currentUser) {
+            currentUser.lcs = (Number(currentUser.lcs) || 0) + pointsAwarded;
+            try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
+        }
+
+        // 3. Post to server (Server calculates match % and credits TagMango Wallet)
+        try {
+            await apiFetch('/api/submissions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subData)
+            });
+        } catch(e) {
+            console.error('Submission sync error:', e);
+        }
+
+        // 4. Refresh UI immediately to show Completed + View button and new balance
         if (typeof switchMilestoneTab === 'function') {
             switchMilestoneTab(moduleName);
         }
         if (typeof updateDashboardUI === 'function') {
             updateDashboardUI();
         }
-        if (typeof syncGlobalServerData === 'function') {
-            syncGlobalServerData().catch(() => {});
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
         }
     });
 }
-window.submitCheckinForm = submitCheckinForm;
+
 
 
 // ==============================================================
@@ -7942,42 +7953,48 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     const qTitle = r.title || r.question || `Question ${i + 1}`;
                     const qType = (r.type || '').toLowerCase();
                     
-                    // Detect media URL or provide verified playback fallback
-                    let rawMedia = r.audioUrl || r.videoUrl || r.fileData || r.answer || '';
-                    let isAudio = qType === 'audio' || String(rawMedia).includes('audio') || String(rawMedia).endsWith('.mp3') || String(rawMedia).endsWith('.wav') || String(rawMedia).endsWith('.m4a') || String(rawMedia).startsWith('data:audio');
-                    let isVideo = qType === 'video' || String(rawMedia).includes('video') || String(rawMedia).endsWith('.mp4') || String(rawMedia).endsWith('.webm') || String(rawMedia).endsWith('.mov') || String(rawMedia).startsWith('data:video') || String(rawMedia).includes('youtube') || String(rawMedia).includes('loom');
+                    // User's exact recorded audio/video
+                    let exactAudioSrc = (r.audioUrl && (r.audioUrl.startsWith('data:audio') || r.audioUrl.startsWith('blob:') || r.audioUrl.startsWith('http'))) ? r.audioUrl : (r.value && r.value.startsWith('data:audio') ? r.value : '');
+                    let exactVideoSrc = (r.videoUrl && (r.videoUrl.startsWith('data:video') || r.videoUrl.startsWith('blob:') || r.videoUrl.startsWith('http'))) ? r.videoUrl : (r.value && r.value.startsWith('data:video') ? r.value : '');
 
-                    let effectiveAudioSrc = (isAudio && (String(rawMedia).startsWith('data:audio') || String(rawMedia).startsWith('blob:') || String(rawMedia).startsWith('http'))) 
-                        ? rawMedia 
-                        : "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
-
-                    let effectiveVideoSrc = (isVideo && (String(rawMedia).startsWith('data:video') || String(rawMedia).startsWith('blob:') || String(rawMedia).startsWith('http'))) 
-                        ? rawMedia 
-                        : "https://vjs.zencdn.net/v/oceans.mp4";
+                    let isAudio = (qType === 'audio') || Boolean(exactAudioSrc);
+                    let isVideo = (qType === 'video') || Boolean(exactVideoSrc);
 
                     let contentHtml = '';
                     if (isAudio) {
                         contentHtml = `
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-volume-up text-indigo-400"></i> Audio Voice Reflection:</span>
-                                    <button type="button" onclick="downloadSubmissionMedia('audio', '${effectiveAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.ogg')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
-                                        <i class="fas fa-download"></i> Download Audio
-                                    </button>
+                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-volume-up text-indigo-400"></i> Audio Voice Reflection (Recorded):</span>
+                                    ${exactAudioSrc ? `
+                                        <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                            <i class="fas fa-download"></i> Download Audio
+                                        </button>
+                                    ` : '<span class="text-[10px] text-slate-500 italic">Voice reflection submitted</span>'}
                                 </div>
-                                <audio controls class="w-full h-9 rounded-lg mt-1" src="${effectiveAudioSrc}"></audio>
+                                ${exactAudioSrc ? `
+                                    <audio controls class="w-full h-9 rounded-lg mt-1" src="${exactAudioSrc}"></audio>
+                                ` : `
+                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Voice Reflection Completed'}</p>
+                                `}
                             </div>
                         `;
                     } else if (isVideo) {
                         contentHtml = `
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-video text-indigo-400"></i> Video Response:</span>
-                                    <button type="button" onclick="downloadSubmissionMedia('video', '${effectiveVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.mp4')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
-                                        <i class="fas fa-download"></i> Download Video
-                                    </button>
+                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-video text-indigo-400"></i> Video Response (Recorded):</span>
+                                    ${exactVideoSrc ? `
+                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                            <i class="fas fa-download"></i> Download Video
+                                        </button>
+                                    ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
                                 </div>
-                                <video controls class="w-full max-h-56 rounded-xl bg-black border border-slate-800 mt-1" src="${effectiveVideoSrc}"></video>
+                                ${exactVideoSrc ? `
+                                    <video controls class="w-full max-h-56 rounded-xl bg-black border border-slate-800 mt-1" src="${exactVideoSrc}"></video>
+                                ` : `
+                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Video Response Completed'}</p>
+                                `}
                             </div>
                         `;
                     } else {
@@ -8033,7 +8050,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     document.body.insertAdjacentHTML('beforeend', fullModalHtml);
 }
-window.renderSubmissionDetailModal = renderSubmissionDetailModal;
+
 
 
 
