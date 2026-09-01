@@ -322,6 +322,78 @@ app.post(['/api/milestone-module-access', '/api/module-access', '/gamification/a
 });
 
 
+// ==============================================================
+// DEDICATED MILESTONE CONFIGS DATABASE ENGINE
+// ==============================================================
+const MILESTONE_CONFIGS_FILE = path.join(DATA_DIR, 'milestone_configs.json');
+
+function getMilestoneConfigsFromDb() {
+    try {
+        if (fs.existsSync(MILESTONE_CONFIGS_FILE)) {
+            const raw = fs.readFileSync(MILESTONE_CONFIGS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading milestone_configs.json:', e);
+    }
+    return store.customMilestoneConfigs || {};
+}
+
+function saveMilestoneConfigsToDb(configs) {
+    try {
+        const obj = (configs && typeof configs === 'object') ? configs : {};
+        fs.writeFileSync(MILESTONE_CONFIGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.customMilestoneConfigs = obj;
+        saveStore();
+        console.log(`[Milestone Configs DB] Saved to ${MILESTONE_CONFIGS_FILE}`);
+        return obj;
+    } catch(e) {
+        console.error('Error writing milestone_configs.json:', e);
+        return store.customMilestoneConfigs || {};
+    }
+}
+
+// GET endpoint — returns current milestone configs (fresh disk read)
+app.get(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req, res) => {
+    const data = getMilestoneConfigsFromDb();
+    res.json({ success: true, data });
+});
+
+// POST endpoint — saves milestone configs to dedicated file
+app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req, res) => {
+    try {
+        const { milestoneId, moduleName, dateKey, config, allConfigs } = req.body;
+        const current = getMilestoneConfigsFromDb();
+
+        if (allConfigs && typeof allConfigs === 'object' && Object.keys(allConfigs).length > 0) {
+            // Deep merge allConfigs into current
+            for (const msId of Object.keys(allConfigs)) {
+                if (!current[msId]) current[msId] = {};
+                for (const mod of Object.keys(allConfigs[msId] || {})) {
+                    if (!current[msId][mod]) current[msId][mod] = {};
+                    for (const dKey of Object.keys(allConfigs[msId][mod] || {})) {
+                        current[msId][mod][dKey] = allConfigs[msId][mod][dKey];
+                    }
+                }
+            }
+        } else if (milestoneId && moduleName && dateKey && config) {
+            const msId = String(milestoneId);
+            const mod = String(moduleName);
+            const dKey = String(dateKey);
+            if (!current[msId]) current[msId] = {};
+            if (!current[msId][mod]) current[msId][mod] = {};
+            current[msId][mod][dKey] = config;
+        }
+
+        const saved = saveMilestoneConfigsToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();
@@ -329,7 +401,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
         success: true,
         data: {
             submissions: store.submissions || [],
-            milestoneConfigs: store.customMilestoneConfigs || {},
+            milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
             joinDates: store.userMilestoneJoinDates || {},
             levelUpAccess: liveLevelUpAccess,

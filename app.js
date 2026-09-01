@@ -1118,19 +1118,37 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
         }
 
-        // 2. MILESTONE CONFIGS TWO-WAY SYNC
+        // 2. MILESTONE CONFIGS TWO-WAY SYNC (Cross-browser real-time sync)
         if (serverConfigs && typeof serverConfigs === 'object') {
             if (!customMilestoneConfigs) customMilestoneConfigs = {};
+            let configsChanged = false;
             for (const msId in serverConfigs) {
-                if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+                if (!customMilestoneConfigs[msId]) {
+                    customMilestoneConfigs[msId] = {};
+                    configsChanged = true;
+                }
                 for (const mod in serverConfigs[msId]) {
-                    if (!customMilestoneConfigs[msId][mod]) customMilestoneConfigs[msId][mod] = {};
+                    if (!customMilestoneConfigs[msId][mod]) {
+                        customMilestoneConfigs[msId][mod] = {};
+                        configsChanged = true;
+                    }
                     for (const dKey in serverConfigs[msId][mod]) {
-                        customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
+                        const sVal = JSON.stringify(serverConfigs[msId][mod][dKey]);
+                        const lVal = JSON.stringify(customMilestoneConfigs[msId][mod][dKey]);
+                        if (sVal !== lVal) {
+                            customMilestoneConfigs[msId][mod][dKey] = serverConfigs[msId][mod][dKey];
+                            configsChanged = true;
+                        }
                     }
                 }
             }
-            try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+            if (configsChanged) {
+                try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+                const checkinsView = document.getElementById('adminCheckinsConfigView');
+                if (checkinsView && !checkinsView.classList.contains('hidden') && typeof renderAdminCheckinsList === 'function') {
+                    renderAdminCheckinsList();
+                }
+            }
         }
 
         // 3. MODULE ACCESS TWO-WAY SYNC (10s grace — same pattern as level-up access)
@@ -7992,6 +8010,15 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
                 const adminDetail = document.getElementById('adminMilestoneDetailContainer');
                 if (adminDetail && typeof renderAdminMilestoneDetail === 'function') {
                     renderAdminMilestoneDetail(activeAdminMilestoneId);
+                }
+            } catch(err) {}
+        }
+        if (e.key === 'customMilestoneConfigs' && e.newValue) {
+            try {
+                customMilestoneConfigs = JSON.parse(e.newValue);
+                const checkinsView = document.getElementById('adminCheckinsConfigView');
+                if (checkinsView && !checkinsView.classList.contains('hidden') && typeof renderAdminCheckinsList === 'function') {
+                    renderAdminCheckinsList();
                 }
             } catch(err) {}
         }
