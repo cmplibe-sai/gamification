@@ -1113,8 +1113,9 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
         }
 
-        // 3. MODULE ACCESS TWO-WAY SYNC (Cross-browser: apply server state & update UI)
-        if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0) {
+        // 3. MODULE ACCESS TWO-WAY SYNC (10s grace — same pattern as level-up access)
+        if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0
+            && (Date.now() - lastModuleToggleTime > 10000)) {
             const localModAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess') || '{}');
             const serverKey = JSON.stringify(serverModuleAccess);
             const localKey = JSON.stringify(localModAccess);
@@ -4789,15 +4790,28 @@ function getEnabledModulesForMilestone(msId) {
     return ['dip', 'pod'];
 }
 
+// Confirmation lock variables — same pattern as toggleLevelUpAccess
+var lastModuleToggleTime = 0;
+var _moduleConfirmInterval = null;
+
 async function toggleMilestoneModuleAccess(msId, moduleCode) {
     const key = String(msId);
+
+    // Step 1: Lock immediately so sync cannot override while POST is in-flight
+    lastModuleToggleTime = Date.now();
+    if (_moduleConfirmInterval) {
+        clearInterval(_moduleConfirmInterval);
+        _moduleConfirmInterval = null;
+    }
+
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
-    
+
     let current = getEnabledModulesForMilestone(msId);
     if (current.includes(moduleCode)) {
         if (current.length === 1) {
             alert('At least one module must remain active in this milestone.');
+            lastModuleToggleTime = 0; // Release lock immediately
             return;
         }
         current = current.filter(m => m !== moduleCode);
@@ -4806,23 +4820,54 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     }
     saved[key] = current;
     saved[Number(msId)] = current;
-    try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved)); } catch(e) {}
 
-    // POST to persistent server backend
-    try {
-        await apiFetch('/api/milestone-module-access', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: saved })
-        });
-    } catch(e) {
-        console.warn('Module access sync warning:', e);
-    }
+    // Step 2: Persist locally
+    const savedSnapshot = { ...saved };
+    try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(savedSnapshot)); } catch(e) {}
 
-    // Re-render creator view tabs immediately
+    // Step 3: Re-render admin view immediately
     if (typeof openAdminMilestone === 'function') {
         openAdminMilestone(Number(msId));
     }
+
+    // Step 4: Keep refreshing lock every 500ms while waiting for server to confirm
+    _moduleConfirmInterval = setInterval(() => {
+        lastModuleToggleTime = Date.now();
+    }, 500);
+
+    // Step 5: POST to server
+    apiFetch('/api/milestone-module-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: savedSnapshot })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('✅ Module access saved to server:', data);
+        // Server confirmed — release lock
+        if (_moduleConfirmInterval) {
+            clearInterval(_moduleConfirmInterval);
+            _moduleConfirmInterval = null;
+        }
+        lastModuleToggleTime = Date.now() - 10500; // Let next poll pick up immediately
+    })
+    .catch(err => {
+        console.error('❌ Module access save failed — retrying:', err);
+        setTimeout(() => {
+            apiFetch('/api/milestone-module-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: savedSnapshot })
+            }).then(r => r.json()).then(d => {
+                console.log('✅ Module access retry succeeded:', d);
+            }).catch(e2 => console.error('❌ Retry failed:', e2));
+            if (_moduleConfirmInterval) {
+                clearInterval(_moduleConfirmInterval);
+                _moduleConfirmInterval = null;
+            }
+            lastModuleToggleTime = Date.now() - 10500;
+        }, 1000);
+    });
 }
 window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
 
