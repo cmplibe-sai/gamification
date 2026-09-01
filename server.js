@@ -249,6 +249,33 @@ app.get(['/api/level-up-access', '/gamification/api/level-up-access'], handleGet
 app.post(['/api/levelup-access', '/gamification/api/levelup-access'], handlePostLevelUpAccess);
 app.post(['/api/level-up-access', '/gamification/api/level-up-access'], handlePostLevelUpAccess);
 
+// MODULE ACCESS ENDPOINT (dip, pod, immerse, projects etc. per milestone)
+app.post(['/api/milestone-module-access', '/gamification/api/milestone-module-access'], (req, res) => {
+    try {
+        const { msId, moduleAccess, allModuleAccess } = req.body;
+        if (!store.customMilestoneModuleAccess) store.customMilestoneModuleAccess = {};
+
+        if (allModuleAccess && typeof allModuleAccess === 'object') {
+            // Full map provided — merge it in
+            for (const key of Object.keys(allModuleAccess)) {
+                if (Array.isArray(allModuleAccess[key])) {
+                    store.customMilestoneModuleAccess[key] = allModuleAccess[key];
+                }
+            }
+        } else if (msId && Array.isArray(moduleAccess)) {
+            // Single milestone update
+            store.customMilestoneModuleAccess[String(msId)] = moduleAccess;
+        }
+
+        saveStore();
+        console.log(`[Module Access] Saved:`, store.customMilestoneModuleAccess);
+        res.json({ success: true, data: store.customMilestoneModuleAccess });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();

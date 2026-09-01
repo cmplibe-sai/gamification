@@ -1113,10 +1113,38 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
         }
 
-        // 3. MODULE ACCESS TWO-WAY SYNC
-        if (serverModuleAccess && typeof serverModuleAccess === 'object') {
-            try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
+        // 3. MODULE ACCESS TWO-WAY SYNC (Cross-browser: apply server state & update UI)
+        if (serverModuleAccess && typeof serverModuleAccess === 'object' && Object.keys(serverModuleAccess).length > 0) {
+            const localModAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess') || '{}');
+            const serverKey = JSON.stringify(serverModuleAccess);
+            const localKey = JSON.stringify(localModAccess);
+
+            if (serverKey !== localKey) {
+                // Server has different module config — update localStorage
+                try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
+
+                // Refresh admin module toggle buttons if that panel is open
+                const adminDetail = document.getElementById('adminMilestoneDetailContainer');
+                if (adminDetail && !adminDetail.classList.contains('hidden')) {
+                    const subNavEl = document.getElementById('adminMilestoneSubNav');
+                    if (subNavEl) {
+                        const enabledMods = getEnabledModulesForMilestone(activeAdminMilestoneId);
+                        subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
+                            const parent = btn.parentElement;
+                            const toggleBtn = parent.querySelector('button:last-child');
+                            const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
+                            if (match && toggleBtn) {
+                                const modCode = match[1];
+                                const isEnabled = enabledMods.includes(modCode);
+                                toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
+                                toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+                            }
+                        });
+                    }
+                }
+            }
         }
+
 
         // 4. USER JOIN DATES TWO-WAY SYNC
         if (serverJoinDates && typeof serverJoinDates === 'object') {
