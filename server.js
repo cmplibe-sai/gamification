@@ -249,27 +249,73 @@ app.get(['/api/level-up-access', '/gamification/api/level-up-access'], handleGet
 app.post(['/api/levelup-access', '/gamification/api/levelup-access'], handlePostLevelUpAccess);
 app.post(['/api/level-up-access', '/gamification/api/level-up-access'], handlePostLevelUpAccess);
 
-// MODULE ACCESS ENDPOINT (dip, pod, immerse, projects etc. per milestone)
-app.post(['/api/milestone-module-access', '/gamification/api/milestone-module-access'], (req, res) => {
+// ==============================================================
+// DEDICATED MODULE ACCESS DATABASE ENGINE (mirrors level-up pattern)
+// ==============================================================
+const MODULE_ACCESS_FILE = path.join(DATA_DIR, 'module_access.json');
+
+const MODULE_ACCESS_DEFAULTS = {
+    "1": ["dip", "pod"],
+    "2": ["dip", "pod", "immerse", "projects"],
+    "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
+    "4": ["dip", "pod", "immerse", "projects", "residency"]
+};
+
+function getModuleAccessFromDb() {
+    try {
+        if (fs.existsSync(MODULE_ACCESS_FILE)) {
+            const raw = fs.readFileSync(MODULE_ACCESS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading module_access.json:', e);
+    }
+    // Fallback: check in-memory store, then return defaults
+    return store.customMilestoneModuleAccess || MODULE_ACCESS_DEFAULTS;
+}
+
+function saveModuleAccessToDb(moduleMap) {
+    try {
+        const obj = (moduleMap && typeof moduleMap === 'object') ? moduleMap : MODULE_ACCESS_DEFAULTS;
+        fs.writeFileSync(MODULE_ACCESS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.customMilestoneModuleAccess = obj;
+        saveStore();
+        console.log(`[Module Access DB] Saved to ${MODULE_ACCESS_FILE}:`, obj);
+        return obj;
+    } catch(e) {
+        console.error('Error writing module_access.json:', e);
+        return store.customMilestoneModuleAccess || MODULE_ACCESS_DEFAULTS;
+    }
+}
+
+// GET endpoint — returns current module access (fresh disk read)
+app.get(['/api/module-access', '/gamification/api/module-access'], (req, res) => {
+    const data = getModuleAccessFromDb();
+    res.json({ success: true, data });
+});
+
+// POST endpoint — saves module access to dedicated file
+app.post(['/api/milestone-module-access', '/api/module-access', '/gamification/api/milestone-module-access', '/gamification/api/module-access'], (req, res) => {
     try {
         const { msId, moduleAccess, allModuleAccess } = req.body;
-        if (!store.customMilestoneModuleAccess) store.customMilestoneModuleAccess = {};
+        // Load current state from disk
+        const current = getModuleAccessFromDb();
 
-        if (allModuleAccess && typeof allModuleAccess === 'object') {
-            // Full map provided — merge it in
+        if (allModuleAccess && typeof allModuleAccess === 'object' && Object.keys(allModuleAccess).length > 0) {
+            // Full map provided — merge into current
             for (const key of Object.keys(allModuleAccess)) {
                 if (Array.isArray(allModuleAccess[key])) {
-                    store.customMilestoneModuleAccess[key] = allModuleAccess[key];
+                    current[String(key)] = allModuleAccess[key];
                 }
             }
         } else if (msId && Array.isArray(moduleAccess)) {
             // Single milestone update
-            store.customMilestoneModuleAccess[String(msId)] = moduleAccess;
+            current[String(msId)] = moduleAccess;
         }
 
-        saveStore();
-        console.log(`[Module Access] Saved:`, store.customMilestoneModuleAccess);
-        res.json({ success: true, data: store.customMilestoneModuleAccess });
+        const saved = saveModuleAccessToDb(current);
+        res.json({ success: true, data: saved });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -284,12 +330,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
         data: {
             submissions: store.submissions || [],
             milestoneConfigs: store.customMilestoneConfigs || {},
-            moduleAccess: store.customMilestoneModuleAccess || {
-                "1": ["dip", "pod"],
-                "2": ["dip", "pod", "immerse", "projects"],
-                "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
-                "4": ["dip", "pod", "immerse", "projects", "residency"]
-            },
+            moduleAccess: getModuleAccessFromDb(),
             joinDates: store.userMilestoneJoinDates || {},
             levelUpAccess: liveLevelUpAccess,
             milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
