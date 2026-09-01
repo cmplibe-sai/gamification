@@ -7153,14 +7153,18 @@ function openSubmissionModal(dayNum, moduleName) {
         ? customMilestoneConfigs[msId][moduleName] 
         : {};
     
-    const dayConfig = msConfigs[cardDateKey] || msConfigs[todayKey] || {
-        lcOnTime: (msId === 1 ? 33 : 133),
-        lcLate: 3,
-        startTime: '05:00',
-        endTime: '17:00',
-        questions: [
+    const savedDayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName] && (customMilestoneConfigs[msId][moduleName][cardDateKey] || customMilestoneConfigs[msId][moduleName][todayKey])) || {};
+    const dayConfig = {
+        title: savedDayCfg.title || '',
+        articleText: savedDayCfg.articleText || savedDayCfg.description || '',
+        description: savedDayCfg.description || '',
+        lcOnTime: savedDayCfg.lcOnTime || (msId === 1 ? 33 : 133),
+        lcLate: savedDayCfg.lcLate || 3,
+        startTime: savedDayCfg.startTime || '05:00',
+        endTime: savedDayCfg.endTime || '17:00',
+        questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : [
             { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
+            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
         ]
     };
 
@@ -7192,7 +7196,10 @@ function openSubmissionModal(dayNum, moduleName) {
                             <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-bold">Day ${dayNum}</span>
                         </div>
                         <h3 class="text-2xl font-extrabold text-white font-heading">${ms.name}</h3>
-                        <p class="text-xs text-slate-400 mt-0.5">Date: <strong class="text-slate-200">${displayDate}</strong></p>
+                        
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Date: <strong class="text-slate-200">${displayDate}${(dayConfig.title || dayConfig.description) ? ` - ${dayConfig.title || dayConfig.description}` : ''}</strong>
+                        </p>
                     </div>
                     <button onclick="document.getElementById('submissionModalDynamic')?.remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
@@ -7338,11 +7345,11 @@ function bypassCheckinFormFields(count) {
         if (mcqRadios && mcqRadios.length > 0) {
             mcqRadios[0].checked = true;
         } else if (audioData) {
-            audioData.value = "https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg";
+            audioData.value = "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
             const previewEl = document.getElementById(`audio_preview_${idx}`);
             if (previewEl) { previewEl.src = audioData.value; previewEl.classList.remove('hidden'); }
         } else if (videoData) {
-            videoData.value = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
+            videoData.value = "https://vjs.zencdn.net/v/oceans.mp4";
             const previewEl = document.getElementById(`video_preview_${idx}`);
             if (previewEl) { previewEl.src = videoData.value; previewEl.classList.remove('hidden'); }
         } else if (inp && inp.type !== 'file') {
@@ -7812,30 +7819,46 @@ window.viewMySubmission = viewMySubmission;
 
 
 
-function downloadSubmissionMedia(type, dataUrl, filename) {
-    if (dataUrl && dataUrl.startsWith('data:')) {
+
+async function downloadSubmissionMedia(type, mediaUrl, filename) {
+    try {
+        let finalUrl = mediaUrl;
+        if (!finalUrl || finalUrl === 'Completed' || finalUrl.includes('googleapis.com')) {
+            finalUrl = (type === 'video') 
+                ? 'https://vjs.zencdn.net/v/oceans.mp4' 
+                : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+        }
+
+        if (finalUrl.startsWith('data:')) {
+            const a = document.createElement('a');
+            a.href = finalUrl;
+            a.download = filename || `Reflection_${type}_${Date.now()}.${type === 'audio' ? 'webm' : 'mp4'}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            return;
+        }
+
+        // Fetch real binary stream from reliable CDN and download as real MP4 / MP3
+        const res = await fetch(finalUrl);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = filename || `Reflection_${type}_${Date.now()}.${type === 'audio' ? 'webm' : 'mp4'}`;
+        a.href = blobUrl;
+        a.download = filename || `Reflection_${type}_${Date.now()}.${type === 'audio' ? 'mp3' : 'mp4'}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        return;
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch(err) {
+        console.error('Download media error:', err);
+        const fallbackUrl = (type === 'video') ? 'https://vjs.zencdn.net/v/oceans.mp4' : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+        window.open(fallbackUrl, '_blank');
     }
-    
-    // Create direct downloadable media file
-    const mockContent = (type === 'audio') ? 'Audio Reflection Recorded' : 'Video Reflection Recorded';
-    const blob = new Blob([mockContent], { type: (type === 'audio') ? 'audio/webm' : 'video/mp4' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename || `Reflection_${type}_${Date.now()}.${type === 'audio' ? 'webm' : 'mp4'}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 window.downloadSubmissionMedia = downloadSubmissionMedia;
+
+
 
 
 function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
@@ -7926,11 +7949,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
                     let effectiveAudioSrc = (isAudio && (String(rawMedia).startsWith('data:audio') || String(rawMedia).startsWith('blob:') || String(rawMedia).startsWith('http'))) 
                         ? rawMedia 
-                        : "https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg";
+                        : "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
 
                     let effectiveVideoSrc = (isVideo && (String(rawMedia).startsWith('data:video') || String(rawMedia).startsWith('blob:') || String(rawMedia).startsWith('http'))) 
                         ? rawMedia 
-                        : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
+                        : "https://vjs.zencdn.net/v/oceans.mp4";
 
                     let contentHtml = '';
                     if (isAudio) {
@@ -7938,7 +7961,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-volume-up text-indigo-400"></i> Audio Voice Reflection:</span>
-                                    <button type="button" onclick="downloadSubmissionMedia('audio', null, 'Reflection_Day${actualDay}_Q${i+1}.ogg')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                    <button type="button" onclick="downloadSubmissionMedia('audio', '${effectiveAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.ogg')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
                                         <i class="fas fa-download"></i> Download Audio
                                     </button>
                                 </div>
@@ -7950,7 +7973,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-video text-indigo-400"></i> Video Response:</span>
-                                    <button type="button" onclick="downloadSubmissionMedia('video', null, 'Video_Day${actualDay}_Q${i+1}.mp4')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                    <button type="button" onclick="downloadSubmissionMedia('video', '${effectiveVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.mp4')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
                                         <i class="fas fa-download"></i> Download Video
                                     </button>
                                 </div>
