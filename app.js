@@ -337,12 +337,13 @@ function renderAdminMangoToggles() {
     
     if (!container || allAdminMangos.length === 0) return;
 
-    // FIX: COMPLETELY HIDE CONFIGURATION TOOLS FROM PARTNERS
-    const parentBox = container.closest('.glass') || container.parentElement;
-    if (isCampusPartner) {
+    // FIX: COMPLETELY HIDE CONFIGURATION TOOLS FROM PARTNERS OR WHEN MILESTONE DETAIL IS OPEN
+    const parentBox = container.closest('.glass-card') || container.closest('.glass') || container.parentElement;
+    const isDetailOpen = !document.getElementById('adminMilestoneDetailContainer')?.classList.contains('hidden');
+    if (isCampusPartner || isDetailOpen) {
         if (parentBox) parentBox.style.display = 'none';
         if (pricingSelect) pricingSelect.style.display = 'none';
-        return; // Stop rendering toggles immediately
+        if (isCampusPartner) return; // Stop rendering toggles immediately for partners
     } else {
         if (parentBox) parentBox.style.display = '';
         if (pricingSelect) pricingSelect.style.display = '';
@@ -4857,11 +4858,22 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     } catch(e) {}
     savedSnapshot[key] = current;
     try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(savedSnapshot)); } catch(e) {}
-    console.log('[ModuleToggle] 🔧 Browser A: local saved:', JSON.stringify(savedSnapshot));
-
-    // Step 3: Re-render admin view immediately
-    if (typeof openAdminMilestone === 'function') {
-        openAdminMilestone(Number(msId));
+    // Step 3: Update admin module toggle buttons in place without resetting or reloading the view
+    const subNavEl = document.getElementById('adminMilestoneSubNav');
+    if (subNavEl) {
+        const enabledMods = current;
+        subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
+            const parent = btn.parentElement;
+            const toggleBtn = parent.querySelector('button:last-child');
+            const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
+            if (match && toggleBtn) {
+                const modCode = match[1];
+                const isEnabled = enabledMods.includes(modCode);
+                toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
+                toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+                toggleBtn.title = isEnabled ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)';
+            }
+        });
     }
 
     // Step 4: Keep refreshing lock every 500ms while waiting for server to confirm
