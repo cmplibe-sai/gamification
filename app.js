@@ -584,6 +584,25 @@ function renderAdminCustomerGrid() {
     }).join('');
 }
 
+// ---------------------------------------------------------------
+// NORMALIZE SUBMISSION TYPE — used throughout for comparison
+// Maps aliases to canonical module codes
+// ---------------------------------------------------------------
+function normalizeLevelUpType(type) {
+    if (!type) return '';
+    const t = String(type).toLowerCase().trim();
+    const map = {
+        'dip': 'dip', 'daily': 'dip', 'checkin': 'dip', 'check-in': 'dip', 'check_in': 'dip',
+        'pod': 'pod', 'podcast': 'pod', 'audio': 'pod',
+        'immerse': 'immerse', 'immersion': 'immerse', 'video': 'immerse',
+        'projects': 'projects', 'project': 'projects', 'real-world': 'projects', 'realworld': 'projects',
+        'problem_solution': 'problem_solution', 'problem-solution': 'problem_solution', 'problemsolution': 'problem_solution', 'briefing': 'problem_solution',
+        'residency': 'residency', 'corporate': 'residency', 'corporate_residency': 'residency',
+        'ios': 'ios'
+    };
+    return map[t] || t;
+}
+window.normalizeLevelUpType = normalizeLevelUpType;
 
 
 var lastLocalToggleTime = 0;
