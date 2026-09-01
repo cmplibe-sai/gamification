@@ -6939,6 +6939,17 @@ window.joinMilestoneNow = joinMilestoneNow;
 // ==============================================================
 // 2. IN-BUILT AUDIO (MIC) & VIDEO (CAMERA) RECORDERS
 // ==============================================================
+
+// ==============================================================
+// GLOBAL RECORDED MEDIA IN-MEMORY CACHE
+// ==============================================================
+window._recordedVideoData = window._recordedVideoData || {};
+window._recordedAudioData = window._recordedAudioData || {};
+
+// Standard reliable sample video/audio data generators for smooth in-browser playback & VLC
+const VALID_SAMPLE_VIDEO_MP4 = "https://vjs.zencdn.net/v/oceans.mp4";
+const VALID_SAMPLE_AUDIO_MP3 = "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
+
 var _audioStream = null;
 var _audioRecorder = null;
 var _audioChunks = [];
@@ -6955,20 +6966,26 @@ async function startAudioRecording(idx) {
 
         _audioRecorder.onstop = () => {
             const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+            const blobUrl = URL.createObjectURL(blob);
+            window._recordedAudioData = window._recordedAudioData || {};
+            window._recordedAudioData[idx] = blobUrl;
+
+            const previewEl = document.getElementById(`audio_preview_${idx}`);
+            if (previewEl) {
+                previewEl.src = blobUrl;
+                previewEl.classList.remove('hidden');
+            }
+            const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+            if (hiddenData) hiddenData.value = blobUrl;
+
+            const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Preview ready below.</span>';
+
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64Data = reader.result;
-                const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+                window._recordedAudioData[idx] = base64Data;
                 if (hiddenData) hiddenData.value = base64Data;
-                
-                const previewEl = document.getElementById(`audio_preview_${idx}`);
-                if (previewEl) {
-                    previewEl.src = base64Data;
-                    previewEl.classList.remove('hidden');
-                }
-
-                const recStatus = document.getElementById(`audio_rec_status_${idx}`);
-                if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Listen to preview below.</span>';
             };
             reader.readAsDataURL(blob);
 
@@ -7047,23 +7064,30 @@ async function startVideoRecording(idx) {
 
         _videoRecorder.onstop = () => {
             const blob = new Blob(_videoChunks, { type: 'video/webm' });
+            const blobUrl = URL.createObjectURL(blob);
+            window._recordedVideoData = window._recordedVideoData || {};
+            window._recordedVideoData[idx] = blobUrl;
+
+            if (liveVideo) {
+                liveVideo.classList.add('hidden');
+                liveVideo.srcObject = null;
+            }
+            const previewEl = document.getElementById(`video_preview_${idx}`);
+            if (previewEl) {
+                previewEl.src = blobUrl;
+                previewEl.classList.remove('hidden');
+            }
+            const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+            if (hiddenData) hiddenData.value = blobUrl;
+
+            const recStatus = document.getElementById(`video_rec_status_${idx}`);
+            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! Preview ready below.</span>';
+
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64Data = reader.result;
-                if (liveVideo) {
-                    liveVideo.classList.add('hidden');
-                    liveVideo.srcObject = null;
-                }
-                const previewEl = document.getElementById(`video_preview_${idx}`);
-                if (previewEl) {
-                    previewEl.src = base64Data;
-                    previewEl.classList.remove('hidden');
-                }
-                const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+                window._recordedVideoData[idx] = base64Data;
                 if (hiddenData) hiddenData.value = base64Data;
-
-                const recStatus = document.getElementById(`video_rec_status_${idx}`);
-                if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! Preview ready below.</span>';
             };
             reader.readAsDataURL(blob);
 

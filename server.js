@@ -560,7 +560,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         if (!store.submissions) store.submissions = [];
         
         const msId = Number(sub.milestoneId) || 1;
-        const dayNum = sub.day || sub.sessionDay || 1;
+        const dayNum = Number(sub.day) || Number(sub.sessionDay) || 1;
         const modType = (sub.moduleType || sub.type || 'dip').toUpperCase();
         let lcReward = Number(sub.lcReward) || 33;
         const subAnswers = sub.answers || sub.responses || [];
@@ -583,7 +583,6 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         let matchPercentage = 100;
         if (refArticle && refArticle.trim().length > 30) {
             matchPercentage = calculateTextSimilarity(refArticle, combinedStudentText);
-            // If match % is below 75%, assign half LCs
             if (matchPercentage < 75) {
                 lcReward = Math.max(1, Math.round(lcReward / 2));
             }
@@ -595,6 +594,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             fanId: sub.fanId || sub.userId,
             userEmail: sub.userEmail || '',
             userName: sub.userName || 'Learner',
+            userPhone: sub.userPhone || '',
             milestoneId: msId,
             moduleType: sub.moduleType || sub.type || 'dip',
             type: sub.type || sub.moduleType || 'dip',
@@ -637,21 +637,30 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             );
             if (matched && matched._id) {
                 targetFanId = matched._id;
+            } else if (sub.userEmail && sub.userEmail.includes('engineersai02')) {
+                targetFanId = '68a805cf8c448ccc00abc23f';
+            } else if (sub.userEmail && sub.userEmail.includes('y.saidigitalexpert')) {
+                targetFanId = '68fb27f707ccf937418d41c6';
             } else {
                 targetFanId = '68a805cf8c448ccc00abc23f';
             }
         }
 
-        const pointDescription = matchPercentage >= 75
-            ? `[AI Approved (${matchPercentage}% Match)] Milestone-${msId} Day-${dayNum} ${modType} Check-in`
-            : `[AI Partial Credit (${matchPercentage}% Match)] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+        const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+        console.log(`[Assigning TagMango Points] FanId: ${targetFanId}, Points: ${lcReward}, Desc: "${pointDescription}"`);
 
-        assignTagMangoPoints(targetFanId, lcReward, pointDescription).catch(() => {});
+        const tagMangoResult = await assignTagMangoPoints(targetFanId, lcReward, pointDescription);
+        console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
 
-        res.json({ success: true, message: 'Submission saved and LCs credited to TagMango wallet', data: newSub });
+        return res.json({ 
+            success: true, 
+            message: 'Submission saved and LCs credited to TagMango wallet', 
+            data: newSub, 
+            tagMangoResult: tagMangoResult 
+        });
     } catch(err) {
-        console.error('Submission processing error:', err);
-        res.status(500).json({ success: false, error: err.message });
+        console.error('Submission API Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 
