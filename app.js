@@ -1119,9 +1119,10 @@ async function syncGlobalServerData() {
             const localModAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess') || '{}');
             const serverKey = JSON.stringify(serverModuleAccess);
             const localKey = JSON.stringify(localModAccess);
+            console.log('[ModuleSync] server:', serverKey, '| local:', localKey, '| match:', serverKey === localKey);
 
             if (serverKey !== localKey) {
-                // Server has different module config — update localStorage
+                console.log('[ModuleSync] 🔄 Applying server module update to localStorage');
                 try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(serverModuleAccess)); } catch(e) {}
 
                 // Refresh admin module toggle buttons if that panel is open
@@ -1130,6 +1131,7 @@ async function syncGlobalServerData() {
                     const subNavEl = document.getElementById('adminMilestoneSubNav');
                     if (subNavEl) {
                         const enabledMods = getEnabledModulesForMilestone(activeAdminMilestoneId);
+                        console.log('[ModuleSync] Updating buttons for milestone', activeAdminMilestoneId, 'enabled:', enabledMods);
                         subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
                             const parent = btn.parentElement;
                             const toggleBtn = parent.querySelector('button:last-child');
@@ -1141,9 +1143,17 @@ async function syncGlobalServerData() {
                                 toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
                             }
                         });
+                    } else {
+                        console.log('[ModuleSync] subNavEl not found — panel not open, localStorage updated only');
                     }
+                } else {
+                    console.log('[ModuleSync] adminMilestoneDetailContainer hidden — localStorage updated only');
                 }
+            } else {
+                console.log('[ModuleSync] No change needed, server == local');
             }
+        } else {
+            console.log('[ModuleSync] SKIPPED — serverModuleAccess empty?', !serverModuleAccess || Object.keys(serverModuleAccess||{}).length === 0, '| grace lock active?', (Date.now() - lastModuleToggleTime) < 10000, 'ms since toggle:', Date.now() - lastModuleToggleTime);
         }
 
 
@@ -4818,12 +4828,17 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     } else {
         current.push(moduleCode);
     }
-    saved[key] = current;
-    saved[Number(msId)] = current;
+    saved[key] = current; // string key only — number key causes JSON stringify issues
 
-    // Step 2: Persist locally
-    const savedSnapshot = { ...saved };
+    // Step 2: Persist locally (string keys only for clean JSON)
+    const savedSnapshot = {};
+    try {
+        const existing = JSON.parse(localStorage.getItem('customMilestoneModuleAccess') || '{}');
+        Object.assign(savedSnapshot, existing);
+    } catch(e) {}
+    savedSnapshot[key] = current;
     try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(savedSnapshot)); } catch(e) {}
+    console.log('[ModuleToggle] 🔧 Browser A: local saved:', JSON.stringify(savedSnapshot));
 
     // Step 3: Re-render admin view immediately
     if (typeof openAdminMilestone === 'function') {
