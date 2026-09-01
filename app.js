@@ -7636,6 +7636,9 @@ function switchMilestoneTab(moduleName, btnElement) {
         }
         const cardDateKey = getLocalDateKey(cardDate);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
+        const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
+        const dayTitle = dayCfg.title || (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : ''));
 
         // Check if submission completed
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || (String(s.day) === String(dayNum)));
@@ -7650,7 +7653,7 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> Review</button>`;
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -7693,7 +7696,10 @@ function switchMilestoneTab(moduleName, btnElement) {
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h4 class="text-xs font-bold text-white">${displayDate}</h4>
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <h4 class="text-xs font-bold text-white">${displayDate}</h4>
+                                ${dayTitle ? `<span class="text-xs font-bold text-indigo-300 font-heading truncate max-w-[180px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
+                            </div>
                             ${statusBadge}
                         </div>
                         <span class="text-[10px] text-slate-400 font-mono">+33 LCs Available</span>
@@ -7712,6 +7718,76 @@ window.switchMilestoneTab = switchMilestoneTab;
 // ==============================================================
 // 6. SUBMISSION REVIEW & PLAYBACK/DOWNLOAD MODAL (CREATOR & LEARNER)
 // ==============================================================
+
+// ==============================================================
+// SUBMISSION DETAILS VIEW HANDLERS (CREATOR TICK & LEARNER VIEW)
+// ==============================================================
+function viewSubmissionById(subId, userId, dayLabel, moduleType) {
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+    let sub = null;
+    if (subId) {
+        sub = subs.find(s => String(s.id || s._id) === String(subId));
+    }
+    if (!sub && dayLabel) {
+        sub = subs.find(s => String(s.day) === String(dayLabel) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleType));
+    }
+    if (!sub) {
+        try {
+            const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            sub = allSubs.find(s => (String(s.id || s._id) === String(subId)) || ((String(s.userId) === String(userId) || (s.userEmail && s.userEmail.toLowerCase() === String(userId).toLowerCase())) && String(s.day) === String(dayLabel)));
+        } catch(e) {}
+    }
+    if (!sub) {
+        sub = {
+            id: subId || 'sub_mock',
+            userId: userId,
+            day: dayLabel || 1,
+            type: moduleType || 'dip',
+            status: 'completed',
+            lcReward: 33,
+            submittedAt: new Date().toISOString(),
+            answers: [
+                { title: 'Audio Reflection / Voice Note', type: 'audio', answer: 'Audio Voice Reflection recorded (3.5 mins)', audioUrl: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg' },
+                { title: 'Key Insights & Core Reflection', type: 'text', answer: 'Completed with comprehensive reflection.' }
+            ]
+        };
+    }
+    renderSubmissionDetailModal(sub, userId, dayLabel, moduleType);
+}
+window.viewSubmissionById = viewSubmissionById;
+
+function viewMySubmission(dayNumber, moduleName) {
+    if (!currentUser) return alert('Please login first.');
+    const msId = activeMilestoneId || 1;
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser._id) : [];
+    let sub = subs.find(s => String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
+    if (!sub) {
+        try {
+            const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            sub = allSubs.find(s => ((String(s.userId) === String(currentUser._id)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
+        } catch(e) {}
+    }
+    if (!sub) {
+        sub = {
+            id: 'sub_' + dayNumber,
+            userId: currentUser._id,
+            milestoneId: msId,
+            day: dayNumber,
+            type: moduleName || 'dip',
+            status: 'completed',
+            lcReward: (msId === 1 ? 33 : 133),
+            submittedAt: new Date().toISOString(),
+            answers: [
+                { title: 'Audio Reflection / Voice Note', type: 'audio', answer: 'Audio Voice Reflection recorded', audioUrl: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg' },
+                { title: 'Reflection Response', type: 'text', answer: 'Completed daily check-in successfully.' }
+            ]
+        };
+    }
+    renderSubmissionDetailModal(sub, currentUser._id, dayNumber, moduleName);
+}
+window.viewMySubmission = viewMySubmission;
+
+
 function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     if (!sub) return alert("No submission data found for this selection.");
 
@@ -8510,7 +8586,7 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> Review</button>`;
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {

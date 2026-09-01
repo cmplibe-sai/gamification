@@ -481,6 +481,36 @@ app.get('/api/submissions', (req, res) => {
     res.json({ success: true, count: list.length, data: list });
 });
 
+
+// ==============================================================
+// AUDIO TRANSCRIPTION & ARTICLE TEXT SIMILARITY ENGINE
+// ==============================================================
+function calculateTextSimilarity(referenceArticle, studentResponse) {
+    if (!referenceArticle || !referenceArticle.trim()) return 100; // If no reference text configured, grant 100%
+    if (!studentResponse || !studentResponse.trim()) return 30; // Minimum baseline for audio recording without text
+
+    const clean = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+    const refWords = new Set(clean(referenceArticle));
+    const studentWords = clean(studentResponse);
+
+    if (refWords.size === 0) return 100;
+
+    let matchedCount = 0;
+    const matchedSet = new Set();
+    studentWords.forEach(w => {
+        if (refWords.has(w) && !matchedSet.has(w)) {
+            matchedCount++;
+            matchedSet.add(w);
+        }
+    });
+
+    // Score based on keyword & concept coverage
+    let coverage = Math.round((matchedCount / refWords.size) * 100);
+    // If student provided 3-4 minutes voice recording (substantial length), boost baseline
+    if (studentWords.length > 50) coverage = Math.max(coverage, 80);
+    return Math.min(coverage, 100);
+}
+
 // ==============================================================
 // TAGMANGO REAL-TIME WALLET POINTS ASSIGNMENT ENGINE
 // ==============================================================
@@ -532,8 +562,32 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const msId = Number(sub.milestoneId) || 1;
         const dayNum = sub.day || sub.sessionDay || 1;
         const modType = (sub.moduleType || sub.type || 'dip').toUpperCase();
-        const lcReward = Number(sub.lcReward) || 33;
+        let lcReward = Number(sub.lcReward) || 33;
         const subAnswers = sub.answers || sub.responses || [];
+
+        // -------------------------------------------------------------
+        // ARTICLE SIMILARITY & TRANSCRIPTION MATCHING CHECK
+        // -------------------------------------------------------------
+        const allConfigs = getMilestoneConfigsFromDb();
+        const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
+        const refArticle = dayCfg.articleText || dayCfg.description || '';
+
+        let combinedStudentText = '';
+        if (Array.isArray(subAnswers)) {
+            subAnswers.forEach(a => {
+                combinedStudentText += ' ' + (a.answer || a.value || a.transcription || a.text || '');
+            });
+        }
+        if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
+
+        let matchPercentage = 100;
+        if (refArticle && refArticle.trim().length > 30) {
+            matchPercentage = calculateTextSimilarity(refArticle, combinedStudentText);
+            // If match % is below 75%, assign half LCs
+            if (matchPercentage < 75) {
+                lcReward = Math.max(1, Math.round(lcReward / 2));
+            }
+        }
 
         const newSub = {
             id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -550,12 +604,17 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
             status: 'completed',
             lcReward: lcReward,
+            originalLcReward: Number(sub.lcReward) || 33,
+            matchPercentage: matchPercentage,
+            similarityScore: matchPercentage,
+            articleTitle: dayCfg.title || '',
+            referenceArticle: refArticle,
             answers: subAnswers,
             responses: subAnswers,
             submittedAt: sub.submittedAt || new Date().toISOString()
         };
 
-        // Filter out duplicate submission for this user, milestone, module, and day
+        // Filter out duplicate submission
         store.submissions = store.submissions.filter(s => !(
             (String(s.userId) === String(newSub.userId) || (s.userEmail && newSub.userEmail && s.userEmail.toLowerCase() === newSub.userEmail.toLowerCase())) &&
             String(s.milestoneId || 1) === String(msId) &&
@@ -571,7 +630,6 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         // -------------------------------------------------------------
         let targetFanId = sub.fanId;
         if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
-            // Lookup real ObjectId in backendActualUsers
             const matched = backendActualUsers.find(u => 
                 (u.email && sub.userEmail && u.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()) ||
                 (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
@@ -580,12 +638,14 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             if (matched && matched._id) {
                 targetFanId = matched._id;
             } else {
-                // Fallback default test learner ID on TagMango
                 targetFanId = '68a805cf8c448ccc00abc23f';
             }
         }
 
-        const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+        const pointDescription = matchPercentage >= 75
+            ? `[AI Approved (${matchPercentage}% Match)] Milestone-${msId} Day-${dayNum} ${modType} Check-in`
+            : `[AI Partial Credit (${matchPercentage}% Match)] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+
         assignTagMangoPoints(targetFanId, lcReward, pointDescription).catch(() => {});
 
         res.json({ success: true, message: 'Submission saved and LCs credited to TagMango wallet', data: newSub });
