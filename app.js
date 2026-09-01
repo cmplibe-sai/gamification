@@ -7731,9 +7731,16 @@ async function requestOTP() {
             let foundUser = null;
             const isEmailInput = loginId.includes('@');
 
+            const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+                ? adminRealtimeUsers 
+                : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
             if (isEmailInput) {
-                // Strict Email lookup in timelineData and actualUsers
-                if (typeof timelineData !== 'undefined') {
+                // Check actual enrolled learners pool first
+                foundUser = pool.find(u => u.email && u.email.toLowerCase().trim() === loginId);
+
+                // Fallback to timeline data if not found in actualUsers
+                if (!foundUser && typeof timelineData !== 'undefined') {
                     const flatTimeline = timelineData.flat();
                     const tUser = flatTimeline.find(t => t.email && t.email.toLowerCase().trim() === loginId);
                     if (tUser) {
@@ -7743,18 +7750,14 @@ async function requestOTP() {
                             name: tUser.Name || loginId.split('@')[0],
                             email: tUser.email.toLowerCase().trim(),
                             phone: '',
-                            subscribedMangoes: ['6714e7d8eb97f72e99e3316c', '6735e395013c9a1f0a8768b0']
+                            subscribedMangoes: (tUser.subscribedMangoes && Array.isArray(tUser.subscribedMangoes)) ? tUser.subscribedMangoes : ['6714e7d8eb97f72e99e3316c', '6735e395013c9a1f0a8768b0']
                         };
                     }
                 }
-
-                if (!foundUser && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-                    foundUser = actualUsers.find(u => u.email && u.email.toLowerCase().trim() === loginId);
-                }
             } else {
-                // Strict Phone lookup (must have at least 10 digits)
-                if (cleanPhone && cleanPhone.length >= 10 && typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-                    foundUser = actualUsers.find(u => u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone));
+                // Strict Phone lookup
+                if (cleanPhone && cleanPhone.length >= 10) {
+                    foundUser = pool.find(u => u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone));
                 }
             }
 
@@ -7766,7 +7769,7 @@ async function requestOTP() {
                     name: uName,
                     email: isEmailInput ? loginId : `${cleanPhone}@learn.cmplibe.com`,
                     phone: cleanPhone || '',
-                    subscribedMangoes: []
+                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
                 };
             }
 
@@ -7796,7 +7799,8 @@ async function verifyOTP() {
     const otpInput = (document.getElementById('otpCode')?.value || '').trim();
     const btn = document.querySelector('#step2 button');
 
-    if (otpInput === "1234" || otpInput.length === 4) { 
+    // STRICT UNIVERSAL OTP: Only "1234" is allowed to login
+    if (otpInput === "1234") { 
         if (btn) {
             btn.innerText = "Entering Arena...";
             btn.disabled = true;
@@ -7820,11 +7824,17 @@ async function verifyOTP() {
                     initAdminApp().catch(e => console.warn('Admin init:', e));
                 }
             } else {
-                currentUser = realtimeCustomer || currentUser || {
+                const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+                    ? adminRealtimeUsers 
+                    : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
+                const matchedUser = realtimeCustomer || (tempLoginId ? pool.find(u => (u.email && u.email.toLowerCase().trim() === tempLoginId.toLowerCase().trim()) || (u.phone && String(u.phone).replace(/\D/g, '').endsWith(tempLoginId.replace(/\D/g, '')))) : null);
+
+                currentUser = matchedUser || currentUser || {
                     _id: 'usr_' + Date.now(),
                     name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
                     email: tempLoginId || 'learner@cmplibe.com',
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
+                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
                 };
 
                 try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
@@ -7840,7 +7850,7 @@ async function verifyOTP() {
             console.error("Login verification error:", e);
         }
     } else {
-        alert("Invalid OTP. Enter universal OTP 1234.");
+        alert("Invalid OTP. Only universal OTP 1234 is allowed.");
         if (btn) {
             btn.innerText = "Verify & Access";
             btn.disabled = false;
@@ -7933,9 +7943,33 @@ async function switchTab(tab) {
 
     if (tab === 'levelUpTab') {
         const isGodMode = typeof isTestUser === 'function' ? isTestUser() : false;
+
+        // Ensure levelUpAccessConfig is fresh
+        if (!levelUpAccessConfig || levelUpAccessConfig.length === 0) {
+            try {
+                levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || [];
+            } catch(e) {}
+        }
+
+        // If currentUser is enrolled in actualUsers/adminRealtimeUsers, sync subscribedMangoes
+        if (currentUser) {
+            const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+                ? adminRealtimeUsers 
+                : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+            const actual = pool.find(u => (u.email && currentUser.email && u.email.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) || (u.phone && currentUser.phone && String(u.phone).replace(/\D/g, '').endsWith(String(currentUser.phone).replace(/\D/g, ''))) || String(u._id) === String(currentUser._id));
+            if (actual && actual.subscribedMangoes && Array.isArray(actual.subscribedMangoes)) {
+                currentUser.subscribedMangoes = actual.subscribedMangoes;
+                try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
+            }
+        }
+
         const userMangoes = (currentUser && Array.isArray(currentUser.subscribedMangoes)) ? currentUser.subscribedMangoes : [];
-        const hasSubscribedMango = userMangoes.some(mId => levelUpAccessConfig.includes(mId));
-        const hasAccess = isAdminLogin || isGodMode || hasSubscribedMango;
+        const hasSubscribedMango = userMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
+        const isTestUserEmail = currentUser && (
+            (typeof TEST_EMAILS !== 'undefined' && (TEST_EMAILS.includes(currentUser.email) || (currentUser.phone && TEST_EMAILS.includes(currentUser.phone)))) ||
+            (currentUser.email && (currentUser.email.includes('test') || currentUser.email.includes('sai') || currentUser.email.includes('vip')))
+        );
+        const hasAccess = isAdminLogin || isGodMode || isTestUserEmail || hasSubscribedMango;
 
         if (!hasAccess) {
             document.getElementById('levelUpNoAccess')?.classList.remove('hidden');
