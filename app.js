@@ -6876,6 +6876,200 @@ window.showPendingEvaluationPopup = showPendingEvaluationPopup;
 // ==============================================================
 // DYNAMIC CHECK-IN SUBMISSION MODAL (cMPLi Dip & other modules)
 // ==============================================================
+
+// ==============================================================
+// USER MILESTONE JOIN ENGINE & IN-BUILT MEDIA RECORDERS
+// ==============================================================
+function getUserMilestoneJoinDate(userId, msId) {
+    if (!userId) return null;
+    let dates = {};
+    try { dates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
+    const k1 = `${userId}_MS${msId}`;
+    const k2 = `${userId}_${msId}`;
+    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    const k3 = userEmail ? `${userEmail}_MS${msId}` : '';
+    const k4 = userEmail ? `${userEmail}_${msId}` : '';
+    return dates[k1] || dates[k2] || (k3 && dates[k3]) || (k4 && dates[k4]) || null;
+}
+window.getUserMilestoneJoinDate = getUserMilestoneJoinDate;
+
+function hasUserJoinedMilestone(userId, msId) {
+    if (typeof isTestUser === 'function' && isTestUser()) return true;
+    return !!getUserMilestoneJoinDate(userId, msId);
+}
+window.hasUserJoinedMilestone = hasUserJoinedMilestone;
+
+async function joinMilestoneNow(msId) {
+    if (!currentUser) return alert('Please login first.');
+    const todayKey = getLocalDateKey(new Date());
+    
+    let dates = {};
+    try { dates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
+    
+    const k1 = `${currentUser._id}_MS${msId}`;
+    const k2 = (currentUser.email) ? `${currentUser.email.toLowerCase().trim()}_MS${msId}` : '';
+    dates[k1] = todayKey;
+    if (k2) dates[k2] = todayKey;
+    
+    try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(dates)); } catch(e) {}
+    
+    apiFetch('/api/user-join-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            userId: currentUser._id,
+            userEmail: currentUser.email || '',
+            milestoneId: msId,
+            joinDate: todayKey,
+            allDates: dates
+        })
+    }).catch(e => console.error('Join date sync error:', e));
+
+    alert(`🎉 You have officially joined Milestone ${msId}! Day 1 starts today (${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}).`);
+    
+    if (typeof openMilestone === 'function') {
+        openMilestone(msId);
+    }
+}
+window.joinMilestoneNow = joinMilestoneNow;
+
+// IN-BUILT AUDIO / MIC RECORDER ENGINE
+var _audioStream = null;
+var _audioRecorder = null;
+var _audioChunks = [];
+
+async function startAudioRecording(idx) {
+    try {
+        _audioChunks = [];
+        _audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _audioRecorder = new MediaRecorder(_audioStream);
+
+        _audioRecorder.ondataavailable = e => {
+            if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+
+        _audioRecorder.onstop = () => {
+            const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(blob);
+            const previewEl = document.getElementById(`audio_preview_${idx}`);
+            if (previewEl) {
+                previewEl.src = audioUrl;
+                previewEl.classList.remove('hidden');
+            }
+            const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+            if (hiddenData) hiddenData.value = audioUrl;
+
+            const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Listen to preview below.</span>';
+
+            const startBtn = document.getElementById(`btn_start_audio_${idx}`);
+            const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
+            if (startBtn) startBtn.classList.remove('hidden');
+            if (stopBtn) stopBtn.classList.add('hidden');
+
+            if (_audioStream) {
+                _audioStream.getTracks().forEach(track => track.stop());
+                _audioStream = null;
+            }
+        };
+
+        _audioRecorder.start();
+        const startBtn = document.getElementById(`btn_start_audio_${idx}`);
+        const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
+        if (startBtn) startBtn.classList.add('hidden');
+        if (stopBtn) stopBtn.classList.remove('hidden');
+
+        const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Audio... Speak now</span>';
+    } catch(err) {
+        console.error('Microphone error:', err);
+        alert('Could not access microphone. Please allow microphone permission in your browser or select an audio file.');
+    }
+}
+window.startAudioRecording = startAudioRecording;
+
+function stopAudioRecording(idx) {
+    if (_audioRecorder && _audioRecorder.state !== 'inactive') {
+        _audioRecorder.stop();
+    }
+}
+window.stopAudioRecording = stopAudioRecording;
+
+// IN-BUILT CAMERA / VIDEO RECORDER ENGINE
+var _videoStream = null;
+var _videoRecorder = null;
+var _videoChunks = [];
+
+async function startVideoRecording(idx) {
+    try {
+        _videoChunks = [];
+        _videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const liveVideo = document.getElementById(`video_live_${idx}`);
+        if (liveVideo) {
+            liveVideo.srcObject = _videoStream;
+            liveVideo.classList.remove('hidden');
+        }
+
+        _videoRecorder = new MediaRecorder(_videoStream);
+
+        _videoRecorder.ondataavailable = e => {
+            if (e.data.size > 0) _videoChunks.push(e.data);
+        };
+
+        _videoRecorder.onstop = () => {
+            const blob = new Blob(_videoChunks, { type: 'video/webm' });
+            const videoUrl = URL.createObjectURL(blob);
+            
+            if (liveVideo) {
+                liveVideo.classList.add('hidden');
+                liveVideo.srcObject = null;
+            }
+            
+            const previewEl = document.getElementById(`video_preview_${idx}`);
+            if (previewEl) {
+                previewEl.src = videoUrl;
+                previewEl.classList.remove('hidden');
+            }
+            const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+            if (hiddenData) hiddenData.value = videoUrl;
+
+            const recStatus = document.getElementById(`video_rec_status_${idx}`);
+            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! Preview ready below.</span>';
+
+            const startBtn = document.getElementById(`btn_start_video_${idx}`);
+            const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
+            if (startBtn) startBtn.classList.remove('hidden');
+            if (stopBtn) stopBtn.classList.add('hidden');
+
+            if (_videoStream) {
+                _videoStream.getTracks().forEach(track => track.stop());
+                _videoStream = null;
+            }
+        };
+
+        _videoRecorder.start();
+        const startBtn = document.getElementById(`btn_start_video_${idx}`);
+        const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
+        if (startBtn) startBtn.classList.add('hidden');
+        if (stopBtn) stopBtn.classList.remove('hidden');
+
+        const recStatus = document.getElementById(`video_rec_status_${idx}`);
+        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-video mr-1"></i> Recording Video... Look into camera</span>';
+    } catch(err) {
+        console.error('Camera error:', err);
+        alert('Could not access camera/microphone. Please allow camera permissions in your browser.');
+    }
+}
+window.startVideoRecording = startVideoRecording;
+
+function stopVideoRecording(idx) {
+    if (_videoRecorder && _videoRecorder.state !== 'inactive') {
+        _videoRecorder.stop();
+    }
+}
+window.stopVideoRecording = stopVideoRecording;
+
+
 function openSubmissionModal(dayNum, moduleName) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
@@ -6884,12 +7078,20 @@ function openSubmissionModal(dayNum, moduleName) {
     const todayKey = getLocalDateKey(new Date());
 
     const userJoinDateStr = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey;
-    let milestoneStartDate = new Date(userJoinDateStr + 'T00:00:00');
+    let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
 
-    const offsetDays = (Number(dayNum) || 1) - 1;
-    const cardDate = new Date(milestoneStartDate.getTime() + (offsetDays * 86400000));
+    // Calculate Mon-Sat card date
+    let cardDate = new Date(milestoneStartDate.getTime());
+    let daysAdded = 0;
+    let targetOffset = (Number(dayNum) || 1) - 1;
+    while (daysAdded < targetOffset) {
+        cardDate.setDate(cardDate.getDate() + 1);
+        if (cardDate.getDay() !== 0) {
+            daysAdded++;
+        }
+    }
     const cardDateKey = getLocalDateKey(cardDate);
     const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -6904,7 +7106,7 @@ function openSubmissionModal(dayNum, moduleName) {
         endTime: '17:00',
         questions: [
             { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Proof of Work / Audio Reflection (.mp3, notes)", type: "audio" }
+            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
         ]
     };
 
@@ -6912,7 +7114,7 @@ function openSubmissionModal(dayNum, moduleName) {
         ? dayConfig.questions
         : [
             { title: "What did you learn today?", type: "text" },
-            { title: "Upload Proof of Work / Audio Reflection (.mp3)", type: "audio" }
+            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
         ];
 
     const lcOnTime = Number(dayConfig.lcOnTime) || (msId === 1 ? 33 : 133);
@@ -6967,23 +7169,66 @@ function openSubmissionModal(dayNum, moduleName) {
 
                         if (qType === 'audio') {
                             return `
-                                <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2">
-                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                    <input type="file" accept="audio/*,.mp3,.m4a,.wav" id="checkin_input_${idx}" class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer" />
-                                    <input type="hidden" id="checkin_audio_data_${idx}" value="" />
-                                    <textarea id="checkin_text_fallback_${idx}" rows="2" placeholder="Or enter reflection text here..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 mt-2"></textarea>
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-microphone mr-1"></i> Audio / Mic</span>
+                                    </div>
+                                    
+                                    <!-- In-Built Voice Recorder (Mic) -->
+                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
+                                        <div class="flex flex-wrap items-center gap-3">
+                                            <button type="button" id="btn_start_audio_${idx}" onclick="startAudioRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
+                                                <i class="fas fa-microphone"></i> Record with Mic
+                                            </button>
+                                            <button type="button" id="btn_stop_audio_${idx}" onclick="stopAudioRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
+                                                <i class="fas fa-stop"></i> Stop Recording
+                                            </button>
+                                            <span class="text-xs text-slate-500 font-bold">OR</span>
+                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
+                                                <i class="fas fa-upload"></i> Upload Audio File
+                                                <input type="file" accept="audio/*,.mp3,.m4a,.wav" id="checkin_input_${idx}" onchange="handleAudioFileSelect(this, ${idx})" class="hidden" />
+                                            </label>
+                                        </div>
+                                        <div id="audio_rec_status_${idx}" class="text-xs text-slate-400">Click "Record with Mic" or upload your audio file.</div>
+                                        <audio id="audio_preview_${idx}" controls class="hidden w-full h-8 rounded-lg mt-2"></audio>
+                                        <input type="hidden" id="checkin_audio_data_${idx}" value="" />
+                                    </div>
                                 </div>
                             `;
                         } else if (qType === 'video') {
                             return `
-                                <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2">
-                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                    <input type="text" id="checkin_input_${idx}" placeholder="Paste Video link (Loom, YouTube, Drive) or enter text..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500" required />
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-video mr-1"></i> Camera / Video</span>
+                                    </div>
+                                    
+                                    <!-- In-Built Camera / Video Recorder -->
+                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
+                                        <div class="flex flex-wrap items-center gap-3">
+                                            <button type="button" id="btn_start_video_${idx}" onclick="startVideoRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
+                                                <i class="fas fa-camera"></i> Open Camera & Record
+                                            </button>
+                                            <button type="button" id="btn_stop_video_${idx}" onclick="stopVideoRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
+                                                <i class="fas fa-stop"></i> Stop Recording
+                                            </button>
+                                            <span class="text-xs text-slate-500 font-bold">OR</span>
+                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
+                                                <i class="fas fa-upload"></i> Upload Video File
+                                                <input type="file" accept="video/*,.mp4,.mov,.webm" id="checkin_input_${idx}" onchange="handleVideoFileSelect(this, ${idx})" class="hidden" />
+                                            </label>
+                                        </div>
+                                        <div id="video_rec_status_${idx}" class="text-xs text-slate-400">Click "Open Camera & Record" or upload your video file.</div>
+                                        <video id="video_live_${idx}" autoplay muted class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700"></video>
+                                        <video id="video_preview_${idx}" controls class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700 mt-2"></video>
+                                        <input type="hidden" id="checkin_video_data_${idx}" value="" />
+                                    </div>
                                 </div>
                             `;
                         } else if (qType === 'mcq' && q.options && Array.isArray(q.options)) {
                             return `
-                                <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2">
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
                                     <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
                                     <div class="space-y-1.5 pt-1">
                                         ${q.options.map((opt, optIdx) => `
@@ -6997,7 +7242,7 @@ function openSubmissionModal(dayNum, moduleName) {
                             `;
                         } else {
                             return `
-                                <div class="p-4 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-2">
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
                                     <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
                                     <textarea id="checkin_input_${idx}" rows="3" placeholder="Enter your detailed response..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500" required></textarea>
                                 </div>
@@ -7028,6 +7273,38 @@ function openSubmissionModal(dayNum, moduleName) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 window.openSubmissionModal = openSubmissionModal;
+
+function handleAudioFileSelect(input, idx) {
+    const file = input.files[0];
+    if (!file) return;
+    const audioUrl = URL.createObjectURL(file);
+    const previewEl = document.getElementById(`audio_preview_${idx}`);
+    if (previewEl) {
+        previewEl.src = audioUrl;
+        previewEl.classList.remove('hidden');
+    }
+    const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+    if (hiddenData) hiddenData.value = file.name;
+    const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+    if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> File Selected: ${file.name}</span>`;
+}
+window.handleAudioFileSelect = handleAudioFileSelect;
+
+function handleVideoFileSelect(input, idx) {
+    const file = input.files[0];
+    if (!file) return;
+    const videoUrl = URL.createObjectURL(file);
+    const previewEl = document.getElementById(`video_preview_${idx}`);
+    if (previewEl) {
+        previewEl.src = videoUrl;
+        previewEl.classList.remove('hidden');
+    }
+    const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+    if (hiddenData) hiddenData.value = file.name;
+    const recStatus = document.getElementById(`video_rec_status_${idx}`);
+    if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> File Selected: ${file.name}</span>`;
+}
+window.handleVideoFileSelect = handleVideoFileSelect;
 
 function bypassCheckinFormFields(count) {
     for (let idx = 0; idx < count; idx++) {
@@ -8231,8 +8508,47 @@ function switchMilestoneTab(moduleName, btnElement) {
     const ms = milestoneConfig.find(m => m.id === activeMilestoneId) || milestoneConfig[0];
     const isTestMode = (typeof isTestUser === 'function') && isTestUser();
     const todayKey = getLocalDateKey(new Date());
+    const formattedToday = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     
-    const userJoinDateStr = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : todayKey;
+    // -------------------------------------------------------------
+    // CHECK IF CUSTOMER HAS JOINED THIS MILESTONE
+    // -------------------------------------------------------------
+    const hasJoined = hasUserJoinedMilestone(currentUser ? currentUser._id : null, activeMilestoneId);
+
+    if (!hasJoined && !isTestMode) {
+        container.innerHTML = `
+            <div class="glass-card p-8 border-indigo-500/40 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-indigo-950/40 to-slate-900/90 shadow-2xl">
+                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-indigo-500/40 shadow-inner">
+                    <i class="fas fa-flag-checkered"></i>
+                </div>
+                <div>
+                    <span class="badge-pill badge-indigo text-xs font-bold uppercase tracking-widest mb-2">Milestone ${ms.id} Activation</span>
+                    <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading">${ms.name}</h3>
+                    <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+                        Ready to begin your journey? Once you join, <strong>Day 1 starts today (${formattedToday})</strong>. Your check-in schedule runs Monday to Saturday. Missing daily check-ins on scheduled days will permanently lock those check-ins.
+                    </p>
+                </div>
+                
+                <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left space-y-1.5">
+                    <div class="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                        <i class="fas fa-exclamation-triangle"></i> Important Commitment Notice:
+                    </div>
+                    <p class="text-[11px] text-amber-200/80 leading-normal">
+                        Your 21-day timeline begins counting from the moment you click Join. Make sure you are ready to commit to daily reflections and check-ins.
+                    </p>
+                </div>
+
+                <div class="pt-2">
+                    <button onclick="joinMilestoneNow(${ms.id})" class="btn-primary py-3.5 px-8 text-sm font-extrabold bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-xl w-full sm:w-auto">
+                        <i class="fas fa-play-circle mr-2"></i> JOIN NOW & START DAY 1
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const userJoinDateStr = getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) || todayKey;
     let milestoneStartDate = new Date(userJoinDateStr + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
@@ -8244,12 +8560,21 @@ function switchMilestoneTab(moduleName, btnElement) {
     let cardsHtml = '';
 
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        const offsetDays = dayNum - 1;
-        const cardDate = new Date(milestoneStartDate.getTime() + (offsetDays * 86400000));
+        // MON-SAT SCHEDULE CALCULATION (Skip Sundays)
+        let cardDate = new Date(milestoneStartDate.getTime());
+        let daysAdded = 0;
+        let targetOffset = dayNum - 1;
+        while (daysAdded < targetOffset) {
+            cardDate.setDate(cardDate.getDate() + 1);
+            if (cardDate.getDay() !== 0) { // Skip Sunday
+                daysAdded++;
+            }
+        }
         const cardDateKey = getLocalDateKey(cardDate);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        const sub = typeSubs.find(s => String(s.day) === String(dayNum) || s.dateKey === cardDateKey || s.date === cardDateKey);
+        // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
+        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || (String(s.day) === String(dayNum) && s.submittedAt && s.submittedAt.startsWith(cardDateKey)));
         const isCompleted = Boolean(sub);
 
         const isToday = (cardDateKey === todayKey);

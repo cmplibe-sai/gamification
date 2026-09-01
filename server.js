@@ -394,6 +394,67 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 });
 
 
+// ==============================================================
+// DEDICATED USER JOIN DATES DATABASE ENGINE
+// ==============================================================
+const USER_JOIN_DATES_FILE = path.join(DATA_DIR, 'user_join_dates.json');
+
+function getUserJoinDatesFromDb() {
+    try {
+        if (fs.existsSync(USER_JOIN_DATES_FILE)) {
+            const raw = fs.readFileSync(USER_JOIN_DATES_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading user_join_dates.json:', e);
+    }
+    return store.userMilestoneJoinDates || {};
+}
+
+function saveUserJoinDatesToDb(dates) {
+    try {
+        const obj = (dates && typeof dates === 'object') ? dates : {};
+        fs.writeFileSync(USER_JOIN_DATES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.userMilestoneJoinDates = obj;
+        saveStore();
+        console.log(`[User Join Dates DB] Saved to ${USER_JOIN_DATES_FILE}`);
+        return obj;
+    } catch(e) {
+        console.error('Error writing user_join_dates.json:', e);
+        return store.userMilestoneJoinDates || {};
+    }
+}
+
+// GET endpoint — returns current join dates (fresh disk read)
+app.get(['/api/user-join-date', '/gamification/api/user-join-date'], (req, res) => {
+    const data = getUserJoinDatesFromDb();
+    res.json({ success: true, data });
+});
+
+// POST endpoint — saves a user's join date for a milestone
+app.post(['/api/user-join-date', '/gamification/api/user-join-date'], (req, res) => {
+    try {
+        const { userId, userEmail, milestoneId, joinDate, allDates } = req.body;
+        const current = getUserJoinDatesFromDb();
+
+        if (allDates && typeof allDates === 'object') {
+            Object.assign(current, allDates);
+        } else if ((userId || userEmail) && milestoneId && joinDate) {
+            const msId = String(milestoneId);
+            const dateStr = String(joinDate);
+            if (userId) current[`${userId}_MS${msId}`] = dateStr;
+            if (userEmail) current[`${userEmail.toLowerCase().trim()}_MS${msId}`] = dateStr;
+        }
+
+        const saved = saveUserJoinDatesToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();
@@ -403,7 +464,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             submissions: store.submissions || [],
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
-            joinDates: store.userMilestoneJoinDates || {},
+            joinDates: getUserJoinDatesFromDb(),
             levelUpAccess: liveLevelUpAccess,
             milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
         }
