@@ -1022,10 +1022,14 @@ var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {
 
 let lastSyncSignature = '';
 let isSyncInProgress = false;
+let _syncLockExpiry = 0;
+// Auto-unlock if a sync has been stuck for >8s (network timeout guard)
+setInterval(() => { if (isSyncInProgress && Date.now() > _syncLockExpiry) isSyncInProgress = false; }, 2000);
 
 async function syncGlobalServerData() {
     if (isSyncInProgress) return;
     isSyncInProgress = true;
+    _syncLockExpiry = Date.now() + 8000; // Auto-release lock after 8s if fetch hangs
 
     try {
         let localData = [];
@@ -1039,16 +1043,17 @@ async function syncGlobalServerData() {
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         
-        // Fast signature check — returns in 0.01ms if no data has changed
+        // Signature: includes submission count+last ID, config keys per milestone, module access state, levelUp list
+        const cfgSig = Object.entries(serverConfigs || {}).map(([msId, mods]) => msId + ':' + Object.keys(mods).join(',')).join('|');
         const currentSignature = (serverData ? serverData.length : 0) + '_' +
             (serverData && serverData.length > 0 ? (serverData[serverData.length - 1].id || serverData[serverData.length - 1]._id || '') : '') + '_' +
-            Object.keys(serverConfigs || {}).length + '_' +
+            cfgSig + '_' +
             JSON.stringify(serverModuleAccess || {}) + '_' +
             JSON.stringify(serverLevelUpAccess || []);
 
         if (currentSignature === lastSyncSignature) {
             isSyncInProgress = false;
-            return; // ZERO DOM WORK — No CPU lockup or freezing!
+            return; // Nothing changed — skip all DOM work
         }
         lastSyncSignature = currentSignature;
 
@@ -1074,11 +1079,16 @@ async function syncGlobalServerData() {
                 if (Array.isArray(cleanS.answers)) {
                     cleanS.answers = cleanS.answers.map(a => {
                         const copyA = { ...a };
+                        // Only strip raw Base64 blobs (they'd bust localStorage quota).
+                        // Keep server-side /gamification/uploads/ paths as-is.
                         if (copyA.audioUrl && copyA.audioUrl.startsWith('data:') && copyA.audioUrl.length > 500) {
-                            copyA.audioUrl = '/gamification/uploads/sample_audio.mp3';
+                            copyA.audioUrl = ''; // stripped — real path is on server
                         }
                         if (copyA.videoUrl && copyA.videoUrl.startsWith('data:') && copyA.videoUrl.length > 500) {
-                            copyA.videoUrl = '/gamification/uploads/sample_video.mp4';
+                            copyA.videoUrl = ''; // stripped — real path is on server
+                        }
+                        if (copyA.value && copyA.value.startsWith('data:') && copyA.value.length > 500) {
+                            copyA.value = '[Audio/Video recorded — view on submission card]';
                         }
                         return copyA;
                     });
@@ -6400,7 +6410,7 @@ function startLiveSync() {
                 switchMilestoneTab(currentModule);
             }
         }
-    }, 4000); // 4-second live bi-directional sync
+    }, 2000); // 2-second live bi-directional sync
 }
 startLiveSync();
 
@@ -7857,8 +7867,13 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     const qType = (r.type || '').toLowerCase();
                     
                     // User's exact recorded audio/video
-                    let exactAudioSrc = (r.audioUrl && (r.audioUrl.startsWith('data:audio') || r.audioUrl.startsWith('blob:') || r.audioUrl.startsWith('http'))) ? r.audioUrl : (r.value && r.value.startsWith('data:audio') ? r.value : '');
-                    let exactVideoSrc = (r.videoUrl && (r.videoUrl.startsWith('data:video') || r.videoUrl.startsWith('blob:') || r.videoUrl.startsWith('http'))) ? r.videoUrl : (r.value && r.value.startsWith('data:video') ? r.value : '');
+                    // Accept data:, blob:, http:, https:, and server-side /gamification/uploads/ paths
+                    const isValidMediaUrl = (url) => url && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/'));
+                    let exactAudioSrc = isValidMediaUrl(r.audioUrl) ? r.audioUrl : (isValidMediaUrl(r.value) && (r.value.startsWith('data:audio') || r.value.includes('/uploads/')) ? r.value : '');
+                    let exactVideoSrc = isValidMediaUrl(r.videoUrl) ? r.videoUrl : (isValidMediaUrl(r.value) && (r.value.startsWith('data:video') || r.value.includes('/uploads/')) ? r.value : '');
+                    // Don't show nonexistent sample files
+                    if (exactAudioSrc && (exactAudioSrc.includes('sample_audio') || exactAudioSrc.includes('sample_video'))) exactAudioSrc = '';
+                    if (exactVideoSrc && (exactVideoSrc.includes('sample_audio') || exactVideoSrc.includes('sample_video'))) exactVideoSrc = '';
 
                     let isAudio = (qType === 'audio') || Boolean(exactAudioSrc);
                     let isVideo = (qType === 'video') || Boolean(exactVideoSrc);
