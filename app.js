@@ -5749,15 +5749,15 @@ function getUserSubmissionsByUserId(userIdentifier) {
     try {
         localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     } catch(e) {}
+
+    // If userIdentifier is undefined or null or empty string, return empty array
+    if (userIdentifier === undefined || userIdentifier === null || userIdentifier === '') {
+        return [];
+    }
     
-    let targetId = (typeof userIdentifier === 'object' && userIdentifier) ? (userIdentifier._id || userIdentifier.id) : userIdentifier;
+    let targetId = (typeof userIdentifier === 'object' && userIdentifier) ? (userIdentifier._id || userIdentifier.id) : String(userIdentifier);
     let targetEmail = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.email : (String(userIdentifier).includes('@') ? String(userIdentifier).toLowerCase().trim() : null);
     let targetPhone = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.phone : (!String(userIdentifier).includes('@') && String(userIdentifier).length >= 10 ? String(userIdentifier).trim() : null);
-
-    if (currentUser && typeof userIdentifier !== 'object') {
-        if (!targetEmail && currentUser.email) targetEmail = currentUser.email.toLowerCase().trim();
-        if (!targetId && currentUser._id) targetId = currentUser._id;
-    }
 
     const knownUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
     const matchedUser = knownUsers.find(u => 
@@ -5775,29 +5775,14 @@ function getUserSubmissionsByUserId(userIdentifier) {
     return localDB.filter(sub => {
         if (!sub) return false;
         
-        // 1. Direct ID match
+        // Direct ID match
         if (targetId && (String(sub.userId) === String(targetId) || String(sub.fanId) === String(targetId) || (matchedUser && String(sub.userId) === String(matchedUser._id)))) return true;
         
-        // 2. Email match (case-insensitive)
+        // Email match (case-insensitive)
         if (targetEmail && sub.userEmail && sub.userEmail.toLowerCase().trim() === String(targetEmail).toLowerCase().trim()) return true;
         
-        // 3. Current user email match
-        if (currentUser && currentUser.email && sub.userEmail && sub.userEmail.toLowerCase().trim() === currentUser.email.toLowerCase().trim()) return true;
-        
-        // 4. Current user ID match
-        if (currentUser && currentUser._id && (String(sub.userId) === String(currentUser._id) || String(sub.fanId) === String(currentUser._id))) return true;
-
-        // 5. Phone match
+        // Phone match
         if (targetPhone && sub.userPhone && String(sub.userPhone).trim() === String(targetPhone).trim()) return true;
-        
-        // 6. Cross-link: check if sub.userId belongs to this user in knownUsers
-        if (sub.userId && knownUsers.length > 0) {
-            const subOwner = knownUsers.find(u => String(u._id) === String(sub.userId));
-            if (subOwner) {
-                if (targetEmail && subOwner.email && subOwner.email.toLowerCase() === targetEmail.toLowerCase()) return true;
-                if (targetId && String(subOwner._id) === String(targetId)) return true;
-            }
-        }
         
         return false;
     });
@@ -6914,7 +6899,6 @@ async function startVideoRecording(idx) {
             const blob = new Blob(_videoChunks, { type: 'video/webm' });
             const blobUrl = URL.createObjectURL(blob);
             window._recordedVideoData = window._recordedVideoData || {};
-            window._recordedVideoData[idx] = blobUrl;
 
             if (liveVideo) {
                 liveVideo.classList.add('hidden');
@@ -6925,19 +6909,20 @@ async function startVideoRecording(idx) {
                 previewEl.src = blobUrl;
                 previewEl.classList.remove('hidden');
             }
-            const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
-            if (hiddenData) hiddenData.value = blobUrl;
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64Data = reader.result;
+                window._recordedVideoData[idx] = base64Data;
+                const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+                if (hiddenData) hiddenData.value = base64Data;
+            };
 
             const recStatus = document.getElementById(`video_rec_status_${idx}`);
             if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! Preview ready below.</span>';
 
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64Data = reader.result;
-                window._recordedVideoData[idx] = base64Data;
-                if (hiddenData) hiddenData.value = base64Data;
-            };
-            reader.readAsDataURL(blob);
+
 
             const startBtn = document.getElementById(`btn_start_video_${idx}`);
             const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
@@ -6996,6 +6981,302 @@ window.handleVideoFileSelect = handleVideoFileSelect;
 // ==============================================================
 // 3. DYNAMIC CHECK-IN SUBMISSION MODAL
 // ==============================================================
+function openSubmissionModal(dayNum, moduleName) {
+    if (!currentUser) return alert('Please login to start your check-in.');
+
+    const msId = activeMilestoneId || 1;
+    const ms = milestoneConfig.find(m => m.id === msId) || { name: `Milestone ${msId}` };
+    const todayKey = getLocalDateKey(new Date());
+
+    const userJoinDateStr = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey;
+    let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
+    if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
+    milestoneStartDate.setHours(0,0,0,0);
+
+    // Calculate Mon-Sat card date
+    let cardDate = new Date(milestoneStartDate.getTime());
+    let daysAdded = 0;
+    let targetOffset = (Number(dayNum) || 1) - 1;
+    while (daysAdded < targetOffset) {
+        cardDate.setDate(cardDate.getDate() + 1);
+        if (cardDate.getDay() !== 0) {
+            daysAdded++;
+        }
+    }
+    const cardDateKey = getLocalDateKey(cardDate);
+    const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
+        ? customMilestoneConfigs[msId][moduleName] 
+        : {};
+    
+    const savedDayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName] && (customMilestoneConfigs[msId][moduleName][cardDateKey] || customMilestoneConfigs[msId][moduleName][todayKey])) || {};
+    const dayConfig = {
+        title: savedDayCfg.title || '',
+        articleText: savedDayCfg.articleText || savedDayCfg.description || '',
+        description: savedDayCfg.description || '',
+        lcOnTime: savedDayCfg.lcOnTime || (msId === 1 ? 33 : 133),
+        lcLate: savedDayCfg.lcLate || 3,
+        startTime: savedDayCfg.startTime || '05:00',
+        endTime: savedDayCfg.endTime || '17:00',
+        questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : [
+            { title: "What key insight or reflection did you gain today?", type: "text" },
+            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
+        ]
+    };
+
+    const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
+        ? dayConfig.questions
+        : [
+            { title: "What did you learn today?", type: "text" },
+            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
+        ];
+
+    const lcOnTime = Number(dayConfig.lcOnTime) || (msId === 1 ? 33 : 133);
+    const lcLate = Number(dayConfig.lcLate) || 3;
+    const startTime = dayConfig.startTime || '05:00';
+    const endTime = dayConfig.endTime || '17:00';
+    const isTest = (typeof isTestUser === 'function') && isTestUser();
+
+    const oldModal = document.getElementById('submissionModalDynamic');
+    if (oldModal) oldModal.remove();
+
+    const modalHtml = `
+        <div id="submissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="document.getElementById('submissionModalDynamic')?.remove()"></div>
+            <div class="relative bg-slate-900 border border-slate-700/80 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl animate-fade-in-up space-y-6">
+                
+                <div class="flex justify-between items-start border-b border-slate-800 pb-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="badge-pill badge-indigo text-[10px] font-bold uppercase"><i class="fas fa-sun text-amber-400 mr-1"></i> cMPLi ${(moduleName || 'dip').toUpperCase()}</span>
+                            <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-bold">Day ${dayNum}</span>
+                        </div>
+                        <h3 class="text-2xl font-extrabold text-white font-heading">${ms.name}</h3>
+                        
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Date: <strong class="text-slate-200">${displayDate}${(dayConfig.title || dayConfig.description) ? ` - ${dayConfig.title || dayConfig.description}` : ''}</strong>
+                        </p>
+                    </div>
+                    <button onclick="document.getElementById('submissionModalDynamic')?.remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- Reward and Window Bar -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
+                    <div>
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">On-Time Reward</span>
+                        <span class="font-mono font-bold text-emerald-400">+${lcOnTime} LCs</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Late Reward</span>
+                        <span class="font-mono font-bold text-amber-400">+${lcLate} LCs</span>
+                    </div>
+                    <div class="col-span-2 sm:col-span-1">
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Window</span>
+                        <span class="font-mono font-bold text-slate-300">${startTime} - ${endTime}</span>
+                    </div>
+                </div>
+
+                <!-- Questions Form -->
+                <form id="activeCheckinForm" onsubmit="event.preventDefault(); submitCheckinForm(${dayNum}, '${moduleName}', '${cardDateKey}', ${lcOnTime}, ${lcLate}, '${endTime}')" class="space-y-5">
+                    ${questions.map((q, idx) => {
+                        const qTitle = q.title || `Question ${idx + 1}`;
+                        const qType = (q.type || 'text').toLowerCase();
+
+                        if (qType === 'audio') {
+                            return `
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-microphone mr-1"></i> Audio / Mic</span>
+                                    </div>
+                                    
+                                    <!-- In-Built Voice Recorder (Mic) -->
+                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
+                                        <div class="flex flex-wrap items-center gap-3">
+                                            <button type="button" id="btn_start_audio_${idx}" onclick="startAudioRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
+                                                <i class="fas fa-microphone"></i> Record with Mic
+                                            </button>
+                                            <button type="button" id="btn_stop_audio_${idx}" onclick="stopAudioRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
+                                                <i class="fas fa-stop"></i> Stop Recording
+                                            </button>
+                                            <span class="text-xs text-slate-500 font-bold">OR</span>
+                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
+                                                <i class="fas fa-upload"></i> Upload Audio File
+                                                <input type="file" accept="audio/*,.mp3,.m4a,.wav" id="checkin_input_${idx}" onchange="handleAudioFileSelect(this, ${idx})" class="hidden" />
+                                            </label>
+                                        </div>
+                                        <div id="audio_rec_status_${idx}" class="text-xs text-slate-400">Click "Record with Mic" or upload your audio file.</div>
+                                        <audio id="audio_preview_${idx}" controls class="hidden w-full h-8 rounded-lg mt-2"></audio>
+                                        <input type="hidden" id="checkin_audio_data_${idx}" value="" />
+                                    </div>
+                                </div>
+                            `;
+                        } else if (qType === 'video') {
+                            return `
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-video mr-1"></i> Camera / Video</span>
+                                    </div>
+                                    
+                                    <!-- In-Built Camera / Video Recorder -->
+                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
+                                        <div class="flex flex-wrap items-center gap-3">
+                                            <button type="button" id="btn_start_video_${idx}" onclick="startVideoRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
+                                                <i class="fas fa-camera"></i> Open Camera & Record
+                                            </button>
+                                            <button type="button" id="btn_stop_video_${idx}" onclick="stopVideoRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
+                                                <i class="fas fa-stop"></i> Stop Recording
+                                            </button>
+                                            <span class="text-xs text-slate-500 font-bold">OR</span>
+                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
+                                                <i class="fas fa-upload"></i> Upload Video File
+                                                <input type="file" accept="video/*,.mp4,.mov,.webm" id="checkin_input_${idx}" onchange="handleVideoFileSelect(this, ${idx})" class="hidden" />
+                                            </label>
+                                        </div>
+                                        <div id="video_rec_status_${idx}" class="text-xs text-slate-400">Click "Open Camera & Record" or upload your video file.</div>
+                                        <video id="video_live_${idx}" autoplay muted class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700"></video>
+                                        <video id="video_preview_${idx}" controls class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700 mt-2"></video>
+                                        <input type="hidden" id="checkin_video_data_${idx}" value="" />
+                                    </div>
+                                </div>
+                            `;
+                        } else if (qType === 'mcq' && q.options && Array.isArray(q.options)) {
+                            return `
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
+                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                    <div class="space-y-1.5 pt-1">
+                                        ${q.options.map((opt, optIdx) => `
+                                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-colors text-xs text-slate-300">
+                                                <input type="radio" name="checkin_mcq_${idx}" value="${opt}" class="accent-indigo-500" required />
+                                                <span>${opt}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            return `
+                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
+                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
+                                    <textarea id="checkin_input_${idx}" rows="3" placeholder="Enter your detailed response..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500" required></textarea>
+                                </div>
+                            `;
+                        }
+                    }).join('')}
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800">
+                        ${isTest ? `
+                        <button type="button" onclick="bypassCheckinFormFields(${questions.length})" class="btn-secondary py-2 px-3 text-xs text-amber-400 font-bold border-amber-500/40 hover:bg-amber-500/10">
+                            <i class="fas fa-bolt mr-1"></i> [Test Mode] Auto-Fill
+                        </button>` : '<div></div>'}
+                        
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <button type="button" onclick="document.getElementById('submissionModalDynamic')?.remove()" class="btn-secondary py-2.5 px-4 text-xs font-bold flex-1 sm:flex-initial">
+                                Cancel
+                            </button>
+                            <button type="submit" id="btnSubmitCheckinForm" class="btn-primary py-2.5 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 flex-1 sm:flex-initial">
+                                <i class="fas fa-paper-plane mr-1.5"></i> Submit Check-in
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+window.openSubmissionModal = openSubmissionModal;
+
+function bypassCheckinFormFields(count) {
+    for (let idx = 0; idx < count; idx++) {
+        const inp = document.getElementById(`checkin_input_${idx}`);
+        const mcqRadios = document.querySelectorAll(`input[name="checkin_mcq_${idx}"]`);
+        const audioData = document.getElementById(`checkin_audio_data_${idx}`);
+        const videoData = document.getElementById(`checkin_video_data_${idx}`);
+
+        if (mcqRadios && mcqRadios.length > 0) {
+            mcqRadios[0].checked = true;
+        } else if (audioData) {
+            audioData.value = "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
+            const previewEl = document.getElementById(`audio_preview_${idx}`);
+            if (previewEl) { previewEl.src = audioData.value; previewEl.classList.remove('hidden'); }
+        } else if (videoData) {
+            videoData.value = "https://vjs.zencdn.net/v/oceans.mp4";
+            const previewEl = document.getElementById(`video_preview_${idx}`);
+            if (previewEl) { previewEl.src = videoData.value; previewEl.classList.remove('hidden'); }
+        } else if (inp && inp.type !== 'file') {
+            inp.value = `[Test Mode Answer ${idx + 1}] Completed key insights with measurable progress.`;
+        }
+    }
+}
+window.bypassCheckinFormFields = bypassCheckinFormFields;
+
+// ==============================================================
+// 4. AI EVALUATION MODAL WITH REALISTIC LAGTIME & SUCCESS DIALOG
+// ==============================================================
+
+function showAiEvaluatingLagtime(earnedPoints, callback) {
+    const old = document.getElementById('evaluatingCheckinModal');
+    if (old) old.remove();
+
+    const pts = Number(earnedPoints) || 33;
+    const modalHtml = `
+        <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
+            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-5 shadow-2xl animate-fade-in-up bg-slate-900/95 rounded-3xl">
+                <!-- ROBOT ANIMATED ICON -->
+                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner animate-pulse">
+                    <i class="fas fa-robot text-indigo-400 animate-bounce"></i>
+                </div>
+                <div>
+                    <span class="badge-pill badge-indigo text-[10px] uppercase tracking-wider font-bold"><i class="fas fa-robot mr-1"></i> AI Speech & Reflection Assessment</span>
+                    <h3 class="text-xl font-extrabold text-white font-heading mt-2">Evaluating Submission...</h3>
+                    <p class="text-xs text-slate-300 mt-1">Transcribing video/audio reflection and comparing with reference article.</p>
+                </div>
+                
+                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 w-0 transition-all duration-700"></div>
+                </div>
+                <div id="evalStatusText" class="text-xs font-mono text-indigo-300">🎙️ Stage 1/5: Transcribing reflection video/audio...</div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const stages = [
+        "🎙️ Stage 1/5: Extracting audio stream from submission...",
+        "🧠 Stage 2/5: Running Speech-to-Text Whisper AI engine...",
+        "📄 Stage 3/5: Comparing transcription against Master Reference Article...",
+        "📊 Stage 4/5: Computing semantic similarity score (>75% target)...",
+        "✅ Stage 5/5: Verification complete! LC Wallet reward credited."
+    ];
+
+    let currentStage = 0;
+    const interval = setInterval(() => {
+        currentStage++;
+        const pBar = document.getElementById('evalProgressBar');
+        const sText = document.getElementById('evalStatusText');
+
+        if (pBar) pBar.style.width = (currentStage * 20) + '%';
+        if (sText && stages[currentStage - 1]) sText.innerText = stages[currentStage - 1];
+
+        if (currentStage >= 5) {
+            clearInterval(interval);
+            setTimeout(() => {
+                document.getElementById('evaluatingCheckinModal')?.remove();
+                if (typeof callback === 'function') callback();
+            }, 600);
+        }
+    }, 1200);
+}
+window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
+
+
 function openSubmissionModal(dayNum, moduleName) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
@@ -7722,27 +8003,12 @@ function viewMySubmission(dayNumber, moduleName) {
         } catch(e) {}
     }
     if (!sub) {
-        sub = {
-            id: 'sub_' + dayNumber,
-            userId: currentUser._id,
-            milestoneId: msId,
-            day: dayNumber,
-            type: moduleName || 'dip',
-            status: 'completed',
-            lcReward: (msId === 1 ? 33 : 133),
-            submittedAt: new Date().toISOString(),
-            answers: [
-                { title: 'Audio Reflection / Voice Note', type: 'audio', answer: 'Audio Voice Reflection recorded', audioUrl: 'https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg' },
-                { title: 'Reflection Response', type: 'text', answer: 'Completed daily check-in successfully.' }
-            ]
-        };
+        return alert("No check-in submission recorded for this day yet.");
     }
     renderSubmissionDetailModal(sub, currentUser._id, dayNumber, moduleName);
 }
+
 window.viewMySubmission = viewMySubmission;
-
-
-
 
 async function downloadSubmissionMedia(type, mediaUrl, filename) {
     try {
