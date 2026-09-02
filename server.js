@@ -27,6 +27,48 @@ app.use((req, res, next) => {
     next();
 });
 
+
+// -------------------------------------------------------------
+// UPLOADS STORAGE & STATIC STREAMING ENGINE
+// -------------------------------------------------------------
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/gamification/uploads', express.static(UPLOADS_DIR));
+
+function saveBase64MediaToFile(dataUrl, prefix) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
+    try {
+        const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (!matches || matches.length !== 3) return dataUrl;
+        
+        const mime = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        let ext = 'bin';
+        if (mime.includes('audio/mp4') || mime.includes('m4a')) ext = 'm4a';
+        else if (mime.includes('audio/webm') || mime.includes('webm')) ext = 'webm';
+        else if (mime.includes('audio/mpeg') || mime.includes('mp3')) ext = 'mp3';
+        else if (mime.includes('audio/wav') || mime.includes('wave')) ext = 'wav';
+        else if (mime.includes('audio/ogg')) ext = 'ogg';
+        else if (mime.includes('video/mp4')) ext = 'mp4';
+        else if (mime.includes('video/webm')) ext = 'webm';
+        else if (mime.includes('video/quicktime') || mime.includes('mov')) ext = 'mov';
+        
+        const filename = `${prefix || 'media'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
+        const filePath = path.join(UPLOADS_DIR, filename);
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[Media Saved to Disk] ${filename} (${buffer.length} bytes)`);
+        return `/gamification/uploads/${filename}`;
+    } catch(err) {
+        console.error('Error saving base64 media file:', err);
+        return dataUrl;
+    }
+}
+
 // -------------------------------------------------------------
 // Local JSON File Database Storage (for server-side sync)
 // -------------------------------------------------------------
@@ -566,6 +608,23 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const subAnswers = sub.answers || sub.responses || [];
 
         // -------------------------------------------------------------
+        // SAVE ANY BASE64 RECORDED / UPLOADED MEDIA FILES DIRECTLY TO DISK
+        // -------------------------------------------------------------
+        if (Array.isArray(subAnswers)) {
+            subAnswers.forEach((a, idx) => {
+                if (a.audioUrl && a.audioUrl.startsWith('data:')) {
+                    a.audioUrl = saveBase64MediaToFile(a.audioUrl, `audio_${sub.userId}_d${dayNum}_q${idx+1}`);
+                }
+                if (a.videoUrl && a.videoUrl.startsWith('data:')) {
+                    a.videoUrl = saveBase64MediaToFile(a.videoUrl, `video_${sub.userId}_d${dayNum}_q${idx+1}`);
+                }
+                if (a.value && a.value.startsWith('data:')) {
+                    a.value = saveBase64MediaToFile(a.value, `media_${sub.userId}_d${dayNum}_q${idx+1}`);
+                }
+            });
+        }
+
+        // -------------------------------------------------------------
         // ARTICLE SIMILARITY & TRANSCRIPTION MATCHING CHECK
         // -------------------------------------------------------------
         const allConfigs = getMilestoneConfigsFromDb();
@@ -664,7 +723,6 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
     }
 });
 
-// --- MILESTONE START DATES SYNC ---
 app.get('/api/milestone-start-dates', (req, res) => {
     res.json({ success: true, data: store.milestoneStartDates || {} });
 });

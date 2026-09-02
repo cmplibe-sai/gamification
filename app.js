@@ -7495,6 +7495,12 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     const form = document.getElementById('activeCheckinForm');
     if (!form) return;
 
+    const submitBtn = document.getElementById('btnSubmitCheckinForm');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Submitting...';
+    }
+
     const msId = activeMilestoneId || 1;
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
         ? customMilestoneConfigs[msId][moduleName] 
@@ -7573,41 +7579,60 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         responses: answers
     };
 
-    // -------------------------------------------------------------
-    // 1. SAVE IMMEDIATELY (0ms - Synchronous Local Storage Persistence)
-    // -------------------------------------------------------------
-    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    localDB = localDB.filter(s => !(
-        (String(s.userId) === String(currentUser._id) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
-        String(s.milestoneId || 1) === String(msId) &&
-        normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) &&
-        String(s.day) === String(dayNum)
-    ));
-    localDB.push(subData);
-    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+    // 1. SAVE SAFELY TO LOCAL STORAGE (Without massive base64 strings to avoid 5MB quota errors)
+    try {
+        const cleanLocalSub = JSON.parse(JSON.stringify(subData));
+        if (Array.isArray(cleanLocalSub.answers)) {
+            cleanLocalSub.answers.forEach(a => {
+                if (a.audioUrl && a.audioUrl.startsWith('data:') && a.audioUrl.length > 500) {
+                    a.audioUrl = '[Audio Uploaded - Processing on Server]';
+                }
+                if (a.videoUrl && a.videoUrl.startsWith('data:') && a.videoUrl.length > 500) {
+                    a.videoUrl = '[Video Uploaded - Processing on Server]';
+                }
+            });
+        }
+        let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+        localDB = localDB.filter(s => !(
+            (String(s.userId) === String(currentUser._id) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
+            String(s.milestoneId || 1) === String(msId) &&
+            normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) &&
+            String(s.day) === String(dayNum)
+        ));
+        localDB.push(cleanLocalSub);
+        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+    } catch(e) {
+        console.warn('Local storage write warning:', e);
+    }
 
-    // -------------------------------------------------------------
-    // 2. CREDIT USER WALLET LOCALLY (Immediate UI reflection)
-    // -------------------------------------------------------------
+    // 2. CREDIT USER BALANCE LOCALLY IMMEDIATELY
     if (currentUser) {
         currentUser.lcs = (Number(currentUser.lcs) || 0) + pointsAwarded;
         try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
     }
 
-    // -------------------------------------------------------------
-    // 3. DISPATCH INSTANT POST TO SERVER (Credits TagMango API right now)
-    // -------------------------------------------------------------
+    // 3. DISPATCH INSTANT POST TO SERVER (Credits TagMango API right now & saves file to disk)
     apiFetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subData)
     }).then(r => r.json()).then(data => {
         console.log('✅ Server & TagMango Points Credit Status:', data);
+        if (data && data.data) {
+            try {
+                let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+                localDB = localDB.filter(s => s.id !== data.data.id && !(
+                    String(s.userId) === String(data.data.userId) &&
+                    String(s.milestoneId) === String(data.data.milestoneId) &&
+                    String(s.day) === String(data.data.day)
+                ));
+                localDB.push(data.data);
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+            } catch(err) {}
+        }
     }).catch(e => console.error('Submission sync error:', e));
 
-    // -------------------------------------------------------------
     // 4. INSTANTLY UPDATE DASHBOARD & TIMELINE (Card flips to Completed)
-    // -------------------------------------------------------------
     if (typeof switchMilestoneTab === 'function') {
         switchMilestoneTab(moduleName);
     }
@@ -7618,9 +7643,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         renderAdminCohortSubmissions();
     }
 
-    // -------------------------------------------------------------
     // 5. CLOSE FORM & SHOW 18-SECOND AI EVALUATION LAGTIME SCREEN
-    // -------------------------------------------------------------
     document.getElementById('submissionModalDynamic')?.remove();
 
     showAiEvaluatingLagtime(pointsAwarded, () => {
