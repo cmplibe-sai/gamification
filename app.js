@@ -7228,53 +7228,45 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
     const modalHtml = `
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
-            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-5 shadow-2xl animate-fade-in-up bg-slate-900/95 rounded-3xl">
-                <!-- ROBOT ANIMATED ICON -->
-                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner animate-pulse">
-                    <i class="fas fa-robot text-indigo-400 animate-bounce"></i>
+            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl">
+                <!-- ROBOT ANIMATED ICON IN INDIGO GLOW CIRCLE -->
+                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner">
+                    <i class="fas fa-robot text-indigo-400"></i>
                 </div>
                 <div>
-                    <span class="badge-pill badge-indigo text-[10px] uppercase tracking-wider font-bold"><i class="fas fa-robot mr-1"></i> AI Speech & Reflection Assessment</span>
-                    <h3 class="text-xl font-extrabold text-white font-heading mt-2">Evaluating Submission...</h3>
-                    <p class="text-xs text-slate-300 mt-1">Transcribing video/audio reflection and comparing with reference article.</p>
+                    <h3 class="text-2xl font-extrabold text-white font-heading">Video Submitted!</h3>
+                    <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">Your reflection is being transcribed and evaluated by our AI.</p>
                 </div>
                 
-                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                    <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 w-0 transition-all duration-700"></div>
+                <!-- EVALUATION IN PROGRESS STATUS BOX -->
+                <div class="p-5 bg-[#0b101d] rounded-2xl border border-slate-800 space-y-2.5 text-center shadow-inner">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-black tracking-wider uppercase">
+                        <i class="fas fa-circle-notch fa-spin text-amber-400"></i> EVALUATION IN PROGRESS
+                    </div>
+                    <p class="text-xs text-slate-300 font-medium leading-relaxed">LCs will be credited to your wallet once approved.</p>
                 </div>
-                <div id="evalStatusText" class="text-xs font-mono text-indigo-300">🎙️ Stage 1/5: Transcribing reflection video/audio...</div>
+                
+                <!-- ACTION BUTTON -->
+                <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" class="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm transition-all shadow-lg shadow-indigo-600/30">
+                    Got it
+                </button>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    const stages = [
-        "🎙️ Stage 1/5: Extracting audio stream from submission...",
-        "🧠 Stage 2/5: Running Speech-to-Text Whisper AI engine...",
-        "📄 Stage 3/5: Comparing transcription against Master Reference Article...",
-        "📊 Stage 4/5: Computing semantic similarity score (>75% target)...",
-        "✅ Stage 5/5: Verification complete! LC Wallet reward credited."
-    ];
-
-    let currentStage = 0;
-    const interval = setInterval(() => {
-        currentStage++;
-        const pBar = document.getElementById('evalProgressBar');
-        const sText = document.getElementById('evalStatusText');
-
-        if (pBar) pBar.style.width = (currentStage * 20) + '%';
-        if (sText && stages[currentStage - 1]) sText.innerText = stages[currentStage - 1];
-
-        if (currentStage >= 5) {
-            clearInterval(interval);
-            setTimeout(() => {
-                document.getElementById('evaluatingCheckinModal')?.remove();
-                if (typeof callback === 'function') callback();
-            }, 600);
-        }
-    }, 1200);
+    window._evalCallback = callback;
 }
 window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
+
+function closeAiEvaluatingModal() {
+    const modal = document.getElementById('evaluatingCheckinModal');
+    if (modal) modal.remove();
+    const cb = window._evalCallback;
+    window._evalCallback = null;
+    if (typeof cb === 'function') cb();
+}
+window.closeAiEvaluatingModal = closeAiEvaluatingModal;
+
 
 
 function openSubmissionModal(dayNum, moduleName) {
@@ -7524,98 +7516,41 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
     const modalHtml = `
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
-            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-5 shadow-2xl animate-fade-in-up bg-slate-900/95 rounded-3xl">
-                <div class="w-16 h-16 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-indigo-500/40 animate-pulse">
-                    <i class="fas fa-microchip"></i>
+            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl">
+                <!-- ROBOT ANIMATED ICON IN INDIGO GLOW CIRCLE -->
+                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner">
+                    <i class="fas fa-robot text-indigo-400"></i>
                 </div>
                 <div>
-                    <span class="badge-pill badge-indigo text-[10px] uppercase tracking-wider font-bold">AI Speech & Reflection Assessment</span>
-                    <h3 class="text-xl font-extrabold text-white font-heading mt-2">Evaluating Submission...</h3>
-                    <p class="text-xs text-slate-300 mt-1">Transcribing voice reflection and comparing with reference article.</p>
+                    <h3 class="text-2xl font-extrabold text-white font-heading">Video Submitted!</h3>
+                    <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">Your reflection is being transcribed and evaluated by our AI.</p>
                 </div>
                 
-                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                    <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 w-0 transition-all duration-700"></div>
+                <!-- EVALUATION IN PROGRESS STATUS BOX -->
+                <div class="p-5 bg-[#0b101d] rounded-2xl border border-slate-800 space-y-2.5 text-center shadow-inner">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-black tracking-wider uppercase">
+                        <i class="fas fa-circle-notch fa-spin text-amber-400"></i> EVALUATION IN PROGRESS
+                    </div>
+                    <p class="text-xs text-slate-300 font-medium leading-relaxed">LCs will be credited to your wallet once approved.</p>
                 </div>
-                <div id="evalStatusText" class="text-xs font-mono text-indigo-300">🎙️ Stage 1/5: Transcribing 3–4 minute audio reflection...</div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    const bar = document.getElementById('evalProgressBar');
-    const statusText = document.getElementById('evalStatusText');
-
-    // Stage 1: Transcribing Audio (0s - 3.5s)
-    setTimeout(() => {
-        if (bar) bar.style.width = '20%';
-        if (statusText) statusText.innerText = '🎙️ Stage 1/5: Converting audio reflection into text transcript...';
-    }, 800);
-
-    // Stage 2: Loading Master Reference Article (3.5s - 8s)
-    setTimeout(() => {
-        if (bar) bar.style.width = '45%';
-        if (statusText) statusText.innerText = '📄 Stage 2/5: Matching transcript with master reference article (~350 words)...';
-    }, 4000);
-
-    // Stage 3: Semantic Similarity & Keyword Density (8s - 13s)
-    setTimeout(() => {
-        if (bar) bar.style.width = '70%';
-        if (statusText) statusText.innerText = '🧠 Stage 3/5: Semantic AI analysis & core concept coverage in progress...';
-    }, 8500);
-
-    // Stage 4: Threshold Verification (13s - 16s)
-    setTimeout(() => {
-        if (bar) bar.style.width = '90%';
-        if (statusText) statusText.innerText = '📊 Stage 4/5: Verification score evaluated against 75% threshold...';
-    }, 13500);
-
-    // Stage 5: TagMango Wallet Crediting (16s - 18s)
-    setTimeout(() => {
-        if (bar) bar.style.width = '100%';
-        if (statusText) statusText.innerText = '💎 Stage 5/5: Crediting LCs to TagMango In-Community Wallet...';
-    }, 16500);
-
-    // Complete at 18 seconds
-    setTimeout(() => {
-        document.getElementById('evaluatingCheckinModal')?.remove();
-        showPendingEvaluationPopup(pts);
-        if (typeof callback === 'function') callback();
-    }, 18000);
-}
-window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
-
-
-
-function showPendingEvaluationPopup(earnedPoints) {
-    const old = document.getElementById('pendingEvalPopup');
-    if (old) old.remove();
-
-    const pts = Number(earnedPoints) || 33;
-    const modalHtml = `
-        <div id="pendingEvalPopup" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onclick="document.getElementById('pendingEvalPopup')?.remove()"></div>
-            <div class="relative glass-card p-6 md:p-8 border-emerald-500/40 max-w-md w-full text-center space-y-4 shadow-2xl animate-fade-in-up bg-slate-900/95 rounded-3xl">
-                <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-emerald-500/40">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div>
-                    <span class="badge-pill badge-emerald text-[10px] uppercase tracking-wider font-bold">AI Approved & Wallet Credited</span>
-                    <h3 class="text-xl font-extrabold text-white font-heading mt-2">Check-in Complete!</h3>
-                    <p class="text-xs text-slate-400 mt-1">Your reflection was evaluated and reward points have been credited directly to your <strong>TagMango In-Community Wallet</strong>.</p>
-                </div>
-                <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex justify-between items-center">
-                    <span class="text-xs text-slate-400 font-bold">TagMango Wallet Credit</span>
-                    <span class="text-sm font-mono font-black text-emerald-400">+${pts} LCs</span>
-                </div>
-                <button onclick="document.getElementById('pendingEvalPopup')?.remove()" class="w-full btn-primary py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500">
-                    Continue Learning
+                
+                <!-- ACTION BUTTON -->
+                <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" class="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm transition-all shadow-lg shadow-indigo-600/30">
+                    Got it
                 </button>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+    window._evalCallback = callback;
 }
+window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
+
+function showPendingEvaluationPopup(earnedPoints) {
+    showAiEvaluatingLagtime(earnedPoints, null);
+}
+window.showPendingEvaluationPopup = showPendingEvaluationPopup;
+
 window.showPendingEvaluationPopup = showPendingEvaluationPopup;
 
 async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLate, endTime) {
@@ -7734,11 +7669,31 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         console.warn('Local storage write warning:', e);
     }
 
-    // 2. CREDIT USER BALANCE LOCALLY IMMEDIATELY
+    // 2. CREDIT USER BALANCE LOCALLY IMMEDIATELY & REGISTER IN ADMIN REALTIME USERS
     if (currentUser) {
         currentUser.lcs = (Number(currentUser.lcs) || 0) + pointsAwarded;
         try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
+
+        if (currentUser._id && Array.isArray(adminRealtimeUsers)) {
+            const uId = String(currentUser._id);
+            const userEmail = currentUser.email || '';
+            const exist = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmail && u.email.toLowerCase() === userEmail.toLowerCase()));
+            if (!exist) {
+                const newU = {
+                    _id: uId,
+                    name: currentUser.name || 'Learner',
+                    email: userEmail,
+                    phone: currentUser.phone || '',
+                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
+                };
+                adminRealtimeUsers.push(newU);
+                if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
+                    actualUsers.push(newU);
+                }
+            }
+        }
     }
+
 
     // 3. DISPATCH INSTANT POST TO SERVER (Credits TagMango API right now & saves file to disk)
     apiFetch('/api/submissions', {
@@ -7852,8 +7807,8 @@ function switchMilestoneTab(moduleName, btnElement) {
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
 
-    const allUserSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser || '') : [];
-    const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId));
+    const allUserSubs = getUserSubmissionsByUserId(currentUser ? currentUser._id : '');
+    const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId || 1));
 
     let totalSessions = (activeMilestoneId === 1) ? 21 : 30;
     let cardsHtml = '';
@@ -7871,13 +7826,14 @@ function switchMilestoneTab(moduleName, btnElement) {
         }
         const cardDateKey = getLocalDateKey(cardDate);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+        // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
+        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
+        const isCompleted = Boolean(sub);
+
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
         const dayTitle = dayCfg.title || (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : ''));
-
-        // Check if submission completed
-        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || (String(s.day) === String(dayNum)));
-        const isCompleted = Boolean(sub);
 
         const isToday = (cardDateKey === todayKey);
         const isPast = (cardDateKey < todayKey);
