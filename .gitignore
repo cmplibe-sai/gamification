@@ -8,3 +8,5 @@ yarn-error.log*
 .vscode/
 *.log
 .DS_Store
+
+server_data/
