@@ -503,13 +503,9 @@ app.post(['/api/user-join-date', '/gamification/api/user-join-date'], (req, res)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();
     
-    // Auto-enrich every submission with complete user profile from users.js
+    // Instant O(1) map enrichment without loop bottleneck
     const enrichedSubs = (store.submissions || []).map(s => {
-        const matched = backendActualUsers.find(u => 
-            (s.userId && String(u._id) === String(s.userId)) ||
-            (s.userEmail && u.email && u.email.toLowerCase().trim() === s.userEmail.toLowerCase().trim()) ||
-            (s.userPhone && u.phone && String(u.phone).replace(/\D/g, '').endsWith(String(s.userPhone).replace(/\D/g, '')))
-        );
+        const matched = findActualUserFast(s.userId, s.userEmail, s.userPhone);
         return {
             ...s,
             userId: s.userId || (matched ? matched._id : 'usr_anon'),
@@ -532,7 +528,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     });
 });
 
-// BULK SUBMISSIONS TWO-WAY SYNC (Ensures all submissions sync instantly across all browsers)
+// BULK SUBMISSIONS TWO-WAY SYNC (Instant O(1) merge)
 app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync'], (req, res) => {
     try {
         const clientSubs = req.body.submissions || [];
@@ -552,10 +548,7 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
                 String(s.day) === String(dayNum)
             ));
 
-            const matchedUser = backendActualUsers.find(u => 
-                (sub.userId && String(u._id) === String(sub.userId)) ||
-                (sub.userEmail && u.email && u.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim())
-            );
+            const matchedUser = findActualUserFast(sub.userId, sub.userEmail, sub.userPhone);
 
             const completeSub = {
                 ...sub,
@@ -637,6 +630,44 @@ try {
     }
 } catch(e) {
     console.warn('Could not parse backendActualUsers:', e.message);
+}
+
+
+// -------------------------------------------------------------
+// HIGH-SPEED O(1) HASH MAPS FOR INSTANT USER LOOKUP
+// -------------------------------------------------------------
+const usersByIdMap = new Map();
+const usersByEmailMap = new Map();
+const usersByPhoneMap = new Map();
+
+function buildUserMaps() {
+    usersByIdMap.clear();
+    usersByEmailMap.clear();
+    usersByPhoneMap.clear();
+    if (Array.isArray(backendActualUsers)) {
+        backendActualUsers.forEach(u => {
+            if (u._id) usersByIdMap.set(String(u._id), u);
+            if (u.email) usersByEmailMap.set(u.email.toLowerCase().trim(), u);
+            if (u.phone) usersByPhoneMap.set(String(u.phone).replace(/\D/g, '').slice(-10), u);
+        });
+    }
+}
+buildUserMaps();
+
+function findActualUserFast(userId, email, phone) {
+    if (email) {
+        const cleanEmail = email.toLowerCase().trim();
+        if (usersByEmailMap.has(cleanEmail)) return usersByEmailMap.get(cleanEmail);
+    }
+    if (userId) {
+        const cleanId = String(userId);
+        if (usersByIdMap.has(cleanId)) return usersByIdMap.get(cleanId);
+    }
+    if (phone) {
+        const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+        if (usersByPhoneMap.has(cleanPhone)) return usersByPhoneMap.get(cleanPhone);
+    }
+    return null;
 }
 
 async function assignTagMangoPoints(fanId, score, description) {

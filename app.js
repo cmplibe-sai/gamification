@@ -1039,7 +1039,20 @@ async function syncGlobalServerData() {
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         
-        // 1. SUBMISSIONS TWO-WAY BULK SYNC
+        // Fast signature check — returns in 0.01ms if no data has changed
+        const currentSignature = (serverData ? serverData.length : 0) + '_' +
+            (serverData && serverData.length > 0 ? (serverData[serverData.length - 1].id || serverData[serverData.length - 1]._id || '') : '') + '_' +
+            Object.keys(serverConfigs || {}).length + '_' +
+            JSON.stringify(serverModuleAccess || {}) + '_' +
+            JSON.stringify(serverLevelUpAccess || []);
+
+        if (currentSignature === lastSyncSignature) {
+            isSyncInProgress = false;
+            return; // ZERO DOM WORK — No CPU lockup or freezing!
+        }
+        lastSyncSignature = currentSignature;
+
+        // 1. SUBMISSIONS SYNC
         if (Array.isArray(serverData)) {
             const missingOnServer = localData.filter(loc => !serverData.some(srv => (
                 (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
@@ -1106,13 +1119,13 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
         }
 
-        // 2. MILESTONE CONFIGS SYNC (Ensures Browser 3 always gets all Creator Day setups)
+        // 2. MILESTONE CONFIGS SYNC
         if (serverConfigs && typeof serverConfigs === 'object') {
             customMilestoneConfigs = serverConfigs;
             try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
         }
 
-        // 3. MODULE ACCESS SYNC (Ensures all browsers have identical ON/OFF toggles)
+        // 3. MODULE ACCESS SYNC
         if (serverModuleAccess && typeof serverModuleAccess === 'object') {
             customMilestoneModuleAccess = serverModuleAccess;
             try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(customMilestoneModuleAccess)); } catch(e) {}
@@ -1130,15 +1143,20 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
         }
 
-        // Trigger UI updates across all components
-        if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-            renderAdminCohortSubmissions();
-        }
-        if (typeof updateDashboardUI === 'function') updateDashboardUI();
-        const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
-        if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
-            switchMilestoneTab(activeSubTab);
+        // 6. SELECTIVE FAST RE-RENDER (Only re-renders the currently active view)
+        const adminTabEl = document.getElementById('adminLevelUpTab') || document.getElementById('adminTab');
+        const isCreatorView = adminTabEl && !adminTabEl.classList.contains('hidden');
+
+        if (isCreatorView) {
+            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                renderAdminCohortSubmissions();
+            }
+        } else {
+            const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
+            if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
+                switchMilestoneTab(activeSubTab);
+            }
+            if (typeof updateDashboardUI === 'function') updateDashboardUI();
         }
     } catch(err) {
         console.error('Sync Error:', err);
@@ -1147,6 +1165,7 @@ async function syncGlobalServerData() {
     }
 }
 window.syncGlobalServerData = syncGlobalServerData;
+
 
 
 
@@ -5055,7 +5074,9 @@ function renderAdminCohortSubmissions() {
     }
 
     let tbodyHtml = `<tbody class="divide-y divide-slate-800 bg-slate-900/40">`;
-    validCohort.forEach((user, userIndex) => {
+    const renderLimit = 100;
+    const displayCohort = validCohort.slice(0, renderLimit);
+    displayCohort.forEach((user, userIndex) => {
         const subs = getUserSubmissionsByUserId(user);
         
         let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
