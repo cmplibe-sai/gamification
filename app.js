@@ -1031,16 +1031,6 @@ async function syncGlobalServerData() {
         let localData = [];
         try { localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
 
-        let localConfigs = {};
-        try { localConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {}; } catch(e) {}
-
-        let localModuleAccess = {};
-        try { localModuleAccess = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
-
-        let localJoinDates = {};
-        try { localJoinDates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
-
-        // Single consolidated ultra-fast fetch
         const response = await apiFetch('/api/sync').then(r => r.json()).catch(() => null);
         if (!response || !response.success || !response.data) {
             isSyncInProgress = false;
@@ -1049,20 +1039,8 @@ async function syncGlobalServerData() {
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         
-        // Fast signature check to detect real-time changes across browsers
-        const currentSignature = JSON.stringify({
-            subsLen: (serverData || []).length,
-            configsCount: Object.keys(serverConfigs || {}).length,
-            moduleAccess: serverModuleAccess,
-            joinDatesCount: Object.keys(serverJoinDates || {}).length,
-            levelUpAccess: serverLevelUpAccess
-        });
-
-        let dataChanged = (currentSignature !== lastSyncSignature);
-
-        // 1. SUBMISSIONS TWO-WAY SYNC
+        // 1. SUBMISSIONS TWO-WAY BULK SYNC
         if (Array.isArray(serverData)) {
-            // Push locally created submissions missing on server via single Bulk Sync
             const missingOnServer = localData.filter(loc => !serverData.some(srv => (
                 (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
                 String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
@@ -1078,10 +1056,8 @@ async function syncGlobalServerData() {
                 }).catch(() => {});
             }
 
-            // Pull server submissions into local DB
             serverData.forEach(s => {
                 const cleanS = { ...s };
-                // Strip massive data URLs to prevent localStorage QuotaExceededError in all browsers
                 if (Array.isArray(cleanS.answers)) {
                     cleanS.answers = cleanS.answers.map(a => {
                         const copyA = { ...a };
@@ -1130,68 +1106,22 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
         }
 
-        // 2. MILESTONE CONFIGS TWO-WAY SYNC (Cross-browser real-time sync)
+        // 2. MILESTONE CONFIGS SYNC (Ensures Browser 3 always gets all Creator Day setups)
         if (serverConfigs && typeof serverConfigs === 'object') {
-            if (!customMilestoneConfigs) customMilestoneConfigs = {};
-            let configsChanged = false;
-            for (const msId in serverConfigs) {
-                if (!customMilestoneConfigs[msId]) {
-                    customMilestoneConfigs[msId] = {};
-                    configsChanged = true;
-                }
-                for (const mod in serverConfigs[msId]) {
-                    if (!customMilestoneConfigs[msId][mod]) {
-                        customMilestoneConfigs[msId][mod] = {};
-                        configsChanged = true;
-                    }
-                    for (const dKey in serverConfigs[msId][mod]) {
-                        const srvCfg = serverConfigs[msId][mod][dKey];
-                        const locCfg = customMilestoneConfigs[msId][mod][dKey];
-                        if (JSON.stringify(srvCfg) !== JSON.stringify(locCfg)) {
-                            customMilestoneConfigs[msId][mod][dKey] = srvCfg;
-                            configsChanged = true;
-                        }
-                    }
-                }
-            }
-            if (configsChanged) {
-                try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
-            }
+            customMilestoneConfigs = serverConfigs;
+            try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
         }
 
-        // 3. MODULE ACCESS TWO-WAY SYNC
+        // 3. MODULE ACCESS SYNC (Ensures all browsers have identical ON/OFF toggles)
         if (serverModuleAccess && typeof serverModuleAccess === 'object') {
-            if (!customMilestoneModuleAccess) customMilestoneModuleAccess = {};
-            let accessChanged = false;
-            for (const msId in serverModuleAccess) {
-                if (JSON.stringify(serverModuleAccess[msId]) !== JSON.stringify(customMilestoneModuleAccess[msId])) {
-                    customMilestoneModuleAccess[msId] = serverModuleAccess[msId];
-                    accessChanged = true;
-                }
-            }
-            if (accessChanged) {
-                try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(customMilestoneModuleAccess)); } catch(e) {}
-            }
+            customMilestoneModuleAccess = serverModuleAccess;
+            try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(customMilestoneModuleAccess)); } catch(e) {}
         }
 
-        // 4. USER MILESTONE JOIN DATES TWO-WAY SYNC
+        // 4. USER JOIN DATES SYNC
         if (serverJoinDates && typeof serverJoinDates === 'object') {
-            if (!userMilestoneJoinDates) userMilestoneJoinDates = {};
-            let joinChanged = false;
-            for (const uId in serverJoinDates) {
-                if (!userMilestoneJoinDates[uId]) {
-                    userMilestoneJoinDates[uId] = {};
-                }
-                for (const msId in serverJoinDates[uId]) {
-                    if (serverJoinDates[uId][msId] !== userMilestoneJoinDates[uId][msId]) {
-                        userMilestoneJoinDates[uId][msId] = serverJoinDates[uId][msId];
-                        joinChanged = true;
-                    }
-                }
-            }
-            if (joinChanged) {
-                try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(userMilestoneJoinDates)); } catch(e) {}
-            }
+            userMilestoneJoinDates = serverJoinDates;
+            try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(userMilestoneJoinDates)); } catch(e) {}
         }
 
         // 5. LEVEL-UP ACCESS CONFIG SYNC
@@ -1200,26 +1130,26 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
         }
 
-        // Always trigger UI update if data changed or submissions exist
-        if (dataChanged || (serverData && serverData.length > 0)) {
-            lastSyncSignature = currentSignature;
-            if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-                renderAdminCohortSubmissions();
-            }
-            if (typeof updateDashboardUI === 'function') updateDashboardUI();
-            const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
-            if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
-                switchMilestoneTab(activeSubTab);
-            }
+        // Trigger UI updates across all components
+        if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
+        }
+        if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
+        if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
+            switchMilestoneTab(activeSubTab);
         }
     } catch(err) {
-        console.error('Server Data Sync Error:', err);
+        console.error('Sync Error:', err);
     } finally {
         isSyncInProgress = false;
     }
 }
 window.syncGlobalServerData = syncGlobalServerData;
+
+
+
 
 
 
@@ -4761,13 +4691,6 @@ var _moduleConfirmInterval = null;
 async function toggleMilestoneModuleAccess(msId, moduleCode) {
     const key = String(msId);
 
-    // Step 1: Lock immediately so sync cannot override while POST is in-flight
-    lastModuleToggleTime = Date.now();
-    if (_moduleConfirmInterval) {
-        clearInterval(_moduleConfirmInterval);
-        _moduleConfirmInterval = null;
-    }
-
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
 
@@ -4775,81 +4698,46 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     if (current.includes(moduleCode)) {
         if (current.length === 1) {
             alert('At least one module must remain active in this milestone.');
-            lastModuleToggleTime = 0; // Release lock immediately
             return;
         }
         current = current.filter(m => m !== moduleCode);
     } else {
         current.push(moduleCode);
     }
-    saved[key] = current; // string key only — number key causes JSON stringify issues
+    saved[key] = current;
 
-    // Step 2: Persist locally (string keys only for clean JSON)
-    const savedSnapshot = {};
-    try {
-        const existing = JSON.parse(localStorage.getItem('customMilestoneModuleAccess') || '{}');
-        Object.assign(savedSnapshot, existing);
-    } catch(e) {}
-    savedSnapshot[key] = current;
-    try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(savedSnapshot)); } catch(e) {}
-    // Step 3: Update admin module toggle buttons in place without resetting or reloading the view
+    // 1. Save locally immediately
+    try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved)); } catch(e) {}
+
+    // 2. Update UI toggle buttons immediately
     const subNavEl = document.getElementById('adminMilestoneSubNav');
     if (subNavEl) {
         const enabledMods = current;
-        subNavEl.querySelectorAll('.admin-module-btn').forEach(btn => {
-            const parent = btn.parentElement;
-            const toggleBtn = parent.querySelector('button:last-child');
-            const match = btn.getAttribute('onclick')?.match(/switchAdminModuleTab\('([^']+)'/);
-            if (match && toggleBtn) {
-                const modCode = match[1];
+        subNavEl.querySelectorAll('.admin-module-toggle-btn').forEach(btn => {
+            const modCode = btn.dataset.mod;
+            if (modCode) {
                 const isEnabled = enabledMods.includes(modCode);
-                toggleBtn.innerText = isEnabled ? 'ON' : 'OFF';
-                toggleBtn.className = `ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
-                toggleBtn.title = isEnabled ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)';
+                btn.innerText = isEnabled ? 'ON' : 'OFF';
+                btn.className = `admin-module-toggle-btn ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}`;
+                btn.title = isEnabled ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)';
             }
         });
     }
 
-    // Step 4: Keep refreshing lock every 500ms while waiting for server to confirm
-    _moduleConfirmInterval = setInterval(() => {
-        lastModuleToggleTime = Date.now();
-    }, 500);
-
-    // Step 5: POST to server
-    apiFetch('/api/milestone-module-access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: savedSnapshot })
-    })
-    .then(res => res.json())
-    .then(data => {
-        console.log('✅ Module access saved to server:', data);
-        // Server confirmed — release lock
-        if (_moduleConfirmInterval) {
-            clearInterval(_moduleConfirmInterval);
-            _moduleConfirmInterval = null;
-        }
-        lastModuleToggleTime = Date.now() - 10500; // Let next poll pick up immediately
-    })
-    .catch(err => {
-        console.error('❌ Module access save failed — retrying:', err);
-        setTimeout(() => {
-            apiFetch('/api/milestone-module-access', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: savedSnapshot })
-            }).then(r => r.json()).then(d => {
-                console.log('✅ Module access retry succeeded:', d);
-            }).catch(e2 => console.error('❌ Retry failed:', e2));
-            if (_moduleConfirmInterval) {
-                clearInterval(_moduleConfirmInterval);
-                _moduleConfirmInterval = null;
-            }
-            lastModuleToggleTime = Date.now() - 10500;
-        }, 1000);
-    });
+    // 3. Post to server immediately
+    try {
+        await apiFetch('/api/milestone-module-access', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msId: key, moduleAccess: current, allModuleAccess: saved })
+        });
+        console.log('✅ Module access synced to server');
+    } catch(err) {
+        console.error('Module access sync error:', err);
+    }
 }
 window.toggleMilestoneModuleAccess = toggleMilestoneModuleAccess;
+
 
 function openAdminMilestone(id) {
     activeAdminMilestoneId = Number(id) || 1;
@@ -4883,11 +4771,11 @@ function openAdminMilestone(id) {
             const isEnabledForStudents = enabledForStudents.includes(mObj.code);
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
             return `
-            <div class="flex items-center gap-1.5 ${activeClass} px-3 py-2 rounded-t-xl font-bold text-xs transition-all">
-                <button onclick="switchAdminModuleTab('${mObj.code}', this.parentElement)" class="admin-module-btn flex items-center gap-2">
+            <div id="adminModuleWrapper_${mObj.code}" class="flex items-center gap-1.5 ${activeClass} px-3 py-2 rounded-t-xl font-bold text-xs transition-all cursor-pointer" onclick="switchAdminModuleTab('${mObj.code}')">
+                <span class="flex items-center gap-2">
                     <i class="fas ${mObj.icon}"></i> ${mObj.name}
-                </button>
-                <button onclick="event.stopPropagation(); toggleMilestoneModuleAccess(${activeAdminMilestoneId}, '${mObj.code}')" title="${isEnabledForStudents ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)'}" class="ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabledForStudents ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
+                </span>
+                <button type="button" data-mod="${mObj.code}" onclick="event.stopPropagation(); toggleMilestoneModuleAccess(${activeAdminMilestoneId}, '${mObj.code}')" title="${isEnabledForStudents ? 'Module Visible to Students (Click to Hide)' : 'Module Hidden from Students (Click to Enable)'}" class="admin-module-toggle-btn ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold transition-all ${isEnabledForStudents ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:bg-slate-700'}">
                     ${isEnabledForStudents ? 'ON' : 'OFF'}
                 </button>
             </div>`;
@@ -4949,13 +4837,14 @@ function switchAdminMilestoneTab(tabName) {
 }
 window.switchAdminMilestoneTab = switchAdminMilestoneTab;
 
-function switchAdminModuleTab(mod, btnElement) {
+function switchAdminModuleTab(mod) {
     activeAdminModule = mod;
-    if (btnElement) {
-        document.querySelectorAll('.admin-module-btn').forEach(btn => {
-            btn.className = 'admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all text-slate-400 hover:bg-slate-800 hover:text-white';
-        });
-        btnElement.className = 'admin-module-btn px-6 py-2 rounded-t-xl font-bold transition-all bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500';
+    document.querySelectorAll('[id^="adminModuleWrapper_"]').forEach(el => {
+        el.className = 'flex items-center gap-1.5 text-slate-400 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-t-xl font-bold text-xs transition-all cursor-pointer';
+    });
+    const activeEl = document.getElementById('adminModuleWrapper_' + mod);
+    if (activeEl) {
+        activeEl.className = 'flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500 px-3 py-2 rounded-t-xl font-bold text-xs transition-all cursor-pointer';
     }
     
     const isCheckinsActive = !document.getElementById('adminCheckinsConfigView')?.classList.contains('hidden');
