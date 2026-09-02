@@ -29,6 +29,16 @@ app.use((req, res, next) => {
 
 
 // -------------------------------------------------------------
+// Local JSON File Database Storage (for server-side sync)
+// -------------------------------------------------------------
+const DATA_DIR = path.join(__dirname, 'server_data');
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const DB_FILE = path.join(DATA_DIR, 'gamification_store.json');
+
+// -------------------------------------------------------------
 // UPLOADS STORAGE & STATIC STREAMING ENGINE
 // -------------------------------------------------------------
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
@@ -68,16 +78,6 @@ function saveBase64MediaToFile(dataUrl, prefix) {
         return dataUrl;
     }
 }
-
-// -------------------------------------------------------------
-// Local JSON File Database Storage (for server-side sync)
-// -------------------------------------------------------------
-const DATA_DIR = path.join(__dirname, 'server_data');
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-const DB_FILE = path.join(DATA_DIR, 'gamification_store.json');
 
 function loadStore() {
     try {
