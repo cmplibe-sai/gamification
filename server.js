@@ -51,22 +51,24 @@ app.use('/gamification/uploads', express.static(UPLOADS_DIR));
 function saveBase64MediaToFile(dataUrl, prefix) {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
     try {
-        const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-        if (!matches || matches.length !== 3) return dataUrl;
+        const commaIndex = dataUrl.indexOf(',');
+        if (commaIndex === -1) return dataUrl;
         
-        const mime = matches[1];
-        const base64Data = matches[2];
+        const header = dataUrl.substring(0, commaIndex).toLowerCase();
+        const base64Data = dataUrl.substring(commaIndex + 1);
         const buffer = Buffer.from(base64Data, 'base64');
         
         let ext = 'bin';
-        if (mime.includes('audio/mp4') || mime.includes('m4a')) ext = 'm4a';
-        else if (mime.includes('audio/webm') || mime.includes('webm')) ext = 'webm';
-        else if (mime.includes('audio/mpeg') || mime.includes('mp3')) ext = 'mp3';
-        else if (mime.includes('audio/wav') || mime.includes('wave')) ext = 'wav';
-        else if (mime.includes('audio/ogg')) ext = 'ogg';
-        else if (mime.includes('video/mp4')) ext = 'mp4';
-        else if (mime.includes('video/webm')) ext = 'webm';
-        else if (mime.includes('video/quicktime') || mime.includes('mov')) ext = 'mov';
+        if (header.includes('audio/mp4') || header.includes('m4a') || header.includes('x-m4a')) ext = 'm4a';
+        else if (header.includes('audio/webm') || header.includes('webm')) ext = 'webm';
+        else if (header.includes('audio/mpeg') || header.includes('mp3')) ext = 'mp3';
+        else if (header.includes('audio/wav') || header.includes('wave')) ext = 'wav';
+        else if (header.includes('audio/ogg')) ext = 'ogg';
+        else if (header.includes('video/mp4')) ext = 'mp4';
+        else if (header.includes('video/webm')) ext = 'webm';
+        else if (header.includes('video/quicktime') || header.includes('mov')) ext = 'mov';
+        else if (header.includes('audio')) ext = 'm4a';
+        else if (header.includes('video')) ext = 'mp4';
         
         const filename = `${prefix || 'media'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
         const filePath = path.join(UPLOADS_DIR, filename);
@@ -688,25 +690,27 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
         // -------------------------------------------------------------
         let targetFanId = sub.fanId;
-        if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+        const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+
+        if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
+            targetFanId = '68fb27f707ccf937418d41c6';
+        } else if (normalizedEmail === 'engineersai02@gmail.com') {
+            targetFanId = '68a805cf8c448ccc00abc23f';
+        } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
             const matched = backendActualUsers.find(u => 
-                (u.email && sub.userEmail && u.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()) ||
+                (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
                 (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
                 (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
             );
             if (matched && matched._id) {
                 targetFanId = matched._id;
-            } else if (sub.userEmail && sub.userEmail.includes('engineersai02')) {
-                targetFanId = '68a805cf8c448ccc00abc23f';
-            } else if (sub.userEmail && sub.userEmail.includes('y.saidigitalexpert')) {
-                targetFanId = '68fb27f707ccf937418d41c6';
             } else {
                 targetFanId = '68a805cf8c448ccc00abc23f';
             }
         }
 
         const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
-        console.log(`[Assigning TagMango Points] FanId: ${targetFanId}, Points: ${lcReward}, Desc: "${pointDescription}"`);
+        console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${lcReward}, Desc: "${pointDescription}"`);
 
         const tagMangoResult = await assignTagMangoPoints(targetFanId, lcReward, pointDescription);
         console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);

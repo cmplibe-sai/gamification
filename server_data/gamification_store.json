@@ -506,6 +506,26 @@
       "status": "completed",
       "submittedAt": "2026-08-29T12:49:08.239Z",
       "updatedAt": "2026-08-30T05:51:34.704Z"
+    },
+    {
+      "id": "sub_1788112718146_qbyov2",
+      "userId": "688c85d25ac60e54c1db4575",
+      "userEmail": "raosurajmangalore@gmail.com",
+      "userName": "Suraj Rao",
+      "userPhone": "",
+      "milestoneId": 1,
+      "type": "dip",
+      "day": 1,
+      "date": "2026-08-30",
+      "title": "Day 1 Check-in",
+      "responses": [],
+      "summary": "",
+      "media": null,
+      "mediaUrl": "",
+      "lcReward": 33,
+      "status": "completed",
+      "submittedAt": "2026-08-30T17:58:38.148Z",
+      "updatedAt": "2026-08-30T17:58:38.148Z"
     }
   ],
   "customMilestoneConfigs": {
@@ -705,7 +725,10 @@
     ]
   },
   "customProjectsDB": {},
-  "levelUpAccessConfig": [],
+  "levelUpAccessConfig": [
+    "6714e7d8eb97f72e99e3316c",
+    "66ac8a14cb4763138b556947"
+  ],
   "milestoneStartDates": {
     "1": "2026-07-31",
     "2": "2026-08-21",

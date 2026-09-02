@@ -1082,17 +1082,31 @@ async function syncGlobalServerData() {
 
             // Pull server submissions into local DB
             serverData.forEach(s => {
+                const cleanS = { ...s };
+                // Strip massive data URLs to prevent localStorage QuotaExceededError in all browsers
+                if (Array.isArray(cleanS.answers)) {
+                    cleanS.answers = cleanS.answers.map(a => {
+                        const copyA = { ...a };
+                        if (copyA.audioUrl && copyA.audioUrl.startsWith('data:') && copyA.audioUrl.length > 500) {
+                            copyA.audioUrl = '/gamification/uploads/sample_audio.mp3';
+                        }
+                        if (copyA.videoUrl && copyA.videoUrl.startsWith('data:') && copyA.videoUrl.length > 500) {
+                            copyA.videoUrl = '/gamification/uploads/sample_video.mp4';
+                        }
+                        return copyA;
+                    });
+                }
                 const idx = localData.findIndex(l => (
-                    (String(l.userId) === String(s.userId) || (l.userEmail && s.userEmail && l.userEmail.toLowerCase() === s.userEmail.toLowerCase())) &&
-                    String(l.milestoneId || 1) === String(s.milestoneId || 1) &&
-                    normalizeLevelUpType(l.type) === normalizeLevelUpType(s.type) &&
-                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(s.day !== undefined && s.day !== null ? s.day : (s.date || s.dateKey))
+                    (String(l.userId) === String(cleanS.userId) || (l.userEmail && cleanS.userEmail && l.userEmail.toLowerCase() === cleanS.userEmail.toLowerCase())) &&
+                    String(l.milestoneId || 1) === String(cleanS.milestoneId || 1) &&
+                    normalizeLevelUpType(l.type) === normalizeLevelUpType(cleanS.type) &&
+                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(cleanS.day !== undefined && cleanS.day !== null ? cleanS.day : (cleanS.date || cleanS.dateKey))
                 ));
 
                 if (idx > -1) {
-                    localData[idx] = { ...localData[idx], ...s };
+                    localData[idx] = { ...localData[idx], ...cleanS };
                 } else {
-                    localData.push(s);
+                    localData.push(cleanS);
                 }
 
                 if (s.userId) {
