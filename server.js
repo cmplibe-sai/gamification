@@ -502,10 +502,27 @@ app.post(['/api/user-join-date', '/gamification/api/user-join-date'], (req, res)
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     const liveLevelUpAccess = getLevelUpAccessFromDb();
+    
+    // Auto-enrich every submission with complete user profile from users.js
+    const enrichedSubs = (store.submissions || []).map(s => {
+        const matched = backendActualUsers.find(u => 
+            (s.userId && String(u._id) === String(s.userId)) ||
+            (s.userEmail && u.email && u.email.toLowerCase().trim() === s.userEmail.toLowerCase().trim()) ||
+            (s.userPhone && u.phone && String(u.phone).replace(/\D/g, '').endsWith(String(s.userPhone).replace(/\D/g, '')))
+        );
+        return {
+            ...s,
+            userId: s.userId || (matched ? matched._id : 'usr_anon'),
+            userEmail: s.userEmail || (matched ? matched.email : ''),
+            userName: s.userName || (matched ? matched.name : 'Learner'),
+            userPhone: s.userPhone || (matched ? matched.phone : '')
+        };
+    });
+
     res.json({
         success: true,
         data: {
-            submissions: store.submissions || [],
+            submissions: enrichedSubs,
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
             joinDates: getUserJoinDatesFromDb(),
@@ -515,7 +532,58 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     });
 });
 
-// SUBMISSIONS ENDPOINTS
+// BULK SUBMISSIONS TWO-WAY SYNC (Ensures all submissions sync instantly across all browsers)
+app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync'], (req, res) => {
+    try {
+        const clientSubs = req.body.submissions || [];
+        if (!store.submissions) store.submissions = [];
+        let addedCount = 0;
+
+        clientSubs.forEach(sub => {
+            if (!sub || (!sub.userId && !sub.userEmail)) return;
+            const msId = Number(sub.milestoneId) || 1;
+            const dayNum = Number(sub.day) || Number(sub.sessionDay) || 1;
+            const modType = (sub.moduleType || sub.type || 'dip').toLowerCase();
+
+            const existingIdx = store.submissions.findIndex(s => (
+                (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase() === sub.userEmail.toLowerCase())) &&
+                String(s.milestoneId || 1) === String(msId) &&
+                String(s.type || s.moduleType || 'dip').toLowerCase() === modType &&
+                String(s.day) === String(dayNum)
+            ));
+
+            const matchedUser = backendActualUsers.find(u => 
+                (sub.userId && String(u._id) === String(sub.userId)) ||
+                (sub.userEmail && u.email && u.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim())
+            );
+
+            const completeSub = {
+                ...sub,
+                userId: sub.userId || (matchedUser ? matchedUser._id : 'usr_anon'),
+                userEmail: sub.userEmail || (matchedUser ? matchedUser.email : ''),
+                userName: sub.userName || (matchedUser ? matchedUser.name : 'Learner'),
+                userPhone: sub.userPhone || (matchedUser ? matchedUser.phone : '')
+            };
+
+            if (existingIdx > -1) {
+                store.submissions[existingIdx] = { ...store.submissions[existingIdx], ...completeSub };
+            } else {
+                store.submissions.push(completeSub);
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            saveStore();
+        }
+
+        res.json({ success: true, count: store.submissions.length, added: addedCount });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 app.get('/api/submissions', (req, res) => {
     const { userId, milestoneId, type } = req.query;
     let list = store.submissions || [];
