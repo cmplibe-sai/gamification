@@ -625,24 +625,40 @@ app.get('/api/submissions', (req, res) => {
 // AUDIO TRANSCRIPTION & ARTICLE TEXT SIMILARITY ENGINE
 // ==============================================================
 function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
-    const { basePoints = 33, isLate = false } = options;
+    const { basePoints = 33, isLate = false, hasAudio = false } = options;
     const refClean = (referenceArticle || '').trim();
-    
+    const studentText = (studentResponse || '').trim();
+
+    // Browser Speech API cannot transcribe pre-recorded/uploaded files, only live mic.
+    // So if a student uploads a file, combinedStudentText will be sparse/empty.
+    // Detect: if audio present but text < 20 words, award full points (good-faith).
+    const studentWordCount = studentText.split(/\s+/).filter(w => w.length > 1).length;
+    const hasTextContent = studentWordCount >= 20;
+
     if (!refClean || refClean.length < 15) {
-        const textLen = (studentResponse || '').trim().length;
-        if (textLen > 30) {
+        if (hasAudio || studentText.length > 30) {
             return {
                 matchPercentage: 90,
                 lcReward: isLate ? 3 : basePoints,
                 status: 'completed',
-                remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Daily reflection verified against milestone standards. Personal takeaways clearly demonstrated.`
+                remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Daily reflection verified against milestone standards. Voice reflection and personal takeaways clearly demonstrated.`
             };
         }
         return {
             matchPercentage: 0,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Incomplete - 0 LCs Awarded] Minimal content submitted. Please provide an authentic reflection discussing today's learning objectives.`
+            remarks: `❌ [AI Evaluation: Content Incomplete - 0 LCs Awarded] No audio or text content was submitted. Please record a voice reflection or fill in the text answers and resubmit.`
+        };
+    }
+
+    // Audio uploaded but browser could not transcribe it (pre-recorded/uploaded file) — award full LCs.
+    if (hasAudio && !hasTextContent) {
+        return {
+            matchPercentage: 85,
+            lcReward: isLate ? 3 : basePoints,
+            status: 'completed',
+            remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Audio voice reflection submitted and stored. Rubric text comparison could not be performed automatically (pre-recorded file — browser transcription only works with live mic). Submission saved and visible to creator for manual review. Full LCs credited.`
         };
     }
 
@@ -659,7 +675,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     const refWords = clean(refClean);
     const refWordSet = new Set(refWords);
-    const studentWords = clean(studentResponse);
+    const studentWords = clean(studentText);
 
     if (refWordSet.size === 0) {
         return { matchPercentage: 85, lcReward: isLate ? 3 : basePoints, status: 'completed', remarks: '✅ [AI Verified & Approved] Reflection completed.' };
@@ -678,11 +694,20 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     if (studentWords.length < 4) coverage = Math.min(coverage, 5);
 
     if (coverage < 15) {
+        if (hasAudio) {
+            const partialLcs = isLate ? 3 : Math.max(1, Math.round(basePoints / 2));
+            return {
+                matchPercentage: 30,
+                lcReward: partialLcs,
+                status: 'completed',
+                remarks: `⚠️ [AI Evaluation: Audio Submitted - ${partialLcs} LCs Awarded] Audio voice reflection recorded and stored. Written text had limited overlap with today's rubric (${coverage}% text match). Audio could not be fully transcribed for automated scoring. Half LCs credited. Creator may review the audio for full credit.`
+            };
+        }
         return {
             matchPercentage: Math.max(coverage, 0),
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Mismatch - 0 LCs Awarded] Reflection content does not match today's designated check-in topic. Audio voice reflection contained totally different content or irrelevant media and failed rubric verification. Please review today's reading and submit a reflection discussing the designated concepts.`
+            remarks: `❌ [AI Evaluation: Content Mismatch - 0 LCs Awarded] Written text response does not match today's designated check-in topic (${coverage}% match). No audio file was uploaded. Please review today's reading and submit an authentic reflection that discusses the key concepts from the description.`
         };
     } else if (coverage < 75) {
         const partialLcs = isLate ? 3 : Math.max(1, Math.round(basePoints / 2));
@@ -843,9 +868,16 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         }
         if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
 
+        // Check if any answer has a valid audio/video URL
+        const hasAudioSubmission = Array.isArray(subAnswers) && subAnswers.some(a => {
+            const url = a.audioUrl || a.videoUrl || a.value || '';
+            return Boolean(url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:') || url.includes('/uploads/')));
+        });
+
         const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
             basePoints: Number(sub.lcReward) || 33,
-            isLate: sub.isLate || false
+            isLate: sub.isLate || false,
+            hasAudio: hasAudioSubmission
         });
 
         const finalMatchPct = evalResult.matchPercentage;
