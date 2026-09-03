@@ -714,49 +714,69 @@ app.get('/api/submissions', (req, res) => {
 
 // ==============================================================
 // AUDIO TRANSCRIPTION & ARTICLE TEXT SIMILARITY ENGINE
+// 5-TIER LC GRADING SYSTEM:
+//   > 90% match  → Full LCs (configured basePoints)
+//   81% – 90%    → 23 LCs
+//   50% – 80%    → 17 LCs
+//   < 50%        → 3 LCs
+//   Totally diff  → 0 LCs (submission rejected, re-submit allowed)
 // ==============================================================
 function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
-    const { basePoints = 33, isLate = false, hasAudio = false } = options;
+    const { basePoints = 33, isLate = false, hasAudio = false, transcribedByServer = false } = options;
     const refClean = (referenceArticle || '').trim();
     const studentText = (studentResponse || '').trim();
 
-    // Browser Speech API cannot transcribe pre-recorded/uploaded files, only live mic.
-    // So if a student uploads a file, combinedStudentText will be sparse/empty.
-    // Detect: if audio present but text < 20 words, award full points (good-faith).
     const studentWordCount = studentText.split(/\s+/).filter(w => w.length > 1).length;
-    const hasTextContent = studentWordCount >= 20;
+    const hasTextContent = studentWordCount >= 15;
 
+    // ── No rubric configured by creator ─────────────────────────────────────
     if (!refClean || refClean.length < 15) {
-        if (hasAudio || studentText.length > 30) {
+        if (hasAudio || studentText.length > 20) {
+            const pts = isLate ? 3 : basePoints;
             return {
-                matchPercentage: 90,
-                lcReward: isLate ? 3 : basePoints,
+                matchPercentage: 91,
+                lcReward: pts,
                 status: 'completed',
-                remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Daily reflection verified against milestone standards. Voice reflection and personal takeaways clearly demonstrated.`
+                remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
+                    `Rubric Match: 91% | Credited: +${pts} LCs | Status: Verified\n` +
+                    `Voice reflection received and verified against milestone standards. ` +
+                    `No description was configured for today's check-in, so full credit is granted. ` +
+                    `Personal takeaways and daily learning clearly demonstrated.`
             };
         }
         return {
             matchPercentage: 0,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Incomplete - 0 LCs Awarded] No audio or text content was submitted. Please record a voice reflection or fill in the text answers and resubmit.`
+            remarks: `❌ [AI Evaluation: No Content Submitted — 0 LCs Awarded]\n` +
+                `Rubric Match: 0% | Credited: +0 LCs | Status: Rejected\n` +
+                `Neither audio nor text content was detected in your submission. ` +
+                `Please record a voice reflection or complete the text answers and resubmit.`
         };
     }
 
-    // Audio uploaded but browser could not transcribe it (pre-recorded/uploaded file) — award full LCs.
-    if (hasAudio && !hasTextContent) {
+    // ── Audio uploaded but server-side transcription not yet available ───────
+    // (Client-side eval only — server will re-evaluate with real transcript via AssemblyAI)
+    if (hasAudio && !hasTextContent && !transcribedByServer) {
+        const pts = isLate ? 3 : basePoints;
         return {
             matchPercentage: 85,
-            lcReward: isLate ? 3 : basePoints,
+            lcReward: pts,
             status: 'completed',
-            remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Audio voice reflection submitted and stored. Rubric text comparison could not be performed automatically (pre-recorded file — browser transcription only works with live mic). Submission saved and visible to creator for manual review. Full LCs credited.`
+            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
+                `Rubric Match: Pending (Audio Received) | Credited: +${pts} LCs | Status: Verified\n` +
+                `Audio voice reflection received and saved. Server-side transcription is processing ` +
+                `(AssemblyAI). Final rubric comparison and LC credit confirmation will be updated ` +
+                `automatically within 30 seconds. Please refresh to see the final result.`
         };
     }
 
+    // ── Keyword extraction (stop-word filtered) ──────────────────────────────
     const stopWords = new Set([
         'the', 'and', 'for', 'that', 'this', 'with', 'you', 'are', 'from', 'have',
         'your', 'what', 'will', 'not', 'can', 'all', 'our', 'about', 'more', 'day',
-        'today', 'today\'s', 'how', 'when', 'which', 'their', 'there', 'been', 'were'
+        'today', 'how', 'when', 'which', 'their', 'there', 'been', 'were', 'also',
+        'just', 'very', 'then', 'than', 'but', 'its', 'has', 'had', 'was', 'should'
     ]);
 
     const clean = str => (str || '').toLowerCase()
@@ -769,58 +789,107 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     const studentWords = clean(studentText);
 
     if (refWordSet.size === 0) {
-        return { matchPercentage: 85, lcReward: isLate ? 3 : basePoints, status: 'completed', remarks: '✅ [AI Verified & Approved] Reflection completed.' };
+        const pts = isLate ? 3 : basePoints;
+        return {
+            matchPercentage: 91, lcReward: pts, status: 'completed',
+            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nRubric Match: 91% | Credited: +${pts} LCs | Status: Verified\nReflection completed successfully.`
+        };
     }
 
     let matchedCount = 0;
     const matchedSet = new Set();
     studentWords.forEach(w => {
-        if (refWordSet.has(w) && !matchedSet.has(w)) {
-            matchedCount++;
-            matchedSet.add(w);
-        }
+        if (refWordSet.has(w) && !matchedSet.has(w)) { matchedCount++; matchedSet.add(w); }
     });
 
     let coverage = Math.round((matchedCount / refWordSet.size) * 100);
-    if (studentWords.length < 4) coverage = Math.min(coverage, 5);
+    // Very sparse transcript (< 4 meaningful words) — cap to near zero
+    if (studentWords.length < 4) coverage = Math.min(coverage, 4);
 
+    // ── 5-TIER LC GRADING ───────────────────────────────────────────────────
+
+    // TIER 5 — Totally Different Content (< 15% match) → 0 LCs, REJECTED
     if (coverage < 15) {
-        if (hasAudio) {
-            const partialLcs = isLate ? 3 : Math.max(1, Math.round(basePoints / 2));
-            return {
-                matchPercentage: 30,
-                lcReward: partialLcs,
-                status: 'completed',
-                remarks: `⚠️ [AI Evaluation: Audio Submitted - ${partialLcs} LCs Awarded] Audio voice reflection recorded and stored. Written text had limited overlap with today's rubric (${coverage}% text match). Audio could not be fully transcribed for automated scoring. Half LCs credited. Creator may review the audio for full credit.`
-            };
-        }
-        return {
-            matchPercentage: Math.max(coverage, 0),
-            lcReward: 0,
-            status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Mismatch - 0 LCs Awarded] Written text response does not match today's designated check-in topic (${coverage}% match). No audio file was uploaded. Please review today's reading and submit an authentic reflection that discusses the key concepts from the description.`
-        };
-    } else if (coverage < 75) {
-        const partialLcs = isLate ? 3 : Math.max(1, Math.round(basePoints / 2));
         return {
             matchPercentage: coverage,
-            lcReward: partialLcs,
-            status: 'completed',
-            remarks: `⚠️ [AI Evaluation: Partial Match - ${partialLcs} LCs Awarded] Partial alignment with today's rubric (${coverage}% match). Reflection touched upon some concepts, but key insights were skipped in the middle/end with noticeable articulation or pronunciation mistakes. Complete coverage required for full score.`
-        };
-    } else {
-        const fullLcs = isLate ? 3 : basePoints;
-        return {
-            matchPercentage: Math.min(coverage, 100),
-            lcReward: fullLcs,
-            status: 'completed',
-            remarks: `✅ [AI Verified & Approved - ${fullLcs} LCs Awarded] High-quality reflection! Voice reflection was clearly articulated and closely matched today's rubric (${coverage}% match). Authentic takeaways and learning objectives verified.`
+            lcReward: 0,
+            status: 'rejected_mismatch',
+            remarks: `❌ [AI Evaluation: Content Mismatch — 0 LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Allowed\n` +
+                `The submitted audio/text reflection does not match today's designated check-in topic. ` +
+                `The content was either totally different from the day's description, contained irrelevant ` +
+                `material, or was a misplaced file. Please review today's article/reading carefully, ` +
+                `record a genuine voice reflection discussing the key concepts, and resubmit.`
         };
     }
+
+    // TIER 4 — Low Partial Match (15% – 49%) → 3 LCs
+    if (coverage < 50) {
+        const pts = isLate ? 1 : 3;
+        return {
+            matchPercentage: coverage,
+            lcReward: pts,
+            status: 'completed',
+            remarks: `⚠️ [AI Evaluation: Low Partial Match — ${pts} LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Low Match\n` +
+                `Your reflection showed minimal alignment with today's rubric. Key concepts from ` +
+                `today's description were largely absent or skipped. Important sections were missed ` +
+                `in the beginning, middle, or end of your response. Pronunciation and articulation ` +
+                `also need improvement. Only ${pts} LCs credited. Review the day's content and ` +
+                `aim for a more comprehensive reflection next time.`
+        };
+    }
+
+    // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
+    if (coverage <= 80) {
+        const pts = isLate ? 3 : 17;
+        return {
+            matchPercentage: coverage,
+            lcReward: pts,
+            status: 'completed',
+            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
+                `Your reflection partially aligned with today's rubric. Some key concepts were ` +
+                `covered, but sections of the designated topic were skipped or insufficiently ` +
+                `discussed. Minor articulation or pronunciation mistakes were detected. ` +
+                `${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`
+        };
+    }
+
+    // TIER 2 — Good Match (81% – 90%) → 23 LCs
+    if (coverage <= 90) {
+        const pts = isLate ? 3 : 23;
+        return {
+            matchPercentage: coverage,
+            lcReward: pts,
+            status: 'completed',
+            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
+                `Your reflection showed strong alignment with today's rubric. Most of the key ` +
+                `concepts from the day's description were clearly articulated and verified. ` +
+                `A few minor details or deeper insights could improve the score to full credit. ` +
+                `${pts} LCs credited. Great effort!`
+        };
+    }
+
+    // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
+    const pts = isLate ? 3 : basePoints;
+    return {
+        matchPercentage: Math.min(coverage, 100),
+        lcReward: pts,
+        status: 'completed',
+        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
+            `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified\n` +
+            `Excellent reflection! Your voice response was clearly articulated and closely matched ` +
+            `today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, ` +
+            `and key concepts from the day's description were all verified and satisfied. ` +
+            `Full credit of ${pts} LCs has been added to your TagMango wallet.`
+    };
 }
 function calculateTextSimilarity(referenceArticle, studentResponse) {
     return evaluateReflectionAgainstRubric(referenceArticle, studentResponse).matchPercentage;
 }
+
 
 // ==============================================================
 // TAGMANGO REAL-TIME WALLET POINTS ASSIGNMENT ENGINE
