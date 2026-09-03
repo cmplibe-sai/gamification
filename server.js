@@ -8,6 +8,8 @@ const mongoose = require('mongoose');
 // Load environment variables
 dotenv.config();
 
+const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY || '';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -80,6 +82,95 @@ function saveBase64MediaToFile(dataUrl, prefix) {
         return dataUrl;
     }
 }
+
+// ==============================================================
+// ASSEMBLYAI AUDIO TRANSCRIPTION ENGINE
+// Uploads audio file to AssemblyAI, polls until complete, returns transcript.
+// ==============================================================
+async function transcribeAudioWithAssemblyAI(audioFilePath) {
+    if (!ASSEMBLYAI_API_KEY) {
+        console.warn('[AssemblyAI] No API key configured (ASSEMBLYAI_API_KEY env var missing). Skipping transcription.');
+        return null;
+    }
+
+    const AAI_BASE = 'https://api.assemblyai.com';
+    const headers = { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/json' };
+
+    try {
+        // Step 1: Upload the audio file to AssemblyAI's upload endpoint
+        let uploadUrl = null;
+
+        // If it's a server-side file path, read and upload as binary
+        const absolutePath = audioFilePath.startsWith('/gamification/uploads/')
+            ? path.join(UPLOADS_DIR, audioFilePath.replace('/gamification/uploads/', ''))
+            : audioFilePath.startsWith('/uploads/')
+                ? path.join(UPLOADS_DIR, audioFilePath.replace('/uploads/', ''))
+                : audioFilePath;
+
+        if (fs.existsSync(absolutePath)) {
+            const fileBuffer = fs.readFileSync(absolutePath);
+            const uploadRes = await fetch(`${AAI_BASE}/v1/upload`, {
+                method: 'POST',
+                headers: { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' },
+                body: fileBuffer
+            });
+            const uploadData = await uploadRes.json();
+            uploadUrl = uploadData.upload_url;
+            console.log(`[AssemblyAI] File uploaded: ${absolutePath} → ${uploadUrl}`);
+        } else if (audioFilePath.startsWith('http')) {
+            // Publicly accessible URL — pass directly
+            uploadUrl = audioFilePath;
+            console.log(`[AssemblyAI] Using public URL directly: ${uploadUrl}`);
+        } else {
+            console.warn('[AssemblyAI] Audio file not found on disk, skipping transcription:', absolutePath);
+            return null;
+        }
+
+        if (!uploadUrl) return null;
+
+        // Step 2: Submit transcription request
+        const transcriptRes = await fetch(`${AAI_BASE}/v2/transcript`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                audio_url: uploadUrl,
+                language_detection: true, // auto-detect Hindi/English/Hinglish
+                speech_model: 'best',
+                punctuate: true,
+                format_text: true
+            })
+        });
+        const transcriptData = await transcriptRes.json();
+        const transcriptId = transcriptData.id;
+        console.log(`[AssemblyAI] Transcription queued: ${transcriptId}`);
+
+        // Step 3: Poll until complete (max 60 seconds, check every 3 seconds)
+        const maxAttempts = 20;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 3000)); // wait 3s
+            const pollRes = await fetch(`${AAI_BASE}/v2/transcript/${transcriptId}`, { headers });
+            const pollData = await pollRes.json();
+
+            if (pollData.status === 'completed') {
+                const transcript = pollData.text || '';
+                console.log(`[AssemblyAI] Transcription complete (${transcript.length} chars): "${transcript.slice(0, 120)}..."`);
+                return transcript;
+            } else if (pollData.status === 'error') {
+                console.warn(`[AssemblyAI] Transcription error for ${transcriptId}:`, pollData.error);
+                return null;
+            }
+            // still processing, keep polling
+            console.log(`[AssemblyAI] Polling (${attempt + 1}/${maxAttempts})... status: ${pollData.status}`);
+        }
+
+        console.warn(`[AssemblyAI] Transcription timed out after ${maxAttempts * 3}s`);
+        return null;
+    } catch (err) {
+        console.warn('[AssemblyAI] Transcription error:', err.message);
+        return null;
+    }
+}
+
 
 function loadStore() {
     try {
@@ -816,8 +907,12 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
         const { dataUrl, prefix, filename } = req.body;
         if (!dataUrl) return res.status(400).json({ success: false, error: 'dataUrl required' });
         const savedPath = saveBase64MediaToFile(dataUrl, prefix || 'audio_rec');
+        // Also return the absolute disk path so the submission handler can transcribe it
+        const absoluteDiskPath = savedPath
+            ? path.join(UPLOADS_DIR, savedPath.replace('/gamification/uploads/', '').replace('/uploads/', ''))
+            : null;
         console.log(`[Media Uploaded via API] Path: ${savedPath}`);
-        return res.json({ success: true, url: savedPath });
+        return res.json({ success: true, url: savedPath, diskPath: absoluteDiskPath });
     } catch (err) {
         console.error('Upload media API error:', err);
         return res.status(500).json({ success: false, error: err.message });
@@ -873,6 +968,35 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             const url = a.audioUrl || a.videoUrl || a.value || '';
             return Boolean(url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:') || url.includes('/uploads/')));
         });
+
+        // -------------------------------------------------------------
+        // ASSEMBLYAI TRANSCRIPTION: Convert audio files to text for real rubric comparison
+        // Run in parallel for all audio answers to save time
+        // -------------------------------------------------------------
+        if (ASSEMBLYAI_API_KEY && Array.isArray(subAnswers)) {
+            const transcriptionPromises = subAnswers.map(async (a, idx) => {
+                const audioUrl = a.audioUrl || (a.type === 'audio' ? (a.value || '') : '');
+                if (!audioUrl || !audioUrl.startsWith('/')) return; // Only process server-stored paths
+                if (a.transcription && a.transcription.trim().length > 20) return; // Already transcribed
+
+                console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
+                const transcript = await transcribeAudioWithAssemblyAI(audioUrl);
+                if (transcript && transcript.trim().length > 0) {
+                    a.transcription = transcript.trim();
+                    console.log(`[AssemblyAI] Q${idx+1} transcript: "${transcript.slice(0, 100)}..."`);
+                }
+            });
+            // Wait for all transcriptions to complete before rubric comparison
+            await Promise.allSettled(transcriptionPromises);
+
+            // Rebuild combinedStudentText with fresh transcriptions
+            combinedStudentText = '';
+            subAnswers.forEach(a => {
+                combinedStudentText += ' ' + (a.transcription || a.answer || a.value || a.text || '');
+            });
+            if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
+            console.log(`[Rubric Eval] Combined text for comparison (${combinedStudentText.trim().split(/\s+/).length} words): "${combinedStudentText.trim().slice(0, 200)}"`);
+        }
 
         const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
             basePoints: Number(sub.lcReward) || 33,
