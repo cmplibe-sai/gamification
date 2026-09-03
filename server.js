@@ -392,6 +392,7 @@ function saveMilestoneConfigsToDb(configs) {
         const obj = (configs && typeof configs === 'object') ? configs : {};
         fs.writeFileSync(MILESTONE_CONFIGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
         store.customMilestoneConfigs = obj;
+        store.configsRevision = Date.now();
         saveStore();
         console.log(`[Milestone Configs DB] Saved to ${MILESTONE_CONFIGS_FILE}`);
         return obj;
@@ -523,6 +524,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
         data: {
             submissions: enrichedSubs,
             submissionsRevision: store.submissionsRevision || Date.now(),
+            configsRevision: store.configsRevision || Date.now(),
             lastUpdated: store.lastUpdated || Date.now(),
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),

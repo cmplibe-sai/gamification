@@ -974,7 +974,7 @@ var currentView = 'sector';
 var currentFilter = 'All';
 var customerProjectFilter = 'All';
 var selectedProject = null;
-var isAdminLogin = (typeof localStorage !== 'undefined' && localStorage.getItem('isAdminLogin') === 'true');
+var isAdminLogin = false;
 var userMilestoneJoinDates = (typeof localStorage !== 'undefined') ? (JSON.parse(localStorage.getItem('userMilestoneJoinDates') || '{}')) : {};
 var isCampusPartner = false;
 var partnerAllowedMangoes = [];
@@ -1044,11 +1044,11 @@ async function syncGlobalServerData() {
         }
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
-        
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
+        const configsRevision = (response.data && response.data.configsRevision) || '';
         const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '')).join('|') : '';
-        const cfgSig = Object.entries(serverConfigs || {}).map(([msId, mods]) => msId + ':' + Object.keys(mods).join(',')).join('|');
-        const currentSignature = serverRevision + '_' + (serverData ? serverData.length : 0) + '_' + subsSummary + '_' +
+        const cfgSig = JSON.stringify(serverConfigs || {});
+        const currentSignature = serverRevision + '_' + configsRevision + '_' + (serverData ? serverData.length : 0) + '_' + subsSummary + '_' +
             cfgSig + '_' +
             JSON.stringify(serverModuleAccess || {}) + '_' +
             JSON.stringify(serverLevelUpAccess || []) + '_' +
@@ -1139,6 +1139,16 @@ async function syncGlobalServerData() {
         if (serverConfigs && typeof serverConfigs === 'object') {
             customMilestoneConfigs = serverConfigs;
             try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+
+            // Instantly refresh Admin Check-ins setup editor/list if currently open
+            const checkinsView = document.getElementById('adminCheckinsConfigView');
+            if (checkinsView && !checkinsView.classList.contains('hidden')) {
+                if (typeof renderAdminCheckinsList === 'function') renderAdminCheckinsList();
+                const isFocusedOnInput = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+                if (!isFocusedOnInput && typeof loadAdminCheckinEditor === 'function') {
+                    loadAdminCheckinEditor(activeAdminDateKey || getLocalDateKey(new Date()));
+                }
+            }
         }
 
         // 3. MODULE ACCESS SYNC
@@ -8235,15 +8245,133 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 // AUTHENTICATION LOGIC (CREATOR, CUSTOMER, TEST USERS, PARTNERS)
 // =========================================================================
 
-var realtimeCustomer = null; 
-var tempLoginId = '';
+// =========================================================================
+// PLATFORM ROLE RESOLUTION & STRICT ACCESS GATING
+// =========================================================================
+window._pendingAuth = null;
+
+function resolvePlatformUserRole(rawInput) {
+    if (!rawInput || typeof rawInput !== 'string') return null;
+    const loginId = rawInput.toLowerCase().trim();
+    const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
+    const isValidPhone = cleanPhone.length === 10;
+    const isEmail = loginId.includes('@');
+
+    // 1. CREATOR / ADMIN
+    const defaultAdmins = [
+        'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
+        'saikumaryadiki@gmail.com', 'admin@cmplibe.com'
+    ];
+    const defaultAdminPhones = ['6309764212', '9845421644'];
+    const adminEmails = (window.ADMIN_EMAILS && Array.isArray(window.ADMIN_EMAILS) && window.ADMIN_EMAILS.length > 0) 
+        ? window.ADMIN_EMAILS 
+        : defaultAdmins;
+
+    const isAdmin = adminEmails.some(e => {
+        const norm = String(e).toLowerCase().trim();
+        if (norm === loginId) return true;
+        if (isValidPhone && norm === cleanPhone) return true;
+        return false;
+    }) || (isValidPhone && defaultAdminPhones.includes(cleanPhone));
+
+    if (isAdmin) {
+        return {
+            role: 'creator',
+            user: {
+                _id: 'creator_' + (isEmail ? loginId.split('@')[0] : cleanPhone),
+                name: 'cMPLi Creator',
+                email: isEmail ? loginId : 'cmplibesai@gmail.com',
+                phone: isValidPhone ? cleanPhone : '6309764212',
+                isAdmin: true
+            }
+        };
+    }
+
+    // 2. CAMPUS PARTNERS
+    const partnersDB = (typeof campusPartnersDB !== 'undefined' && campusPartnersDB) ? campusPartnersDB : {};
+    const partnerMangoes = partnersDB[loginId] || (isValidPhone && partnersDB[cleanPhone]);
+    if (partnerMangoes) {
+        return {
+            role: 'partner',
+            partnerAllowedMangoes: Array.isArray(partnerMangoes) ? partnerMangoes : [],
+            user: {
+                _id: 'partner_' + (isEmail ? loginId.split('@')[0] : cleanPhone),
+                name: 'Campus Partner',
+                email: isEmail ? loginId : 'partner@cmplibe.com',
+                phone: isValidPhone ? cleanPhone : ''
+            }
+        };
+    }
+
+    // 3. TEST USERS
+    const testAccounts = [
+        'saiyedamala02@gmail.com',
+        'engineersai02@gmail.com',
+        'test@cmplibe.com',
+        'tester@cmplibe.com',
+        'test@learner.com',
+        'vip@student.com',
+        'sai@cmplibe.com',
+        'test@test.com'
+    ];
+    const testPhones = ['6309764213'];
+    const isTest = testAccounts.includes(loginId) || (isValidPhone && testPhones.includes(cleanPhone));
+    if (isTest) {
+        return {
+            role: 'test_user',
+            user: {
+                _id: 'test_' + (isEmail ? loginId.split('@')[0] : cleanPhone),
+                fanId: 'fan_test',
+                name: 'Test Learner',
+                email: isEmail ? loginId : (cleanPhone + '@cmplibe.com'),
+                phone: isValidPhone ? cleanPhone : '',
+                subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
+            }
+        };
+    }
+
+    // 4. REGISTERED CUSTOMERS / LEARNERS ON learn.cmplibe.com
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
+    let foundCustomer = null;
+    if (isEmail) {
+        foundCustomer = pool.find(u => u.email && u.email.toLowerCase().trim() === loginId);
+        if (!foundCustomer && typeof timelineData !== 'undefined') {
+            const flatTimeline = timelineData.flat();
+            const tUser = flatTimeline.find(t => t.email && t.email.toLowerCase().trim() === loginId);
+            if (tUser) {
+                foundCustomer = {
+                    _id: tUser['cMPLiBe ID'] || ('cb_' + tUser.email.split('@')[0]),
+                    fanId: tUser['cMPLiBe ID'] || 'cbtm0292',
+                    name: tUser.Name || loginId.split('@')[0],
+                    email: tUser.email.toLowerCase().trim(),
+                    phone: '',
+                    subscribedMangoes: (tUser.subscribedMangoes && Array.isArray(tUser.subscribedMangoes)) ? tUser.subscribedMangoes : ['6714e7d8eb97f72e99e3316c', '6735e395013c9a1f0a8768b0']
+                };
+            }
+        }
+    } else if (isValidPhone) {
+        foundCustomer = pool.find(u => u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone));
+    }
+
+    if (foundCustomer) {
+        return {
+            role: 'customer',
+            user: foundCustomer
+        };
+    }
+
+    // UNREGISTERED CREDENTIAL
+    return null;
+}
+window.resolvePlatformUserRole = resolvePlatformUserRole;
 
 async function requestOTP() {
     const rawInput = (document.getElementById('loginId')?.value || '').trim();
-    const loginId = rawInput.toLowerCase();
-    const cleanPhone = rawInput.replace(/\D/g, '').slice(-10);
-    if (!loginId) return alert("Please enter your registered email or phone number.");
-    
+    if (!rawInput) return alert("Please enter your registered email or 10-digit phone number.");
+
     const btn = document.querySelector('#step1 button');
     if (btn) {
         btn.innerText = "Verifying...";
@@ -8251,83 +8379,24 @@ async function requestOTP() {
     }
 
     try {
-        // 1. SAFE ADMIN & PARTNER CHECK
-        const defaultAdmins = [
-            'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
-            '6309764212', '9845421644', 'admin@cmplibe.com', 'saikumaryadiki@gmail.com'
-        ];
-        const adminEmails = (window.ADMIN_EMAILS && window.ADMIN_EMAILS.length > 0) ? window.ADMIN_EMAILS : defaultAdmins;
-        
-        isAdminLogin = adminEmails.some(e => {
-            const normE = String(e).toLowerCase().trim();
-            return normE === loginId || (cleanPhone && normE === cleanPhone) || (cleanPhone && normE.endsWith(cleanPhone)) || loginId.includes('cmplibesai') || loginId.includes('admin');
-        });
-        
-        isCampusPartner = !!campusPartnersDB[loginId] || (cleanPhone && !!campusPartnersDB[cleanPhone]);
-        if (isCampusPartner) {
-            partnerAllowedMangoes = campusPartnersDB[loginId] || campusPartnersDB[cleanPhone] || [];
+        const auth = resolvePlatformUserRole(rawInput);
+        if (!auth) {
+            alert("❌ Account not registered on learn.cmplibe.com.\n\nPlease check your registered email or 10-digit mobile number, or contact your cohort manager.");
+            if (btn) {
+                btn.innerText = "Request OTP";
+                btn.disabled = false;
+            }
+            return;
         }
 
-        // 2. CUSTOMER / TEST USER LOGIN FLOW
-        if (!isAdminLogin && !isCampusPartner) {
-            let foundUser = null;
-            const isEmailInput = loginId.includes('@');
-
-            const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
-                ? adminRealtimeUsers 
-                : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
-
-            if (isEmailInput) {
-                // Check actual enrolled learners pool first
-                foundUser = pool.find(u => u.email && u.email.toLowerCase().trim() === loginId);
-
-                // Fallback to timeline data if not found in actualUsers
-                if (!foundUser && typeof timelineData !== 'undefined') {
-                    const flatTimeline = timelineData.flat();
-                    const tUser = flatTimeline.find(t => t.email && t.email.toLowerCase().trim() === loginId);
-                    if (tUser) {
-                        foundUser = {
-                            _id: tUser['cMPLiBe ID'] || ('cb_' + tUser.email.split('@')[0]),
-                            fanId: tUser['cMPLiBe ID'] || 'cbtm0292',
-                            name: tUser.Name || loginId.split('@')[0],
-                            email: tUser.email.toLowerCase().trim(),
-                            phone: '',
-                            subscribedMangoes: (tUser.subscribedMangoes && Array.isArray(tUser.subscribedMangoes)) ? tUser.subscribedMangoes : ['6714e7d8eb97f72e99e3316c', '6735e395013c9a1f0a8768b0']
-                        };
-                    }
-                }
-            } else {
-                // Strict Phone lookup
-                if (cleanPhone && cleanPhone.length >= 10) {
-                    foundUser = pool.find(u => u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone));
-                }
-            }
-
-            if (!foundUser) {
-                const uName = isEmailInput ? loginId.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : `Learner ${cleanPhone}`;
-                foundUser = {
-                    _id: 'usr_' + (isEmailInput ? loginId.replace(/[^a-zA-Z0-9]/g, '_') : cleanPhone),
-                    fanId: 'fan_' + (cleanPhone || Math.floor(100000 + Math.random() * 900000)),
-                    name: uName,
-                    email: isEmailInput ? loginId : `${cleanPhone}@learn.cmplibe.com`,
-                    phone: cleanPhone || '',
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
-                };
-            }
-
-            realtimeCustomer = foundUser;
-            currentUser = foundUser;
-        }
+        window._pendingAuth = auth;
+        tempLoginId = rawInput.toLowerCase().trim();
 
         document.getElementById('step1')?.classList.add('hidden');
         document.getElementById('step2')?.classList.remove('hidden');
-        tempLoginId = loginId;
-
     } catch (err) {
-        console.error("Login error:", err);
-        document.getElementById('step1')?.classList.add('hidden');
-        document.getElementById('step2')?.classList.remove('hidden');
-        tempLoginId = loginId;
+        console.error("Login verification error:", err);
+        alert("An error occurred while verifying credentials. Please try again.");
     } finally {
         if (btn) {
             btn.innerText = "Request OTP";
@@ -8341,63 +8410,95 @@ async function verifyOTP() {
     const otpInput = (document.getElementById('otpCode')?.value || '').trim();
     const btn = document.querySelector('#step2 button');
 
-    // STRICT UNIVERSAL OTP: Only "1234" is allowed to login
-    if (otpInput === "1234") { 
-        if (btn) {
-            btn.innerText = "Entering Arena...";
-            btn.disabled = true;
-        }
-
-        try {
-            const loginScreen = document.getElementById('loginScreen');
-            const mainApp = document.getElementById('mainApp');
-            const learnerNav = document.getElementById('learnerNav');
-            const adminNav = document.getElementById('adminNav');
-
-            if (loginScreen) loginScreen.style.display = 'none';
-            if (mainApp) mainApp.classList.remove('hidden');
-
-            if (isAdminLogin || isCampusPartner) {
-                try { localStorage.setItem('isAdminLogin', 'true'); sessionStorage.setItem('isAdminLogin', 'true'); } catch(e) {}
-                if (learnerNav) learnerNav.classList.add('hidden');
-                if (adminNav) adminNav.classList.remove('hidden');
-                
-                switchTab('adminTab');
-                if (typeof initAdminApp === 'function') {
-                    initAdminApp().catch(e => console.warn('Admin init:', e));
-                }
-            } else {
-                const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
-                    ? adminRealtimeUsers 
-                    : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
-
-                const matchedUser = realtimeCustomer || (tempLoginId ? pool.find(u => (u.email && u.email.toLowerCase().trim() === tempLoginId.toLowerCase().trim()) || (u.phone && String(u.phone).replace(/\D/g, '').endsWith(tempLoginId.replace(/\D/g, '')))) : null);
-
-                currentUser = matchedUser || currentUser || {
-                    _id: 'usr_' + Date.now(),
-                    name: tempLoginId ? tempLoginId.split('@')[0] : 'Learner',
-                    email: tempLoginId || 'learner@cmplibe.com',
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
-                };
-
-                try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
-
-                if (learnerNav) learnerNav.classList.remove('hidden');
-                if (adminNav) adminNav.classList.add('hidden');
-                
-                switchTab('dashboardTab');
-                if (typeof updateDashboardUI === 'function') updateDashboardUI();
-                if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
-            }
-        } catch(e) {
-            console.error("Login verification error:", e);
-        }
-    } else {
+    if (otpInput !== "1234") {
         alert("Invalid OTP. Only universal OTP 1234 is allowed.");
         if (btn) {
             btn.innerText = "Verify & Access";
             btn.disabled = false;
         }
+        return;
+    }
+
+    if (!window._pendingAuth) {
+        alert("Session expired. Please request OTP again.");
+        logout();
+        return;
+    }
+
+    if (btn) {
+        btn.innerText = "Entering Arena...";
+        btn.disabled = true;
+    }
+
+    try {
+        const loginScreen = document.getElementById('loginScreen');
+        const mainApp = document.getElementById('mainApp');
+        const learnerNav = document.getElementById('learnerNav');
+        const adminNav = document.getElementById('adminNav');
+
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (mainApp) mainApp.classList.remove('hidden');
+
+        const role = window._pendingAuth.role;
+        const authUser = window._pendingAuth.user;
+
+        if (role === 'creator') {
+            isAdminLogin = true;
+            isCampusPartner = false;
+            partnerAllowedMangoes = [];
+            currentUser = authUser;
+            try {
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.setItem('isAdminLogin', 'true');
+                sessionStorage.setItem('isAdminLogin', 'true');
+            } catch(e) {}
+
+            if (learnerNav) learnerNav.classList.add('hidden');
+            if (adminNav) adminNav.classList.remove('hidden');
+
+            switchTab('adminTab');
+            if (typeof initAdminApp === 'function') {
+                initAdminApp().catch(e => console.warn('Admin init:', e));
+            }
+        } else if (role === 'partner') {
+            isAdminLogin = false;
+            isCampusPartner = true;
+            partnerAllowedMangoes = window._pendingAuth.partnerAllowedMangoes || [];
+            currentUser = authUser;
+            try {
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.removeItem('isAdminLogin');
+                sessionStorage.removeItem('isAdminLogin');
+            } catch(e) {}
+
+            if (learnerNav) learnerNav.classList.add('hidden');
+            if (adminNav) adminNav.classList.remove('hidden');
+
+            switchTab('adminTab');
+            if (typeof initAdminApp === 'function') {
+                initAdminApp().catch(e => console.warn('Partner init:', e));
+            }
+        } else {
+            // Role is 'customer' or 'test_user' -> ONLY LEARNER ACCESS
+            isAdminLogin = false;
+            isCampusPartner = false;
+            partnerAllowedMangoes = [];
+            currentUser = authUser;
+            try {
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.removeItem('isAdminLogin');
+                sessionStorage.removeItem('isAdminLogin');
+            } catch(e) {}
+
+            if (learnerNav) learnerNav.classList.remove('hidden');
+            if (adminNav) adminNav.classList.add('hidden');
+
+            switchTab('dashboardTab');
+            if (typeof updateDashboardUI === 'function') updateDashboardUI();
+            if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
+        }
+    } catch(e) {
+        console.error("OTP verification error:", e);
     }
 }
 window.verifyOTP = verifyOTP;
@@ -8405,20 +8506,23 @@ window.verifyOTP = verifyOTP;
 function logout() {
     currentUser = null;
     isAdminLogin = false;
-    try { localStorage.removeItem('isAdminLogin'); sessionStorage.removeItem('isAdminLogin'); } catch(e) {}
     isCampusPartner = false;
     partnerAllowedMangoes = [];
     tempLoginId = '';
-    try { localStorage.removeItem('currentUser'); } catch(e) {}
-    
+    window._pendingAuth = null;
+    try {
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('isAdminLogin');
+        sessionStorage.removeItem('isAdminLogin');
+    } catch(e) {}
+
     const loginInp = document.getElementById('loginId');
     if (loginInp) loginInp.value = '';
     const otpInp = document.getElementById('otpCode');
     if (otpInp) otpInp.value = '';
-    
+
     document.getElementById('step1')?.classList.remove('hidden');
     document.getElementById('step2')?.classList.add('hidden');
-    
     document.getElementById('mainApp')?.classList.add('hidden');
     const loginScr = document.getElementById('loginScreen');
     if (loginScr) loginScr.style.display = 'flex';
