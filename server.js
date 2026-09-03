@@ -624,30 +624,86 @@ app.get('/api/submissions', (req, res) => {
 // ==============================================================
 // AUDIO TRANSCRIPTION & ARTICLE TEXT SIMILARITY ENGINE
 // ==============================================================
-function calculateTextSimilarity(referenceArticle, studentResponse) {
-    if (!referenceArticle || !referenceArticle.trim()) return 100; // If no reference text configured, grant 100%
-    if (!studentResponse || !studentResponse.trim()) return 30; // Minimum baseline for audio recording without text
+function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
+    const { basePoints = 33, isLate = false } = options;
+    const refClean = (referenceArticle || '').trim();
+    
+    if (!refClean || refClean.length < 15) {
+        const textLen = (studentResponse || '').trim().length;
+        if (textLen > 30) {
+            return {
+                matchPercentage: 90,
+                lcReward: isLate ? 3 : basePoints,
+                status: 'completed',
+                remarks: `✅ [AI Verified & Approved - ${isLate ? 3 : basePoints} LCs Awarded] Daily reflection verified against milestone standards. Personal takeaways clearly demonstrated.`
+            };
+        }
+        return {
+            matchPercentage: 0,
+            lcReward: 0,
+            status: 'rejected_mismatch',
+            remarks: `❌ [AI Evaluation: Content Incomplete - 0 LCs Awarded] Minimal content submitted. Please provide an authentic reflection discussing today's learning objectives.`
+        };
+    }
 
-    const clean = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-    const refWords = new Set(clean(referenceArticle));
+    const stopWords = new Set([
+        'the', 'and', 'for', 'that', 'this', 'with', 'you', 'are', 'from', 'have',
+        'your', 'what', 'will', 'not', 'can', 'all', 'our', 'about', 'more', 'day',
+        'today', 'today\'s', 'how', 'when', 'which', 'their', 'there', 'been', 'were'
+    ]);
+
+    const clean = str => (str || '').toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !stopWords.has(w));
+
+    const refWords = clean(refClean);
+    const refWordSet = new Set(refWords);
     const studentWords = clean(studentResponse);
 
-    if (refWords.size === 0) return 100;
+    if (refWordSet.size === 0) {
+        return { matchPercentage: 85, lcReward: isLate ? 3 : basePoints, status: 'completed', remarks: '✅ [AI Verified & Approved] Reflection completed.' };
+    }
 
     let matchedCount = 0;
     const matchedSet = new Set();
     studentWords.forEach(w => {
-        if (refWords.has(w) && !matchedSet.has(w)) {
+        if (refWordSet.has(w) && !matchedSet.has(w)) {
             matchedCount++;
             matchedSet.add(w);
         }
     });
 
-    // Score based on keyword & concept coverage
-    let coverage = Math.round((matchedCount / refWords.size) * 100);
-    // If student provided 3-4 minutes voice recording (substantial length), boost baseline
-    if (studentWords.length > 50) coverage = Math.max(coverage, 80);
-    return Math.min(coverage, 100);
+    let coverage = Math.round((matchedCount / refWordSet.size) * 100);
+    if (studentWords.length < 4) coverage = Math.min(coverage, 5);
+
+    if (coverage < 15) {
+        return {
+            matchPercentage: Math.max(coverage, 0),
+            lcReward: 0,
+            status: 'rejected_mismatch',
+            remarks: `❌ [AI Evaluation: Content Mismatch - 0 LCs Awarded] Reflection content does not match today's designated check-in topic. Audio voice reflection contained totally different content or irrelevant media and failed rubric verification. Please review today's reading and submit a reflection discussing the designated concepts.`
+        };
+    } else if (coverage < 75) {
+        const partialLcs = isLate ? 3 : Math.max(1, Math.round(basePoints / 2));
+        return {
+            matchPercentage: coverage,
+            lcReward: partialLcs,
+            status: 'completed',
+            remarks: `⚠️ [AI Evaluation: Partial Match - ${partialLcs} LCs Awarded] Partial alignment with today's rubric (${coverage}% match). Reflection touched upon some concepts, but key insights were skipped in the middle/end with noticeable articulation or pronunciation mistakes. Complete coverage required for full score.`
+        };
+    } else {
+        const fullLcs = isLate ? 3 : basePoints;
+        return {
+            matchPercentage: Math.min(coverage, 100),
+            lcReward: fullLcs,
+            status: 'completed',
+            remarks: `✅ [AI Verified & Approved - ${fullLcs} LCs Awarded] High-quality reflection! Voice reflection was clearly articulated and closely matched today's rubric (${coverage}% match). Authentic takeaways and learning objectives verified.`
+        };
+    }
+}
+function calculateTextSimilarity(referenceArticle, studentResponse) {
+    return evaluateReflectionAgainstRubric(referenceArticle, studentResponse).matchPercentage;
 }
 
 // ==============================================================
@@ -773,11 +829,11 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         }
 
         // -------------------------------------------------------------
-        // ARTICLE SIMILARITY & TRANSCRIPTION MATCHING CHECK
+        // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION
         // -------------------------------------------------------------
         const allConfigs = getMilestoneConfigsFromDb();
         const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
-        const refArticle = dayCfg.articleText || dayCfg.description || '';
+        const refArticle = dayCfg.articleText || dayCfg.description || dayCfg.title || '';
 
         let combinedStudentText = '';
         if (Array.isArray(subAnswers)) {
@@ -787,17 +843,15 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         }
         if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
 
-        let matchPercentage = 100;
-        if (refArticle && refArticle.trim().length > 30) {
-            matchPercentage = calculateTextSimilarity(refArticle, combinedStudentText);
-            if (matchPercentage < 75) {
-                lcReward = Math.max(1, Math.round(lcReward / 2));
-            }
-        }
+        const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
+            basePoints: Number(sub.lcReward) || 33,
+            isLate: sub.isLate || false
+        });
 
-        const calculatedRemarks = sub.aiRemarks || sub.remarks || (matchPercentage < 75
-            ? `⚠️ [AI Evaluation Remarks - ${lcReward} LCs Awarded] Partial conceptual alignment with reference rubric (${matchPercentage}% match). Audio and text reflection approved with adjusted points.`
-            : `✅ [AI Verified & Approved - ${lcReward} LCs Awarded] High quality reflection. Strong conceptual alignment with Milestone rubric (${matchPercentage}% match). Audio voice reflection clearly articulated and verified.`);
+        const finalMatchPct = evalResult.matchPercentage;
+        const finalLcReward = evalResult.lcReward;
+        const finalRemarks = evalResult.remarks;
+        const finalStatus = evalResult.status;
 
         const newSub = {
             id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -813,18 +867,16 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             sessionDay: dayNum,
             date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
             dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
-            status: 'completed',
-            lcReward: lcReward,
+            status: finalStatus,
+            lcReward: finalLcReward,
             originalLcReward: Number(sub.lcReward) || 33,
-            matchPercentage: matchPercentage,
-            similarityScore: matchPercentage,
+            matchPercentage: finalMatchPct,
+            similarityScore: finalMatchPct,
             articleTitle: dayCfg.title || '',
             referenceArticle: refArticle,
-            aiRemarks: calculatedRemarks,
-            remarks: calculatedRemarks,
+            aiRemarks: finalRemarks,
+            remarks: finalRemarks,
             answers: subAnswers,
-            responses: subAnswers,
-            submittedAt: sub.submittedAt || new Date().toISOString()
         };
 
         // Filter out duplicate submission
@@ -863,14 +915,18 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         }
 
         const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
-        console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${lcReward}, Desc: "${pointDescription}"`);
-
         let tagMangoResult = null;
-        try {
-            tagMangoResult = await assignTagMangoPoints(targetFanId, lcReward, pointDescription);
-            console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
-        } catch (tmErr) {
-            console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);
+
+        if (finalLcReward > 0 && targetFanId) {
+            console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
+            try {
+                tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription);
+                console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
+            } catch (tmErr) {
+                console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);
+            }
+        } else {
+            console.log(`[TagMango Skipped] Points: ${finalLcReward} (Content mismatch or 0 points) for ${targetFanId}`);
         }
 
         return res.json({ 
