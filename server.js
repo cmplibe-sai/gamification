@@ -92,6 +92,7 @@ function loadStore() {
     }
     return {
         submissions: [],
+        submissionsRevision: Date.now(),
         customMilestoneConfigs: {},
         customProjectsDB: {},
         levelUpAccessConfig: [],
@@ -104,9 +105,11 @@ function loadStore() {
 }
 
 let store = loadStore();
+if (!store.submissionsRevision) store.submissionsRevision = Date.now();
 
 function saveStore() {
     try {
+        store.lastUpdated = Date.now();
         fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
     } catch (e) {
         console.error('Error saving storage file:', e);
@@ -519,6 +522,8 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
         success: true,
         data: {
             submissions: enrichedSubs,
+            submissionsRevision: store.submissionsRevision || Date.now(),
+            lastUpdated: store.lastUpdated || Date.now(),
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
             joinDates: getUserJoinDatesFromDb(),
@@ -567,15 +572,38 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
         });
 
         if (addedCount > 0) {
+            store.submissionsRevision = Date.now();
             saveStore();
         }
 
-        res.json({ success: true, count: store.submissions.length, added: addedCount });
+        res.json({ success: true, count: store.submissions.length, added: addedCount, submissionsRevision: store.submissionsRevision });
     } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+// SUBMISSION STATUS UPDATE ENDPOINT (e.g. approve or mark completed)
+app.post(['/api/submissions/update-status', '/gamification/api/submissions/update-status'], (req, res) => {
+    try {
+        const { userId, milestoneId, type, day, status } = req.body;
+        if (!store.submissions) store.submissions = [];
+        const idx = store.submissions.findIndex(s => 
+            (String(s.userId) === String(userId) || (s.userEmail && String(s.userEmail).toLowerCase() === String(userId).toLowerCase())) &&
+            String(s.milestoneId || 1) === String(milestoneId || 1) &&
+            String(s.type || s.moduleType || 'dip').toLowerCase() === String(type || 'dip').toLowerCase() &&
+            String(s.day) === String(day)
+        );
+        if (idx > -1) {
+            store.submissions[idx].status = status || 'completed';
+            store.submissionsRevision = Date.now();
+            saveStore();
+            return res.json({ success: true, data: store.submissions[idx], submissionsRevision: store.submissionsRevision });
+        }
+        res.json({ success: false, message: 'Submission not found' });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 app.get('/api/submissions', (req, res) => {
     const { userId, milestoneId, type } = req.query;
@@ -783,6 +811,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         ));
 
         store.submissions.push(newSub);
+        store.submissionsRevision = Date.now();
         saveStore();
 
         // -------------------------------------------------------------

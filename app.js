@@ -32,6 +32,7 @@ function displayAdminLearnerDataById(userId) {
     if (!reportContainer) return;
 
     reportContainer.classList.remove('hidden');
+    reportContainer.dataset.userId = String(user._id || userId);
 
     const uSubs = getUserSubmissionsByUserId(user._id || user);
     const earnedLcs = uSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
@@ -973,7 +974,8 @@ var currentView = 'sector';
 var currentFilter = 'All';
 var customerProjectFilter = 'All';
 var selectedProject = null;
-var isAdminLogin = false;
+var isAdminLogin = (typeof localStorage !== 'undefined' && localStorage.getItem('isAdminLogin') === 'true');
+var userMilestoneJoinDates = (typeof localStorage !== 'undefined') ? (JSON.parse(localStorage.getItem('userMilestoneJoinDates') || '{}')) : {};
 var isCampusPartner = false;
 var partnerAllowedMangoes = [];
 var activeAdminMilestoneId = 1;
@@ -1043,13 +1045,14 @@ async function syncGlobalServerData() {
 
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         
-        // Signature: includes submission count+last ID, config keys per milestone, module access state, levelUp list
+        const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
+        const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '')).join('|') : '';
         const cfgSig = Object.entries(serverConfigs || {}).map(([msId, mods]) => msId + ':' + Object.keys(mods).join(',')).join('|');
-        const currentSignature = (serverData ? serverData.length : 0) + '_' +
-            (serverData && serverData.length > 0 ? (serverData[serverData.length - 1].id || serverData[serverData.length - 1]._id || '') : '') + '_' +
+        const currentSignature = serverRevision + '_' + (serverData ? serverData.length : 0) + '_' + subsSummary + '_' +
             cfgSig + '_' +
             JSON.stringify(serverModuleAccess || {}) + '_' +
-            JSON.stringify(serverLevelUpAccess || []);
+            JSON.stringify(serverLevelUpAccess || []) + '_' +
+            JSON.stringify(serverJoinDates || {});
 
         if (currentSignature === lastSyncSignature) {
             isSyncInProgress = false;
@@ -1059,12 +1062,15 @@ async function syncGlobalServerData() {
 
         // 1. SUBMISSIONS SYNC
         if (Array.isArray(serverData)) {
-            const missingOnServer = localData.filter(loc => !serverData.some(srv => (
-                (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
-                String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
-                normalizeLevelUpType(srv.type) === normalizeLevelUpType(loc.type) &&
-                String(srv.day !== undefined && srv.day !== null ? srv.day : (srv.date || srv.dateKey)) === String(loc.day !== undefined && loc.day !== null ? loc.day : (loc.date || loc.dateKey))
-            )));
+            const missingOnServer = localData.filter(loc => {
+                if (!loc || (!loc.userId && !loc.userEmail) || String(loc.id || '').includes('mock')) return false;
+                return !serverData.some(srv => (
+                    (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
+                    String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
+                    normalizeLevelUpType(srv.type) === normalizeLevelUpType(loc.type) &&
+                    String(srv.day !== undefined && srv.day !== null ? srv.day : (srv.date || srv.dateKey)) === String(loc.day !== undefined && loc.day !== null ? loc.day : (loc.date || loc.dateKey))
+                ));
+            });
 
             if (missingOnServer.length > 0) {
                 apiFetch('/api/submissions/bulk-sync', {
@@ -1154,15 +1160,42 @@ async function syncGlobalServerData() {
         }
 
         // 6. SELECTIVE FAST RE-RENDER (Only re-renders the currently active view)
-        const adminTabEl = document.getElementById('adminLevelUpTab') || document.getElementById('adminTab');
-        const isCreatorView = adminTabEl && !adminTabEl.classList.contains('hidden');
+        const adminMainTab = document.getElementById('adminTab');
+        const adminLevelUpTab = document.getElementById('adminLevelUpTab');
+        const isAdminMainVisible = adminMainTab && !adminMainTab.classList.contains('hidden');
+        const isAdminLevelUpVisible = adminLevelUpTab && !adminLevelUpTab.classList.contains('hidden');
 
-        if (isCreatorView) {
+        if (isAdminLevelUpVisible) {
             if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
                 renderAdminCohortSubmissions();
             }
+        } else if (isAdminMainVisible) {
+            if (typeof renderAdminCustomerGrid === 'function') {
+                renderAdminCustomerGrid();
+            }
+            const reportContainer = document.getElementById('adminReportContainer');
+            if (reportContainer && !reportContainer.classList.contains('hidden')) {
+                const curId = reportContainer.dataset?.userId;
+                if (curId && typeof displayAdminLearnerDataById === 'function') {
+                    displayAdminLearnerDataById(curId);
+                }
+            }
         } else {
-            const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
+            let activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module;
+            if (!activeSubTab) {
+                const activeNavBtn = document.querySelector('.milestone-nav-btn.border-indigo-500');
+                if (activeNavBtn) {
+                    const txt = activeNavBtn.innerText.toLowerCase();
+                    if (txt.includes('pod')) activeSubTab = 'pod';
+                    else if (txt.includes('immerse')) activeSubTab = 'immerse';
+                    else if (txt.includes('project') || txt.includes('real-world')) activeSubTab = 'projects';
+                    else if (txt.includes('solution') || txt.includes('problem')) activeSubTab = 'problem_solution';
+                    else if (txt.includes('residency')) activeSubTab = 'residency';
+                    else activeSubTab = 'dip';
+                } else {
+                    activeSubTab = 'dip';
+                }
+            }
             if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
                 switchMilestoneTab(activeSubTab);
             }
@@ -6365,6 +6398,8 @@ let lastRenderedSubHash = '';
 function startLiveSync() {
     if (liveSyncInterval) clearInterval(liveSyncInterval);
     liveSyncInterval = setInterval(async () => {
+        if (!currentUser) { try { currentUser = JSON.parse(localStorage.getItem('currentUser')); } catch(e) {} }
+        if (!isAdminLogin) { try { isAdminLogin = localStorage.getItem('isAdminLogin') === 'true' || sessionStorage.getItem('isAdminLogin') === 'true'; } catch(e) {} }
         if (!currentUser && !isAdminLogin) return;
 
         await syncGlobalServerData();
@@ -8323,6 +8358,7 @@ async function verifyOTP() {
             if (mainApp) mainApp.classList.remove('hidden');
 
             if (isAdminLogin || isCampusPartner) {
+                try { localStorage.setItem('isAdminLogin', 'true'); sessionStorage.setItem('isAdminLogin', 'true'); } catch(e) {}
                 if (learnerNav) learnerNav.classList.add('hidden');
                 if (adminNav) adminNav.classList.remove('hidden');
                 
@@ -8369,6 +8405,7 @@ window.verifyOTP = verifyOTP;
 function logout() {
     currentUser = null;
     isAdminLogin = false;
+    try { localStorage.removeItem('isAdminLogin'); sessionStorage.removeItem('isAdminLogin'); } catch(e) {}
     isCampusPartner = false;
     partnerAllowedMangoes = [];
     tempLoginId = '';
@@ -8651,7 +8688,7 @@ async function openMilestone(id) {
         subNav.innerHTML = enabledMods.map((modCode, i) => {
             const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-            return `<button onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
+            return `<button data-module="${modCode}" onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
                 <i class="fas ${modObj.icon}"></i> ${modObj.name}
             </button>`;
         }).join('');
@@ -8804,7 +8841,7 @@ function switchMilestoneTab(moduleName, btnElement) {
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
-        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || (String(s.day) === String(dayNum) && s.submittedAt && s.submittedAt.startsWith(cardDateKey)));
+        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey || String(s.day) === String(dayNum)));
         const isCompleted = Boolean(sub);
 
         const isToday = (cardDateKey === todayKey);
