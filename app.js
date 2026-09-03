@@ -120,7 +120,7 @@ function updateDashboardUI() {
         : null;
 
     const displayUser = matchedActual || currentUser;
-    const userSubs = getUserSubmissionsByUserId(displayUser._id || displayUser);
+    const userSubs = getUserSubmissionsByUserId(displayUser);
     const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
     const totalXP = earnedLcs > 0 ? (6505 + earnedLcs) : 6541;
 
@@ -5810,17 +5810,29 @@ function getUserSubmissionsByUserId(userIdentifier) {
         localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     } catch(e) {}
 
-    // If userIdentifier is undefined or null or empty string, return empty array
-    if (userIdentifier === undefined || userIdentifier === null || userIdentifier === '') {
-        return [];
-    }
-    
+    if (!userIdentifier) return [];
+
     let targetId = (typeof userIdentifier === 'object' && userIdentifier) ? (userIdentifier._id || userIdentifier.id) : String(userIdentifier);
     let targetEmail = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.email : (String(userIdentifier).includes('@') ? String(userIdentifier).toLowerCase().trim() : null);
     let targetPhone = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.phone : (!String(userIdentifier).includes('@') && String(userIdentifier).length >= 10 ? String(userIdentifier).trim() : null);
 
-    const knownUsers = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
-    const matchedUser = knownUsers.find(u => 
+    // If currentUser exists in memory or localStorage, enrich matching
+    let cur = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
+    if (!cur) {
+        try { cur = JSON.parse(localStorage.getItem('currentUser')); } catch(e) {}
+    }
+    if (cur) {
+        if (!targetId && cur._id) targetId = cur._id;
+        if (!targetEmail && cur.email) targetEmail = cur.email.toLowerCase().trim();
+        if (!targetPhone && cur.phone) targetPhone = String(cur.phone).trim();
+    }
+
+    const allKnownUsers = [
+        ...(typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) ? actualUsers : []),
+        ...(typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])
+    ];
+
+    const matchedUser = allKnownUsers.find(u => 
         (targetId && String(u._id) === String(targetId)) ||
         (targetEmail && u.email && u.email.toLowerCase().trim() === String(targetEmail).toLowerCase().trim()) ||
         (targetPhone && u.phone && String(u.phone).trim() === String(targetPhone).trim())
@@ -5828,8 +5840,8 @@ function getUserSubmissionsByUserId(userIdentifier) {
 
     if (matchedUser) {
         if (!targetId || String(targetId).startsWith('usr_')) targetId = matchedUser._id;
-        if (!targetEmail) targetEmail = matchedUser.email;
-        if (!targetPhone) targetPhone = matchedUser.phone;
+        if (!targetEmail && matchedUser.email) targetEmail = matchedUser.email.toLowerCase().trim();
+        if (!targetPhone && matchedUser.phone) targetPhone = String(matchedUser.phone).trim();
     }
 
     return localDB.filter(sub => {
@@ -5843,11 +5855,15 @@ function getUserSubmissionsByUserId(userIdentifier) {
         
         // Phone match
         if (targetPhone && sub.userPhone && String(sub.userPhone).trim() === String(targetPhone).trim()) return true;
+
+        // Current user fallback match
+        if (cur && cur.email && sub.userEmail && cur.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()) return true;
+        if (cur && cur._id && sub.userId && String(cur._id) === String(sub.userId)) return true;
         
         return false;
     });
 }
-
+window.getUserSubmissionsByUserId = getUserSubmissionsByUserId;
 
 function getUserMilestoneLcs(userId, milestoneId) {
     if (!userId) return 0;
@@ -7279,9 +7295,9 @@ function bypassCheckinFormFields(count) {
 window.bypassCheckinFormFields = bypassCheckinFormFields;
 
 // ==============================================================
-// 4. AI EVALUATION MODAL WITH REALISTIC LAGTIME & SUCCESS DIALOG
 // ==============================================================
-
+// 4. 5-STAGE AI EVALUATION ENGINE WITH STATUS BAR & ROBOT CHECKING
+// ==============================================================
 function showAiEvaluatingLagtime(earnedPoints, callback) {
     const old = document.getElementById('evaluatingCheckinModal');
     if (old) old.remove();
@@ -7289,34 +7305,118 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
     const pts = Number(earnedPoints) || 33;
     const modalHtml = `
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
-            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl">
-                <!-- ROBOT ANIMATED ICON IN INDIGO GLOW CIRCLE -->
-                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner">
-                    <i class="fas fa-robot text-indigo-400"></i>
+            <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-md"></div>
+            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl overflow-hidden">
+                
+                <!-- TOP: ROBOT ANIMATION WITH RADAR GLOW & SCANNING BEAM -->
+                <div class="relative w-24 h-24 mx-auto flex items-center justify-center">
+                    <div id="robotGlowRing" class="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping opacity-75"></div>
+                    <div id="robotIconCircle" class="relative w-20 h-20 bg-gradient-to-tr from-indigo-950 via-indigo-900 to-indigo-800 text-indigo-400 rounded-full flex items-center justify-center text-4xl border-2 border-indigo-500/50 shadow-2xl shadow-indigo-500/40 overflow-hidden">
+                        <div id="robotLaserSweep" class="absolute inset-x-0 h-1 bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-pulse" style="top:30%;"></div>
+                        <i id="robotIcon" class="fas fa-robot text-indigo-300"></i>
+                    </div>
                 </div>
+
+                <!-- TITLE & SUBTITLE -->
                 <div>
-                    <h3 class="text-2xl font-extrabold text-white font-heading">Video Submitted!</h3>
-                    <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">Your reflection is being transcribed and evaluated by our AI.</p>
+                    <h3 id="evalModalTitle" class="text-2xl font-extrabold text-white font-heading">AI Evaluation in Progress</h3>
+                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">Analyzing your reflection and verifying insights against cohort rubrics...</p>
                 </div>
                 
-                <!-- EVALUATION IN PROGRESS STATUS BOX -->
-                <div class="p-5 bg-[#0b101d] rounded-2xl border border-slate-800 space-y-2.5 text-center shadow-inner">
-                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-black tracking-wider uppercase">
-                        <i class="fas fa-circle-notch fa-spin text-amber-400"></i> EVALUATION IN PROGRESS
+                <!-- 5-STAGE STATUS BAR FILLING (0% -> 100%) -->
+                <div class="space-y-2 text-left bg-slate-950/80 p-4 rounded-2xl border border-slate-800 shadow-inner">
+                    <div class="flex justify-between items-center text-[11px] font-bold">
+                        <span id="evalCurrentStageText" class="text-indigo-400 flex items-center gap-1.5">
+                            <i class="fas fa-circle-notch fa-spin text-cyan-400"></i> Stage 1/5: Uploading reflection media...
+                        </span>
+                        <span id="evalPercentageText" class="font-mono text-cyan-400">15%</span>
                     </div>
-                    <p class="text-xs text-slate-300 font-medium leading-relaxed">LCs will be credited to your wallet once approved.</p>
+                    <!-- Status Bar -->
+                    <div class="w-full h-3.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-700/60 shadow-inner">
+                        <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500 ease-out" style="width: 15%;"></div>
+                    </div>
+                    <div class="flex justify-between items-center text-[10px] text-slate-500 font-mono pt-1">
+                        <span>Submitted</span>
+                        <span id="evalStepCounter">Stage 1 of 5</span>
+                        <span>Approved</span>
+                    </div>
+                </div>
+
+                <!-- DYNAMIC STATUS INFO BOX -->
+                <div id="evalStatusBox" class="p-3 bg-indigo-950/40 rounded-xl border border-indigo-800/40 flex items-center justify-center gap-2 text-indigo-300 text-xs font-semibold">
+                    <i id="evalStatusIcon" class="fas fa-microchip text-indigo-400"></i>
+                    <span id="evalStatusMsg">Encrypted link established with verification node...</span>
                 </div>
                 
                 <!-- ACTION BUTTON -->
-                <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" class="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm transition-all shadow-lg shadow-indigo-600/30">
-                    Got it
+                <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" disabled class="w-full py-3.5 px-6 rounded-2xl bg-slate-800 text-slate-500 font-extrabold text-sm transition-all shadow-lg cursor-not-allowed">
+                    <i class="fas fa-spinner fa-spin mr-2"></i> Evaluating Response...
                 </button>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     window._evalCallback = callback;
+
+    const stages = [
+        { pct: 20, stage: "Stage 1 of 5", text: "Stage 1/5: Uploading reflection media...", msg: "Reflection payload and audio/video secured on server...", icon: "fa-upload" },
+        { pct: 45, stage: "Stage 2 of 5", text: "Stage 2/5: Transcribing voice reflection...", msg: "AI Speech-to-Text parsing key takeaways and reflections...", icon: "fa-microphone-lines" },
+        { pct: 70, stage: "Stage 3 of 5", text: "Stage 3/5: Evaluating Milestone rubrics...", msg: "Assessing depth of insights against daily learning goals...", icon: "fa-brain" },
+        { pct: 90, stage: "Stage 4 of 5", text: "Stage 4/5: Peer-benchmark verification...", msg: "Calculating concept coverage and originality score...", icon: "fa-chart-pie" },
+        { pct: 100, stage: "Stage 5 of 5", text: "Stage 5/5: Evaluation Approved!", msg: `Check-in verified! +${pts} LCs successfully credited to your wallet!`, icon: "fa-check-circle" }
+    ];
+
+    let currentIdx = 0;
+    const interval = setInterval(() => {
+        currentIdx++;
+        if (currentIdx < stages.length) {
+            const s = stages[currentIdx];
+            const bar = document.getElementById('evalProgressBar');
+            const pctText = document.getElementById('evalPercentageText');
+            const stageText = document.getElementById('evalCurrentStageText');
+            const statusMsg = document.getElementById('evalStatusMsg');
+            const statusIcon = document.getElementById('evalStatusIcon');
+            const stepCounter = document.getElementById('evalStepCounter');
+
+            if (bar) bar.style.width = `${s.pct}%`;
+            if (pctText) pctText.innerText = `${s.pct}%`;
+            if (stageText) stageText.innerHTML = `<i class="fas fa-circle-notch fa-spin text-cyan-400"></i> ${s.text}`;
+            if (statusMsg) statusMsg.innerText = s.msg;
+            if (statusIcon) statusIcon.className = `fas ${s.icon} text-cyan-400`;
+            if (stepCounter) stepCounter.innerText = s.stage;
+
+            if (s.pct === 100) {
+                clearInterval(interval);
+                setTimeout(() => {
+                    const title = document.getElementById('evalModalTitle');
+                    const subtitle = document.getElementById('evalModalSubtitle');
+                    const btn = document.getElementById('btnDismissEvalModal');
+                    const robotIcon = document.getElementById('robotIcon');
+                    const robotCircle = document.getElementById('robotIconCircle');
+                    const laser = document.getElementById('robotLaserSweep');
+                    const glow = document.getElementById('robotGlowRing');
+                    const statusBox = document.getElementById('evalStatusBox');
+
+                    if (laser) laser.remove();
+                    if (glow) glow.className = "absolute inset-0 rounded-full bg-emerald-500/40 animate-pulse";
+                    if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-emerald-950 to-emerald-700 text-emerald-300 rounded-full flex items-center justify-center text-4xl border-2 border-emerald-400 shadow-2xl shadow-emerald-500/50";
+                    if (robotIcon) robotIcon.className = "fas fa-check-circle text-emerald-300 scale-110";
+
+                    if (title) title.innerHTML = '<span class="text-emerald-400">Reflection Approved!</span>';
+                    if (subtitle) subtitle.innerHTML = `Great work! Your daily check-in is complete and <strong>+${pts} LCs</strong> are credited to your wallet.`;
+
+                    if (stageText) stageText.innerHTML = '<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Check-in Completed';
+                    if (statusBox) statusBox.className = "p-3 bg-emerald-950/50 rounded-xl border border-emerald-500/50 flex items-center justify-center gap-2 text-emerald-300 text-xs font-bold";
+
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-xl shadow-emerald-600/30 cursor-pointer";
+                        btn.innerHTML = '<i class="fas fa-check-double mr-2"></i> Done & View Completed Check-in';
+                    }
+                }, 300);
+            }
+        }
+    }, 600);
 }
 window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
 
@@ -7329,7 +7429,10 @@ function closeAiEvaluatingModal() {
 }
 window.closeAiEvaluatingModal = closeAiEvaluatingModal;
 
-
+function showPendingEvaluationPopup(earnedPoints) {
+    showAiEvaluatingLagtime(earnedPoints, null);
+}
+window.showPendingEvaluationPopup = showPendingEvaluationPopup;
 
 function openSubmissionModal(dayNum, moduleName) {
     if (!currentUser) return alert('Please login to start your check-in.');
@@ -7567,54 +7670,6 @@ function bypassCheckinFormFields(count) {
 window.bypassCheckinFormFields = bypassCheckinFormFields;
 
 // ==============================================================
-// 4. AI EVALUATION MODAL WITH REALISTIC LAGTIME & SUCCESS DIALOG
-// ==============================================================
-
-function showAiEvaluatingLagtime(earnedPoints, callback) {
-    const old = document.getElementById('evaluatingCheckinModal');
-    if (old) old.remove();
-
-    const pts = Number(earnedPoints) || 33;
-    const modalHtml = `
-        <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
-            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl">
-                <!-- ROBOT ANIMATED ICON IN INDIGO GLOW CIRCLE -->
-                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-4xl border border-indigo-500/40 shadow-inner">
-                    <i class="fas fa-robot text-indigo-400"></i>
-                </div>
-                <div>
-                    <h3 class="text-2xl font-extrabold text-white font-heading">Video Submitted!</h3>
-                    <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">Your reflection is being transcribed and evaluated by our AI.</p>
-                </div>
-                
-                <!-- EVALUATION IN PROGRESS STATUS BOX -->
-                <div class="p-5 bg-[#0b101d] rounded-2xl border border-slate-800 space-y-2.5 text-center shadow-inner">
-                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-black tracking-wider uppercase">
-                        <i class="fas fa-circle-notch fa-spin text-amber-400"></i> EVALUATION IN PROGRESS
-                    </div>
-                    <p class="text-xs text-slate-300 font-medium leading-relaxed">LCs will be credited to your wallet once approved.</p>
-                </div>
-                
-                <!-- ACTION BUTTON -->
-                <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" class="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm transition-all shadow-lg shadow-indigo-600/30">
-                    Got it
-                </button>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    window._evalCallback = callback;
-}
-window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
-
-function showPendingEvaluationPopup(earnedPoints) {
-    showAiEvaluatingLagtime(earnedPoints, null);
-}
-window.showPendingEvaluationPopup = showPendingEvaluationPopup;
-
-window.showPendingEvaluationPopup = showPendingEvaluationPopup;
-
 async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLate, endTime) {
     if (!currentUser) return alert('Please login first.');
 
@@ -7684,16 +7739,31 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     const isLate = endTime ? (currentHHMM > endTime) : false;
     const pointsAwarded = isLate ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
 
-    const subData = {
+    const cleanAnswers = answers.map(a => {
+        const copy = { ...a };
+        if (copy.audioUrl && copy.audioUrl.startsWith('data:') && copy.audioUrl.length > 500) {
+            copy.audioUrl = '[Audio Uploaded - Processing on Server]';
+        }
+        if (copy.videoUrl && copy.videoUrl.startsWith('data:') && copy.videoUrl.length > 500) {
+            copy.videoUrl = '[Video Uploaded - Processing on Server]';
+        }
+        return copy;
+    });
+
+    const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
+    const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
+    const userPhoneStr = currentUser.phone ? String(currentUser.phone).trim() : '';
+
+    const cleanLocalSub = {
         id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        userId: currentUser._id,
-        fanId: currentUser.fanId || currentUser._id,
-        userEmail: currentUser.email || '',
+        userId: userIdStr,
+        fanId: String(currentUser.fanId || userIdStr),
+        userEmail: userEmailStr,
         userName: currentUser.name || 'Learner',
-        userPhone: currentUser.phone || '',
-        milestoneId: msId,
-        moduleType: moduleName,
-        type: moduleName,
+        userPhone: userPhoneStr,
+        milestoneId: Number(msId) || 1,
+        moduleType: String(moduleName || 'dip').toLowerCase(),
+        type: String(moduleName || 'dip').toLowerCase(),
         day: Number(dayNum) || 1,
         sessionDay: Number(dayNum) || 1,
         date: cardDateKey,
@@ -7701,29 +7771,22 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         submittedAt: new Date().toISOString(),
         lcReward: pointsAwarded,
         status: 'completed',
-        answers: answers,
-        responses: answers
+        answers: cleanAnswers,
+        responses: cleanAnswers
     };
 
-    // 1. SAVE SAFELY TO LOCAL STORAGE (Without massive base64 strings to avoid 5MB quota errors)
+    // 1. SAVE SAFELY & INSTANTLY TO LOCAL STORAGE
     try {
-        const cleanLocalSub = JSON.parse(JSON.stringify(subData));
-        if (Array.isArray(cleanLocalSub.answers)) {
-            cleanLocalSub.answers.forEach(a => {
-                if (a.audioUrl && a.audioUrl.startsWith('data:') && a.audioUrl.length > 500) {
-                    a.audioUrl = '[Audio Uploaded - Processing on Server]';
-                }
-                if (a.videoUrl && a.videoUrl.startsWith('data:') && a.videoUrl.length > 500) {
-                    a.videoUrl = '[Video Uploaded - Processing on Server]';
-                }
-            });
-        }
         let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
         localDB = localDB.filter(s => !(
-            (String(s.userId) === String(currentUser._id) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
-            String(s.milestoneId || 1) === String(msId) &&
-            normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) &&
-            String(s.day) === String(dayNum)
+            (
+                (s.userId && userIdStr && String(s.userId) === userIdStr) ||
+                (s.userEmail && userEmailStr && s.userEmail.toLowerCase().trim() === userEmailStr) ||
+                (s.userPhone && userPhoneStr && String(s.userPhone).trim() === userPhoneStr)
+            ) &&
+            String(s.milestoneId || 1) === String(cleanLocalSub.milestoneId || 1) &&
+            normalizeLevelUpType(s.type) === normalizeLevelUpType(cleanLocalSub.type) &&
+            (String(s.day) === String(cleanLocalSub.day) || (s.dateKey && cleanLocalSub.dateKey && s.dateKey === cleanLocalSub.dateKey))
         ));
         localDB.push(cleanLocalSub);
         localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
@@ -7738,14 +7801,13 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
 
         if (currentUser._id && Array.isArray(adminRealtimeUsers)) {
             const uId = String(currentUser._id);
-            const userEmail = currentUser.email || '';
-            const exist = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmail && u.email.toLowerCase() === userEmail.toLowerCase()));
+            const exist = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmailStr && u.email.toLowerCase() === userEmailStr));
             if (!exist) {
                 const newU = {
                     _id: uId,
                     name: currentUser.name || 'Learner',
-                    email: userEmail,
-                    phone: currentUser.phone || '',
+                    email: userEmailStr,
+                    phone: userPhoneStr,
                     subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
                 };
                 adminRealtimeUsers.push(newU);
@@ -7756,43 +7818,35 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         }
     }
 
-
-    // 3. DISPATCH INSTANT POST TO SERVER (Credits TagMango API right now & saves file to disk)
-    try {
-        const postRes = await apiFetch('/api/submissions', {
+    // 3. BACKGROUND NETWORK PERSISTENCE (POST + fallback bulk-sync)
+    apiFetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanLocalSub)
+    }).then(r => r.json()).then(postData => {
+        console.log('✅ Server submission response:', postData);
+        if (postData && postData.data) {
+            try {
+                let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+                localDB = localDB.filter(s => s.id !== postData.data.id && !(
+                    (String(s.userId) === String(postData.data.userId) || (s.userEmail && postData.data.userEmail && s.userEmail.toLowerCase() === postData.data.userEmail.toLowerCase())) &&
+                    String(s.milestoneId) === String(postData.data.milestoneId) &&
+                    String(s.day) === String(postData.data.day)
+                ));
+                localDB.push(postData.data);
+                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+            } catch(e) {}
+        }
+    }).catch(e => {
+        console.warn('POST /api/submissions fallback to bulk-sync:', e);
+        apiFetch('/api/submissions/bulk-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cleanLocalSub)
-        });
-        const postData = await postRes.json();
-        console.log('✅ Server & TagMango Points Credit Status:', postData);
-        if (postData && postData.data) {
-            let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            localDB = localDB.filter(s => s.id !== postData.data.id && !(
-                String(s.userId) === String(postData.data.userId) &&
-                String(s.milestoneId) === String(postData.data.milestoneId) &&
-                String(s.day) === String(postData.data.day)
-            ));
-            localDB.push(postData.data);
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-        }
-    } catch (e) {
-        console.warn('Submission POST warning, triggering bulk-sync fallback:', e);
-        try {
-            await apiFetch('/api/submissions/bulk-sync', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ submissions: [cleanLocalSub] })
-            });
-        } catch(bulkErr) {}
-    }
+            body: JSON.stringify({ submissions: [cleanLocalSub] })
+        }).catch(() => {});
+    });
 
-    // Immediately trigger background sync
-    if (typeof syncGlobalServerData === 'function') {
-        syncGlobalServerData().catch(() => {});
-    }
-
-    // 4. INSTANTLY UPDATE DASHBOARD & TIMELINE (Card flips to Completed)
+    // 4. INSTANT LOCAL STATE FLIP
     if (typeof switchMilestoneTab === 'function') {
         switchMilestoneTab(moduleName);
     }
@@ -7803,7 +7857,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         renderAdminCohortSubmissions();
     }
 
-    // 5. CLOSE FORM & SHOW 18-SECOND AI EVALUATION LAGTIME SCREEN
+    // 5. REMOVE INPUT MODAL & TRIGGER 5-STAGE AI EVALUATION FLOW
     document.getElementById('submissionModalDynamic')?.remove();
 
     showAiEvaluatingLagtime(pointsAwarded, () => {
@@ -7816,14 +7870,13 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
             renderAdminCohortSubmissions();
         }
+        if (typeof syncGlobalServerData === 'function') {
+            syncGlobalServerData().catch(() => {});
+        }
     });
 }
 window.submitCheckinForm = submitCheckinForm;
 
-
-// ==============================================================
-// 5. SWITCH MILESTONE TAB & LEARNER TIMELINE
-// ==============================================================
 function switchMilestoneTab(moduleName, btnElement) {
     if (btnElement) {
         document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
@@ -7883,7 +7936,7 @@ function switchMilestoneTab(moduleName, btnElement) {
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
 
-    const allUserSubs = getUserSubmissionsByUserId(currentUser ? currentUser._id : '');
+    const allUserSubs = getUserSubmissionsByUserId(currentUser);
     const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId || 1));
 
     let totalSessions = (activeMilestoneId === 1) ? 21 : 30;

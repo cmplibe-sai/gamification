@@ -105,7 +105,10 @@ function loadStore() {
 }
 
 let store = loadStore();
-if (!store.submissionsRevision) store.submissionsRevision = Date.now();
+if (!store.submissionsRevision) {
+    store.submissionsRevision = Date.now();
+    saveStore();
+}
 
 function saveStore() {
     try {
@@ -523,9 +526,9 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
         success: true,
         data: {
             submissions: enrichedSubs,
-            submissionsRevision: store.submissionsRevision || Date.now(),
-            configsRevision: store.configsRevision || Date.now(),
-            lastUpdated: store.lastUpdated || Date.now(),
+            submissionsRevision: store.submissionsRevision || 1000,
+            configsRevision: store.configsRevision || 1000,
+            lastUpdated: store.lastUpdated || 1000,
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
             joinDates: getUserJoinDatesFromDb(),
@@ -843,8 +846,13 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
         console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${lcReward}, Desc: "${pointDescription}"`);
 
-        const tagMangoResult = await assignTagMangoPoints(targetFanId, lcReward, pointDescription);
-        console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
+        let tagMangoResult = null;
+        try {
+            tagMangoResult = await assignTagMangoPoints(targetFanId, lcReward, pointDescription);
+            console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
+        } catch (tmErr) {
+            console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);
+        }
 
         return res.json({ 
             success: true, 
