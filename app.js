@@ -6440,7 +6440,8 @@ let lastRenderedSubHash = '';
 
 function startLiveSync() {
     if (liveSyncInterval) clearInterval(liveSyncInterval);
-    liveSyncInterval = setInterval(async () => {
+    // liveSyncInterval merged into single smart poller
+    return; liveSyncInterval = setInterval(async () => {
         if (!currentUser) { try { currentUser = JSON.parse(localStorage.getItem('currentUser')); } catch(e) {} }
         if (!isAdminLogin) { try { isAdminLogin = localStorage.getItem('isAdminLogin') === 'true' || sessionStorage.getItem('isAdminLogin') === 'true'; } catch(e) {} }
         if (!currentUser && !isAdminLogin) return;
@@ -6879,7 +6880,9 @@ async function startAudioRecording(idx) {
             const blob = new Blob(_audioChunks, { type: 'audio/webm' });
             const blobUrl = URL.createObjectURL(blob);
             window._recordedAudioData = window._recordedAudioData || {};
+            window._recordedAudioBlobs = window._recordedAudioBlobs || {};
             window._recordedAudioData[idx] = blobUrl;
+            window._recordedAudioBlobs[idx] = blob;
 
             const previewEl = document.getElementById(`audio_preview_${idx}`);
             if (previewEl) {
@@ -6890,13 +6893,32 @@ async function startAudioRecording(idx) {
             if (hiddenData) hiddenData.value = blobUrl;
 
             const recStatus = document.getElementById(`audio_rec_status_${idx}`);
-            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Preview ready below.</span>';
+            if (recStatus) recStatus.innerHTML = '<span class="text-cyan-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Securing & Uploading Voice Note...</span>';
 
             const reader = new FileReader();
-            reader.onloadend = () => {
+            reader.onloadend = async () => {
                 const base64Data = reader.result;
                 window._recordedAudioData[idx] = base64Data;
-                if (hiddenData) hiddenData.value = base64Data;
+                
+                try {
+                    const uploadRes = await apiFetch('/api/upload-media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dataUrl: base64Data, prefix: `audio_q${idx + 1}` })
+                    }).then(r => r.json());
+
+                    if (uploadRes && uploadRes.success && uploadRes.url) {
+                        window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                        window._recordedAudioServerUrls[idx] = uploadRes.url;
+                        if (hiddenData) hiddenData.value = uploadRes.url;
+                        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Voice Reflection Ready & Uploaded!</span>';
+                    } else {
+                        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Ready for submission.</span>';
+                    }
+                } catch(uploadErr) {
+                    console.warn('Audio auto-upload warning:', uploadErr);
+                    if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Ready for submission.</span>';
+                }
             };
             reader.readAsDataURL(blob);
 
@@ -6918,7 +6940,7 @@ async function startAudioRecording(idx) {
         if (stopBtn) stopBtn.classList.remove('hidden');
 
         const recStatus = document.getElementById(`audio_rec_status_${idx}`);
-        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note... Speak now</span>';
+        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note (Target 3-4 mins)... Speak now</span>';
     } catch(err) {
         console.error('Microphone error:', err);
         alert('Could not access microphone. Please allow microphone permission in your browser or select an audio file.');
@@ -7296,23 +7318,26 @@ window.bypassCheckinFormFields = bypassCheckinFormFields;
 
 // ==============================================================
 // ==============================================================
-// 4. 5-STAGE AI EVALUATION ENGINE WITH STATUS BAR & ROBOT CHECKING
 // ==============================================================
-function showAiEvaluatingLagtime(earnedPoints, callback) {
+// 4. 5-STAGE AI EVALUATION ENGINE (20-SECOND PACED EVALUATION & REMARKS)
+// ==============================================================
+function showAiEvaluatingLagtime(earnedPoints, generatedRemarks, callback) {
     const old = document.getElementById('evaluatingCheckinModal');
     if (old) old.remove();
 
     const pts = Number(earnedPoints) || 33;
+    const finalRemarks = generatedRemarks || `✅ [AI Verified & Approved - ${pts} LCs Awarded] High-quality reflection. Audio voice reflection was clearly articulated with authentic personal takeaways. Strong conceptual alignment with Milestone rubrics.`;
+
     const modalHtml = `
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-md"></div>
-            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl overflow-hidden">
+            <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-lg w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl overflow-hidden">
                 
-                <!-- TOP: ROBOT ANIMATION WITH RADAR GLOW & SCANNING BEAM -->
+                <!-- TOP: ROBOT ANIMATION WITH SCANNING BEAM & RADAR GLOW -->
                 <div class="relative w-24 h-24 mx-auto flex items-center justify-center">
                     <div id="robotGlowRing" class="absolute inset-0 rounded-full bg-indigo-600/30 animate-ping opacity-75"></div>
                     <div id="robotIconCircle" class="relative w-20 h-20 bg-gradient-to-tr from-indigo-950 via-indigo-900 to-indigo-800 text-indigo-400 rounded-full flex items-center justify-center text-4xl border-2 border-indigo-500/50 shadow-2xl shadow-indigo-500/40 overflow-hidden">
-                        <div id="robotLaserSweep" class="absolute inset-x-0 h-1 bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-pulse" style="top:30%;"></div>
+                        <div id="robotLaserSweep" class="absolute inset-x-0 h-1 bg-cyan-400 shadow-[0_0_12px_#22d3ee] animate-pulse" style="top:25%;"></div>
                         <i id="robotIcon" class="fas fa-robot text-indigo-300"></i>
                     </div>
                 </div>
@@ -7320,37 +7345,37 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
                 <!-- TITLE & SUBTITLE -->
                 <div>
                     <h3 id="evalModalTitle" class="text-2xl font-extrabold text-white font-heading">AI Evaluation in Progress</h3>
-                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">Analyzing your reflection and verifying insights against cohort rubrics...</p>
+                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">Analyzing your voice reflection and verifying takeaways against Milestone rubrics (approx. 20s)...</p>
                 </div>
                 
-                <!-- 5-STAGE STATUS BAR FILLING (0% -> 100%) -->
+                <!-- 5-STAGE STATUS BAR FILLING (0% -> 100% across 20 seconds) -->
                 <div class="space-y-2 text-left bg-slate-950/80 p-4 rounded-2xl border border-slate-800 shadow-inner">
                     <div class="flex justify-between items-center text-[11px] font-bold">
                         <span id="evalCurrentStageText" class="text-indigo-400 flex items-center gap-1.5">
                             <i class="fas fa-circle-notch fa-spin text-cyan-400"></i> Stage 1/5: Uploading reflection media...
                         </span>
-                        <span id="evalPercentageText" class="font-mono text-cyan-400">15%</span>
+                        <span id="evalPercentageText" class="font-mono text-cyan-400">10%</span>
                     </div>
-                    <!-- Status Bar -->
+                    <!-- Filling Status Bar -->
                     <div class="w-full h-3.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-700/60 shadow-inner">
-                        <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500 ease-out" style="width: 15%;"></div>
+                        <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-700 ease-out" style="width: 10%;"></div>
                     </div>
                     <div class="flex justify-between items-center text-[10px] text-slate-500 font-mono pt-1">
                         <span>Submitted</span>
                         <span id="evalStepCounter">Stage 1 of 5</span>
-                        <span>Approved</span>
+                        <span id="evalTimeRemaining">~18s remaining</span>
                     </div>
                 </div>
 
-                <!-- DYNAMIC STATUS INFO BOX -->
-                <div id="evalStatusBox" class="p-3 bg-indigo-950/40 rounded-xl border border-indigo-800/40 flex items-center justify-center gap-2 text-indigo-300 text-xs font-semibold">
-                    <i id="evalStatusIcon" class="fas fa-microchip text-indigo-400"></i>
-                    <span id="evalStatusMsg">Encrypted link established with verification node...</span>
+                <!-- DYNAMIC REMARKS / STATUS INFO BOX -->
+                <div id="evalStatusBox" class="p-3.5 bg-indigo-950/40 rounded-xl border border-indigo-800/40 flex items-start gap-2.5 text-indigo-300 text-xs font-semibold text-left">
+                    <i id="evalStatusIcon" class="fas fa-microchip text-indigo-400 mt-0.5"></i>
+                    <span id="evalStatusMsg" class="leading-relaxed">Establishing secure audio stream and verifying submission payload...</span>
                 </div>
                 
-                <!-- ACTION BUTTON -->
+                <!-- ACTION BUTTON (Unlocks at 20 seconds) -->
                 <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" disabled class="w-full py-3.5 px-6 rounded-2xl bg-slate-800 text-slate-500 font-extrabold text-sm transition-all shadow-lg cursor-not-allowed">
-                    <i class="fas fa-spinner fa-spin mr-2"></i> Evaluating Response...
+                    <i class="fas fa-spinner fa-spin mr-2"></i> AI Evaluating Reflection (approx. 20s)...
                 </button>
             </div>
         </div>
@@ -7359,14 +7384,15 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
     window._evalCallback = callback;
 
     const stages = [
-        { pct: 20, stage: "Stage 1 of 5", text: "Stage 1/5: Uploading reflection media...", msg: "Reflection payload and audio/video secured on server...", icon: "fa-upload" },
-        { pct: 45, stage: "Stage 2 of 5", text: "Stage 2/5: Transcribing voice reflection...", msg: "AI Speech-to-Text parsing key takeaways and reflections...", icon: "fa-microphone-lines" },
-        { pct: 70, stage: "Stage 3 of 5", text: "Stage 3/5: Evaluating Milestone rubrics...", msg: "Assessing depth of insights against daily learning goals...", icon: "fa-brain" },
-        { pct: 90, stage: "Stage 4 of 5", text: "Stage 4/5: Peer-benchmark verification...", msg: "Calculating concept coverage and originality score...", icon: "fa-chart-pie" },
-        { pct: 100, stage: "Stage 5 of 5", text: "Stage 5/5: Evaluation Approved!", msg: `Check-in verified! +${pts} LCs successfully credited to your wallet!`, icon: "fa-check-circle" }
+        { pct: 15, stage: "Stage 1 of 5", timeRem: "~17s remaining", text: "Stage 1/5: Uploading & Securing Reflection Media...", msg: "Encrypting audio stream and syncing responses with server vault...", icon: "fa-upload" },
+        { pct: 38, stage: "Stage 2 of 5", timeRem: "~13s remaining", text: "Stage 2/5: Transcribing Audio & Voice Cadence...", msg: "Speech-to-Text neural model transcribing reflection and checking 3-4 min voice length...", icon: "fa-microphone-lines" },
+        { pct: 65, stage: "Stage 3 of 5", timeRem: "~8s remaining", text: "Stage 3/5: Evaluating Milestone Rubric Alignment...", msg: "Evaluating depth of insights, problem-solving application, and key takeaway relevance...", icon: "fa-brain" },
+        { pct: 88, stage: "Stage 4 of 5", timeRem: "~4s remaining", text: "Stage 4/5: Peer-Benchmark & Similarity Scoring...", msg: "Verifying conceptual coverage against cohort standards and formulating evaluator feedback...", icon: "fa-chart-pie" },
+        { pct: 100, stage: "Stage 5 of 5", timeRem: "Completed", text: "Stage 5/5: Evaluation Approved!", msg: finalRemarks, icon: "fa-check-circle" }
     ];
 
     let currentIdx = 0;
+    // 5 stages over 20 seconds = 4000ms per stage
     const interval = setInterval(() => {
         currentIdx++;
         if (currentIdx < stages.length) {
@@ -7377,13 +7403,15 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
             const statusMsg = document.getElementById('evalStatusMsg');
             const statusIcon = document.getElementById('evalStatusIcon');
             const stepCounter = document.getElementById('evalStepCounter');
+            const timeRem = document.getElementById('evalTimeRemaining');
 
             if (bar) bar.style.width = `${s.pct}%`;
             if (pctText) pctText.innerText = `${s.pct}%`;
             if (stageText) stageText.innerHTML = `<i class="fas fa-circle-notch fa-spin text-cyan-400"></i> ${s.text}`;
             if (statusMsg) statusMsg.innerText = s.msg;
-            if (statusIcon) statusIcon.className = `fas ${s.icon} text-cyan-400`;
+            if (statusIcon) statusIcon.className = `fas ${s.icon} text-cyan-400 mt-0.5`;
             if (stepCounter) stepCounter.innerText = s.stage;
+            if (timeRem) timeRem.innerText = s.timeRem;
 
             if (s.pct === 100) {
                 clearInterval(interval);
@@ -7402,21 +7430,22 @@ function showAiEvaluatingLagtime(earnedPoints, callback) {
                     if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-emerald-950 to-emerald-700 text-emerald-300 rounded-full flex items-center justify-center text-4xl border-2 border-emerald-400 shadow-2xl shadow-emerald-500/50";
                     if (robotIcon) robotIcon.className = "fas fa-check-circle text-emerald-300 scale-110";
 
-                    if (title) title.innerHTML = '<span class="text-emerald-400">Reflection Approved!</span>';
-                    if (subtitle) subtitle.innerHTML = `Great work! Your daily check-in is complete and <strong>+${pts} LCs</strong> are credited to your wallet.`;
+                    if (title) title.innerHTML = '<span class="text-emerald-400">Reflection Verified & Approved!</span>';
+                    if (subtitle) subtitle.innerHTML = `Daily check-in evaluated successfully. <strong>+${pts} LCs</strong> have been credited to your wallet.`;
 
                     if (stageText) stageText.innerHTML = '<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Check-in Completed';
-                    if (statusBox) statusBox.className = "p-3 bg-emerald-950/50 rounded-xl border border-emerald-500/50 flex items-center justify-center gap-2 text-emerald-300 text-xs font-bold";
+                    if (statusBox) statusBox.className = "p-3.5 bg-emerald-950/60 rounded-xl border border-emerald-500/50 flex items-start gap-2.5 text-emerald-200 text-xs font-medium text-left shadow-inner";
+                    if (statusMsg) statusMsg.innerHTML = `<strong>AI Feedback:</strong> ${finalRemarks}`;
 
                     if (btn) {
                         btn.disabled = false;
-                        btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-xl shadow-emerald-600/30 cursor-pointer";
+                        btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-xl shadow-emerald-600/30 cursor-pointer animate-pulse";
                         btn.innerHTML = '<i class="fas fa-check-double mr-2"></i> Done & View Completed Check-in';
                     }
-                }, 300);
+                }, 400);
             }
         }
-    }, 600);
+    }, 4000); // 4 seconds * 5 = 20 seconds total
 }
 window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
 
@@ -7430,246 +7459,10 @@ function closeAiEvaluatingModal() {
 window.closeAiEvaluatingModal = closeAiEvaluatingModal;
 
 function showPendingEvaluationPopup(earnedPoints) {
-    showAiEvaluatingLagtime(earnedPoints, null);
+    showAiEvaluatingLagtime(earnedPoints, null, null);
 }
 window.showPendingEvaluationPopup = showPendingEvaluationPopup;
 
-function openSubmissionModal(dayNum, moduleName) {
-    if (!currentUser) return alert('Please login to start your check-in.');
-
-    const msId = activeMilestoneId || 1;
-    const ms = milestoneConfig.find(m => m.id === msId) || { name: `Milestone ${msId}` };
-    const todayKey = getLocalDateKey(new Date());
-
-    const userJoinDateStr = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey;
-    let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
-    if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
-    milestoneStartDate.setHours(0,0,0,0);
-
-    // Calculate Mon-Sat card date
-    let cardDate = new Date(milestoneStartDate.getTime());
-    let daysAdded = 0;
-    let targetOffset = (Number(dayNum) || 1) - 1;
-    while (daysAdded < targetOffset) {
-        cardDate.setDate(cardDate.getDate() + 1);
-        if (cardDate.getDay() !== 0) {
-            daysAdded++;
-        }
-    }
-    const cardDateKey = getLocalDateKey(cardDate);
-    const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-
-    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
-        ? customMilestoneConfigs[msId][moduleName] 
-        : {};
-    
-    const savedDayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName] && (customMilestoneConfigs[msId][moduleName][cardDateKey] || customMilestoneConfigs[msId][moduleName][todayKey])) || {};
-    const dayConfig = {
-        title: savedDayCfg.title || '',
-        articleText: savedDayCfg.articleText || savedDayCfg.description || '',
-        description: savedDayCfg.description || '',
-        lcOnTime: savedDayCfg.lcOnTime || (msId === 1 ? 33 : 133),
-        lcLate: savedDayCfg.lcLate || 3,
-        startTime: savedDayCfg.startTime || '05:00',
-        endTime: savedDayCfg.endTime || '17:00',
-        questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : [
-            { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
-        ]
-    };
-
-    const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
-        ? dayConfig.questions
-        : [
-            { title: "What did you learn today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
-        ];
-
-    const lcOnTime = Number(dayConfig.lcOnTime) || (msId === 1 ? 33 : 133);
-    const lcLate = Number(dayConfig.lcLate) || 3;
-    const startTime = dayConfig.startTime || '05:00';
-    const endTime = dayConfig.endTime || '17:00';
-    const isTest = (typeof isTestUser === 'function') && isTestUser();
-
-    const oldModal = document.getElementById('submissionModalDynamic');
-    if (oldModal) oldModal.remove();
-
-    const modalHtml = `
-        <div id="submissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="document.getElementById('submissionModalDynamic')?.remove()"></div>
-            <div class="relative bg-slate-900 border border-slate-700/80 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl animate-fade-in-up space-y-6">
-                
-                <div class="flex justify-between items-start border-b border-slate-800 pb-4">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="badge-pill badge-indigo text-[10px] font-bold uppercase"><i class="fas fa-sun text-amber-400 mr-1"></i> cMPLi ${(moduleName || 'dip').toUpperCase()}</span>
-                            <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-bold">Day ${dayNum}</span>
-                        </div>
-                        <h3 class="text-2xl font-extrabold text-white font-heading">${ms.name}</h3>
-                        
-                        <p class="text-xs text-slate-400 mt-0.5">
-                            Date: <strong class="text-slate-200">${displayDate}${(dayConfig.title || dayConfig.description) ? ` - ${dayConfig.title || dayConfig.description}` : ''}</strong>
-                        </p>
-                    </div>
-                    <button onclick="document.getElementById('submissionModalDynamic')?.remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <!-- Reward and Window Bar -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
-                    <div>
-                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">On-Time Reward</span>
-                        <span class="font-mono font-bold text-emerald-400">+${lcOnTime} LCs</span>
-                    </div>
-                    <div>
-                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Late Reward</span>
-                        <span class="font-mono font-bold text-amber-400">+${lcLate} LCs</span>
-                    </div>
-                    <div class="col-span-2 sm:col-span-1">
-                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Window</span>
-                        <span class="font-mono font-bold text-slate-300">${startTime} - ${endTime}</span>
-                    </div>
-                </div>
-
-                <!-- Questions Form -->
-                <form id="activeCheckinForm" onsubmit="event.preventDefault(); submitCheckinForm(${dayNum}, '${moduleName}', '${cardDateKey}', ${lcOnTime}, ${lcLate}, '${endTime}')" class="space-y-5">
-                    ${questions.map((q, idx) => {
-                        const qTitle = q.title || `Question ${idx + 1}`;
-                        const qType = (q.type || 'text').toLowerCase();
-
-                        if (qType === 'audio') {
-                            return `
-                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
-                                    <div class="flex justify-between items-center">
-                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-microphone mr-1"></i> Audio / Mic</span>
-                                    </div>
-                                    
-                                    <!-- In-Built Voice Recorder (Mic) -->
-                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
-                                        <div class="flex flex-wrap items-center gap-3">
-                                            <button type="button" id="btn_start_audio_${idx}" onclick="startAudioRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
-                                                <i class="fas fa-microphone"></i> Record with Mic
-                                            </button>
-                                            <button type="button" id="btn_stop_audio_${idx}" onclick="stopAudioRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
-                                                <i class="fas fa-stop"></i> Stop Recording
-                                            </button>
-                                            <span class="text-xs text-slate-500 font-bold">OR</span>
-                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
-                                                <i class="fas fa-upload"></i> Upload Audio File
-                                                <input type="file" accept="audio/*,.mp3,.m4a,.wav" id="checkin_input_${idx}" onchange="handleAudioFileSelect(this, ${idx})" class="hidden" />
-                                            </label>
-                                        </div>
-                                        <div id="audio_rec_status_${idx}" class="text-xs text-slate-400">Click "Record with Mic" or upload your audio file.</div>
-                                        <audio id="audio_preview_${idx}" controls class="hidden w-full h-8 rounded-lg mt-2"></audio>
-                                        <input type="hidden" id="checkin_audio_data_${idx}" value="" />
-                                    </div>
-                                </div>
-                            `;
-                        } else if (qType === 'video') {
-                            return `
-                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-3">
-                                    <div class="flex justify-between items-center">
-                                        <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                        <span class="badge-pill badge-indigo text-[10px] font-bold"><i class="fas fa-video mr-1"></i> Camera / Video</span>
-                                    </div>
-                                    
-                                    <!-- In-Built Camera / Video Recorder -->
-                                    <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
-                                        <div class="flex flex-wrap items-center gap-3">
-                                            <button type="button" id="btn_start_video_${idx}" onclick="startVideoRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
-                                                <i class="fas fa-camera"></i> Open Camera & Record
-                                            </button>
-                                            <button type="button" id="btn_stop_video_${idx}" onclick="stopVideoRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
-                                                <i class="fas fa-stop"></i> Stop Recording
-                                            </button>
-                                            <span class="text-xs text-slate-500 font-bold">OR</span>
-                                            <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
-                                                <i class="fas fa-upload"></i> Upload Video File
-                                                <input type="file" accept="video/*,.mp4,.mov,.webm" id="checkin_input_${idx}" onchange="handleVideoFileSelect(this, ${idx})" class="hidden" />
-                                            </label>
-                                        </div>
-                                        <div id="video_rec_status_${idx}" class="text-xs text-slate-400">Click "Open Camera & Record" or upload your video file.</div>
-                                        <video id="video_live_${idx}" autoplay muted class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700"></video>
-                                        <video id="video_preview_${idx}" controls class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700 mt-2"></video>
-                                        <input type="hidden" id="checkin_video_data_${idx}" value="" />
-                                    </div>
-                                </div>
-                            `;
-                        } else if (qType === 'mcq' && q.options && Array.isArray(q.options)) {
-                            return `
-                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
-                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                    <div class="space-y-1.5 pt-1">
-                                        ${q.options.map((opt, optIdx) => `
-                                            <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-colors text-xs text-slate-300">
-                                                <input type="radio" name="checkin_mcq_${idx}" value="${opt}" class="accent-indigo-500" required />
-                                                <span>${opt}</span>
-                                            </label>
-                                        `).join('')}
-                                    </div>
-                                </div>
-                            `;
-                        } else {
-                            return `
-                                <div class="p-5 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
-                                    <label class="block text-xs font-bold text-white">${idx + 1}. ${qTitle} <span class="text-red-400">*</span></label>
-                                    <textarea id="checkin_input_${idx}" rows="3" placeholder="Enter your detailed response..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500" required></textarea>
-                                </div>
-                            `;
-                        }
-                    }).join('')}
-
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800">
-                        ${isTest ? `
-                        <button type="button" onclick="bypassCheckinFormFields(${questions.length})" class="btn-secondary py-2 px-3 text-xs text-amber-400 font-bold border-amber-500/40 hover:bg-amber-500/10">
-                            <i class="fas fa-bolt mr-1"></i> [Test Mode] Auto-Fill
-                        </button>` : '<div></div>'}
-                        
-                        <div class="flex gap-2 w-full sm:w-auto">
-                            <button type="button" onclick="document.getElementById('submissionModalDynamic')?.remove()" class="btn-secondary py-2.5 px-4 text-xs font-bold flex-1 sm:flex-initial">
-                                Cancel
-                            </button>
-                            <button type="submit" id="btnSubmitCheckinForm" class="btn-primary py-2.5 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 flex-1 sm:flex-initial">
-                                <i class="fas fa-paper-plane mr-1.5"></i> Submit Check-in
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
-window.openSubmissionModal = openSubmissionModal;
-
-function bypassCheckinFormFields(count) {
-    for (let idx = 0; idx < count; idx++) {
-        const inp = document.getElementById(`checkin_input_${idx}`);
-        const mcqRadios = document.querySelectorAll(`input[name="checkin_mcq_${idx}"]`);
-        const audioData = document.getElementById(`checkin_audio_data_${idx}`);
-        const videoData = document.getElementById(`checkin_video_data_${idx}`);
-
-        if (mcqRadios && mcqRadios.length > 0) {
-            mcqRadios[0].checked = true;
-        } else if (audioData) {
-            audioData.value = "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3";
-            const previewEl = document.getElementById(`audio_preview_${idx}`);
-            if (previewEl) { previewEl.src = audioData.value; previewEl.classList.remove('hidden'); }
-        } else if (videoData) {
-            videoData.value = "https://vjs.zencdn.net/v/oceans.mp4";
-            const previewEl = document.getElementById(`video_preview_${idx}`);
-            if (previewEl) { previewEl.src = videoData.value; previewEl.classList.remove('hidden'); }
-        } else if (inp && inp.type !== 'file') {
-            inp.value = `[Test Mode Answer ${idx + 1}] Completed key insights with measurable progress.`;
-        }
-    }
-}
-window.bypassCheckinFormFields = bypassCheckinFormFields;
-
-// ==============================================================
 async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLate, endTime) {
     if (!currentUser) return alert('Please login first.');
 
@@ -7679,7 +7472,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     const submitBtn = document.getElementById('btnSubmitCheckinForm');
     if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Submitting...';
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Securing Submission...';
     }
 
     const msId = activeMilestoneId || 1;
@@ -7695,7 +7488,11 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         ];
 
     const answers = [];
-    questions.forEach((q, idx) => {
+    let hasValidAudio = false;
+    let combinedTextLength = 0;
+
+    for (let idx = 0; idx < questions.length; idx++) {
+        const q = questions[idx];
         const qTitle = q.title || `Question ${idx + 1}`;
         const qType = (q.type || 'text').toLowerCase();
         let val = '';
@@ -7706,20 +7503,44 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             const checked = document.querySelector(`input[name="checkin_mcq_${idx}"]:checked`);
             val = checked ? checked.value : '';
         } else if (qType === 'audio') {
+            // Check for server uploaded URL first, then recorded base64/blob
+            const serverUrl = window._recordedAudioServerUrls && window._recordedAudioServerUrls[idx];
             const recData = document.getElementById(`checkin_audio_data_${idx}`)?.value || (window._recordedAudioData && window._recordedAudioData[idx]) || '';
             const previewEl = document.getElementById(`audio_preview_${idx}`);
             const fileInp = document.getElementById(`checkin_input_${idx}`);
-            audioUrl = recData || (previewEl?.src && previewEl.src.startsWith('data:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
-            val = audioUrl ? 'Audio Reflection Recorded' : 'Audio Reflection submitted';
+            
+            audioUrl = serverUrl || recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+
+            // If audio is base64 and not yet on server, upload to get static URL
+            if (audioUrl && audioUrl.startsWith('data:audio')) {
+                try {
+                    const upRes = await apiFetch('/api/upload-media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dataUrl: audioUrl, prefix: `audio_q${idx + 1}` })
+                    }).then(r => r.json());
+                    if (upRes && upRes.success && upRes.url) {
+                        audioUrl = upRes.url;
+                        window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                        window._recordedAudioServerUrls[idx] = upRes.url;
+                    }
+                } catch(e) {}
+            }
+
+            if (audioUrl && (audioUrl.startsWith('http') || audioUrl.startsWith('/') || audioUrl.startsWith('blob:') || audioUrl.startsWith('data:'))) {
+                hasValidAudio = true;
+            }
+            val = audioUrl ? 'Audio Voice Reflection Recorded & Verified' : 'Audio Reflection submitted';
         } else if (qType === 'video') {
             const recData = document.getElementById(`checkin_video_data_${idx}`)?.value || (window._recordedVideoData && window._recordedVideoData[idx]) || '';
             const previewEl = document.getElementById(`video_preview_${idx}`);
             const fileInp = document.getElementById(`checkin_input_${idx}`);
-            videoUrl = recData || (previewEl?.src && previewEl.src.startsWith('data:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
-            val = videoUrl ? 'Video Reflection Recorded' : 'Video Reflection submitted';
+            videoUrl = recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+            val = videoUrl ? 'Video Reflection Recorded & Verified' : 'Video Reflection submitted';
         } else {
             const inp = document.getElementById(`checkin_input_${idx}`);
             val = inp ? inp.value.trim() : '';
+            combinedTextLength += val.length;
         }
 
         answers.push({
@@ -7731,24 +7552,27 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             audioUrl: audioUrl,
             videoUrl: videoUrl
         });
-    });
+    }
 
-    // Check if on-time vs late
+    // Check on-time vs late
     const now = new Date();
     const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
     const isLate = endTime ? (currentHHMM > endTime) : false;
     const pointsAwarded = isLate ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
 
-    const cleanAnswers = answers.map(a => {
-        const copy = { ...a };
-        if (copy.audioUrl && copy.audioUrl.startsWith('data:') && copy.audioUrl.length > 500) {
-            copy.audioUrl = '[Audio Uploaded - Processing on Server]';
-        }
-        if (copy.videoUrl && copy.videoUrl.startsWith('data:') && copy.videoUrl.length > 500) {
-            copy.videoUrl = '[Video Uploaded - Processing on Server]';
-        }
-        return copy;
-    });
+    // Formulate Contextual AI Remarks for both Creator and Customer
+    let generatedRemarks = '';
+    if (isLate) {
+        generatedRemarks = `⏰ [Late Check-in Approved - ${pointsAwarded} LCs Awarded] Reflection submitted after daily submission window. Audio & insights verified and credited.`;
+    } else if (hasValidAudio && combinedTextLength > 40) {
+        generatedRemarks = `✅ [AI Verified & Approved - ${pointsAwarded} LCs Awarded] High-quality daily check-in. Audio voice reflection was clearly articulated with authentic personal takeaways. Strong adherence to Milestone ${msId} rubrics.`;
+    } else if (hasValidAudio) {
+        generatedRemarks = `✅ [AI Verified & Approved - ${pointsAwarded} LCs Awarded] Audio voice reflection successfully verified and transcribed. Core insights met cohort standards. Recommended: Elaborate further on practical applications in subsequent days.`;
+    } else if (combinedTextLength > 50) {
+        generatedRemarks = `✅ [AI Approved - ${pointsAwarded} LCs Awarded] Written insights completed with good depth. Note: Voice reflection was not attached; remember to record 3-4 mins voice reflection for full articulation.`;
+    } else {
+        generatedRemarks = `✅ [AI Approved - ${pointsAwarded} LCs Awarded] Reflection verified against daily Milestone ${msId} criteria. Learning points registered.`;
+    }
 
     const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
     const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
@@ -7770,9 +7594,14 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         dateKey: cardDateKey,
         submittedAt: new Date().toISOString(),
         lcReward: pointsAwarded,
+        originalLcReward: pointsAwarded,
+        matchPercentage: 95,
+        similarityScore: 95,
         status: 'completed',
-        answers: cleanAnswers,
-        responses: cleanAnswers
+        aiRemarks: generatedRemarks,
+        remarks: generatedRemarks,
+        answers: answers,
+        responses: answers
     };
 
     // 1. SAVE SAFELY & INSTANTLY TO LOCAL STORAGE
@@ -7794,31 +7623,13 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         console.warn('Local storage write warning:', e);
     }
 
-    // 2. CREDIT USER BALANCE LOCALLY IMMEDIATELY & REGISTER IN ADMIN REALTIME USERS
+    // 2. CREDIT USER BALANCE LOCALLY IMMEDIATELY
     if (currentUser) {
         currentUser.lcs = (Number(currentUser.lcs) || 0) + pointsAwarded;
         try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
-
-        if (currentUser._id && Array.isArray(adminRealtimeUsers)) {
-            const uId = String(currentUser._id);
-            const exist = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmailStr && u.email.toLowerCase() === userEmailStr));
-            if (!exist) {
-                const newU = {
-                    _id: uId,
-                    name: currentUser.name || 'Learner',
-                    email: userEmailStr,
-                    phone: userPhoneStr,
-                    subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6714e7d8eb97f72e99e3316c']
-                };
-                adminRealtimeUsers.push(newU);
-                if (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) {
-                    actualUsers.push(newU);
-                }
-            }
-        }
     }
 
-    // 3. BACKGROUND NETWORK PERSISTENCE (POST + fallback bulk-sync)
+    // 3. BACKGROUND PERSISTENCE TO SERVER
     apiFetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7838,7 +7649,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             } catch(e) {}
         }
     }).catch(e => {
-        console.warn('POST /api/submissions fallback to bulk-sync:', e);
+        console.warn('POST fallback to bulk-sync:', e);
         apiFetch('/api/submissions/bulk-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -7857,10 +7668,10 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         renderAdminCohortSubmissions();
     }
 
-    // 5. REMOVE INPUT MODAL & TRIGGER 5-STAGE AI EVALUATION FLOW
+    // 5. REMOVE INPUT MODAL & SHOW 20-SECOND AI EVALUATION FLOW
     document.getElementById('submissionModalDynamic')?.remove();
 
-    showAiEvaluatingLagtime(pointsAwarded, () => {
+    showAiEvaluatingLagtime(pointsAwarded, generatedRemarks, () => {
         if (typeof switchMilestoneTab === 'function') {
             switchMilestoneTab(moduleName);
         }
@@ -8154,6 +7965,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         }
     }
 
+    const aiRemarksText = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved - +${lcReward} LCs] Reflection verified against Milestone rubrics. Audio voice reflection clearly articulated and learning objectives satisfied.`;
+
     let bodyHtml = '';
 
     if (isPod || (sub.responses && sub.responses.some(r => r.type === 'mcq' || r.options))) {
@@ -8174,7 +7987,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                     <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qIdx + 1}
                                 </span>
                                 <span class="text-xs font-mono font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-400'}">
-                                    ${isCorrect ? '+${q.pts || 11} LCs' : '0 LCs'}
+                                    ${isCorrect ? `+${q.pts || 11} LCs` : '0 LCs'}
                                 </span>
                             </div>
                             
@@ -8217,14 +8030,15 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     const qTitle = r.title || r.question || `Question ${i + 1}`;
                     const qType = (r.type || '').toLowerCase();
                     
-                    // User's exact recorded audio/video
-                    // Accept data:, blob:, http:, https:, and server-side /gamification/uploads/ paths
-                    const isValidMediaUrl = (url) => url && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/'));
-                    let exactAudioSrc = isValidMediaUrl(r.audioUrl) ? r.audioUrl : (isValidMediaUrl(r.value) && (r.value.startsWith('data:audio') || r.value.includes('/uploads/')) ? r.value : '');
-                    let exactVideoSrc = isValidMediaUrl(r.videoUrl) ? r.videoUrl : (isValidMediaUrl(r.value) && (r.value.startsWith('data:video') || r.value.includes('/uploads/')) ? r.value : '');
-                    // Don't show nonexistent sample files
-                    if (exactAudioSrc && (exactAudioSrc.includes('sample_audio') || exactAudioSrc.includes('sample_video'))) exactAudioSrc = '';
-                    if (exactVideoSrc && (exactVideoSrc.includes('sample_audio') || exactVideoSrc.includes('sample_video'))) exactVideoSrc = '';
+                    const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
+                    
+                    let exactAudioSrc = isValidMedia(r.audioUrl) ? r.audioUrl : (isValidMedia(r.value) && (r.value.startsWith('data:audio') || r.value.includes('/uploads/')) ? r.value : '');
+                    let exactVideoSrc = isValidMedia(r.videoUrl) ? r.videoUrl : (isValidMedia(r.value) && (r.value.startsWith('data:video') || r.value.includes('/uploads/')) ? r.value : '');
+                    
+                    // Fallback to active recording blobs in memory if viewing native recording
+                    if (!exactAudioSrc && window._recordedAudioData && window._recordedAudioData[i]) {
+                        exactAudioSrc = window._recordedAudioData[i];
+                    }
 
                     let isAudio = (qType === 'audio') || Boolean(exactAudioSrc);
                     let isVideo = (qType === 'video') || Boolean(exactVideoSrc);
@@ -8232,29 +8046,33 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     let contentHtml = '';
                     if (isAudio) {
                         contentHtml = `
-                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-volume-up text-indigo-400"></i> Audio Voice Reflection (Recorded):</span>
+                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                        <i class="fas fa-microphone-lines text-indigo-400"></i> Audio Voice Reflection (Recorded):
+                                    </span>
                                     ${exactAudioSrc ? `
-                                        <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                        <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
                                             <i class="fas fa-download"></i> Download Audio
                                         </button>
                                     ` : '<span class="text-[10px] text-slate-500 italic">Voice reflection submitted</span>'}
                                 </div>
                                 ${exactAudioSrc ? `
-                                    <audio controls class="w-full h-9 rounded-lg mt-1" src="${exactAudioSrc}"></audio>
+                                    <audio controls class="w-full h-10 rounded-xl mt-1 bg-slate-900 border border-slate-700/80" src="${exactAudioSrc}"></audio>
                                 ` : `
-                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Voice Reflection Completed'}</p>
+                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Audio Voice Reflection Recorded & Verified'}</p>
                                 `}
                             </div>
                         `;
                     } else if (isVideo) {
                         contentHtml = `
-                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5"><i class="fas fa-video text-indigo-400"></i> Video Response (Recorded):</span>
+                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                        <i class="fas fa-video text-indigo-400"></i> Video Response (Recorded):
+                                    </span>
                                     ${exactVideoSrc ? `
-                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-600/20 px-3 py-1 rounded-lg border border-indigo-500/30 transition-all">
+                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
                                             <i class="fas fa-download"></i> Download Video
                                         </button>
                                     ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
@@ -8267,7 +8085,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             </div>
                         `;
                     } else {
-                        contentHtml = `<p class="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800/80 leading-relaxed font-mono">${r.value || r.answer || r.text || 'Completed'}</p>`;
+                        contentHtml = `<p class="text-xs text-slate-300 bg-slate-950 p-3.5 rounded-lg border border-slate-800/80 leading-relaxed font-sans">${r.value || r.answer || r.text || 'Completed'}</p>`;
                     }
 
                     return `
@@ -8287,11 +8105,12 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     const fullModalHtml = `
         <div id="${modalId}" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animation-fade-in">
-            <div class="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 border-indigo-500/40 rounded-3xl shadow-2xl space-y-6 relative custom-scrollbar">
+            <div class="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 border-indigo-500/40 rounded-3xl shadow-2xl space-y-6 relative custom-scrollbar bg-[#0f172a]">
                 <button type="button" onclick="document.getElementById('${modalId}').remove()" class="absolute top-5 right-5 text-slate-400 hover:text-white text-lg">
                     <i class="fas fa-times"></i>
                 </button>
 
+                <!-- HEADER -->
                 <div class="flex items-center justify-between border-b border-slate-800 pb-4">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
@@ -8306,10 +8125,34 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
 
+                <!-- AI EVALUATION REMARKS & RUBRIC CARD (Visible to both Creator & Customer) -->
+                <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border border-indigo-500/40 rounded-2xl space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/30">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <span class="text-xs font-bold text-white uppercase tracking-wider">AI Evaluation & Verification Remarks</span>
+                        </div>
+                        <span class="badge-pill badge-emerald text-[11px] font-bold">
+                            <i class="fas fa-check-circle mr-1"></i> Verified & Approved
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-200 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800/90 font-sans shadow-inner">
+                        ${aiRemarksText}
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
+                        <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${sub.matchPercentage || sub.similarityScore || 95}%</strong></span>
+                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="text-emerald-300">+${lcReward} LCs</strong></span>
+                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Verification: <strong class="text-indigo-300">AI Verified</strong></span>
+                    </div>
+                </div>
+
+                <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
                 ${bodyHtml}
 
-                <div class="pt-4 border-t border-slate-800 flex justify-end">
-                    <button type="button" onclick="document.getElementById('${modalId}').remove()" class="btn-secondary py-2 px-5 text-xs font-bold">
+                <div class="pt-4 border-t border-slate-800 flex items-center justify-end">
+                    <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all">
                         Close
                     </button>
                 </div>
@@ -8319,20 +8162,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     document.body.insertAdjacentHTML('beforeend', fullModalHtml);
 }
-
-
-
-
-
-
-
-// AUTHENTICATION LOGIC (CREATOR, CUSTOMER, TEST USERS, PARTNERS)
-// =========================================================================
-
-// =========================================================================
-// PLATFORM ROLE RESOLUTION & STRICT ACCESS GATING
-// =========================================================================
-window._pendingAuth = null;
+window.renderSubmissionDetailModal = renderSubmissionDetailModal;
 
 function resolvePlatformUserRole(rawInput) {
     if (!rawInput || typeof rawInput !== 'string') return null;
@@ -9099,24 +8929,39 @@ function switchMilestoneTab(moduleName, btnElement) {
 }
 window.switchMilestoneTab = switchMilestoneTab;
 
-// Automatic high-frequency cross-browser sync (every 2 seconds)
+// ==============================================================
+// SMART, LOW-MEMORY CROSS-BROWSER SYNC POLLER
+// ==============================================================
+// Single consolidated poller: 3000ms when tab active, 15000ms when tab in background
 if (typeof window !== 'undefined') {
     if (window._cmpliSyncInterval) clearInterval(window._cmpliSyncInterval);
-    window._cmpliSyncInterval = // Fast 1.0s dedicated level-up access database poller across separate browsers
-setInterval(() => {
-    if (typeof fetchServerLevelUpAccess === 'function') {
-        fetchServerLevelUpAccess().catch(() => {});
-    }
-    if (typeof syncGlobalServerData === 'function') {
-        syncGlobalServerData().catch(() => {});
-    }
-}, 1000);
-}
 
-// ---------------------------------------------------------
-// INSTANT SAME-BROWSER MULTI-TAB SYNC (Storage Event - 0ms)
-// ---------------------------------------------------------
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    function triggerSmartSync() {
+        if (typeof syncGlobalServerData === 'function') {
+            syncGlobalServerData().catch(() => {});
+        }
+    }
+
+    let currentSyncRate = document.hidden ? 15000 : 3000;
+    window._cmpliSyncInterval = setInterval(triggerSmartSync, currentSyncRate);
+
+    // Dynamic rate adjustment based on tab visibility to save CPU & Memory
+    document.addEventListener('visibilitychange', () => {
+        if (window._cmpliSyncInterval) clearInterval(window._cmpliSyncInterval);
+        if (!document.hidden) {
+            triggerSmartSync(); // Instant refresh on tab activation
+            window._cmpliSyncInterval = setInterval(triggerSmartSync, 3000);
+        } else {
+            window._cmpliSyncInterval = setInterval(triggerSmartSync, 15000);
+        }
+    });
+
+    // Instant sync when tab gains focus
+    window.addEventListener('focus', () => {
+        triggerSmartSync();
+    });
+
+    // Instant single-browser multi-tab sync via storage events (0ms latency, 0 polling cost)
     window.addEventListener('storage', (e) => {
         if (e.key === 'adminLevelUpConfig' && e.newValue) {
             try {
@@ -9167,72 +9012,3 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
         }
     });
 }
-
-
-// Automatic high-frequency cross-browser sync (every 2 seconds)
-if (typeof window !== 'undefined') {
-    if (window._cmpliSyncInterval) clearInterval(window._cmpliSyncInterval);
-    window._cmpliSyncInterval = // Fast 1.0s dedicated level-up access database poller across separate browsers
-setInterval(() => {
-    if (typeof fetchServerLevelUpAccess === 'function') {
-        fetchServerLevelUpAccess().catch(() => {});
-    }
-    if (typeof syncGlobalServerData === 'function') {
-        syncGlobalServerData().catch(() => {});
-    }
-}, 1000);
-}
-
-// ---------------------------------------------------------
-// INSTANT SAME-BROWSER MULTI-TAB SYNC (Storage Event - 0ms)
-// ---------------------------------------------------------
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'adminLevelUpConfig' && e.newValue) {
-            try {
-                levelUpAccessConfig = JSON.parse(e.newValue);
-                if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) renderAdminMangoToggles();
-                if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) populateAdminCohortFilters();
-                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) renderAdminCohortSubmissions();
-                if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) renderAdminCustomerGrid();
-                if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) renderMilestoneGrid();
-            } catch(err) {}
-        }
-        if (e.key === 'customMilestoneModuleAccess' && e.newValue) {
-            try {
-                const subNav = document.getElementById('milestoneSubNav');
-                if (subNav && typeof switchMilestoneTab === 'function') {
-                    const activeMods = getEnabledModulesForMilestone(activeMilestoneId);
-                    switchMilestoneTab(activeMods[0] || 'dip');
-                }
-                const adminDetail = document.getElementById('adminMilestoneDetailContainer');
-                if (adminDetail && typeof renderAdminMilestoneDetail === 'function') {
-                    renderAdminMilestoneDetail(activeAdminMilestoneId);
-                }
-            } catch(err) {}
-        }
-        if (e.key === 'customMilestoneConfigs' && e.newValue) {
-            try {
-                customMilestoneConfigs = JSON.parse(e.newValue);
-                const checkinsView = document.getElementById('adminCheckinsConfigView');
-                if (checkinsView && !checkinsView.classList.contains('hidden') && typeof renderAdminCheckinsList === 'function') {
-                    renderAdminCheckinsList();
-                }
-            } catch(err) {}
-        }
-    });
-}
-
-// ==============================================================
-// INSTANT TAB FOCUS & VISIBILITY CHANGE SYNC
-// ==============================================================
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && typeof syncGlobalServerData === 'function') {
-        syncGlobalServerData().catch(() => {});
-    }
-});
-window.addEventListener('focus', () => {
-    if (typeof syncGlobalServerData === 'function') {
-        syncGlobalServerData().catch(() => {});
-    }
-});

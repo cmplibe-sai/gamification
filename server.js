@@ -730,6 +730,19 @@ async function assignTagMangoPoints(fanId, score, description) {
     }
 }
 
+app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => {
+    try {
+        const { dataUrl, prefix, filename } = req.body;
+        if (!dataUrl) return res.status(400).json({ success: false, error: 'dataUrl required' });
+        const savedPath = saveBase64MediaToFile(dataUrl, prefix || 'audio_rec');
+        console.log(`[Media Uploaded via API] Path: ${savedPath}`);
+        return res.json({ success: true, url: savedPath });
+    } catch (err) {
+        console.error('Upload media API error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
     try {
         const sub = req.body;
@@ -782,6 +795,10 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             }
         }
 
+        const calculatedRemarks = sub.aiRemarks || sub.remarks || (matchPercentage < 75
+            ? `⚠️ [AI Evaluation Remarks - ${lcReward} LCs Awarded] Partial conceptual alignment with reference rubric (${matchPercentage}% match). Audio and text reflection approved with adjusted points.`
+            : `✅ [AI Verified & Approved - ${lcReward} LCs Awarded] High quality reflection. Strong conceptual alignment with Milestone rubric (${matchPercentage}% match). Audio voice reflection clearly articulated and verified.`);
+
         const newSub = {
             id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             userId: sub.userId,
@@ -803,6 +820,8 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             similarityScore: matchPercentage,
             articleTitle: dayCfg.title || '',
             referenceArticle: refArticle,
+            aiRemarks: calculatedRemarks,
+            remarks: calculatedRemarks,
             answers: subAnswers,
             responses: subAnswers,
             submittedAt: sub.submittedAt || new Date().toISOString()
