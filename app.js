@@ -7503,6 +7503,20 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
     const old = document.getElementById('evaluatingCheckinModal');
     if (old) old.remove();
 
+    let serverResult = null;
+    let serverError = null;
+
+    // Track promise in background without stopping the stage progression
+    Promise.resolve(evalPromise)
+        .then(data => {
+            console.log('✅ Server evaluation result arrived in modal:', data);
+            serverResult = data;
+        })
+        .catch(err => {
+            console.warn('⚠️ Server evaluation error in modal:', err);
+            serverError = err;
+        });
+
     const modalHtml = `
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-md"></div>
@@ -7520,20 +7534,20 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                 <!-- TITLE & SUBTITLE -->
                 <div>
                     <h3 id="evalModalTitle" class="text-2xl font-extrabold text-white font-heading">AI Evaluation in Progress</h3>
-                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">AssemblyAI transcribing audio & verifying takeaways against Milestone rubrics (approx. 15-20s)...</p>
+                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">AssemblyAI transcribing speech & verifying takeaways against Milestone rubrics (approx. 15-20s)...</p>
                 </div>
                 
                 <!-- 5-STAGE STATUS BAR FILLING (0% -> 100% across 18 seconds) -->
                 <div class="space-y-2 text-left bg-slate-950/80 p-4 rounded-2xl border border-slate-800 shadow-inner">
                     <div class="flex justify-between items-center text-[11px] font-bold">
                         <span id="evalCurrentStageText" class="text-indigo-400 flex items-center gap-1.5">
-                            <i class="fas fa-circle-notch fa-spin text-cyan-400"></i> Stage 1/5: Securing reflection media in vault...
+                            <i class="fas fa-circle-notch fa-spin text-cyan-400"></i> Stage 1/5: Uploading reflection media...
                         </span>
-                        <span id="evalPercentageText" class="font-mono text-cyan-400">12%</span>
+                        <span id="evalPercentageText" class="font-mono text-cyan-400">15%</span>
                     </div>
                     <!-- Filling Status Bar -->
                     <div class="w-full h-3.5 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-700/60 shadow-inner">
-                        <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-700 ease-out" style="width: 12%;"></div>
+                        <div id="evalProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-700 ease-out" style="width: 15%;"></div>
                     </div>
                     <div class="flex justify-between items-center text-[10px] text-slate-500 font-mono pt-1">
                         <span>Submitted</span>
@@ -7548,7 +7562,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                     <span id="evalStatusMsg" class="leading-relaxed">Establishing secure audio stream and verifying submission payload...</span>
                 </div>
                 
-                <!-- ACTION BUTTON (Unlocks when real evaluation is ready) -->
+                <!-- ACTION BUTTON (Unlocks when real evaluation is finalized) -->
                 <button id="btnDismissEvalModal" onclick="closeAiEvaluatingModal()" disabled class="w-full py-3.5 px-6 rounded-2xl bg-slate-800 text-slate-500 font-extrabold text-sm transition-all shadow-lg cursor-not-allowed">
                     <i class="fas fa-spinner fa-spin mr-2"></i> AI Evaluating Reflection (approx. 15-20s)...
                 </button>
@@ -7558,12 +7572,79 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
     const stages = [
-        { pct: 15, stage: "Stage 1 of 5", timeRem: "~15s remaining", text: "Stage 1/5: Uploading Audio to Analysis Vault...", msg: "Encrypting audio stream and syncing payload with server...", icon: "fa-upload" },
+        { pct: 15, stage: "Stage 1 of 5", timeRem: "~15s remaining", text: "Stage 1/5: Uploading Audio to Analysis Vault...", msg: "Encrypting audio stream and syncing payload with server vault...", icon: "fa-upload" },
         { pct: 38, stage: "Stage 2 of 5", timeRem: "~11s remaining", text: "Stage 2/5: AssemblyAI Transcribing Audio Speech...", msg: "Converting spoken voice notes to text using neural speech model...", icon: "fa-microphone-lines" },
         { pct: 65, stage: "Stage 3 of 5", timeRem: "~7s remaining", text: "Stage 3/5: Comparing Spoken Insights with Day Rubric...", msg: "Measuring conceptual overlap against today's configured lecture description...", icon: "fa-brain" },
         { pct: 88, stage: "Stage 4 of 5", timeRem: "~3s remaining", text: "Stage 4/5: Calculating 5-Tier LC Score...", msg: "Formulating evaluator feedback and checking match thresholds...", icon: "fa-chart-pie" },
         { pct: 100, stage: "Stage 5 of 5", timeRem: "Finalizing", text: "Stage 5/5: Awaiting Seal & Verification...", msg: "Applying evaluator verification...", icon: "fa-check-circle" }
     ];
+
+    function applyFinalModalResult(finalData) {
+        const title = document.getElementById('evalModalTitle');
+        const subtitle = document.getElementById('evalModalSubtitle');
+        const btn = document.getElementById('btnDismissEvalModal');
+        const robotIcon = document.getElementById('robotIcon');
+        const robotCircle = document.getElementById('robotIconCircle');
+        const laser = document.getElementById('robotLaserSweep');
+        const glow = document.getElementById('robotGlowRing');
+        const statusBox = document.getElementById('evalStatusBox');
+        const statusMsg = document.getElementById('evalStatusMsg');
+        const stageText = document.getElementById('evalCurrentStageText');
+        const bar = document.getElementById('evalProgressBar');
+        const pctText = document.getElementById('evalPercentageText');
+
+        if (bar) bar.style.width = '100%';
+        if (pctText) pctText.innerText = '100%';
+        if (laser) laser.remove();
+
+        const pts = Number(finalData?.lcReward) || 0;
+        const matchScore = Number(finalData?.matchPercentage) || 0;
+        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch');
+        const rawRemarks = String(finalData?.remarks || finalData?.aiRemarks || 'Evaluation completed.').trim();
+
+        window._finalEvaluationResult = finalData;
+        window._evalCallback = () => {
+            if (typeof onDoneCallback === 'function') onDoneCallback(finalData);
+        };
+
+        if (isMismatch) {
+            // Mismatch (0 LCs)
+            if (glow) glow.className = "absolute inset-0 rounded-full bg-rose-500/40 animate-pulse";
+            if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-rose-950 to-rose-700 text-rose-300 rounded-full flex items-center justify-center text-4xl border-2 border-rose-400 shadow-2xl shadow-rose-500/50";
+            if (robotIcon) robotIcon.className = "fas fa-times-circle text-rose-300 scale-110";
+
+            if (title) title.innerHTML = '<span class="text-rose-400 font-extrabold">Content Mismatch Detected (0 LCs)</span>';
+            if (subtitle) subtitle.innerHTML = 'The submitted audio reflection did not match today\'s topic configuration. <strong>0 LCs Awarded</strong>. Submission was not accepted.';
+
+            if (stageText) stageText.innerHTML = '<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (0% Rubric Match)';
+            if (statusBox) statusBox.className = "p-3.5 bg-rose-950/60 rounded-xl border border-rose-500/50 flex items-start gap-2.5 text-rose-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
+            if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-rose-300 block">AI Evaluation Feedback:</strong>${rawRemarks.replace(/\n/g, '<br/>')}</div>`;
+
+            if (btn) {
+                btn.disabled = false;
+                btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm transition-all shadow-xl shadow-rose-600/30 cursor-pointer animate-pulse";
+                btn.innerHTML = '<i class="fas fa-redo mr-2"></i> Review Feedback & Re-try Check-in';
+            }
+        } else {
+            // Approved (3, 17, 23, or 33 LCs)
+            if (glow) glow.className = "absolute inset-0 rounded-full bg-emerald-500/40 animate-pulse";
+            if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-emerald-950 to-emerald-700 text-emerald-300 rounded-full flex items-center justify-center text-4xl border-2 border-emerald-400 shadow-2xl shadow-emerald-500/50";
+            if (robotIcon) robotIcon.className = "fas fa-check-circle text-emerald-300 scale-110";
+
+            if (title) title.innerHTML = '<span class="text-emerald-400 font-extrabold">Check-in Verified & Approved!</span>';
+            if (subtitle) subtitle.innerHTML = `Rubric Match: <strong>${matchScore}%</strong> — <strong>+${pts} LCs</strong> credited to your wallet.`;
+
+            if (stageText) stageText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Verified (${matchScore}% Match)`;
+            if (statusBox) statusBox.className = "p-3.5 bg-emerald-950/60 rounded-xl border border-emerald-500/50 flex items-start gap-2.5 text-emerald-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
+            if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-emerald-300 block">AI Evaluation Feedback:</strong>${rawRemarks.replace(/\n/g, '<br/>')}</div>`;
+
+            if (btn) {
+                btn.disabled = false;
+                btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-xl shadow-emerald-600/30 cursor-pointer animate-pulse";
+                btn.innerHTML = '<i class="fas fa-check-double mr-2"></i> Done & View Completed Check-in';
+            }
+        }
+    }
 
     let currentIdx = 0;
     const interval = setInterval(() => {
@@ -7585,92 +7666,39 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
             if (statusIcon) statusIcon.className = `fas ${s.icon} text-cyan-400 mt-0.5`;
             if (stepCounter) stepCounter.innerText = s.stage;
             if (timeRem) timeRem.innerText = s.timeRem;
-        }
-    }, 3500); // 3.5s * 5 = 17.5s
-
-    // Listen to real server result promise
-    Promise.resolve(evalPromise).then((serverData) => {
-        clearInterval(interval);
-        
-        setTimeout(() => {
-            const title = document.getElementById('evalModalTitle');
-            const subtitle = document.getElementById('evalModalSubtitle');
-            const btn = document.getElementById('btnDismissEvalModal');
-            const robotIcon = document.getElementById('robotIcon');
-            const robotCircle = document.getElementById('robotIconCircle');
-            const laser = document.getElementById('robotLaserSweep');
-            const glow = document.getElementById('robotGlowRing');
-            const statusBox = document.getElementById('evalStatusBox');
-            const statusMsg = document.getElementById('evalStatusMsg');
-            const stageText = document.getElementById('evalCurrentStageText');
-            const bar = document.getElementById('evalProgressBar');
-            const pctText = document.getElementById('evalPercentageText');
-
-            if (bar) bar.style.width = '100%';
-            if (pctText) pctText.innerText = '100%';
-            if (laser) laser.remove();
-
-            const pts = Number(serverData?.lcReward) || 0;
-            const matchScore = Number(serverData?.matchPercentage) || 0;
-            const isMismatch = (pts === 0 || serverData?.status === 'rejected_mismatch');
-            const remarks = serverData?.remarks || serverData?.aiRemarks || 'Evaluation completed.';
-
-            window._finalEvaluationResult = serverData;
-            window._evalCallback = () => {
-                if (typeof onDoneCallback === 'function') onDoneCallback(serverData);
-            };
-
-            if (isMismatch) {
-                // Content mismatch state (0 LCs)
-                if (glow) glow.className = "absolute inset-0 rounded-full bg-rose-500/40 animate-pulse";
-                if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-rose-950 to-rose-700 text-rose-300 rounded-full flex items-center justify-center text-4xl border-2 border-rose-400 shadow-2xl shadow-rose-500/50";
-                if (robotIcon) robotIcon.className = "fas fa-times-circle text-rose-300 scale-110";
-
-                if (title) title.innerHTML = '<span class="text-rose-400">Content Mismatch Detected (0 LCs)</span>';
-                if (subtitle) subtitle.innerHTML = 'The submitted audio reflection did not match today\'s topic configuration. <strong>0 LCs Awarded</strong>. Submission was not accepted.';
-
-                if (stageText) stageText.innerHTML = '<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (0% Rubric Match)';
-                if (statusBox) statusBox.className = "p-3.5 bg-rose-950/60 rounded-xl border border-rose-500/50 flex items-start gap-2.5 text-rose-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
-                if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-rose-300 block">AI Evaluation Feedback:</strong>${remarks.replace(/\n/g, '<br/>')}</div>`;
-
-                if (btn) {
-                    btn.disabled = false;
-                    btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm transition-all shadow-xl shadow-rose-600/30 cursor-pointer animate-pulse";
-                    btn.innerHTML = '<i class="fas fa-redo mr-2"></i> Review Feedback & Re-try Check-in';
+        } else {
+            // Stage 5 reached! Check if server response has arrived
+            clearInterval(interval);
+            
+            // Poll for serverResult up to 15 seconds more if still transcribing
+            let waitAttempts = 0;
+            const checkServerReady = setInterval(() => {
+                waitAttempts++;
+                if (serverResult) {
+                    clearInterval(checkServerReady);
+                    applyFinalModalResult(serverResult);
+                } else if (serverError || waitAttempts >= 30) {
+                    clearInterval(checkServerReady);
+                    const title = document.getElementById('evalModalTitle');
+                    const btn = document.getElementById('btnDismissEvalModal');
+                    const statusMsg = document.getElementById('evalStatusMsg');
+                    if (title) title.innerHTML = '<span class="text-amber-400">Evaluation Finished</span>';
+                    if (statusMsg) statusMsg.innerHTML = 'Submission saved to database. Please click below to refresh and view your updated check-in card.';
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.className = "w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm cursor-pointer shadow-lg";
+                        btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Refresh Dashboard';
+                    }
+                    window._evalCallback = () => {
+                        if (typeof onDoneCallback === 'function') onDoneCallback(serverResult);
+                    };
+                } else {
+                    const statusMsg = document.getElementById('evalStatusMsg');
+                    if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & rubric verification (${Math.max(1, 15 - Math.round(waitAttempts * 0.5))}s)...`;
                 }
-            } else {
-                // Approved state (3, 17, 23, or 33 LCs)
-                if (glow) glow.className = "absolute inset-0 rounded-full bg-emerald-500/40 animate-pulse";
-                if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-emerald-950 to-emerald-700 text-emerald-300 rounded-full flex items-center justify-center text-4xl border-2 border-emerald-400 shadow-2xl shadow-emerald-500/50";
-                if (robotIcon) robotIcon.className = "fas fa-check-circle text-emerald-300 scale-110";
-
-                if (title) title.innerHTML = '<span class="text-emerald-400">Check-in Verified & Approved!</span>';
-                if (subtitle) subtitle.innerHTML = `Rubric Match: <strong>${matchScore}%</strong> — <strong>+${pts} LCs</strong> credited to your wallet.`;
-
-                if (stageText) stageText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Verified (${matchScore}% Match)`;
-                if (statusBox) statusBox.className = "p-3.5 bg-emerald-950/60 rounded-xl border border-emerald-500/50 flex items-start gap-2.5 text-emerald-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
-                if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-emerald-300 block">AI Evaluation Feedback:</strong>${remarks.replace(/\n/g, '<br/>')}</div>`;
-
-                if (btn) {
-                    btn.disabled = false;
-                    btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-xl shadow-emerald-600/30 cursor-pointer animate-pulse";
-                    btn.innerHTML = '<i class="fas fa-check-double mr-2"></i> Done & View Completed Check-in';
-                }
-            }
-        }, 500);
-    }).catch(err => {
-        clearInterval(interval);
-        const title = document.getElementById('evalModalTitle');
-        const btn = document.getElementById('btnDismissEvalModal');
-        const statusMsg = document.getElementById('evalStatusMsg');
-        if (title) title.innerHTML = '<span class="text-amber-400">Evaluation Delayed</span>';
-        if (statusMsg) statusMsg.innerHTML = 'Server is finishing transcription. Please close and refresh your dashboard in a few seconds.';
-        if (btn) {
-            btn.disabled = false;
-            btn.className = "w-full py-3.5 px-6 rounded-2xl bg-slate-700 text-white font-extrabold text-sm cursor-pointer";
-            btn.innerHTML = 'Close & Refresh';
+            }, 500);
         }
-    });
+    }, 2800); // 2.8s per stage = ~14 seconds for smooth 5-stage animation!
 }
 window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
 
