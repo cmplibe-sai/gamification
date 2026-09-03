@@ -552,7 +552,7 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
                 (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase() === sub.userEmail.toLowerCase())) &&
                 String(s.milestoneId || 1) === String(msId) &&
                 String(s.type || s.moduleType || 'dip').toLowerCase() === modType &&
-                String(s.day) === String(dayNum)
+                (String(s.day) === String(dayNum) || (s.date && sub.date && s.date === sub.date))
             ));
 
             const matchedUser = findActualUserFast(sub.userId, sub.userEmail, sub.userPhone);
@@ -567,6 +567,7 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
 
             if (existingIdx > -1) {
                 store.submissions[existingIdx] = { ...store.submissions[existingIdx], ...completeSub };
+                addedCount++;
             } else {
                 store.submissions.push(completeSub);
                 addedCount++;

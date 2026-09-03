@@ -1046,26 +1046,16 @@ async function syncGlobalServerData() {
         const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
-        const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '')).join('|') : '';
-        const cfgSig = JSON.stringify(serverConfigs || {});
-        const currentSignature = serverRevision + '_' + configsRevision + '_' + (serverData ? serverData.length : 0) + '_' + subsSummary + '_' +
-            cfgSig + '_' +
-            JSON.stringify(serverModuleAccess || {}) + '_' +
-            JSON.stringify(serverLevelUpAccess || []) + '_' +
-            JSON.stringify(serverJoinDates || {});
 
-        if (currentSignature === lastSyncSignature) {
-            isSyncInProgress = false;
-            return; // Nothing changed — skip all DOM work
-        }
-        lastSyncSignature = currentSignature;
+        let hasLocalSubmissionsChanged = false;
 
-        // 1. SUBMISSIONS SYNC
+        // 1. TWO-WAY SUBMISSIONS SYNC (ALWAYS RUNS BEFORE SIGNATURE GATE!)
         if (Array.isArray(serverData)) {
-            const missingOnServer = localData.filter(loc => {
+            // A. PUSH CLIENT SUBMISSIONS MISSING ON SERVER (Guarantees local check-ins reach server)
+            const missingOnServer = (Array.isArray(localData) ? localData : []).filter(loc => {
                 if (!loc || (!loc.userId && !loc.userEmail) || String(loc.id || '').includes('mock')) return false;
                 return !serverData.some(srv => (
-                    (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase() === loc.userEmail.toLowerCase())) &&
+                    (String(srv.userId) === String(loc.userId) || (srv.userEmail && loc.userEmail && srv.userEmail.toLowerCase().trim() === loc.userEmail.toLowerCase().trim())) &&
                     String(srv.milestoneId || 1) === String(loc.milestoneId || 1) &&
                     normalizeLevelUpType(srv.type) === normalizeLevelUpType(loc.type) &&
                     String(srv.day !== undefined && srv.day !== null ? srv.day : (srv.date || srv.dateKey)) === String(loc.day !== undefined && loc.day !== null ? loc.day : (loc.date || loc.dateKey))
@@ -1077,21 +1067,24 @@ async function syncGlobalServerData() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ submissions: missingOnServer })
+                }).then(r => r.json()).then(res => {
+                    if (res && res.success) {
+                        console.log(`[Cross-Browser Sync] Pushed ${missingOnServer.length} local submissions to server successfully.`);
+                    }
                 }).catch(() => {});
             }
 
+            // B. PULL SERVER SUBMISSIONS INTO CLIENT STORAGE
             serverData.forEach(s => {
                 const cleanS = { ...s };
                 if (Array.isArray(cleanS.answers)) {
                     cleanS.answers = cleanS.answers.map(a => {
                         const copyA = { ...a };
-                        // Only strip raw Base64 blobs (they'd bust localStorage quota).
-                        // Keep server-side /gamification/uploads/ paths as-is.
                         if (copyA.audioUrl && copyA.audioUrl.startsWith('data:') && copyA.audioUrl.length > 500) {
-                            copyA.audioUrl = ''; // stripped — real path is on server
+                            copyA.audioUrl = '';
                         }
                         if (copyA.videoUrl && copyA.videoUrl.startsWith('data:') && copyA.videoUrl.length > 500) {
-                            copyA.videoUrl = ''; // stripped — real path is on server
+                            copyA.videoUrl = '';
                         }
                         if (copyA.value && copyA.value.startsWith('data:') && copyA.value.length > 500) {
                             copyA.value = '[Audio/Video recorded — view on submission card]';
@@ -1100,28 +1093,32 @@ async function syncGlobalServerData() {
                     });
                 }
                 const idx = localData.findIndex(l => (
-                    (String(l.userId) === String(cleanS.userId) || (l.userEmail && cleanS.userEmail && l.userEmail.toLowerCase() === cleanS.userEmail.toLowerCase())) &&
+                    (String(l.userId) === String(cleanS.userId) || (l.userEmail && cleanS.userEmail && l.userEmail.toLowerCase().trim() === cleanS.userEmail.toLowerCase().trim())) &&
                     String(l.milestoneId || 1) === String(cleanS.milestoneId || 1) &&
                     normalizeLevelUpType(l.type) === normalizeLevelUpType(cleanS.type) &&
                     String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(cleanS.day !== undefined && cleanS.day !== null ? cleanS.day : (cleanS.date || cleanS.dateKey))
                 ));
 
                 if (idx > -1) {
-                    localData[idx] = { ...localData[idx], ...cleanS };
+                    if (localData[idx].status !== cleanS.status || localData[idx].lcReward !== cleanS.lcReward || String(localData[idx].id) !== String(cleanS.id)) {
+                        localData[idx] = { ...localData[idx], ...cleanS };
+                        hasLocalSubmissionsChanged = true;
+                    }
                 } else {
                     localData.push(cleanS);
+                    hasLocalSubmissionsChanged = true;
                 }
 
-                if (s.userId) {
-                    const uId = String(s.userId);
-                    const userEmail = s.userEmail || (String(s.userId).includes('@') ? s.userId : '');
+                if (cleanS.userId) {
+                    const uId = String(cleanS.userId);
+                    const userEmail = cleanS.userEmail || (String(cleanS.userId).includes('@') ? cleanS.userId : '');
                     const existInAdmin = adminRealtimeUsers.find(u => String(u._id) === uId || (u.email && userEmail && u.email.toLowerCase() === userEmail.toLowerCase()));
                     if (!existInAdmin) {
                         const newU = {
                             _id: uId,
-                            name: s.userName || (userEmail ? userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
+                            name: cleanS.userName || (userEmail ? userEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
                             email: userEmail,
-                            phone: s.userPhone || '',
+                            phone: cleanS.userPhone || '',
                             subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : ['6a168e4213e4e9a10984b164']
                         };
                         adminRealtimeUsers.push(newU);
@@ -1132,21 +1129,27 @@ async function syncGlobalServerData() {
                 }
             });
 
-            try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
+            if (hasLocalSubmissionsChanged) {
+                try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
+            }
         }
 
         // 2. MILESTONE CONFIGS SYNC
+        let hasConfigsChanged = false;
         if (serverConfigs && typeof serverConfigs === 'object') {
-            customMilestoneConfigs = serverConfigs;
-            try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+            if (JSON.stringify(customMilestoneConfigs) !== JSON.stringify(serverConfigs)) {
+                customMilestoneConfigs = serverConfigs;
+                try { localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs)); } catch(e) {}
+                hasConfigsChanged = true;
 
-            // Instantly refresh Admin Check-ins setup editor/list if currently open
-            const checkinsView = document.getElementById('adminCheckinsConfigView');
-            if (checkinsView && !checkinsView.classList.contains('hidden')) {
-                if (typeof renderAdminCheckinsList === 'function') renderAdminCheckinsList();
-                const isFocusedOnInput = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
-                if (!isFocusedOnInput && typeof loadAdminCheckinEditor === 'function') {
-                    loadAdminCheckinEditor(activeAdminDateKey || getLocalDateKey(new Date()));
+                // Instantly refresh Admin Check-ins setup editor/list if currently open
+                const checkinsView = document.getElementById('adminCheckinsConfigView');
+                if (checkinsView && !checkinsView.classList.contains('hidden')) {
+                    if (typeof renderAdminCheckinsList === 'function') renderAdminCheckinsList();
+                    const isFocusedOnInput = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+                    if (!isFocusedOnInput && typeof loadAdminCheckinEditor === 'function') {
+                        loadAdminCheckinEditor(activeAdminDateKey || getLocalDateKey(new Date()));
+                    }
                 }
             }
         }
@@ -1169,7 +1172,21 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
         }
 
-        // 6. SELECTIVE FAST RE-RENDER (Only re-renders the currently active view)
+        // 6. SIGNATURE & SELECTIVE FAST RE-RENDER
+        const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '')).join('|') : '';
+        const cfgSig = JSON.stringify(serverConfigs || {});
+        const currentSignature = serverRevision + '_' + configsRevision + '_' + (serverData ? serverData.length : 0) + '_' + (localData ? localData.length : 0) + '_' + subsSummary + '_' +
+            cfgSig + '_' +
+            JSON.stringify(serverModuleAccess || {}) + '_' +
+            JSON.stringify(serverLevelUpAccess || []) + '_' +
+            JSON.stringify(serverJoinDates || {});
+
+        if (!hasLocalSubmissionsChanged && !hasConfigsChanged && currentSignature === lastSyncSignature) {
+            isSyncInProgress = false;
+            return; // Nothing changed locally or on server — skip DOM work
+        }
+        lastSyncSignature = currentSignature;
+
         const adminMainTab = document.getElementById('adminTab');
         const adminLevelUpTab = document.getElementById('adminLevelUpTab');
         const isAdminMainVisible = adminMainTab && !adminMainTab.classList.contains('hidden');
@@ -7741,25 +7758,39 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
 
 
     // 3. DISPATCH INSTANT POST TO SERVER (Credits TagMango API right now & saves file to disk)
-    apiFetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subData)
-    }).then(r => r.json()).then(data => {
-        console.log('✅ Server & TagMango Points Credit Status:', data);
-        if (data && data.data) {
-            try {
-                let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-                localDB = localDB.filter(s => s.id !== data.data.id && !(
-                    String(s.userId) === String(data.data.userId) &&
-                    String(s.milestoneId) === String(data.data.milestoneId) &&
-                    String(s.day) === String(data.data.day)
-                ));
-                localDB.push(data.data);
-                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-            } catch(err) {}
+    try {
+        const postRes = await apiFetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cleanLocalSub)
+        });
+        const postData = await postRes.json();
+        console.log('✅ Server & TagMango Points Credit Status:', postData);
+        if (postData && postData.data) {
+            let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            localDB = localDB.filter(s => s.id !== postData.data.id && !(
+                String(s.userId) === String(postData.data.userId) &&
+                String(s.milestoneId) === String(postData.data.milestoneId) &&
+                String(s.day) === String(postData.data.day)
+            ));
+            localDB.push(postData.data);
+            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
         }
-    }).catch(e => console.error('Submission sync error:', e));
+    } catch (e) {
+        console.warn('Submission POST warning, triggering bulk-sync fallback:', e);
+        try {
+            await apiFetch('/api/submissions/bulk-sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ submissions: [cleanLocalSub] })
+            });
+        } catch(bulkErr) {}
+    }
+
+    // Immediately trigger background sync
+    if (typeof syncGlobalServerData === 'function') {
+        syncGlobalServerData().catch(() => {});
+    }
 
     // 4. INSTANTLY UPDATE DASHBOARD & TIMELINE (Card flips to Completed)
     if (typeof switchMilestoneTab === 'function') {
@@ -9055,6 +9086,21 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
                 if (adminDetail && typeof renderAdminMilestoneDetail === 'function') {
                     renderAdminMilestoneDetail(activeAdminMilestoneId);
                 }
+            } catch(err) {}
+        }
+        if (e.key === 'allUserSubmissionsDB' && e.newValue) {
+            try {
+                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                    renderAdminCohortSubmissions();
+                }
+                if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+                    renderAdminCustomerGrid();
+                }
+                const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
+                if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
+                    switchMilestoneTab(activeSubTab);
+                }
+                if (typeof updateDashboardUI === 'function') updateDashboardUI();
             } catch(err) {}
         }
         if (e.key === 'customMilestoneConfigs' && e.newValue) {
