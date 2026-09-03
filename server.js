@@ -5,10 +5,11 @@ const fs = require('fs');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 
-// Load environment variables
-dotenv.config();
+// Load environment variables explicitly from current directory
+dotenv.config({ path: path.join(__dirname, '.env') });
 
-const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY || '';
+const ASSEMBLYAI_API_KEY = (process.env.ASSEMBLYAI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+console.log(`[AssemblyAI Engine]: ${ASSEMBLYAI_API_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (ASSEMBLYAI_API_KEY missing in .env)'}`);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,7 +90,7 @@ function saveBase64MediaToFile(dataUrl, prefix) {
 // ==============================================================
 async function transcribeAudioWithAssemblyAI(audioFilePath) {
     if (!ASSEMBLYAI_API_KEY) {
-        console.warn('[AssemblyAI] No API key configured (ASSEMBLYAI_API_KEY env var missing). Skipping transcription.');
+        console.warn('[AssemblyAI] No API key configured in .env (ASSEMBLYAI_API_KEY missing). Cannot transcribe audio.');
         return null;
     }
 
@@ -97,18 +98,20 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
     const headers = { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/json' };
 
     try {
-        // Step 1: Upload the audio file to AssemblyAI's upload endpoint
         let uploadUrl = null;
 
-        // If it's a server-side file path, read and upload as binary
-        const absolutePath = audioFilePath.startsWith('/gamification/uploads/')
-            ? path.join(UPLOADS_DIR, audioFilePath.replace('/gamification/uploads/', ''))
-            : audioFilePath.startsWith('/uploads/')
-                ? path.join(UPLOADS_DIR, audioFilePath.replace('/uploads/', ''))
-                : audioFilePath;
+        // Resolve absolute file path on disk
+        let absolutePath = audioFilePath;
+        if (audioFilePath.includes('/uploads/')) {
+            const base = path.basename(audioFilePath);
+            absolutePath = path.join(UPLOADS_DIR, base);
+        } else if (!path.isAbsolute(audioFilePath)) {
+            absolutePath = path.join(UPLOADS_DIR, audioFilePath);
+        }
 
         if (fs.existsSync(absolutePath)) {
             const fileBuffer = fs.readFileSync(absolutePath);
+            console.log(`[AssemblyAI] Uploading file: ${absolutePath} (${fileBuffer.length} bytes)...`);
             const uploadRes = await fetch(`${AAI_BASE}/v1/upload`, {
                 method: 'POST',
                 headers: { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' },
@@ -116,62 +119,57 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
             });
             const uploadData = await uploadRes.json();
             uploadUrl = uploadData.upload_url;
-            console.log(`[AssemblyAI] File uploaded: ${absolutePath} → ${uploadUrl}`);
+            console.log(`[AssemblyAI] File uploaded to AssemblyAI: ${uploadUrl}`);
         } else if (audioFilePath.startsWith('http')) {
-            // Publicly accessible URL — pass directly
             uploadUrl = audioFilePath;
-            console.log(`[AssemblyAI] Using public URL directly: ${uploadUrl}`);
+            console.log(`[AssemblyAI] Using public audio URL: ${uploadUrl}`);
         } else {
-            console.warn('[AssemblyAI] Audio file not found on disk, skipping transcription:', absolutePath);
+            console.warn('[AssemblyAI] Audio file not found on disk:', absolutePath);
             return null;
         }
 
         if (!uploadUrl) return null;
 
-        // Step 2: Submit transcription request
+        // Submit transcription job (fast, auto language detection)
         const transcriptRes = await fetch(`${AAI_BASE}/v2/transcript`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 audio_url: uploadUrl,
-                language_detection: true, // auto-detect Hindi/English/Hinglish
-                speech_model: 'best',
+                language_detection: true,
                 punctuate: true,
                 format_text: true
             })
         });
         const transcriptData = await transcriptRes.json();
         const transcriptId = transcriptData.id;
-        console.log(`[AssemblyAI] Transcription queued: ${transcriptId}`);
+        console.log(`[AssemblyAI] Transcription job queued: ${transcriptId}`);
 
-        // Step 3: Poll until complete (max 60 seconds, check every 3 seconds)
-        const maxAttempts = 20;
+        // Poll for completion (up to 30 seconds, checking every 2.5s)
+        const maxAttempts = 15;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, 3000)); // wait 3s
+            await new Promise(resolve => setTimeout(resolve, 2500));
             const pollRes = await fetch(`${AAI_BASE}/v2/transcript/${transcriptId}`, { headers });
             const pollData = await pollRes.json();
 
             if (pollData.status === 'completed') {
                 const transcript = pollData.text || '';
-                console.log(`[AssemblyAI] Transcription complete (${transcript.length} chars): "${transcript.slice(0, 120)}..."`);
+                console.log(`[AssemblyAI] ✅ Transcription complete (${transcript.length} chars): "${transcript.slice(0, 150)}..."`);
                 return transcript;
             } else if (pollData.status === 'error') {
                 console.warn(`[AssemblyAI] Transcription error for ${transcriptId}:`, pollData.error);
                 return null;
             }
-            // still processing, keep polling
             console.log(`[AssemblyAI] Polling (${attempt + 1}/${maxAttempts})... status: ${pollData.status}`);
         }
 
-        console.warn(`[AssemblyAI] Transcription timed out after ${maxAttempts * 3}s`);
+        console.warn(`[AssemblyAI] Transcription timed out after ${maxAttempts * 2.5}s`);
         return null;
     } catch (err) {
-        console.warn('[AssemblyAI] Transcription error:', err.message);
+        console.warn('[AssemblyAI] Exception during transcription:', err.message);
         return null;
     }
 }
-
-
 function loadStore() {
     try {
         if (fs.existsSync(DB_FILE)) {
@@ -755,22 +753,6 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         };
     }
 
-    // ── Audio uploaded but server-side transcription not yet available ───────
-    // (Client-side eval only — server will re-evaluate with real transcript via AssemblyAI)
-    if (hasAudio && !hasTextContent && !transcribedByServer) {
-        const pts = isLate ? 3 : basePoints;
-        return {
-            matchPercentage: 85,
-            lcReward: pts,
-            status: 'completed',
-            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
-                `Rubric Match: Pending (Audio Received) | Credited: +${pts} LCs | Status: Verified\n` +
-                `Audio voice reflection received and saved. Server-side transcription is processing ` +
-                `(AssemblyAI). Final rubric comparison and LC credit confirmation will be updated ` +
-                `automatically within 30 seconds. Please refresh to see the final result.`
-        };
-    }
-
     // ── Keyword extraction (stop-word filtered) ──────────────────────────────
     const stopWords = new Set([
         'the', 'and', 'for', 'that', 'this', 'with', 'you', 'are', 'from', 'have',
@@ -1045,7 +1027,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         if (ASSEMBLYAI_API_KEY && Array.isArray(subAnswers)) {
             const transcriptionPromises = subAnswers.map(async (a, idx) => {
                 const audioUrl = a.audioUrl || (a.type === 'audio' ? (a.value || '') : '');
-                if (!audioUrl || !audioUrl.startsWith('/')) return; // Only process server-stored paths
+                if (!audioUrl || (!audioUrl.startsWith('/') && !audioUrl.includes('/uploads/') && !audioUrl.startsWith('http'))) return;
                 if (a.transcription && a.transcription.trim().length > 20) return; // Already transcribed
 
                 console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
