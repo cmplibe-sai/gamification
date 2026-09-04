@@ -1053,15 +1053,16 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const sub = req.body;
         if (!sub || (!sub.userId && !sub.userEmail)) return res.status(400).json({ success: false, error: 'userId or userEmail required' });
         if (!store.submissions) store.submissions = [];
-        
+
         const msId = Number(sub.milestoneId) || 1;
         const dayNum = Number(sub.day) || Number(sub.sessionDay) || 1;
         const modType = (sub.moduleType || sub.type || 'dip').toUpperCase();
-        let lcReward = Number(sub.lcReward) || 33;
         const subAnswers = sub.answers || sub.responses || [];
 
         // -------------------------------------------------------------
         // SAVE ANY BASE64 RECORDED / UPLOADED MEDIA FILES DIRECTLY TO DISK
+        // (fast, synchronous — completes before we respond, so the audio
+        // itself is never at risk even if evaluation below is slow)
         // -------------------------------------------------------------
         if (Array.isArray(subAnswers)) {
             subAnswers.forEach((a, idx) => {
@@ -1077,69 +1078,22 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             });
         }
 
-        // -------------------------------------------------------------
-        // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION
-        // -------------------------------------------------------------
-        const allConfigs = getMilestoneConfigsFromDb();
-        const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
-        const refArticle = dayCfg.articleText || dayCfg.description || dayCfg.title || '';
-
-        let combinedStudentText = '';
-        if (Array.isArray(subAnswers)) {
-            subAnswers.forEach(a => {
-                combinedStudentText += ' ' + (a.answer || a.value || a.transcription || a.text || '');
-            });
-        }
-        if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
-
-        // Check if any answer has a valid audio/video URL
-        const hasAudioSubmission = Array.isArray(subAnswers) && subAnswers.some(a => {
-            const url = a.audioUrl || a.videoUrl || a.value || '';
-            return Boolean(url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:') || url.includes('/uploads/')));
-        });
+        const subId = sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
         // -------------------------------------------------------------
-        // ASSEMBLYAI TRANSCRIPTION: Convert audio files to text for real rubric comparison
-        // Run in parallel for all audio answers to save time
+        // FAILSAFE: PERSIST THE SUBMISSION IMMEDIATELY AS "evaluating"
+        // BEFORE running AssemblyAI transcription / rubric scoring / TagMango
+        // sync. AssemblyAI upload+polling can take up to ~37.5s per audio
+        // answer — holding the HTTP response open that long risked a proxy
+        // (e.g. Nginx) 504 timeout, which the client would see as a JSON
+        // parse error and report as "rejected", even though the recording
+        // was genuine. Now the record is guaranteed to exist in the store
+        // the moment this responds; evaluation continues in the background
+        // and the client polls GET /api/submissions/status/:id for the
+        // real outcome.
         // -------------------------------------------------------------
-        if (ASSEMBLYAI_API_KEY && Array.isArray(subAnswers)) {
-            const transcriptionPromises = subAnswers.map(async (a, idx) => {
-                const audioUrl = a.audioUrl || (a.type === 'audio' ? (a.value || '') : '');
-                if (!audioUrl || (!audioUrl.startsWith('/') && !audioUrl.includes('/uploads/') && !audioUrl.startsWith('http'))) return;
-                if (a.transcription && a.transcription.trim().length > 20) return; // Already transcribed
-
-                console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
-                const transcript = await transcribeAudioWithAssemblyAI(audioUrl);
-                if (transcript && transcript.trim().length > 0) {
-                    a.transcription = transcript.trim();
-                    console.log(`[AssemblyAI] Q${idx+1} transcript: "${transcript.slice(0, 100)}..."`);
-                }
-            });
-            // Wait for all transcriptions to complete before rubric comparison
-            await Promise.allSettled(transcriptionPromises);
-
-            // Rebuild combinedStudentText with fresh transcriptions
-            combinedStudentText = '';
-            subAnswers.forEach(a => {
-                combinedStudentText += ' ' + (a.transcription || a.answer || a.value || a.text || '');
-            });
-            if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
-            console.log(`[Rubric Eval] Combined text for comparison (${combinedStudentText.trim().split(/\s+/).length} words): "${combinedStudentText.trim().slice(0, 200)}"`);
-        }
-
-        const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
-            basePoints: Number(sub.lcReward) || 33,
-            isLate: sub.isLate || false,
-            hasAudio: hasAudioSubmission
-        });
-
-        const finalMatchPct = evalResult.matchPercentage;
-        const finalLcReward = evalResult.lcReward;
-        const finalRemarks = evalResult.remarks;
-        const finalStatus = evalResult.status;
-
-        const newSub = {
-            id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        const placeholderSub = {
+            id: subId,
             userId: sub.userId,
             fanId: sub.fanId || sub.userId,
             userEmail: sub.userEmail || '',
@@ -1152,78 +1106,176 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             sessionDay: dayNum,
             date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
             dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
-            status: finalStatus,
-            lcReward: finalLcReward,
+            status: 'evaluating',
+            lcReward: 0,
             originalLcReward: Number(sub.lcReward) || 33,
-            matchPercentage: finalMatchPct,
-            similarityScore: finalMatchPct,
-            articleTitle: dayCfg.title || '',
-            referenceArticle: refArticle,
-            aiRemarks: finalRemarks,
-            remarks: finalRemarks,
+            matchPercentage: null,
+            similarityScore: null,
+            aiRemarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
+            remarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
             answers: subAnswers,
         };
 
-        // Filter out duplicate submission
+        // Filter out duplicate submission for this exact day/module before inserting
         store.submissions = store.submissions.filter(s => !(
-            (String(s.userId) === String(newSub.userId) || (s.userEmail && newSub.userEmail && s.userEmail.toLowerCase() === newSub.userEmail.toLowerCase())) &&
+            (String(s.userId) === String(placeholderSub.userId) || (s.userEmail && placeholderSub.userEmail && s.userEmail.toLowerCase() === placeholderSub.userEmail.toLowerCase())) &&
             String(s.milestoneId || 1) === String(msId) &&
-            String(s.type || s.moduleType || 'dip').toLowerCase() === String(newSub.type).toLowerCase() &&
+            String(s.type || s.moduleType || 'dip').toLowerCase() === String(placeholderSub.type).toLowerCase() &&
             String(s.day) === String(dayNum)
         ));
 
-        store.submissions.push(newSub);
+        store.submissions.push(placeholderSub);
         store.submissionsRevision = Date.now();
         saveStore();
 
-        // -------------------------------------------------------------
-        // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
-        // -------------------------------------------------------------
-        let targetFanId = sub.fanId;
-        const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+        res.json({
+            success: true,
+            pending: true,
+            message: 'Submission received and saved. AI evaluation is running in the background.',
+            data: placeholderSub
+        });
 
-        if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
-            targetFanId = '68fb27f707ccf937418d41c6';
-        } else if (normalizedEmail === 'engineersai02@gmail.com') {
-            targetFanId = '68a805cf8c448ccc00abc23f';
-        } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
-            const matched = backendActualUsers.find(u => 
-                (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
-                (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
-                (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
-            );
-            if (matched && matched._id) {
-                targetFanId = matched._id;
-            } else {
-                targetFanId = '68a805cf8c448ccc00abc23f';
-            }
-        }
-
-        const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
-        let tagMangoResult = null;
-
-        if (finalLcReward > 0 && targetFanId) {
-            console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
-            try {
-                tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription);
-                console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
-            } catch (tmErr) {
-                console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);
-            }
-        } else {
-            console.log(`[TagMango Skipped] Points: ${finalLcReward} (Content mismatch or 0 points) for ${targetFanId}`);
-        }
-
-        return res.json({ 
-            success: true, 
-            message: 'Submission saved and LCs credited to TagMango wallet', 
-            data: newSub, 
-            tagMangoResult: tagMangoResult 
+        // Continue evaluating AFTER the response has been sent — this can now
+        // take as long as it needs without risking a proxy timeout.
+        finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum, modType).catch(err => {
+            console.error(`[Background Evaluation Error] Submission ${subId}:`, err);
         });
     } catch(err) {
         console.error('Submission API Error:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
+});
+
+// Runs after POST /api/submissions has already responded: transcribes audio,
+// scores against the rubric, updates the already-saved record in place, and
+// credits the TagMango wallet.
+async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum, modType) {
+    // -------------------------------------------------------------
+    // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION
+    // -------------------------------------------------------------
+    const allConfigs = getMilestoneConfigsFromDb();
+    const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
+    const refArticle = dayCfg.articleText || dayCfg.description || dayCfg.title || '';
+
+    let combinedStudentText = '';
+    if (Array.isArray(subAnswers)) {
+        subAnswers.forEach(a => {
+            combinedStudentText += ' ' + (a.answer || a.value || a.transcription || a.text || '');
+        });
+    }
+    if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
+
+    // Check if any answer has a valid audio/video URL
+    const hasAudioSubmission = Array.isArray(subAnswers) && subAnswers.some(a => {
+        const url = a.audioUrl || a.videoUrl || a.value || '';
+        return Boolean(url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') || url.startsWith('blob:') || url.includes('/uploads/')));
+    });
+
+    // -------------------------------------------------------------
+    // ASSEMBLYAI TRANSCRIPTION: Convert audio files to text for real rubric comparison
+    // Run in parallel for all audio answers to save time
+    // -------------------------------------------------------------
+    if (ASSEMBLYAI_API_KEY && Array.isArray(subAnswers)) {
+        const transcriptionPromises = subAnswers.map(async (a, idx) => {
+            const audioUrl = a.audioUrl || (a.type === 'audio' ? (a.value || '') : '');
+            if (!audioUrl || (!audioUrl.startsWith('/') && !audioUrl.includes('/uploads/') && !audioUrl.startsWith('http'))) return;
+            if (a.transcription && a.transcription.trim().length > 20) return; // Already transcribed
+
+            console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
+            const transcript = await transcribeAudioWithAssemblyAI(audioUrl);
+            if (transcript && transcript.trim().length > 0) {
+                a.transcription = transcript.trim();
+                console.log(`[AssemblyAI] Q${idx+1} transcript: "${transcript.slice(0, 100)}..."`);
+            }
+        });
+        // Wait for all transcriptions to complete before rubric comparison
+        await Promise.allSettled(transcriptionPromises);
+
+        // Rebuild combinedStudentText with fresh transcriptions
+        combinedStudentText = '';
+        subAnswers.forEach(a => {
+            combinedStudentText += ' ' + (a.transcription || a.answer || a.value || a.text || '');
+        });
+        if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
+        console.log(`[Rubric Eval] Combined text for comparison (${combinedStudentText.trim().split(/\s+/).length} words): "${combinedStudentText.trim().slice(0, 200)}"`);
+    }
+
+    const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
+        basePoints: Number(sub.lcReward) || 33,
+        isLate: sub.isLate || false,
+        hasAudio: hasAudioSubmission
+    });
+
+    const finalMatchPct = evalResult.matchPercentage;
+    const finalLcReward = evalResult.lcReward;
+    const finalRemarks = evalResult.remarks;
+    const finalStatus = evalResult.status;
+
+    // Update the already-saved submission record in place
+    const idx = (store.submissions || []).findIndex(s => s.id === subId);
+    if (idx === -1) {
+        console.warn(`[Background Evaluation] Submission ${subId} no longer exists in store (overwritten by a later resubmission?). Skipping finalize.`);
+        return;
+    }
+    store.submissions[idx] = {
+        ...store.submissions[idx],
+        status: finalStatus,
+        lcReward: finalLcReward,
+        matchPercentage: finalMatchPct,
+        similarityScore: finalMatchPct,
+        articleTitle: dayCfg.title || '',
+        referenceArticle: refArticle,
+        aiRemarks: finalRemarks,
+        remarks: finalRemarks,
+        answers: subAnswers,
+        evaluatedAt: new Date().toISOString()
+    };
+    store.submissionsRevision = Date.now();
+    saveStore();
+
+    // -------------------------------------------------------------
+    // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
+    // -------------------------------------------------------------
+    let targetFanId = sub.fanId;
+    const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+
+    if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
+        targetFanId = '68fb27f707ccf937418d41c6';
+    } else if (normalizedEmail === 'engineersai02@gmail.com') {
+        targetFanId = '68a805cf8c448ccc00abc23f';
+    } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+        const matched = backendActualUsers.find(u =>
+            (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
+            (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
+            (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
+        );
+        if (matched && matched._id) {
+            targetFanId = matched._id;
+        } else {
+            targetFanId = '68a805cf8c448ccc00abc23f';
+        }
+    }
+
+    const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
+
+    if (finalLcReward > 0 && targetFanId) {
+        console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
+        try {
+            const tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription);
+            console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
+        } catch (tmErr) {
+            console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);
+        }
+    } else {
+        console.log(`[TagMango Skipped] Points: ${finalLcReward} (Content mismatch or 0 points) for ${targetFanId}`);
+    }
+}
+
+// Lightweight poll target for the client: current status of one submission by id.
+app.get(['/api/submissions/status/:id', '/gamification/api/submissions/status/:id'], (req, res) => {
+    const sub = (store.submissions || []).find(s => s.id === req.params.id);
+    if (!sub) return res.status(404).json({ success: false, error: 'Submission not found' });
+    res.json({ success: true, data: sub });
 });
 
 app.get('/api/milestone-start-dates', (req, res) => {

@@ -7784,18 +7784,38 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                     const title = document.getElementById('evalModalTitle');
                     const btn = document.getElementById('btnDismissEvalModal');
                     const statusMsg = document.getElementById('evalStatusMsg');
-                    if (title) title.innerHTML = '<span class="text-amber-400">Still Processing...</span>';
-                    if (statusMsg) statusMsg.innerHTML = 'This is taking longer than usual. Your submission is still being evaluated on the server — you can close this and check back shortly. It will NOT be lost or need resubmitting.';
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.className = "w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm cursor-pointer shadow-lg";
-                        btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Close & Check Back Later';
+
+                    if (serverError && serverError.isConnectionError) {
+                        // The submission itself never reached the server (network/HTTP
+                        // failure) — this is a real failure, not just a slow evaluation.
+                        // Offer a genuine retry instead of pretending it's still processing.
+                        if (title) title.innerHTML = '<span class="text-rose-400">Connection Error</span>';
+                        if (statusMsg) statusMsg.innerHTML = `${serverError.message || 'Could not reach the server.'} Your recording is still available on this device — click below to retry.`;
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm cursor-pointer shadow-xl";
+                            btn.innerHTML = '<i class="fas fa-redo mr-2"></i> Retry Submission';
+                        }
+                        window._evalCallback = () => {
+                            if (typeof window.retryLastCheckinSubmission === 'function') window.retryLastCheckinSubmission();
+                        };
+                    } else {
+                        // Either still polling (isPollTimeout) or the wait budget simply
+                        // ran out — either way the submission was already confirmed saved
+                        // server-side before polling even started, so it is genuinely safe.
+                        if (title) title.innerHTML = '<span class="text-amber-400">Still Processing...</span>';
+                        if (statusMsg) statusMsg.innerHTML = 'This is taking longer than usual. Your submission was already saved on the server and is still being evaluated — you can close this and check back shortly. It will NOT be lost or need resubmitting.';
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.className = "w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm cursor-pointer shadow-lg";
+                            btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Close & Check Back Later';
+                        }
+                        // Do NOT invoke onDoneCallback with a fabricated result here — the
+                        // real evaluation is still in flight. The Promise.resolve(evalPromise)
+                        // handler above will apply the true result for real once it arrives,
+                        // even though this modal has already closed by then.
+                        window._evalCallback = null;
                     }
-                    // Do NOT invoke onDoneCallback with a fabricated result here — the
-                    // real evaluation is still in flight. The Promise.resolve(evalPromise)
-                    // handler above will apply the true result for real once it arrives,
-                    // even though this modal has already closed by then.
-                    window._evalCallback = null;
                 } else {
                     const statusMsg = document.getElementById('evalStatusMsg');
                     if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & rubric verification (${Math.max(1, Math.round((maxWaitAttempts - waitAttempts) * 0.5))}s)...`;
@@ -7952,21 +7972,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     // Close submission input form
     document.getElementById('submissionModalDynamic')?.remove();
 
-    // SERVER-SIDE EVALUATION PROMISE: The server transcribes with AssemblyAI and evaluates against the 5-tier rubric
-    const serverEvalPromise = apiFetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).then(r => r.json()).then(res => {
-        console.log('✅ Server Submission Result:', res);
-        if (res && res.data) {
-            return res.data;
-        }
-        throw new Error(res?.error || 'Submission failed');
-    });
-
-    // OPEN 20-SECOND ANIMATED AI EVALUATION MODAL — WAITS FOR SERVER EVALUATION RESULT
-    showAiEvaluatingLagtime(serverEvalPromise, (finalData) => {
+    const doneHandler = (finalData) => {
         const pts = Number(finalData?.lcReward) || 0;
         const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch');
 
@@ -8002,9 +8008,95 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             renderAdminCohortSubmissions();
         }
         if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
-    });
+    };
+
+    // Keep the payload + done handler reachable so a genuine connection failure
+    // (see submitPayloadToServer / showAiEvaluatingLagtime) can retry the exact
+    // same submission without re-collecting form data from a form that's already closed.
+    window._lastCheckinPayload = payload;
+    window._lastCheckinDoneHandler = doneHandler;
+
+    // SERVER-SIDE EVALUATION PROMISE: server saves the submission immediately, then
+    // transcribes with AssemblyAI and evaluates against the 5-tier rubric in the
+    // background (see submitPayloadToServer for why).
+    const serverEvalPromise = submitPayloadToServer(payload);
+
+    // OPEN ANIMATED AI EVALUATION MODAL — WAITS FOR SERVER EVALUATION RESULT
+    showAiEvaluatingLagtime(serverEvalPromise, doneHandler);
 }
 window.submitCheckinForm = submitCheckinForm;
+
+// Sends a check-in payload to the server. The server responds as soon as the
+// submission is safely saved (status: 'evaluating') and finishes AssemblyAI
+// transcription + rubric scoring in the background — so this then polls for
+// the real outcome instead of blocking a single long-lived HTTP request,
+// which previously risked a reverse-proxy (e.g. Nginx) timeout on slow
+// transcriptions and made genuine submissions look "lost".
+async function submitPayloadToServer(payload) {
+    let res;
+    try {
+        res = await apiFetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(r => r.json());
+    } catch (netErr) {
+        const err = new Error('Could not reach the server to save your check-in. Please check your connection and retry.');
+        err.isConnectionError = true;
+        throw err;
+    }
+
+    if (!res || !res.data) {
+        const err = new Error(res?.error || 'Submission failed');
+        err.isConnectionError = true;
+        throw err;
+    }
+
+    console.log('✅ Server Submission Ack:', res);
+
+    if (res.pending) {
+        // Submission is already safely saved server-side — poll for the real result.
+        return await pollSubmissionStatus(res.data.id);
+    }
+    return res.data;
+}
+window.submitPayloadToServer = submitPayloadToServer;
+
+// Polls GET /api/submissions/status/:id until the background evaluation
+// finishes (status is no longer 'evaluating'). The submission was already
+// persisted before this starts, so a timeout here just means "still
+// finishing" — never "lost" — which showAiEvaluatingLagtime relies on to
+// avoid falsely reporting a rejection.
+async function pollSubmissionStatus(id, { intervalMs = 2000, maxWaitMs = 90000 } = {}) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+        await new Promise(r => setTimeout(r, intervalMs));
+        try {
+            const res = await apiFetch(`/api/submissions/status/${encodeURIComponent(id)}`).then(r => r.json());
+            if (res && res.success && res.data && res.data.status !== 'evaluating') {
+                return res.data;
+            }
+        } catch (e) {
+            // Transient poll error — keep trying until maxWaitMs.
+        }
+    }
+    const timeoutErr = new Error('Evaluation is taking longer than expected. Your submission was already saved and will finish evaluating shortly.');
+    timeoutErr.isPollTimeout = true;
+    throw timeoutErr;
+}
+window.pollSubmissionStatus = pollSubmissionStatus;
+
+// Retries the exact last check-in submission after a genuine connection error
+// (the original form is already closed by then, so we resend the same payload
+// rather than trying to re-collect it from now-removed DOM elements).
+function retryLastCheckinSubmission() {
+    const payload = window._lastCheckinPayload;
+    const doneHandler = window._lastCheckinDoneHandler;
+    if (!payload) return;
+    const serverEvalPromise = submitPayloadToServer(payload);
+    showAiEvaluatingLagtime(serverEvalPromise, doneHandler);
+}
+window.retryLastCheckinSubmission = retryLastCheckinSubmission;
 
 function switchMilestoneTab(moduleName, btnElement) {
     if (btnElement) {
