@@ -1053,10 +1053,26 @@ async function syncGlobalServerData() {
             });
 
             if (missingOnServer.length > 0) {
+                const cleanedPayload = missingOnServer.map(loc => {
+                    const cleanLoc = { ...loc };
+                    if (Array.isArray(cleanLoc.answers)) {
+                        cleanLoc.answers = cleanLoc.answers.map(a => {
+                            const copyA = { ...a };
+                            if (copyA.audioUrl && copyA.audioUrl.startsWith('data:') && copyA.audioUrl.length > 500) {
+                                copyA.audioUrl = '';
+                            }
+                            return copyA;
+                        });
+                    }
+                    if (cleanLoc.audioBlob) delete cleanLoc.audioBlob;
+                    if (cleanLoc.mediaBlob) delete cleanLoc.mediaBlob;
+                    return cleanLoc;
+                });
+
                 apiFetch('/api/submissions/bulk-sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ submissions: missingOnServer })
+                    body: JSON.stringify({ submissions: cleanedPayload })
                 }).then(r => r.json()).then(res => {
                     if (res && res.success) {
                         console.log(`[Cross-Browser Sync] Pushed ${missingOnServer.length} local submissions to server successfully.`);
