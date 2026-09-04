@@ -874,35 +874,17 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     // ── 5-TIER LC GRADING ───────────────────────────────────────────────────
 
-    // TIER 5 — Totally Different Content (< 15% match) → 0 LCs, REJECTED
-    if (coverage < 15) {
+    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
+    if (coverage < 50) {
         return {
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Mismatch — 0 LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Allowed\n` +
-                `The submitted audio/text reflection does not match today's designated check-in topic. ` +
-                `The content was either totally different from the day's description, contained irrelevant ` +
-                `material, or was a misplaced file. Please review today's article/reading carefully, ` +
-                `record a genuine voice reflection discussing the key concepts, and resubmit.`
-        };
-    }
-
-    // TIER 4 — Low Partial Match (15% – 49%) → 3 LCs
-    if (coverage < 50) {
-        const pts = isLate ? 1 : 3;
-        return {
-            matchPercentage: coverage,
-            lcReward: pts,
-            status: 'completed',
-            remarks: `⚠️ [AI Evaluation: Low Partial Match — ${pts} LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Low Match\n` +
-                `Your reflection showed minimal alignment with today's rubric. Key concepts from ` +
-                `today's description were largely absent or skipped. Important sections were missed ` +
-                `in the beginning, middle, or end of your response. Pronunciation and articulation ` +
-                `also need improvement. Only ${pts} LCs credited. Review the day's content and ` +
-                `aim for a more comprehensive reflection next time.`
+            remarks: `❌ [AI Evaluation: Rubric Match Below 50% — 0 LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Required (Min. 50% Required)\n` +
+                `The submitted reflection scored ${coverage}%, which is below the minimum required 50% rubric match threshold. ` +
+                `No LCs have been awarded. Please review today's designated reading/article carefully, record a genuine voice reflection ` +
+                `discussing the key concepts and core takeaways, and re-submit your check-in.`
         };
     }
 
@@ -1131,6 +1113,18 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             updatedAt: new Date().toISOString()
         };
 
+        // Find if this is a re-submission attempt to accurately track attempt count
+        const existingSub = store.submissions.find(s =>
+            (String(s.userId) === String(placeholderSub.userId) || (s.userEmail && placeholderSub.userEmail && s.userEmail.toLowerCase() === placeholderSub.userEmail.toLowerCase())) &&
+            String(s.milestoneId || 1) === String(msId) &&
+            String(s.type || s.moduleType || 'dip').toLowerCase() === String(placeholderSub.type).toLowerCase() &&
+            String(s.day) === String(dayNum)
+        );
+        const previousAttempts = existingSub ? (Number(existingSub.attemptsCount) || Number(existingSub.attemptNumber) || 1) : 0;
+        const currentAttemptNumber = previousAttempts + 1;
+        placeholderSub.attemptsCount = currentAttemptNumber;
+        placeholderSub.attemptNumber = currentAttemptNumber;
+
         // Filter out duplicate submission for this exact day/module before inserting
         store.submissions = store.submissions.filter(s => !(
             (String(s.userId) === String(placeholderSub.userId) || (s.userEmail && placeholderSub.userEmail && s.userEmail.toLowerCase() === placeholderSub.userEmail.toLowerCase())) &&
@@ -1238,6 +1232,8 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         lcReward: finalLcReward,
         matchPercentage: finalMatchPct,
         similarityScore: finalMatchPct,
+        attemptsCount: store.submissions[idx].attemptsCount || 1,
+        attemptNumber: store.submissions[idx].attemptsCount || 1,
         articleTitle: dayCfg.title || '',
         referenceArticle: refArticle,
         aiRemarks: finalRemarks,

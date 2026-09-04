@@ -5300,9 +5300,22 @@ function renderAdminCohortSubmissions() {
                 });
                 
                 if (matchingSub) {
-                    const tooltip = matchingSub.date ? `${new Date(matchingSub.date).toLocaleDateString('en-GB')} • ${matchingSub.lcReward || 0} LCs` : `Day ${actualDay}`;
-                    const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
-                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${statusLabel}</span></div></td>`;
+                    const isEval = matchingSub.status === 'evaluating';
+                    const isSubFailed = !isEval && (matchingSub.status === 'rejected_mismatch' || Number(matchingSub.lcReward) === 0 || (matchingSub.matchPercentage !== undefined && Number(matchingSub.matchPercentage) < 50));
+                    const attemptNum = matchingSub.attemptsCount || matchingSub.attemptNumber || 1;
+                    const matchPct = (matchingSub.matchPercentage !== undefined && matchingSub.matchPercentage !== null) ? `${matchingSub.matchPercentage}%` : '';
+
+                    if (isEval) {
+                        const tooltip = `Evaluating... • Attempt #${attemptNum}`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-indigo-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-spinner fa-spin text-indigo-400 text-base"></i><span class="text-[9px] text-indigo-300 font-mono">Evaluating</span></div></td>`;
+                    } else if (isSubFailed) {
+                        const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • Rejected (<50% match) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''} • 0 LCs`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-rose-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-400 text-base"></i><span class="text-[9px] px-1 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-bold" title="Failed: Rubric Match < 50%">Att #${attemptNum}</span></div></td>`;
+                    } else {
+                        const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Passed (≥50%) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''}`;
+                        const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-check-circle text-emerald-400 text-base shadow-emerald"></i><div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">${statusLabel}</span><span class="text-[8px] px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono font-bold" title="Passed on Attempt #${attemptNum}">Att #${attemptNum}</span></div></div></td>`;
+                    }
                 } else {
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
                 }
@@ -7063,24 +7076,17 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     // ── 5-TIER LC GRADING ───────────────────────────────────────────────────
 
-    // TIER 5 — Totally Different (< 15%) → 0 LCs, REJECTED, re-submit allowed
-    if (coverage < 15) {
+    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
+    if (coverage < 50) {
         return {
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Content Mismatch — 0 LCs Awarded]\nRubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Allowed\nThe submitted audio/text reflection does not match today's designated check-in topic. The content was either totally different from the day's description, contained irrelevant material, or was a misplaced file. Please review today's article/reading carefully, record a genuine voice reflection discussing the key concepts, and resubmit.`
-        };
-    }
-
-    // TIER 4 — Low Partial Match (15% – 49%) → 3 LCs
-    if (coverage < 50) {
-        const pts = isLate ? 1 : 3;
-        return {
-            matchPercentage: coverage,
-            lcReward: pts,
-            status: 'completed',
-            remarks: `⚠️ [AI Evaluation: Low Partial Match — ${pts} LCs Awarded]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Low Match\nYour reflection showed minimal alignment with today's rubric. Key concepts from today's description were largely absent or skipped. Important sections were missed in the beginning, middle, or end of your response. Pronunciation and articulation also need improvement. Only ${pts} LCs credited. Review the day's content and aim for a more comprehensive reflection next time.`
+            remarks: `❌ [AI Evaluation: Rubric Match Below 50% — 0 LCs Awarded]\n` +
+                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Required (Min. 50% Required)\n` +
+                `The submitted reflection scored ${coverage}%, which is below the minimum required 50% rubric match threshold. ` +
+                `No LCs have been awarded. Please review today's designated reading/article carefully, record a genuine voice reflection ` +
+                `discussing the key concepts and core takeaways, and re-submit your check-in.`
         };
     }
 
@@ -7755,7 +7761,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
 
         const pts = Number(finalData?.lcReward) || 0;
         const matchScore = Number(finalData?.matchPercentage) || 0;
-        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch');
+        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch' || matchScore < 50);
         const rawRemarks = String(finalData?.remarks || finalData?.aiRemarks || 'Evaluation completed.').trim();
 
         window._finalEvaluationResult = finalData;
@@ -7764,15 +7770,15 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
         };
 
         if (isMismatch) {
-            // Mismatch (0 LCs)
+            // Below 50% threshold or Mismatch (0 LCs)
             if (glow) glow.className = "absolute inset-0 rounded-full bg-rose-500/40 animate-pulse";
             if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-rose-950 to-rose-700 text-rose-300 rounded-full flex items-center justify-center text-4xl border-2 border-rose-400 shadow-2xl shadow-rose-500/50";
             if (robotIcon) robotIcon.className = "fas fa-times-circle text-rose-300 scale-110";
 
-            if (title) title.innerHTML = '<span class="text-rose-400 font-extrabold">Content Mismatch Detected (0 LCs)</span>';
-            if (subtitle) subtitle.innerHTML = 'The submitted audio reflection did not match today\'s topic configuration. <strong>0 LCs Awarded</strong>. Submission was not accepted.';
+            if (title) title.innerHTML = '<span class="text-rose-400 font-extrabold">Rubric Match Below 50% (0 LCs)</span>';
+            if (subtitle) subtitle.innerHTML = 'The submitted audio reflection scored below the minimum required 50% rubric match. <strong>0 LCs Awarded</strong>. Please re-submit with the proper reflection to earn LCs.';
 
-            if (stageText) stageText.innerHTML = '<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (0% Rubric Match)';
+            if (stageText) stageText.innerHTML = `<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (${matchScore}% Rubric Match &lt; 50% Required)`;
             if (statusBox) statusBox.className = "p-3.5 bg-rose-950/60 rounded-xl border border-rose-500/50 flex items-start gap-2.5 text-rose-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
             if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-rose-300 block">AI Evaluation Feedback:</strong>${rawRemarks.replace(/\n/g, '<br/>')}</div>`;
 
@@ -8072,10 +8078,11 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
 
     const doneHandler = (finalData) => {
         const pts = Number(finalData?.lcReward) || 0;
-        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch');
+        const matchScore = Number(finalData?.matchPercentage) || 0;
+        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch' || matchScore < 50);
 
-        if (!isMismatch && finalData) {
-            // ONLY SAVE AS COMPLETED IF APPROVED (LC REWARD > 0)
+        if (finalData) {
+            // Save submission record to client DB so card immediately reflects status (completed vs retry)
             try {
                 let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
                 localDB = localDB.filter(s => !(
@@ -8091,19 +8098,19 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
                 localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
             } catch(e) {}
 
-            if (currentUser && pts > 0) {
+            if (!isMismatch && currentUser && pts > 0) {
                 currentUser.lcs = (Number(currentUser.lcs) || 0) + pts;
                 try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
-            }
 
-            // Immediately update the navbar LC counter so student sees +pts instantly
-            const navPointsEl = document.getElementById('userPoints');
-            if (navPointsEl && pts > 0) {
-                const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
-                navPointsEl.innerText = curVal + pts;
+                // Immediately update the navbar LC counter so student sees +pts instantly
+                const navPointsEl = document.getElementById('userPoints');
+                if (navPointsEl && pts > 0) {
+                    const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
+                    navPointsEl.innerText = curVal + pts;
+                }
+            } else if (isMismatch) {
+                console.log('❌ Submission scored < 50% rubric match (0 LCs awarded). Card set to Retry.');
             }
-        } else {
-            console.log('❌ Submission was rejected (0 LCs). Check-in card remains open for re-submission.');
         }
 
         // Refresh UI
@@ -8316,8 +8323,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
         const isEvaluating = sub && sub.status === 'evaluating';
-        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && Number(sub.lcReward) === 0));
-        const isCompleted = sub && !isEvaluating && !isMismatch;
+        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && Number(sub.lcReward) === 0) || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50));
+        const isCompleted = sub && !isEvaluating && !isMismatch && (Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
@@ -8333,17 +8340,17 @@ function switchMilestoneTab(moduleName, btnElement) {
         if (isEvaluating) {
             statusBadge = '<span class="badge-pill bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...</span>';
             actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
-        } else if (isCompleted) {
-            statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isMismatch) {
             statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
             actionBtn = `
                 <div class="flex items-center gap-1.5">
-                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-2.5 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer"><i class="fas fa-redo mr-1"></i> Re-try Check-in</button>
+                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1"><i class="fas fa-redo"></i> Retry</button>
                     <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 text-[11px] font-bold text-slate-300 hover:text-white" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
                 </div>
             `;
+        } else if (isCompleted) {
+            statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -8788,33 +8795,29 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     }
 
     const isEvaluating = (sub.status === 'evaluating');
-    const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && lcReward === 0) || matchPercentage < 15);
-    const isLowMatch = (!isEvaluating && !isMismatch && matchPercentage < 50);   // 3 LCs tier
-    const isPartial  = (!isEvaluating && !isMismatch && !isLowMatch && matchPercentage <= 80); // 17 LCs tier
-    const isGood     = (!isEvaluating && !isMismatch && !isLowMatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
+    const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && lcReward === 0) || matchPercentage < 50);
+    const isPartial  = (!isEvaluating && !isMismatch && matchPercentage <= 80); // 17 LCs tier
+    const isGood     = (!isEvaluating && !isMismatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
+    const attemptNum = sub.attemptsCount || sub.attemptNumber || 1;
 
     const badgeClass = isEvaluating
         ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
         : isMismatch
             ? 'badge-rose bg-rose-500/20 border-rose-500/40 text-rose-300'
-            : isLowMatch
-                ? 'bg-red-800/30 border-red-500/40 text-red-300'
-                : isPartial
-                    ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
-                    : isGood
-                        ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                        : 'badge-emerald';
+            : isPartial
+                ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
+                : isGood
+                    ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                    : 'badge-emerald';
     const badgeText = isEvaluating
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
-            ? (isCreatorView ? '<i class="fas fa-times-circle mr-1"></i> Content Mismatch (0%)' : '<i class="fas fa-times-circle mr-1"></i> Mismatch (0%) — Re-submit')
-            : isLowMatch
-                ? '<i class="fas fa-exclamation-circle mr-1"></i> Low Match (3 LCs)'
-                : isPartial
-                    ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
-                    : isGood
-                        ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
-                        : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
+            ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Rubric < 50% — Retry Required`)
+            : isPartial
+                ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
+                : isGood
+                    ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
+                    : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
 
     const modalId = 'submissionDetailReviewModal';
     document.getElementById(modalId)?.remove();
@@ -8836,6 +8839,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="flex items-center gap-2">
                                 <h4 class="text-sm font-extrabold text-white truncate">${learnerName}</h4>
                                 <span class="badge-pill bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase">Learner Review</span>
+                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${isMismatch ? '(Failed <50%)' : '(Passed ≥50%)'}</span>
                             </div>
                             <p class="text-xs text-slate-400 truncate font-mono mt-0.5">${learnerEmail || ''} ${learnerPhone ? '• ' + learnerPhone : ''}</p>
                         </div>
@@ -8848,6 +8852,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <div class="flex items-center gap-2 mb-1">
                             <span class="badge-pill ${isPod ? 'badge-indigo' : 'badge-amber'} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
                             <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${formattedDatePill}</span>
+                            <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum}</span>
                         </div>
                         <h3 class="text-xl font-extrabold text-white font-heading">${displayTitle}</h3>
                         ${exactSubmittedTimeStr ? `
@@ -8882,7 +8887,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
                         <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
                         <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
-                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))}</strong></span>
+                        <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${isMismatch ? '(Failed <50%)' : '(Passed ≥50%)'}</strong></span>
+                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))}</strong></span>
                     </div>
                 </div>
 
@@ -9529,159 +9535,6 @@ function renderTimelineGrid(learnerEmail, gridId) {
     }
 }
 window.renderTimelineGrid = renderTimelineGrid;
-
-function switchMilestoneTab(moduleName, btnElement) {
-    if (btnElement) {
-        document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
-            btn.classList.remove('bg-indigo-600/20', 'text-indigo-400', 'border-b-2', 'border-indigo-500');
-            btn.classList.add('text-slate-400');
-        });
-        btnElement.classList.add('bg-indigo-600/20', 'text-indigo-400', 'border-b-2', 'border-indigo-500');
-        btnElement.classList.remove('text-slate-400');
-    }
-
-    const container = document.getElementById('milestoneTimelinesContent') || document.getElementById('milestoneTimeline');
-    if (!container) return;
-
-    const ms = milestoneConfig.find(m => m.id === activeMilestoneId) || milestoneConfig[0];
-    const isTestMode = (typeof isTestUser === 'function') && isTestUser();
-    const todayKey = getLocalDateKey(new Date());
-    const formattedToday = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    
-    // -------------------------------------------------------------
-    // CHECK IF CUSTOMER HAS JOINED THIS MILESTONE
-    // -------------------------------------------------------------
-    const hasJoined = hasUserJoinedMilestone(currentUser ? currentUser._id : null, activeMilestoneId);
-
-    if (!hasJoined && !isTestMode) {
-        container.innerHTML = `
-            <div class="glass-card p-8 border-indigo-500/40 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-indigo-950/40 to-slate-900/90 shadow-2xl">
-                <div class="w-20 h-20 bg-indigo-600/20 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-indigo-500/40 shadow-inner">
-                    <i class="fas fa-flag-checkered"></i>
-                </div>
-                <div>
-                    <span class="badge-pill badge-indigo text-xs font-bold uppercase tracking-widest mb-2">Milestone ${ms.id} Activation</span>
-                    <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading">${ms.name}</h3>
-                    <p class="text-xs text-slate-300 mt-2 leading-relaxed">
-                        Ready to begin your journey? Once you join, <strong>Day 1 starts today (${formattedToday})</strong>. Your check-in schedule runs Monday to Saturday. Missing daily check-ins on scheduled days will permanently lock those check-ins.
-                    </p>
-                </div>
-                
-                <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-left space-y-1.5">
-                    <div class="flex items-center gap-2 text-amber-400 font-bold text-xs">
-                        <i class="fas fa-exclamation-triangle"></i> Important Commitment Notice:
-                    </div>
-                    <p class="text-[11px] text-amber-200/80 leading-normal">
-                        Your 21-day timeline begins counting from the moment you click Join. Make sure you are ready to commit to daily reflections and check-ins.
-                    </p>
-                </div>
-
-                <div class="pt-2">
-                    <button onclick="joinMilestoneNow(${ms.id})" class="btn-primary py-3.5 px-8 text-sm font-extrabold bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-xl w-full sm:w-auto">
-                        <i class="fas fa-play-circle mr-2"></i> JOIN NOW & START DAY 1
-                    </button>
-                </div>
-            </div>
-        `;
-        return;
-    }
-
-    const userJoinDateStr = getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) || todayKey;
-    let milestoneStartDate = new Date(userJoinDateStr + 'T00:00:00');
-    if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
-    milestoneStartDate.setHours(0,0,0,0);
-
-    const allUserSubs = getUserSubmissionsByUserId(currentUser ? currentUser._id : '');
-    const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId));
-
-    let totalSessions = (activeMilestoneId === 1) ? 21 : 30;
-    let cardsHtml = '';
-
-    for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        // MON-SAT SCHEDULE CALCULATION (Skip Sundays)
-        let cardDate = new Date(milestoneStartDate.getTime());
-        let daysAdded = 0;
-        let targetOffset = dayNum - 1;
-        while (daysAdded < targetOffset) {
-            cardDate.setDate(cardDate.getDate() + 1);
-            if (cardDate.getDay() !== 0) { // Skip Sunday
-                daysAdded++;
-            }
-        }
-        const cardDateKey = getLocalDateKey(cardDate);
-        const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-
-        // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
-        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey || String(s.day) === String(dayNum)));
-        // Treat rejected_mismatch as completed on the card — submission was saved to DB
-        const isCompleted = Boolean(sub);
-
-        const isToday = (cardDateKey === todayKey);
-        const isPast = (cardDateKey < todayKey);
-        const isFuture = (cardDateKey > todayKey);
-
-        let statusBadge = '<span class="badge-pill bg-slate-800 text-slate-400 text-[10px]">Upcoming</span>';
-        let actionBtn = '';
-
-        if (isCompleted) {
-            statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
-        } else if (isToday) {
-            statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
-            if (moduleName === 'pod') {
-                actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
-            } else {
-                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
-            }
-        } else if (isPast) {
-            if (isTestMode) {
-                statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold">Past (Bypass Available)</span>';
-                if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
-                } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
-                }
-            } else {
-                statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px]">Missed</span>';
-                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed">Locked</button>`;
-            }
-        } else if (isFuture) {
-            if (isTestMode) {
-                statusBadge = '<span class="badge-pill badge-indigo text-[10px] font-bold">Future (Bypass Available)</span>';
-                if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
-                } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
-                }
-            } else {
-                statusBadge = '<span class="badge-pill bg-slate-800 text-slate-500 text-[10px]">Locked</span>';
-                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed">Locked</button>`;
-            }
-        }
-
-        cardsHtml += `
-            <div class="glass-card p-4 rounded-xl border-slate-800 flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold">
-                        <span class="text-[10px] uppercase tracking-tighter">Day</span>
-                        <span class="text-xs font-mono font-black">${dayNum}</span>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h4 class="text-xs font-bold text-white">${displayDate}</h4>
-                            ${statusBadge}
-                        </div>
-                        <span class="text-[10px] text-slate-400 font-mono">+33 LCs Available</span>
-                    </div>
-                </div>
-                <div>${actionBtn}</div>
-            </div>
-        `;
-    }
-
-    container.innerHTML = cardsHtml;
-}
-window.switchMilestoneTab = switchMilestoneTab;
 
 // ==============================================================
 // SMART, LOW-MEMORY CROSS-BROWSER SYNC POLLER
