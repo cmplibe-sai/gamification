@@ -797,7 +797,7 @@ function updateLearnerDropdown() {
 
 async function fetchLivePoints(userId) {
     try {
-        const response = await fetch(`/api/tagmango/points/${encodeURIComponent(userId)}`);
+        const response = await apiFetch(`/api/tagmango/points/${encodeURIComponent(userId)}`);
 
         if (response.ok) {
             const data = await response.json();
