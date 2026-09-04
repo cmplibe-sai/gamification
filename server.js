@@ -370,7 +370,7 @@ async function assignTagMangoPointsOnServer(userId, score, description) {
                 fanIds: [userId],
                 score: Number(score) || 33,
                 description: description || `[AI Approved] Daily Milestone Check-in`,
-                type: 'community',
+                type: 'levelup-challenge',
                 date: new Date().toISOString()
             })
         });
@@ -1011,7 +1011,7 @@ function findActualUserFast(userId, email, phone) {
     return null;
 }
 
-async function assignTagMangoPoints(fanId, score, description) {
+async function assignTagMangoPoints(fanId, score, description, type = 'levelup-challenge') {
     if (!fanId || !score) return null;
     if (!TAGMANGO_KEY) {
         console.warn('[TagMango Wallet API] Skipped: TAGMANGO_KEY is not configured.');
@@ -1029,11 +1029,13 @@ async function assignTagMangoPoints(fanId, score, description) {
             body: JSON.stringify({
                 fanIds: [String(fanId)],
                 score: Number(score),
-                description: String(description || 'Challenge check-in')
+                description: String(description || 'Challenge check-in'),
+                type: type || 'levelup-challenge',
+                date: new Date().toISOString()
             })
         });
         const resData = await res.json();
-        console.log(`[TagMango Wallet API] Successfully credited ${score} LCs to ${fanId} ("${description}"):`, resData?.message || resData);
+        console.log(`[TagMango Wallet API] Successfully credited ${score} LCs to ${fanId} ("${description}") [Type: ${type}]:`, resData?.message || resData);
         return resData;
     } catch (err) {
         console.error(`[TagMango Wallet API Error] Failed to credit points to ${fanId}:`, err.message);
@@ -1258,6 +1260,8 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         targetFanId = '68fb27f707ccf937418d41c6';
     } else if (normalizedEmail === 'engineersai02@gmail.com') {
         targetFanId = '68a805cf8c448ccc00abc23f';
+    } else if (normalizedEmail === 'engineersai.y@gmail.com') {
+        targetFanId = '68d390062f70f039556c0364';
     } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
         const matched = backendActualUsers.find(u =>
             (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
@@ -1276,7 +1280,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     if (finalLcReward > 0 && targetFanId) {
         console.log(`[Assigning TagMango Points] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
         try {
-            const tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription);
+            const tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription, 'levelup-challenge');
             console.log(`[TagMango Result for ${targetFanId}]:`, tagMangoResult);
         } catch (tmErr) {
             console.warn(`[TagMango Assignment Warning for ${targetFanId}]:`, tmErr.message);

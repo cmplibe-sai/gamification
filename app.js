@@ -127,6 +127,23 @@ function updateDashboardUI() {
     const pointsEl = document.getElementById('userPoints');
     if (pointsEl) pointsEl.innerText = totalXP;
 
+    // Asynchronously fetch live TagMango collective points and render live breakdown
+    const targetUserId = displayUser._id || currentUser._id;
+    if (targetUserId && typeof fetchLivePoints === 'function') {
+        fetchLivePoints(targetUserId).then(scoreObj => {
+            if (scoreObj && scoreObj.points && scoreObj.points.length > 0) {
+                const pointsContentEl = document.getElementById('pointsContent');
+                if (pointsContentEl) {
+                    pointsContentEl.innerHTML = buildPointsHtml(scoreObj);
+                }
+                const liveTotal = scoreObj.displayScore || scoreObj.totalScore;
+                if (liveTotal && pointsEl) {
+                    pointsEl.innerText = liveTotal;
+                }
+            }
+        }).catch(err => console.warn('Dashboard live points sync note:', err));
+    }
+
     const welcomeEl = document.getElementById('dashWelcomeName');
     if (welcomeEl) welcomeEl.innerHTML = 'Learner <span class="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Performance</span>';
 
@@ -152,7 +169,7 @@ function updateDashboardUI() {
         `;
     }
 
-    // 2. cMPLi Learning Currencies (Right Box - Matches Img-3 Exactly)
+    // 2. cMPLi Learning Currencies (Right Box - Default fallback until live sync returns)
     const pointsContentEl = document.getElementById('pointsContent');
     if (pointsContentEl) {
         pointsContentEl.innerHTML = `
@@ -161,6 +178,10 @@ function updateDashboardUI() {
             </div>
             <div class="space-y-2 pt-3 text-xs font-semibold">
                 <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                    <span class="text-slate-300">Levelup Challenge</span>
+                    <span class="text-emerald-400 font-mono font-bold">+${earnedLcs || 33}</span>
+                </div>
+                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
                     <span class="text-slate-300">C M P Li Dip</span>
                     <span class="text-emerald-400 font-mono font-bold">+339</span>
                 </div>
@@ -168,13 +189,9 @@ function updateDashboardUI() {
                     <span class="text-slate-300">Daily Active</span>
                     <span class="text-emerald-400 font-mono font-bold">+333</span>
                 </div>
-                <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
+                <div class="flex justify-between items-center py-1">
                     <span class="text-slate-300">Dip</span>
                     <span class="text-emerald-400 font-mono font-bold">+253</span>
-                </div>
-                <div class="flex justify-between items-center py-1">
-                    <span class="text-slate-300">Levelup Quiz</span>
-                    <span class="text-emerald-400 font-mono font-bold">+138</span>
                 </div>
             </div>
         `;
@@ -8061,6 +8078,13 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
                 currentUser.lcs = (Number(currentUser.lcs) || 0) + pts;
                 try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
             }
+
+            // Immediately update the navbar LC counter so student sees +pts instantly
+            const navPointsEl = document.getElementById('userPoints');
+            if (navPointsEl && pts > 0) {
+                const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
+                navPointsEl.innerText = curVal + pts;
+            }
         } else {
             console.log('❌ Submission was rejected (0 LCs). Check-in card remains open for re-submission.');
         }
@@ -8474,6 +8498,38 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const actualDay = sub.day || sub.sessionDay || dayLabel || 1;
     const matchPercentage = (sub.matchPercentage !== undefined && sub.matchPercentage !== null) ? sub.matchPercentage : (sub.similarityScore || 95);
 
+    // DETERMINE IF VIEWER IS CREATOR/ADMIN REVIEWING A LEARNER OR LEARNER REVIEWING THEMSELVES
+    const isCreatorView = Boolean(
+        isAdminLogin || 
+        (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'creator' || currentUser.isAdmin) && (
+            !userId || String(userId) !== String(currentUser._id) || 
+            (sub && sub.userEmail && currentUser.email && sub.userEmail.toLowerCase().trim() !== currentUser.email.toLowerCase().trim())
+        )) ||
+        (document.getElementById('adminTab') && !document.getElementById('adminTab').classList.contains('hidden'))
+    );
+
+    // Resolve Learner details for Creator View
+    let learnerName = sub.userName || sub.name || '';
+    let learnerEmail = sub.userEmail || sub.email || '';
+    let learnerPhone = sub.userPhone || sub.phone || '';
+    if (!learnerName || !learnerEmail) {
+        const allU = [
+            ...(typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) ? actualUsers : []),
+            ...(typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])
+        ];
+        const matchU = allU.find(u => 
+            (userId && String(u._id) === String(userId)) ||
+            (learnerEmail && u.email && u.email.toLowerCase().trim() === learnerEmail.toLowerCase().trim()) ||
+            (sub.userId && String(u._id) === String(sub.userId))
+        );
+        if (matchU) {
+            if (!learnerName) learnerName = matchU.name || 'Learner';
+            if (!learnerEmail) learnerEmail = matchU.email || '';
+            if (!learnerPhone) learnerPhone = matchU.phone || '';
+        }
+    }
+    if (!learnerName) learnerName = 'Learner';
+
     // 1. TOP DATE PILL: Date only, no time (e.g. "4 SEPT 2026")
     const dateSource = sub.dateKey || sub.date || sub.submittedAt || sub.createdAt || '';
     let formattedDatePill = '';
@@ -8520,9 +8576,32 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         }
     }
 
-    const rawRemarks = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved — +${lcReward} LCs] Reflection verified against Milestone rubrics. Audio voice reflection clearly articulated and learning objectives satisfied.`;
-    // Format multi-line remarks: first line = header (bold), rest = body text
-    const remarkLines = rawRemarks.split('\n').filter(l => l.trim());
+    const rawRemarks = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved — +${lcReward} LCs]\nRubric Match: ${matchPercentage}% | Credited: +${lcReward} LCs | Status: Fully Verified\nReflection completed successfully and learning objectives satisfied.`;
+    
+    // CUSTOMIZE FEEDBACK TONE FOR CREATOR VS CUSTOMER
+    let customizedRemarks = rawRemarks;
+    if (isCreatorView) {
+        customizedRemarks = customizedRemarks
+            .replace(/Your voice response/gi, "Learner's voice response")
+            .replace(/your voice response/gi, "learner's voice response")
+            .replace(/Your reflection/gi, "Learner's reflection")
+            .replace(/your reflection/gi, "learner's reflection")
+            .replace(/your submission/gi, "the learner's submission")
+            .replace(/Your submission/gi, "The learner's submission")
+            .replace(/your response/gi, "the learner's response")
+            .replace(/your answers/gi, "the learner's answers")
+            .replace(/added to your TagMango wallet/gi, "credited to learner's TagMango wallet")
+            .replace(/credited to your wallet/gi, "credited to learner's TagMango wallet")
+            .replace(/to your TagMango wallet/gi, "to learner's TagMango wallet")
+            .replace(/to your wallet/gi, "to learner's wallet")
+            .replace(/Please review today's article\/reading carefully, record a genuine voice reflection discussing the key concepts, and resubmit\./gi, "Content mismatch detected. Learner has been instructed to review the day's designated material and re-submit a genuine voice reflection.")
+            .replace(/Please record a voice reflection or complete the text answers and resubmit\./gi, "No content detected in the learner's submission. Check-in marked as rejected.")
+            .replace(/Review the day's content and aim for a more comprehensive reflection next time\./gi, "Low rubric coverage. Learner was awarded partial credit.")
+            .replace(/Aim for deeper coverage of all key concepts for a higher score\./gi, "Partial rubric coverage. Learner was awarded partial credit.")
+            .replace(/Great effort!/gi, "Learner demonstrated strong conceptual alignment.");
+    }
+
+    const remarkLines = customizedRemarks.split('\n').filter(l => l.trim());
     const aiRemarksText = remarkLines.map((line, i) => {
         if (i === 0) return `<strong class="block text-sm mb-1.5">${line}</strong>`;
         if (i === 1) return `<span class="block font-mono text-[10px] text-slate-400 mb-2 tracking-wide">${line}</span>`;
@@ -8627,17 +8706,24 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     let isAudio = (qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc);
                     let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
 
+                    let mediaTitle = isAudio 
+                        ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
+                        : (isCreatorView ? "Learner Video Response (Recorded):" : "Video Response (Recorded):");
+                    let downloadTitle = isAudio
+                        ? (isCreatorView ? "Download Learner Audio" : "Download Audio")
+                        : (isCreatorView ? "Download Learner Video" : "Download Video");
+
                     let contentHtml = '';
                     if (isAudio) {
                         contentHtml = `
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <i class="fas fa-microphone-lines text-indigo-400"></i> Audio Voice Reflection (Recorded):
+                                        <i class="fas fa-microphone-lines text-indigo-400"></i> ${mediaTitle}
                                     </span>
                                     ${exactAudioSrc ? `
                                         <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
-                                            <i class="fas fa-download"></i> Download Audio
+                                            <i class="fas fa-download"></i> ${downloadTitle}
                                         </button>
                                     ` : '<span class="text-[10px] text-slate-500 italic">Voice reflection submitted</span>'}
                                 </div>
@@ -8653,11 +8739,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <i class="fas fa-video text-indigo-400"></i> Video Response (Recorded):
+                                        <i class="fas fa-video text-indigo-400"></i> ${mediaTitle}
                                     </span>
                                     ${exactVideoSrc ? `
                                         <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
-                                            <i class="fas fa-download"></i> Download Video
+                                            <i class="fas fa-download"></i> ${downloadTitle}
                                         </button>
                                     ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
                                 </div>
@@ -8689,7 +8775,6 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const isLowMatch = (!isEvaluating && !isMismatch && matchPercentage < 50);   // 3 LCs tier
     const isPartial  = (!isEvaluating && !isMismatch && !isLowMatch && matchPercentage <= 80); // 17 LCs tier
     const isGood     = (!isEvaluating && !isMismatch && !isLowMatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
-    // isFullApproved = matchPercentage > 90
 
     const badgeClass = isEvaluating
         ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
@@ -8705,7 +8790,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const badgeText = isEvaluating
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
-            ? '<i class="fas fa-times-circle mr-1"></i> Mismatch (0%) — Re-submit'
+            ? (isCreatorView ? '<i class="fas fa-times-circle mr-1"></i> Content Mismatch (0%)' : '<i class="fas fa-times-circle mr-1"></i> Mismatch (0%) — Re-submit')
             : isLowMatch
                 ? '<i class="fas fa-exclamation-circle mr-1"></i> Low Match (3 LCs)'
                 : isPartial
@@ -8724,6 +8809,22 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <i class="fas fa-times"></i>
                 </button>
 
+                <!-- CREATOR-SPECIFIC LEARNER PROFILE HEADER -->
+                ${isCreatorView ? `
+                    <div class="flex items-center gap-3 p-3.5 bg-indigo-950/70 border border-indigo-500/40 rounded-2xl shadow-inner">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white flex items-center justify-center font-bold text-base shadow">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-sm font-extrabold text-white truncate">${learnerName}</h4>
+                                <span class="badge-pill bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase">Learner Review</span>
+                            </div>
+                            <p class="text-xs text-slate-400 truncate font-mono mt-0.5">${learnerEmail || ''} ${learnerPhone ? '• ' + learnerPhone : ''}</p>
+                        </div>
+                    </div>
+                ` : ''}
+
                 <!-- HEADER -->
                 <div class="flex items-center justify-between border-b border-slate-800 pb-4">
                     <div>
@@ -8740,19 +8841,19 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         ` : ''}
                     </div>
                     <div class="text-right">
-                        <span class="text-xs font-bold text-slate-400 block">TagMango Wallet</span>
+                        <span class="text-xs font-bold text-slate-400 block">${isCreatorView ? 'Wallet Reward' : 'TagMango Wallet'}</span>
                         <span class="text-base font-black ${isEvaluating ? 'text-indigo-400' : (isMismatch ? 'text-rose-400' : 'text-emerald-400')} font-mono">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</span>
                     </div>
                 </div>
 
-                <!-- AI EVALUATION REMARKS & RUBRIC CARD (Visible to both Creator & Customer) -->
+                <!-- AI EVALUATION REMARKS & RUBRIC CARD -->
                 <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                             <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30')} flex items-center justify-center text-sm border">
                                 <i class="fas fa-robot"></i>
                             </div>
-                            <span class="text-xs font-bold text-white uppercase tracking-wider">AI Evaluation & Verification Remarks</span>
+                            <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'AI Rubric Evaluation (Creator Review Mode)' : 'AI Evaluation & Verification Remarks'}</span>
                         </div>
                         <span class="badge-pill ${badgeClass} text-[11px] font-bold">
                             ${badgeText}
@@ -8772,14 +8873,24 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 ${bodyHtml}
 
                 <div class="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
-                    ${isMismatch ? `
-                        <button type="button" onclick="document.getElementById('${modalId}').remove(); if(typeof openSubmissionModal === 'function') openSubmissionModal(${actualDay}, '${normalizedType}')" class="py-2.5 px-5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer">
-                            <i class="fas fa-redo"></i> Re-try Check-in Now
+                    ${isCreatorView ? `
+                        <div class="flex items-center gap-2 text-slate-400 text-xs font-medium">
+                            <i class="fas fa-shield-halved text-indigo-400"></i>
+                            <span>Reviewing as Creator</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer">
+                            Close Review
                         </button>
-                    ` : `<div></div>`}
-                    <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer">
-                        Close
-                    </button>
+                    ` : `
+                        ${isMismatch ? `
+                            <button type="button" onclick="document.getElementById('${modalId}').remove(); if(typeof openSubmissionModal === 'function') openSubmissionModal(${actualDay}, '${normalizedType}')" class="py-2.5 px-5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer">
+                                <i class="fas fa-redo"></i> Re-try Check-in Now
+                            </button>
+                        ` : `<div></div>`}
+                        <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer">
+                            Close
+                        </button>
+                    `}
                 </div>
             </div>
         </div>
