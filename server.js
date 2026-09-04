@@ -258,20 +258,80 @@ const TAGMANGO_KEY = (process.env.TAGMANGO_KEY || '').trim().replace(/^["']|["']
 console.log(`[TagMango Wallet Sync]: ${TAGMANGO_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (TAGMANGO_KEY missing in .env)'}`);
 const HOST_URL = process.env.HOST_URL || 'learn.cmplibe.com';
 
-// Dynamic configuration endpoint
+// Dynamic configuration endpoint (Public config only - NEVER expose secrets)
 app.get('/api/config', (req, res) => {
     const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
     const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
     const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
 
     res.status(200).json({
-        tagmangoKey: TAGMANGO_KEY,
         hostUrl: HOST_URL,
         baseUrl: process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1',
         creatorId: process.env.CREATOR_ID || '6682734e120c766a6e5af59c',
         adminEmails: adminEmails,
         databaseConnected: isDbConnected
     });
+});
+
+// -------------------------------------------------------------
+// SECURE SERVER-SIDE TAGMANGO PROXY ROUTES
+// (Attaches TAGMANGO_KEY server-side so it is NEVER sent to client)
+// -------------------------------------------------------------
+const TM_BASE_URL = process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1';
+const TM_CREATOR_ID = process.env.CREATOR_ID || '6682734e120c766a6e5af59c';
+
+async function fetchTagMangoServer(path) {
+    if (!TAGMANGO_KEY) {
+        throw new Error('TAGMANGO_KEY is not configured in environment');
+    }
+    const url = `${TM_BASE_URL}${path}`;
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TAGMANGO_KEY}`,
+            'x-whitelabel-host': HOST_URL
+        }
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`TagMango HTTP ${response.status}: ${errorText}`);
+    }
+    return response.json();
+}
+
+// 1. Proxy: Get All Mangos / Solutions
+app.get('/api/tagmango/mangos', async (req, res) => {
+    try {
+        const data = await fetchTagMangoServer('/external/mangos');
+        res.json(data);
+    } catch (err) {
+        console.error('[TagMango Proxy Error /mangos]:', err.message);
+        res.status(502).json({ success: false, error: err.message, result: [] });
+    }
+});
+
+// 2. Proxy: Get Subscribers / Customers by Creator
+app.get('/api/tagmango/subscribers', async (req, res) => {
+    try {
+        const data = await fetchTagMangoServer(`/external/subscriptions/subscribers-by-creator/${TM_CREATOR_ID}`);
+        res.json(data);
+    } catch (err) {
+        console.error('[TagMango Proxy Error /subscribers]:', err.message);
+        res.status(502).json({ success: false, error: err.message, result: [] });
+    }
+});
+
+// 3. Proxy: Get Collective Points by User ID
+app.get('/api/tagmango/points/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const data = await fetchTagMangoServer(`/external/gamification/points/collective/${encodeURIComponent(userId)}`);
+        res.json(data);
+    } catch (err) {
+        console.error(`[TagMango Proxy Error /points/${req.params.userId}]:`, err.message);
+        res.status(502).json({ success: false, error: err.message, result: {} });
+    }
 });
 
 // --- SUBMISSIONS SYNC & NATIVE AI WORKER ---

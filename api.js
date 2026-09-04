@@ -2,9 +2,8 @@
 
 // --- GLOBAL CONFIGURATION (Attached to window so it's readable everywhere) ---
 window.APP_CONFIG = {
-    tagmangoKey: '',
     hostUrl: 'learn.cmplibe.com',
-    baseUrl: 'https://api-prod-new.tagmango.com/api/v1',
+    baseUrl: '/api/tagmango',
     creatorId: '6682734e120c766a6e5af59c'
 };
 
@@ -14,14 +13,12 @@ window.ADMIN_EMAILS = [
 ];
 
 // Asynchronously sync config from backend Web Service if available
-window.configLoadedPromise = (async function syncBackendConfig() {
+(async function syncBackendConfig() {
     try {
         const res = await fetch('/api/config');
         if (res.ok) {
             const data = await res.json();
-            if (data.tagmangoKey) window.APP_CONFIG.tagmangoKey = data.tagmangoKey;
             if (data.hostUrl) window.APP_CONFIG.hostUrl = data.hostUrl;
-            if (data.baseUrl) window.APP_CONFIG.baseUrl = data.baseUrl;
             if (data.creatorId) window.APP_CONFIG.creatorId = data.creatorId;
             if (Array.isArray(data.adminEmails) && data.adminEmails.length > 0) {
                 window.ADMIN_EMAILS = data.adminEmails;
@@ -32,50 +29,32 @@ window.configLoadedPromise = (async function syncBackendConfig() {
     }
 })();
 
-// --- ENDPOINT REGISTRY ---
+// --- ENDPOINT REGISTRY (Proxied through backend - zero secrets in browser) ---
 window.TagMangoAPI = {
     Gamification: {
-        assignPoints: `${window.APP_CONFIG.baseUrl}/external/gamification/points/assign`,
-        getLedger: (userId) => `${window.APP_CONFIG.baseUrl}/external/gamification/points/ledger/${userId}`,
-        getCollectivePoints: (userId) => `${window.APP_CONFIG.baseUrl}/external/gamification/points/collective/${userId}`,
-    },
-    Courses: {
-        getAll: `${window.APP_CONFIG.baseUrl}/external/courses`,
-        getStudentOverview: (userId) => `${window.APP_CONFIG.baseUrl}/external/courses/${userId}/overview`,
-        getReporting: (courseId) => `${window.APP_CONFIG.baseUrl}/external/courses/${courseId}/reporting`,
-        getReportingStudents: (courseId) => `${window.APP_CONFIG.baseUrl}/external/courses/${courseId}/reporting/students`,
-    },
-    Users: {
-        lookup: `${window.APP_CONFIG.baseUrl}/external/users/lookup`,
-        getById: (userId) => `${window.APP_CONFIG.baseUrl}/external/users/${userId}`,
+        getCollectivePoints: (userId) => `/api/tagmango/points/${encodeURIComponent(userId)}`,
     },
     Mangos: {
-        getAll: `${window.APP_CONFIG.baseUrl}/external/mangos`,
+        getAll: `/api/tagmango/mangos`,
     },
     Subscriptions: {
-        getByCreator: `${window.APP_CONFIG.baseUrl}/external/subscriptions/subscribers-by-creator/${window.APP_CONFIG.creatorId}`
+        getByCreator: `/api/tagmango/subscribers`
     }
 };
 
-// --- AUTOMATED FETCH WRAPPER ---
+// --- AUTOMATED FETCH WRAPPER (Calls secure server proxy) ---
 window.fetchTagMango = async function(endpoint, method = 'GET', body = null) {
-    if (window.configLoadedPromise) {
-        try { await window.configLoadedPromise; } catch (_) {}
-    }
     const options = {
         method,
         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${window.APP_CONFIG.tagmangoKey}`,
-            'x-whitelabel-host': window.APP_CONFIG.hostUrl
+            'Content-Type': 'application/json'
         }
     };
     
     if (body) {
         if (method.toUpperCase() === 'GET') {
-            // Browsers block GET requests with bodies. Convert body to query string (e.g. ?email=...)
             const params = new URLSearchParams(body).toString();
-            endpoint += `?${params}`;
+            endpoint += (endpoint.includes('?') ? '&' : '?') + params;
         } else {
             options.body = JSON.stringify(body);
         }
