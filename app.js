@@ -122,10 +122,17 @@ function updateDashboardUI() {
     const displayUser = matchedActual || currentUser;
     const userSubs = getUserSubmissionsByUserId(displayUser);
     const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    const totalXP = earnedLcs > 0 ? (6505 + earnedLcs) : 6541;
+    const userStoredLcs = Number(currentUser?.lcs) || 0;
+    const initialXP = userStoredLcs > 0 ? userStoredLcs : (earnedLcs > 0 ? (6505 + earnedLcs) : 6541);
 
     const pointsEl = document.getElementById('userPoints');
-    if (pointsEl) pointsEl.innerText = totalXP;
+    if (pointsEl) {
+        const curNav = parseInt(pointsEl.innerText.replace(/\D/g, ''), 10) || 0;
+        // Don't downgrade if doneHandler already smoothly incremented userPoints
+        if (curNav === 0 || initialXP > curNav) {
+            pointsEl.innerText = initialXP;
+        }
+    }
 
     // Asynchronously fetch live TagMango collective points and render live breakdown
     const targetUserId = displayUser._id || currentUser._id;
@@ -139,6 +146,10 @@ function updateDashboardUI() {
                 const liveTotal = scoreObj.displayScore || scoreObj.totalScore;
                 if (liveTotal && pointsEl) {
                     pointsEl.innerText = liveTotal;
+                    if (currentUser) {
+                        currentUser.lcs = liveTotal;
+                        try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
+                    }
                 }
             }
         }).catch(err => console.warn('Dashboard live points sync note:', err));
@@ -914,8 +925,14 @@ function buildPointsHtml(scoreObject) {
             let cleanType = (point.type || "Activity")
                 .replace(/-/g, ' ')
                 .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, function(str) { return str.toUpperCase(); })
-                .trim();
+                .trim()
+                .split(/\s+/)
+                .map(w => {
+                    const low = w.toLowerCase();
+                    if (low === 'cmpli') return 'cMPLi';
+                    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+                })
+                .join(' ');
             
             html += `
                 <div class="glass-card p-3 rounded-xl border border-slate-800/80 bg-slate-900/60 flex items-center justify-between hover:border-indigo-500/40 transition-colors">
