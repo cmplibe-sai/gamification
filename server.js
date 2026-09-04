@@ -118,20 +118,30 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
         if (fs.existsSync(absolutePath)) {
             const fileBuffer = fs.readFileSync(absolutePath);
             console.log(`[AssemblyAI] Uploading file: ${absolutePath} (${fileBuffer.length} bytes)...`);
-            const uploadRes = await fetch(`${AAI_BASE}/v1/upload`, {
-                method: 'POST',
-                headers: { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' },
-                body: fileBuffer
-            });
-            const uploadData = await uploadRes.json();
-            uploadUrl = uploadData.upload_url;
-            console.log(`[AssemblyAI] File uploaded to AssemblyAI: ${uploadUrl}`);
-        } else if (audioFilePath.startsWith('http')) {
-            uploadUrl = audioFilePath;
-            console.log(`[AssemblyAI] Using public audio URL: ${uploadUrl}`);
-        } else {
-            console.warn('[AssemblyAI] Audio file not found on disk:', absolutePath);
-            return null;
+            try {
+                const uploadRes = await fetch(`${AAI_BASE}/v2/upload`, {
+                    method: 'POST',
+                    headers: { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' },
+                    body: fileBuffer
+                });
+                const uploadData = await uploadRes.json();
+                uploadUrl = uploadData.upload_url;
+                console.log(`[AssemblyAI] File uploaded to AssemblyAI: ${uploadUrl}`);
+            } catch (upErr) {
+                console.warn('[AssemblyAI] Direct buffer upload failed, trying public URL fallback:', upErr.message);
+            }
+        }
+        
+        if (!uploadUrl) {
+            if (audioFilePath.startsWith('http')) {
+                uploadUrl = audioFilePath;
+                console.log(`[AssemblyAI] Using public audio URL: ${uploadUrl}`);
+            } else {
+                const baseName = path.basename(audioFilePath);
+                const host = process.env.HOST_URL || 'cmplibe.com';
+                uploadUrl = `https://${host}/gamification/uploads/${baseName}`;
+                console.log(`[AssemblyAI] Attempting public URL fallback: ${uploadUrl}`);
+            }
         }
 
         if (!uploadUrl) return null;
@@ -1114,6 +1124,9 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             aiRemarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
             remarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
             answers: subAnswers,
+            submittedAt: sub.submittedAt || new Date().toISOString(),
+            createdAt: sub.submittedAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
         // Filter out duplicate submission for this exact day/module before inserting
@@ -1228,7 +1241,9 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         aiRemarks: finalRemarks,
         remarks: finalRemarks,
         answers: subAnswers,
-        evaluatedAt: new Date().toISOString()
+        submittedAt: store.submissions[idx].submittedAt || sub.submittedAt || new Date().toISOString(),
+        evaluatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     };
     store.submissionsRevision = Date.now();
     saveStore();

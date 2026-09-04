@@ -7746,6 +7746,14 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                 btn.disabled = false;
                 btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm transition-all shadow-xl shadow-rose-600/30 cursor-pointer animate-pulse";
                 btn.innerHTML = '<i class="fas fa-redo mr-2"></i> Review Feedback & Re-try Check-in';
+                btn.onclick = () => {
+                    closeAiEvaluatingModal(true);
+                    const subDay = finalData?.day || window._lastCheckinPayload?.day;
+                    const subMod = finalData?.type || finalData?.moduleType || window._lastCheckinPayload?.type || 'dip';
+                    if (subDay && typeof openSubmissionModal === 'function') {
+                        openSubmissionModal(subDay, subMod);
+                    }
+                };
             }
         } else {
             // Approved (3, 17, 23, or 33 LCs)
@@ -8266,7 +8274,8 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
-        const isCompleted = Boolean(sub);
+        const isMismatch = sub && (sub.status === 'rejected_mismatch' || Number(sub.lcReward) === 0);
+        const isCompleted = sub && !isMismatch;
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
@@ -8282,6 +8291,14 @@ function switchMilestoneTab(moduleName, btnElement) {
         if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
             actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
+        } else if (isMismatch) {
+            statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
+            actionBtn = `
+                <div class="flex items-center gap-1.5">
+                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-2.5 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer"><i class="fas fa-redo mr-1"></i> Re-try Check-in</button>
+                    <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 text-[11px] font-bold text-slate-300 hover:text-white" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
+                </div>
+            `;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -8453,13 +8470,49 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const actualDay = sub.day || sub.sessionDay || dayLabel || 1;
     const matchPercentage = (sub.matchPercentage !== undefined && sub.matchPercentage !== null) ? sub.matchPercentage : (sub.similarityScore || 95);
 
-    let displayTitle = sub.title || `Day ${actualDay} ${normalizedType.toUpperCase()} Check-In`;
-    const subTime = sub.submittedAt || sub.timestamp || sub.date;
-    let exactTimeStr = 'Recorded';
-    if (subTime) {
-        const dObj = new Date(subTime);
+    // 1. TOP DATE PILL: Date only, no time (e.g. "4 SEPT 2026")
+    const dateSource = sub.dateKey || sub.date || sub.submittedAt || sub.createdAt || '';
+    let formattedDatePill = '';
+    if (dateSource) {
+        if (typeof dateSource === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateSource.trim())) {
+            const [y, m, d] = dateSource.trim().split('-');
+            const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEPT', 'OCT', 'NOV', 'DEC'];
+            formattedDatePill = `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+        } else {
+            const dObj = new Date(dateSource);
+            if (!isNaN(dObj.getTime())) {
+                formattedDatePill = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+            }
+        }
+    }
+    if (!formattedDatePill) formattedDatePill = 'RECORDED';
+
+    // 2. CREATOR TITLE: {Day-X: Title}, removes repeated "DIP Check-in" from title
+    const msId = sub.milestoneId || (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
+    const msConfigs = (typeof customMilestoneConfigs !== 'undefined' && customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][normalizedType]) || {};
+    const subDateKey = sub.dateKey || sub.date || '';
+    const dayCfg = msConfigs[subDateKey] || {};
+    let creatorTitle = (sub.articleTitle || dayCfg.title || '').trim();
+    if (!creatorTitle && sub.title && !sub.title.toLowerCase().includes('check-in')) {
+        creatorTitle = sub.title.trim();
+    }
+    const displayTitle = creatorTitle ? `Day-${actualDay}: ${creatorTitle}` : `Day-${actualDay}`;
+
+    // 3. EXACT SUBMISSION TIME
+    const actualSubmissionTime = sub.submittedAt || sub.createdAt || sub.evaluatedAt || sub.updatedAt || sub.timestamp;
+    let exactSubmittedTimeStr = '';
+    if (actualSubmissionTime) {
+        const dObj = new Date(actualSubmissionTime);
         if (!isNaN(dObj.getTime())) {
-            exactTimeStr = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            exactSubmittedTimeStr = dObj.toLocaleDateString('en-GB', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', 
+                hour12: true 
+            });
         }
     }
 
@@ -8667,9 +8720,15 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <span class="badge-pill ${isPod ? 'badge-indigo' : 'badge-amber'} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
-                            <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${exactTimeStr}</span>
+                            <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${formattedDatePill}</span>
                         </div>
                         <h3 class="text-xl font-extrabold text-white font-heading">${displayTitle}</h3>
+                        ${exactSubmittedTimeStr ? `
+                            <p class="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                                <i class="fas fa-clock text-cyan-400 text-[11px]"></i>
+                                <span>Submitted: <strong class="font-mono text-slate-200">${exactSubmittedTimeStr}</strong></span>
+                            </p>
+                        ` : ''}
                     </div>
                     <div class="text-right">
                         <span class="text-xs font-bold text-slate-400 block">TagMango Wallet</span>
@@ -8703,8 +8762,13 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
                 ${bodyHtml}
 
-                <div class="pt-4 border-t border-slate-800 flex items-center justify-end">
-                    <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all">
+                <div class="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+                    ${isMismatch ? `
+                        <button type="button" onclick="document.getElementById('${modalId}').remove(); if(typeof openSubmissionModal === 'function') openSubmissionModal(${actualDay}, '${normalizedType}')" class="py-2.5 px-5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer">
+                            <i class="fas fa-redo"></i> Re-try Check-in Now
+                        </button>
+                    ` : `<div></div>`}
+                    <button type="button" onclick="document.getElementById('${modalId}').remove()" class="py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer">
                         Close
                     </button>
                 </div>
