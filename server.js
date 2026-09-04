@@ -431,6 +431,7 @@ function saveLevelUpAccessToDb(accessArray) {
         const arr = Array.isArray(accessArray) ? accessArray : [];
         fs.writeFileSync(LEVELUP_ACCESS_FILE, JSON.stringify(arr, null, 2), 'utf8');
         store.levelUpAccessConfig = arr;
+        store.configsRevision = (store.configsRevision || 1000) + 1;
         saveStore();
         return arr;
     } catch(e) {
@@ -491,6 +492,7 @@ function saveModuleAccessToDb(moduleMap) {
         const obj = (moduleMap && typeof moduleMap === 'object') ? moduleMap : MODULE_ACCESS_DEFAULTS;
         fs.writeFileSync(MODULE_ACCESS_FILE, JSON.stringify(obj, null, 2), 'utf8');
         store.customMilestoneModuleAccess = obj;
+        store.configsRevision = (store.configsRevision || 1000) + 1;
         saveStore();
         console.log(`[Module Access DB] Saved to ${MODULE_ACCESS_FILE}:`, obj);
         return obj;

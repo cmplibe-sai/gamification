@@ -313,6 +313,10 @@ async function initAdminApp() {
         const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
         allAdminMangos = response.result || response.mangos || [];
         
+        if (typeof fetchServerLevelUpAccess === 'function') {
+            await fetchServerLevelUpAccess(true);
+        }
+
         if (typeof filterMangosByPricing === 'function') filterMangosByPricing();
         if (typeof renderAdminMangoToggles === 'function') renderAdminMangoToggles();
 
@@ -375,13 +379,30 @@ function renderAdminMangoToggles() {
         existingItems.forEach(cb => {
             const mangoId = cb.getAttribute('data-mango-id');
             if (mangoId) {
-                cb.checked = levelUpAccessConfig.includes(mangoId);
+                cb.checked = (levelUpAccessConfig || []).includes(mangoId);
             }
         });
-        return; // Exit early — do NOT rebuild innerHTML
+        return; // Exit early — do NOT rebuild innerHTML during user click
     }
 
-    // Full rebuild only when safe (no recent user click)
+    // Seamless in-place update if list is already rendered and matches filtered list (zero flicker across browsers)
+    if (existingItems.length > 0 && existingItems.length === filteredMangos.length) {
+        let allMatch = true;
+        existingItems.forEach((cb, idx) => {
+            if (cb.getAttribute('data-mango-id') !== filteredMangos[idx]._id) allMatch = false;
+        });
+        if (allMatch) {
+            existingItems.forEach(cb => {
+                const mangoId = cb.getAttribute('data-mango-id');
+                if (mangoId) {
+                    cb.checked = (levelUpAccessConfig || []).includes(mangoId);
+                }
+            });
+            return; // In-place update complete
+        }
+    }
+
+    // Full rebuild only when safe (initial render or search/pricing filter change)
     container.innerHTML = filteredMangos.map(mango => {
         const isEnabled = levelUpAccessConfig.includes(mango._id);
         const priceLabel = (mango.amount > 0 || mango.price > 0) ? `<span class="text-[9px] text-amber-400 bg-amber-900/40 px-1.5 rounded border border-amber-700/50">PAID</span>` : `<span class="text-[9px] text-emerald-400 bg-emerald-900/40 px-1.5 rounded border border-emerald-700/50">FREE</span>`;
@@ -610,9 +631,9 @@ window.normalizeLevelUpType = normalizeLevelUpType;
 var lastLocalToggleTime = 0;
 var _toggleConfirmInterval = null; // Interval that keeps refreshing the lock until server confirms
 
-async function fetchServerLevelUpAccess() {
-    // 10s grace period after user toggle — only polls server once confirmed POST completes
-    if (Date.now() - lastLocalToggleTime < 10000) {
+async function fetchServerLevelUpAccess(force = false) {
+    // 10s grace period after user toggle unless explicitly forced
+    if (!force && (Date.now() - lastLocalToggleTime < 10000)) {
         return levelUpAccessConfig || [];
     }
 
@@ -621,14 +642,20 @@ async function fetchServerLevelUpAccess() {
         if (res && res.success && Array.isArray(res.data)) {
             const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
             const nextKey = res.data.slice().sort().join(',');
-            if (prevKey !== nextKey) {
-                levelUpAccessConfig = res.data;
+            if (prevKey !== nextKey || force) {
+                levelUpAccessConfig = [...res.data];
                 try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
                 if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
                     renderAdminMangoToggles();
                 }
                 if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
                     populateAdminCohortFilters();
+                }
+                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                    renderAdminCohortSubmissions();
+                }
+                if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
+                    renderMilestoneGrid();
                 }
             }
             return res.data;
@@ -689,13 +716,16 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
     .then(res => res.json())
     .then(data => {
         console.log('✅ Level-Up saved to server DB:', data);
-        // Server confirmed — clear lock so polling resumes after 10s
         if (_toggleConfirmInterval) {
             clearInterval(_toggleConfirmInterval);
             _toggleConfirmInterval = null;
         }
-        // Reset lastLocalToggleTime to exactly 10s ago so next poll picks up immediately
-        lastLocalToggleTime = Date.now() - 10500;
+        if (data && data.data && Array.isArray(data.data)) {
+            levelUpAccessConfig = [...data.data];
+            try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+        }
+        // Retain 3s grace margin so lagging in-flight GETs cannot revert local state
+        lastLocalToggleTime = Date.now() - 7000;
     })
     .catch(err => {
         console.error('❌ Failed to save to server DB — will retry:', err);
@@ -707,6 +737,10 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
                 body: JSON.stringify({ config: configSnapshot, levelUpAccess: configSnapshot })
             }).then(r => r.json()).then(d => {
                 console.log('✅ Level-Up retry save succeeded:', d);
+                if (d && d.data && Array.isArray(d.data)) {
+                    levelUpAccessConfig = [...d.data];
+                    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+                }
             }).catch(e2 => {
                 console.error('❌ Retry also failed:', e2);
             });
@@ -714,7 +748,7 @@ function toggleLevelUpAccess(mangoId, isEnabled) {
                 clearInterval(_toggleConfirmInterval);
                 _toggleConfirmInterval = null;
             }
-            lastLocalToggleTime = Date.now() - 10500;
+            lastLocalToggleTime = Date.now() - 7000;
         }, 1000);
     });
 }
@@ -1172,10 +1206,42 @@ async function syncGlobalServerData() {
             try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(userMilestoneJoinDates)); } catch(e) {}
         }
 
-        // 5. LEVEL-UP ACCESS CONFIG SYNC
+        // 5. LEVEL-UP ACCESS CONFIG SYNC (Real-time cross-browser sync)
+        let hasLevelUpChanged = false;
         if (serverLevelUpAccess && Array.isArray(serverLevelUpAccess)) {
-            levelUpAccessConfig = serverLevelUpAccess;
-            try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+            const isLocalLocked = (Date.now() - (lastLocalToggleTime || 0)) < 4000;
+            if (!isLocalLocked) {
+                const prevKey = (levelUpAccessConfig || []).slice().sort().join(',');
+                const nextKey = serverLevelUpAccess.slice().sort().join(',');
+                if (prevKey !== nextKey) {
+                    levelUpAccessConfig = [...serverLevelUpAccess];
+                    try { localStorage.setItem('adminLevelUpConfig', JSON.stringify(levelUpAccessConfig)); } catch(e) {}
+                    hasLevelUpChanged = true;
+
+                    // Instantly sync UI toggles & views across browsers
+                    if (typeof renderAdminMangoToggles === 'function' && document.getElementById('adminMangoToggles')) {
+                        renderAdminMangoToggles();
+                    }
+                    if (typeof populateAdminCohortFilters === 'function' && document.getElementById('adminCohortFilter')) {
+                        populateAdminCohortFilters();
+                    }
+                    if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                        renderAdminCohortSubmissions();
+                    }
+                    if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+                        renderAdminCustomerGrid();
+                    }
+                    if (typeof renderMilestoneGrid === 'function' && document.getElementById('milestoneGridContainer')) {
+                        renderMilestoneGrid();
+                    }
+
+                    // Refresh learner access if currently on Level-Up tab
+                    const levelUpTab = document.getElementById('levelUpTab');
+                    if (levelUpTab && !levelUpTab.classList.contains('hidden') && typeof switchTab === 'function') {
+                        switchTab('levelUpTab');
+                    }
+                }
+            }
         }
 
         // 6. SIGNATURE & SELECTIVE FAST RE-RENDER
@@ -1187,7 +1253,7 @@ async function syncGlobalServerData() {
             JSON.stringify(serverLevelUpAccess || []) + '_' +
             JSON.stringify(serverJoinDates || {});
 
-        if (!hasLocalSubmissionsChanged && !hasConfigsChanged && currentSignature === lastSyncSignature) {
+        if (!hasLocalSubmissionsChanged && !hasConfigsChanged && !hasLevelUpChanged && currentSignature === lastSyncSignature) {
             isSyncInProgress = false;
             return; // Nothing changed locally or on server — skip DOM work
         }
@@ -9214,6 +9280,7 @@ if (typeof window !== 'undefined') {
 
     let currentSyncRate = document.hidden ? 15000 : 3000;
     window._cmpliSyncInterval = setInterval(triggerSmartSync, currentSyncRate);
+    triggerSmartSync(); // Trigger initial sync immediately upon script execution
 
     // Dynamic rate adjustment based on tab visibility to save CPU & Memory
     document.addEventListener('visibilitychange', () => {
