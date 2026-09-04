@@ -7122,32 +7122,41 @@ async function startAudioRecording(idx) {
             const recStatus = document.getElementById(`audio_rec_status_${idx}`);
             if (recStatus) recStatus.innerHTML = '<span class="text-cyan-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Securing & Uploading Voice Note...</span>';
 
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64Data = reader.result;
-                window._recordedAudioData[idx] = base64Data;
-                
-                try {
-                    const uploadRes = await apiFetch('/api/upload-media', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dataUrl: base64Data, prefix: `audio_q${idx + 1}` })
-                    }).then(r => r.json());
+            // Track this upload so submitCheckinForm can await it instead of racing it —
+            // otherwise a fast submit grabs the blob: URL above, which the server can't
+            // transcribe (blob: URLs only exist in this browser tab), causing a false
+            // "content mismatch" rejection even for a genuine recording.
+            window._audioUploadPromises = window._audioUploadPromises || {};
+            window._audioUploadPromises[idx] = new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Data = reader.result;
+                    window._recordedAudioData[idx] = base64Data;
 
-                    if (uploadRes && uploadRes.success && uploadRes.url) {
-                        window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
-                        window._recordedAudioServerUrls[idx] = uploadRes.url;
-                        if (hiddenData) hiddenData.value = uploadRes.url;
-                        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Voice Reflection Ready & Uploaded!</span>';
-                    } else {
+                    try {
+                        const uploadRes = await apiFetch('/api/upload-media', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dataUrl: base64Data, prefix: `audio_q${idx + 1}` })
+                        }).then(r => r.json());
+
+                        if (uploadRes && uploadRes.success && uploadRes.url) {
+                            window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                            window._recordedAudioServerUrls[idx] = uploadRes.url;
+                            if (hiddenData) hiddenData.value = uploadRes.url;
+                            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Voice Reflection Ready & Uploaded!</span>';
+                        } else {
+                            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Ready for submission.</span>';
+                        }
+                    } catch(uploadErr) {
+                        console.warn('Audio auto-upload warning:', uploadErr);
                         if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Ready for submission.</span>';
+                    } finally {
+                        resolve();
                     }
-                } catch(uploadErr) {
-                    console.warn('Audio auto-upload warning:', uploadErr);
-                    if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Recorded! Ready for submission.</span>';
-                }
-            };
-            reader.readAsDataURL(blob);
+                };
+                reader.readAsDataURL(blob);
+            });
 
             const startBtn = document.getElementById(`btn_start_audio_${idx}`);
             const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
@@ -7200,7 +7209,9 @@ function handleAudioFileSelect(input, idx) {
         const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
         if (hiddenData) hiddenData.value = dataUrl;
 
-        // Auto-upload immediately to server so the server has the file ready on disk
+        // Auto-upload immediately to server so the server has the file ready on disk.
+        // Resolve _audioUploadPromises[idx] in every branch so submitCheckinForm can
+        // safely await it before reading the final audioUrl.
         try {
             const upRes = await apiFetch('/api/upload-media', {
                 method: 'POST',
@@ -7219,8 +7230,13 @@ function handleAudioFileSelect(input, idx) {
         } catch(upErr) {
             console.warn('Audio immediate upload warning:', upErr);
             if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio File Ready: ${file.name}</span>`;
+        } finally {
+            if (window._audioUploadResolvers && window._audioUploadResolvers[idx]) window._audioUploadResolvers[idx]();
         }
     };
+    window._audioUploadPromises = window._audioUploadPromises || {};
+    window._audioUploadResolvers = window._audioUploadResolvers || {};
+    window._audioUploadPromises[idx] = new Promise((resolve) => { window._audioUploadResolvers[idx] = resolve; });
     reader.readAsDataURL(file);
 }
 window.handleAudioFileSelect = handleAudioFileSelect;
@@ -7577,12 +7593,21 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
 
     let serverResult = null;
     let serverError = null;
+    let lateResultApplied = false;
 
-    // Track promise in background without stopping the stage progression
+    // Track promise in background without stopping the stage progression.
+    // If the real result arrives AFTER the modal has already given up waiting and
+    // closed (see the "give up" branch below), it would otherwise be silently
+    // dropped — leaving a genuinely-approved submission looking rejected on the
+    // client even though the server already saved it. Apply it for real here.
     Promise.resolve(evalPromise)
         .then(data => {
             console.log('✅ Server evaluation result arrived in modal:', data);
             serverResult = data;
+            if (!document.getElementById('evaluatingCheckinModal') && !lateResultApplied) {
+                lateResultApplied = true;
+                if (typeof onDoneCallback === 'function') onDoneCallback(data);
+            }
         })
         .catch(err => {
             console.warn('⚠️ Server evaluation error in modal:', err);
@@ -7742,31 +7767,38 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
             // Stage 5 reached! Check if server response has arrived
             clearInterval(interval);
             
-            // Poll for serverResult up to 15 seconds more if still transcribing
+            // Poll for serverResult up to ~50 seconds more if still transcribing.
+            // AssemblyAI upload + polling can itself take up to ~37.5s per audio
+            // answer server-side, so this budget must comfortably exceed that —
+            // giving up too early was causing genuine submissions to be reported
+            // to the user as "rejected" while the server was still finishing.
             let waitAttempts = 0;
+            const maxWaitAttempts = 100; // 100 * 500ms = 50s
             const checkServerReady = setInterval(() => {
                 waitAttempts++;
                 if (serverResult) {
                     clearInterval(checkServerReady);
                     applyFinalModalResult(serverResult);
-                } else if (serverError || waitAttempts >= 30) {
+                } else if (serverError || waitAttempts >= maxWaitAttempts) {
                     clearInterval(checkServerReady);
                     const title = document.getElementById('evalModalTitle');
                     const btn = document.getElementById('btnDismissEvalModal');
                     const statusMsg = document.getElementById('evalStatusMsg');
-                    if (title) title.innerHTML = '<span class="text-amber-400">Evaluation Finished</span>';
-                    if (statusMsg) statusMsg.innerHTML = 'Submission saved to database. Please click below to refresh and view your updated check-in card.';
+                    if (title) title.innerHTML = '<span class="text-amber-400">Still Processing...</span>';
+                    if (statusMsg) statusMsg.innerHTML = 'This is taking longer than usual. Your submission is still being evaluated on the server — you can close this and check back shortly. It will NOT be lost or need resubmitting.';
                     if (btn) {
                         btn.disabled = false;
                         btn.className = "w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm cursor-pointer shadow-lg";
-                        btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Refresh Dashboard';
+                        btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Close & Check Back Later';
                     }
-                    window._evalCallback = () => {
-                        if (typeof onDoneCallback === 'function') onDoneCallback(serverResult);
-                    };
+                    // Do NOT invoke onDoneCallback with a fabricated result here — the
+                    // real evaluation is still in flight. The Promise.resolve(evalPromise)
+                    // handler above will apply the true result for real once it arrives,
+                    // even though this modal has already closed by then.
+                    window._evalCallback = null;
                 } else {
                     const statusMsg = document.getElementById('evalStatusMsg');
-                    if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & rubric verification (${Math.max(1, 15 - Math.round(waitAttempts * 0.5))}s)...`;
+                    if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & rubric verification (${Math.max(1, Math.round((maxWaitAttempts - waitAttempts) * 0.5))}s)...`;
                 }
             }, 500);
         }
@@ -7828,6 +7860,12 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             const checked = document.querySelector(`input[name="checkin_mcq_${idx}"]:checked`);
             val = checked ? checked.value : '';
         } else if (qType === 'audio') {
+            // Wait for any in-flight recording/file upload to finish so we send the
+            // server a real uploaded path instead of a browser-only blob: URL that
+            // AssemblyAI can never transcribe.
+            if (window._audioUploadPromises && window._audioUploadPromises[idx]) {
+                try { await window._audioUploadPromises[idx]; } catch(e) {}
+            }
             const serverUrl = window._recordedAudioServerUrls && window._recordedAudioServerUrls[idx];
             const recData = document.getElementById(`checkin_audio_data_${idx}`)?.value || (window._recordedAudioData && window._recordedAudioData[idx]) || '';
             const previewEl = document.getElementById(`audio_preview_${idx}`);
