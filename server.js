@@ -138,8 +138,8 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
                 console.log(`[AssemblyAI] Using public audio URL: ${uploadUrl}`);
             } else {
                 const baseName = path.basename(audioFilePath);
-                const host = process.env.HOST_URL || 'cmplibe.com';
-                uploadUrl = `https://${host}/gamification/uploads/${baseName}`;
+                const publicOrigin = (process.env.APP_PUBLIC_ORIGIN || process.env.PUBLIC_ORIGIN || 'https://cmplibe.com').replace(/\/$/, '');
+                uploadUrl = `${publicOrigin}/gamification/uploads/${baseName}`;
                 console.log(`[AssemblyAI] Attempting public URL fallback: ${uploadUrl}`);
             }
         }

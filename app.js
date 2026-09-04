@@ -8274,8 +8274,9 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
-        const isMismatch = sub && (sub.status === 'rejected_mismatch' || Number(sub.lcReward) === 0);
-        const isCompleted = sub && !isMismatch;
+        const isEvaluating = sub && sub.status === 'evaluating';
+        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && Number(sub.lcReward) === 0));
+        const isCompleted = sub && !isEvaluating && !isMismatch;
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
@@ -8288,7 +8289,10 @@ function switchMilestoneTab(moduleName, btnElement) {
         let statusBadge = '<span class="badge-pill bg-slate-800 text-slate-400 text-[10px]">Upcoming</span>';
         let actionBtn = '';
 
-        if (isCompleted) {
+        if (isEvaluating) {
+            statusBadge = '<span class="badge-pill bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...</span>';
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
+        } else if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
             actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isMismatch) {
@@ -8680,30 +8684,35 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         `;
     }
 
-    const isMismatch = (matchPercentage < 15 || lcReward === 0);
-    const isLowMatch = (!isMismatch && matchPercentage < 50);   // 3 LCs tier
-    const isPartial  = (!isMismatch && !isLowMatch && matchPercentage <= 80); // 17 LCs tier
-    const isGood     = (!isMismatch && !isLowMatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
+    const isEvaluating = (sub.status === 'evaluating');
+    const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && lcReward === 0) || matchPercentage < 15);
+    const isLowMatch = (!isEvaluating && !isMismatch && matchPercentage < 50);   // 3 LCs tier
+    const isPartial  = (!isEvaluating && !isMismatch && !isLowMatch && matchPercentage <= 80); // 17 LCs tier
+    const isGood     = (!isEvaluating && !isMismatch && !isLowMatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
     // isFullApproved = matchPercentage > 90
 
-    const badgeClass = isMismatch
-        ? 'badge-rose bg-rose-500/20 border-rose-500/40 text-rose-300'
-        : isLowMatch
-            ? 'bg-red-800/30 border-red-500/40 text-red-300'
-            : isPartial
-                ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
-                : isGood
-                    ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                    : 'badge-emerald';
-    const badgeText = isMismatch
-        ? '<i class="fas fa-times-circle mr-1"></i> Mismatch (0%) — Re-submit'
-        : isLowMatch
-            ? '<i class="fas fa-exclamation-circle mr-1"></i> Low Match (3 LCs)'
-            : isPartial
-                ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
-                : isGood
-                    ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
-                    : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
+    const badgeClass = isEvaluating
+        ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
+        : isMismatch
+            ? 'badge-rose bg-rose-500/20 border-rose-500/40 text-rose-300'
+            : isLowMatch
+                ? 'bg-red-800/30 border-red-500/40 text-red-300'
+                : isPartial
+                    ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
+                    : isGood
+                        ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                        : 'badge-emerald';
+    const badgeText = isEvaluating
+        ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
+        : isMismatch
+            ? '<i class="fas fa-times-circle mr-1"></i> Mismatch (0%) — Re-submit'
+            : isLowMatch
+                ? '<i class="fas fa-exclamation-circle mr-1"></i> Low Match (3 LCs)'
+                : isPartial
+                    ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
+                    : isGood
+                        ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
+                        : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
 
     const modalId = 'submissionDetailReviewModal';
     document.getElementById(modalId)?.remove();
@@ -8732,15 +8741,15 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                     <div class="text-right">
                         <span class="text-xs font-bold text-slate-400 block">TagMango Wallet</span>
-                        <span class="text-base font-black ${isMismatch ? 'text-rose-400' : 'text-emerald-400'} font-mono">+${lcReward} LCs</span>
+                        <span class="text-base font-black ${isEvaluating ? 'text-indigo-400' : (isMismatch ? 'text-rose-400' : 'text-emerald-400')} font-mono">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</span>
                     </div>
                 </div>
 
                 <!-- AI EVALUATION REMARKS & RUBRIC CARD (Visible to both Creator & Customer) -->
-                <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40'} rounded-2xl space-y-3 shadow-xl">
+                <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-lg ${isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30'} flex items-center justify-center text-sm border">
+                            <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30')} flex items-center justify-center text-sm border">
                                 <i class="fas fa-robot"></i>
                             </div>
                             <span class="text-xs font-bold text-white uppercase tracking-wider">AI Evaluation & Verification Remarks</span>
@@ -8749,13 +8758,13 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             ${badgeText}
                         </span>
                     </div>
-                    <div class="text-xs ${isMismatch ? 'text-rose-200 border-rose-500/30' : 'text-slate-200 border-slate-800/90'} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
+                    <div class="text-xs ${isEvaluating ? 'text-indigo-200 border-indigo-500/30' : (isMismatch ? 'text-rose-200 border-rose-500/30' : 'text-slate-200 border-slate-800/90')} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
                         ${aiRemarksText}
                     </div>
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
-                        <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${matchPercentage}%</strong></span>
-                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isMismatch ? 'text-rose-300' : 'text-emerald-300'}">+${lcReward} LCs</strong></span>
-                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isMismatch ? 'Rejected (Mismatch)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')}</strong></span>
+                        <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
+                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
+                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))}</strong></span>
                     </div>
                 </div>
 
