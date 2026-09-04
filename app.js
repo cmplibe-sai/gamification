@@ -5301,7 +5301,7 @@ function renderAdminCohortSubmissions() {
                 
                 if (matchingSub) {
                     const isEval = matchingSub.status === 'evaluating';
-                    const isSubFailed = !isEval && (matchingSub.status === 'rejected_mismatch' || Number(matchingSub.lcReward) === 0 || (matchingSub.matchPercentage !== undefined && Number(matchingSub.matchPercentage) < 50));
+                    const isSubFailed = !isEval && (matchingSub.status === 'rejected_mismatch' || (matchingSub.status !== 'completed' && (Number(matchingSub.lcReward) === 0 || (matchingSub.matchPercentage !== undefined && Number(matchingSub.matchPercentage) < 50))));
                     const attemptNum = matchingSub.attemptsCount || matchingSub.attemptNumber || 1;
                     const matchPct = (matchingSub.matchPercentage !== undefined && matchingSub.matchPercentage !== null) ? `${matchingSub.matchPercentage}%` : '';
 
@@ -8323,8 +8323,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
         const isEvaluating = sub && sub.status === 'evaluating';
-        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && Number(sub.lcReward) === 0) || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50));
-        const isCompleted = sub && !isEvaluating && !isMismatch && (Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
+        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
+        const isCompleted = sub && !isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
@@ -8795,7 +8795,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     }
 
     const isEvaluating = (sub.status === 'evaluating');
-    const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && lcReward === 0) || matchPercentage < 50);
+    const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (lcReward === 0 || matchPercentage < 50)));
     const isPartial  = (!isEvaluating && !isMismatch && matchPercentage <= 80); // 17 LCs tier
     const isGood     = (!isEvaluating && !isMismatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
     const attemptNum = sub.attemptsCount || sub.attemptNumber || 1;
