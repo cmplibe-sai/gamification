@@ -7810,10 +7810,13 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                     const btn = document.getElementById('btnDismissEvalModal');
                     const statusMsg = document.getElementById('evalStatusMsg');
 
-                    if (serverError && serverError.isConnectionError) {
-                        // The submission itself never reached the server (network/HTTP
-                        // failure) — this is a real failure, not just a slow evaluation.
-                        // Offer a genuine retry instead of pretending it's still processing.
+                    if (serverError && (serverError.isConnectionError || serverError.isServerError)) {
+                        // Either the request never reached the server (isConnectionError)
+                        // or it did and got back a real error/proxy failure response
+                        // (isServerError, e.g. 413/502/504) — either way this is a real
+                        // failure, not just a slow evaluation. Show the true message
+                        // (submitPayloadToServer already extracted it) and offer a retry
+                        // instead of pretending it's still processing.
                         if (title) title.innerHTML = '<span class="text-rose-400">Connection Error</span>';
                         if (statusMsg) statusMsg.innerHTML = `${serverError.message || 'Could not reach the server.'} Your recording is still available on this device — click below to retry.`;
                         if (btn) {
@@ -7948,7 +7951,21 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
                 } catch(e) {}
             }
 
-            if (audioUrl && (audioUrl.startsWith('http') || audioUrl.startsWith('/') || audioUrl.startsWith('data:') || audioUrl.startsWith('blob:'))) {
+            // Safety net: never embed a raw base64 audio blob in the /api/submissions
+            // JSON body. If it's still here, the upload genuinely failed (even after
+            // the retry above) — sending it anyway would blow past the proxy's request
+            // size limit (413) or make the request huge/slow, and previously produced
+            // a confusing "Connection Error" with no clear cause. Fail fast instead.
+            if (audioUrl && audioUrl.startsWith('data:')) {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Submit Check-in';
+                }
+                alert('Your audio recording could not be uploaded to the server (this usually means the file is too large or the connection dropped mid-upload). Please try a shorter recording or check your connection, then submit again.');
+                return;
+            }
+
+            if (audioUrl && (audioUrl.startsWith('http') || audioUrl.startsWith('/') || audioUrl.startsWith('blob:'))) {
                 hasValidAudio = true;
             }
 
@@ -8072,22 +8089,53 @@ window.submitCheckinForm = submitCheckinForm;
 // which previously risked a reverse-proxy (e.g. Nginx) timeout on slow
 // transcriptions and made genuine submissions look "lost".
 async function submitPayloadToServer(payload) {
-    let res;
+    let response;
     try {
-        res = await apiFetch('/api/submissions', {
+        response = await apiFetch('/api/submissions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        }).then(r => r.json());
+        });
     } catch (netErr) {
+        // fetch() itself rejected — the request never reached the server at all
+        // (offline, DNS failure, CORS block). This is the only case that's
+        // genuinely a "connection" problem.
         const err = new Error('Could not reach the server to save your check-in. Please check your connection and retry.');
         err.isConnectionError = true;
         throw err;
     }
 
+    // Try to read a JSON body regardless of status — Express error responses
+    // are valid JSON ({success:false, error:...}), but a proxy in front of
+    // the server (e.g. Nginx returning an HTML 413/502/504 page) is not.
+    let res = null;
+    try {
+        res = await response.json();
+    } catch (parseErr) {
+        // Body wasn't JSON — fall through, response.ok / response.status below
+        // still tell us what actually happened.
+    }
+
+    if (!response.ok) {
+        let message;
+        if (res && res.error) {
+            message = res.error; // real error text from our own Express handler
+        } else if (response.status === 413) {
+            message = 'Your audio recording is too large for the server to accept. Please try a shorter recording (under 2-3 minutes) and submit again.';
+        } else if (response.status === 502 || response.status === 504) {
+            message = `The server took too long to respond (HTTP ${response.status}). Please retry — your recording is still available on this device.`;
+        } else {
+            message = `Server returned an error (HTTP ${response.status}). Please retry.`;
+        }
+        const err = new Error(message);
+        err.isServerError = true;
+        err.httpStatus = response.status;
+        throw err;
+    }
+
     if (!res || !res.data) {
-        const err = new Error(res?.error || 'Submission failed');
-        err.isConnectionError = true;
+        const err = new Error((res && res.error) || 'Submission failed');
+        err.isServerError = true;
         throw err;
     }
 
