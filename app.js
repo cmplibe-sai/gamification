@@ -8796,28 +8796,34 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     const isEvaluating = (sub.status === 'evaluating');
     const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (lcReward === 0 || matchPercentage < 50)));
-    const isPartial  = (!isEvaluating && !isMismatch && matchPercentage <= 80); // 17 LCs tier
-    const isGood     = (!isEvaluating && !isMismatch && !isPartial && matchPercentage <= 90); // 23 LCs tier
+    const isLegacyLow = (!isEvaluating && !isMismatch && (matchPercentage < 50 || Number(lcReward) === 3)); // Legacy 3 LCs tier
+    const isPartial  = (!isEvaluating && !isMismatch && !isLegacyLow && matchPercentage <= 80); // 17 LCs tier
+    const isGood     = (!isEvaluating && !isMismatch && !isLegacyLow && !isPartial && matchPercentage <= 90); // 23 LCs tier
     const attemptNum = sub.attemptsCount || sub.attemptNumber || 1;
+    const passLabel = isMismatch ? '(Failed <50%)' : (isLegacyLow ? `(Passed Legacy ${matchPercentage}%)` : '(Passed ≥50%)');
 
     const badgeClass = isEvaluating
         ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
         : isMismatch
             ? 'badge-rose bg-rose-500/20 border-rose-500/40 text-rose-300'
-            : isPartial
-                ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
-                : isGood
-                    ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                    : 'badge-emerald';
+            : isLegacyLow
+                ? 'bg-amber-900/30 border-amber-500/40 text-amber-300'
+                : isPartial
+                    ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
+                    : isGood
+                        ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                        : 'badge-emerald';
     const badgeText = isEvaluating
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
             ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Rubric < 50% — Retry Required`)
-            : isPartial
-                ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
-                : isGood
-                    ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
-                    : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
+            : isLegacyLow
+                ? `<i class="fas fa-history mr-1"></i> Low Match (+${lcReward || 3} LCs)`
+                : isPartial
+                    ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
+                    : isGood
+                        ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
+                        : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
 
     const modalId = 'submissionDetailReviewModal';
     document.getElementById(modalId)?.remove();
@@ -8839,7 +8845,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="flex items-center gap-2">
                                 <h4 class="text-sm font-extrabold text-white truncate">${learnerName}</h4>
                                 <span class="badge-pill bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase">Learner Review</span>
-                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${isMismatch ? '(Failed <50%)' : '(Passed ≥50%)'}</span>
+                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
                             </div>
                             <p class="text-xs text-slate-400 truncate font-mono mt-0.5">${learnerEmail || ''} ${learnerPhone ? '• ' + learnerPhone : ''}</p>
                         </div>
@@ -8887,8 +8893,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
                         <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
                         <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
-                        <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${isMismatch ? '(Failed <50%)' : '(Passed ≥50%)'}</strong></span>
-                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))}</strong></span>
+                        <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${passLabel}</strong></span>
+                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
                     </div>
                 </div>
 
