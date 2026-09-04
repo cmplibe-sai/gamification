@@ -5718,6 +5718,27 @@ function loadAdminCheckinEditor(dateKey) {
     `;
 }
 
+function addAdminQuestionField() {
+    const container = document.getElementById('adminQuestionsContainer');
+    if (!container) return;
+    
+    const fieldHtml = `
+        <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
+            <i class="fas fa-grip-vertical text-slate-500 cursor-move"></i>
+            <input type="text" placeholder="Enter question or reflection prompt..." class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-indigo-500 rounded px-2 py-1">
+            <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500">
+                <option value="text">Text Box</option>
+                <option value="audio" selected>Audio File (.mp3 / Voice)</option>
+                <option value="video">Video File (.mp4 / Camera)</option>
+                <option value="doc">Document (.pdf, .doc)</option>
+            </select>
+            <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', fieldHtml);
+}
+window.addAdminQuestionField = addAdminQuestionField;
+
 function saveAdminCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
@@ -7618,6 +7639,10 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
         <div id="evaluatingCheckinModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/90 backdrop-blur-md"></div>
             <div class="relative glass-card p-6 md:p-8 border-indigo-500/40 max-w-lg w-full text-center space-y-6 shadow-2xl animate-fade-in-up bg-[#111827] rounded-3xl overflow-hidden">
+                <!-- TOP CLOSE BUTTON -->
+                <button type="button" onclick="closeAiEvaluatingModal(true)" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-20 w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 flex items-center justify-center text-sm" title="Close Modal">
+                    <i class="fas fa-times"></i>
+                </button>
                 
                 <!-- TOP: ROBOT ANIMATION WITH SCANNING BEAM & RADAR GLOW -->
                 <div class="relative w-24 h-24 mx-auto flex items-center justify-center">
@@ -7799,6 +7824,16 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                         window._evalCallback = () => {
                             if (typeof window.retryLastCheckinSubmission === 'function') window.retryLastCheckinSubmission();
                         };
+                        let dismissBtn = document.getElementById('btnDismissErrorCancel');
+                        if (!dismissBtn && btn && btn.parentElement) {
+                            dismissBtn = document.createElement('button');
+                            dismissBtn.id = 'btnDismissErrorCancel';
+                            dismissBtn.type = 'button';
+                            dismissBtn.className = 'w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors mt-2 cursor-pointer';
+                            dismissBtn.innerHTML = '<i class="fas fa-times mr-1.5"></i> Close & Keep Voice Note';
+                            dismissBtn.onclick = () => closeAiEvaluatingModal(true);
+                            btn.insertAdjacentElement('afterend', dismissBtn);
+                        }
                     } else {
                         // Either still polling (isPollTimeout) or the wait budget simply
                         // ran out — either way the submission was already confirmed saved
@@ -7826,9 +7861,13 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
 }
 window.showAiEvaluatingLagtime = showAiEvaluatingLagtime;
 
-function closeAiEvaluatingModal() {
+function closeAiEvaluatingModal(forceDismiss = false) {
     const modal = document.getElementById('evaluatingCheckinModal');
     if (modal) modal.remove();
+    if (forceDismiss) {
+        window._evalCallback = null;
+        return;
+    }
     const cb = window._evalCallback;
     window._evalCallback = null;
     if (typeof cb === 'function') cb();
