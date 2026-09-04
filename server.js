@@ -271,10 +271,15 @@ app.get('/api/config', (req, res) => {
 // -------------------------------------------------------------
 // NATIVE AI EVALUATION & TAGMANGO WALLET SYNC ENGINE
 // -------------------------------------------------------------
-const TAGMANGO_KEY = process.env.TAGMANGO_KEY || 'tmk_6a548d2ad99f41ea005cfb8e.2c6260d65f3f09ca4f0a479d15081d98288cc2a6f9e51e191f5249cc0068b8f6';
+const TAGMANGO_KEY = (process.env.TAGMANGO_KEY || '').trim().replace(/^["']|["']$/g, '');
+console.log(`[TagMango Wallet Sync]: ${TAGMANGO_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (TAGMANGO_KEY missing in .env)'}`);
 const HOST_URL = process.env.HOST_URL || 'learn.cmplibe.com';
 
 async function assignTagMangoPointsOnServer(userId, score, description) {
+    if (!TAGMANGO_KEY) {
+        console.warn('[TagMango Sync] Skipped: TAGMANGO_KEY is not configured.');
+        return null;
+    }
     try {
         console.log(`[TagMango Sync] Assigning ${score} LCs to user ${userId}...`);
         const response = await fetch('https://api-prod-new.tagmango.com/api/v1/external/gamification/points/assign', {
@@ -929,6 +934,10 @@ function findActualUserFast(userId, email, phone) {
 
 async function assignTagMangoPoints(fanId, score, description) {
     if (!fanId || !score) return null;
+    if (!TAGMANGO_KEY) {
+        console.warn('[TagMango Wallet API] Skipped: TAGMANGO_KEY is not configured.');
+        return null;
+    }
     try {
         const url = `${BASE_URL}/external/gamification/points/assign`;
         const res = await fetch(url, {
