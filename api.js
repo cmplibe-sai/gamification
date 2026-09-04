@@ -2,7 +2,7 @@
 
 // --- GLOBAL CONFIGURATION (Attached to window so it's readable everywhere) ---
 window.APP_CONFIG = {
-    tagmangoKey: 'tmk_6a548d2ad99f41ea005cfb8e.2c6260d65f3f09ca4f0a479d15081d98288cc2a6f9e51e191f5249cc0068b8f6',
+    tagmangoKey: '',
     hostUrl: 'learn.cmplibe.com',
     baseUrl: 'https://api-prod-new.tagmango.com/api/v1',
     creatorId: '6682734e120c766a6e5af59c'
@@ -14,11 +14,12 @@ window.ADMIN_EMAILS = [
 ];
 
 // Asynchronously sync config from backend Web Service if available
-(async function syncBackendConfig() {
+window.configLoadedPromise = (async function syncBackendConfig() {
     try {
         const res = await fetch('/api/config');
         if (res.ok) {
             const data = await res.json();
+            if (data.tagmangoKey) window.APP_CONFIG.tagmangoKey = data.tagmangoKey;
             if (data.hostUrl) window.APP_CONFIG.hostUrl = data.hostUrl;
             if (data.baseUrl) window.APP_CONFIG.baseUrl = data.baseUrl;
             if (data.creatorId) window.APP_CONFIG.creatorId = data.creatorId;
@@ -58,6 +59,9 @@ window.TagMangoAPI = {
 
 // --- AUTOMATED FETCH WRAPPER ---
 window.fetchTagMango = async function(endpoint, method = 'GET', body = null) {
+    if (window.configLoadedPromise) {
+        try { await window.configLoadedPromise; } catch (_) {}
+    }
     const options = {
         method,
         headers: {

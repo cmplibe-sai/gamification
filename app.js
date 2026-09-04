@@ -797,7 +797,10 @@ function updateLearnerDropdown() {
 
 async function fetchLivePoints(userId) {
     try {
-        const tagmangoKey = (window.APP_CONFIG && window.APP_CONFIG.tagmangoKey) ? window.APP_CONFIG.tagmangoKey : 'tmk_6a548d2ad99f41ea005cfb8e.2c6260d65f3f09ca4f0a479d15081d98288cc2a6f9e51e191f5249cc0068b8f6';
+        if (window.configLoadedPromise) {
+            try { await window.configLoadedPromise; } catch (_) {}
+        }
+        const tagmangoKey = (window.APP_CONFIG && window.APP_CONFIG.tagmangoKey) ? window.APP_CONFIG.tagmangoKey : '';
         const hostUrl = (window.APP_CONFIG && window.APP_CONFIG.hostUrl) ? window.APP_CONFIG.hostUrl : 'learn.cmplibe.com';
 
         const response = await fetch(`https://api-prod-new.tagmango.com/api/v1/external/gamification/points/collective/${userId}`, {

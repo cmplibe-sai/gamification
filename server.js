@@ -251,6 +251,13 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// -------------------------------------------------------------
+// NATIVE AI EVALUATION & TAGMANGO WALLET SYNC ENGINE CONFIG
+// -------------------------------------------------------------
+const TAGMANGO_KEY = (process.env.TAGMANGO_KEY || '').trim().replace(/^["']|["']$/g, '');
+console.log(`[TagMango Wallet Sync]: ${TAGMANGO_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (TAGMANGO_KEY missing in .env)'}`);
+const HOST_URL = process.env.HOST_URL || 'learn.cmplibe.com';
+
 // Dynamic configuration endpoint
 app.get('/api/config', (req, res) => {
     const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
@@ -258,7 +265,8 @@ app.get('/api/config', (req, res) => {
     const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
 
     res.status(200).json({
-        hostUrl: process.env.HOST_URL || 'learn.cmplibe.com',
+        tagmangoKey: TAGMANGO_KEY,
+        hostUrl: HOST_URL,
         baseUrl: process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1',
         creatorId: process.env.CREATOR_ID || '6682734e120c766a6e5af59c',
         adminEmails: adminEmails,
@@ -267,13 +275,6 @@ app.get('/api/config', (req, res) => {
 });
 
 // --- SUBMISSIONS SYNC & NATIVE AI WORKER ---
-
-// -------------------------------------------------------------
-// NATIVE AI EVALUATION & TAGMANGO WALLET SYNC ENGINE
-// -------------------------------------------------------------
-const TAGMANGO_KEY = (process.env.TAGMANGO_KEY || '').trim().replace(/^["']|["']$/g, '');
-console.log(`[TagMango Wallet Sync]: ${TAGMANGO_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (TAGMANGO_KEY missing in .env)'}`);
-const HOST_URL = process.env.HOST_URL || 'learn.cmplibe.com';
 
 async function assignTagMangoPointsOnServer(userId, score, description) {
     if (!TAGMANGO_KEY) {
