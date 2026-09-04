@@ -1,6 +1,6 @@
 // api.js
 
-const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '';
+var APP_PATH_PREFIX = window.APP_PATH_PREFIX || ((typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '');
 window.APP_PATH_PREFIX = APP_PATH_PREFIX;
 
 // --- GLOBAL CONFIGURATION (Attached to window so it's readable everywhere) ---

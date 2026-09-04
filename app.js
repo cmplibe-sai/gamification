@@ -1,4 +1,4 @@
-const APP_PATH_PREFIX = (typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '';
+var APP_PATH_PREFIX = window.APP_PATH_PREFIX || ((typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '');
 
 function apiFetch(endpoint, options = {}) {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : ('/' + endpoint);
