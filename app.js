@@ -185,7 +185,7 @@ function updateDashboardUI() {
     if (pointsContentEl) {
         pointsContentEl.innerHTML = `
             <div class="text-center pb-4 border-b border-slate-800">
-                <div class="text-3xl font-black text-cyan-400 font-mono tracking-tight">${totalXP} XP</div>
+                <div class="text-3xl font-black text-cyan-400 font-mono tracking-tight">${initialXP} XP</div>
             </div>
             <div class="space-y-2 pt-3 text-xs font-semibold">
                 <div class="flex justify-between items-center py-1 border-b border-slate-800/50">
@@ -249,8 +249,262 @@ function updateDashboardUI() {
     if (typeof renderTimelineGrid === 'function') {
         renderTimelineGrid(displayUser.email, 'completionGrid');
     }
+
+    if (typeof initLearnabilityGauge === 'function') {
+        initLearnabilityGauge(displayUser);
+    }
 }
 window.updateDashboardUI = updateDashboardUI;
+
+// ==============================================================
+// LEARNABILITY QUOTIENT / FUTURE READINESS SPEEDOMETER GAUGE
+// Shows Earned LCs vs Max Possible LCs for the selected milestone +
+// module as a needle position only — the numeric percentage is
+// intentionally never rendered, per product requirement.
+// ==============================================================
+var lqSelectedMilestone = null;
+var lqSelectedModule = 'all';
+
+// The "on-time" LC value the Creator has configured for a given module's
+// check-in day(s); falls back to the platform default of 33 LCs/day when
+// no day has been configured yet.
+function getLqPerDayMaxLc(msId, moduleCode) {
+    try {
+        const dayConfigs = (customMilestoneConfigs[String(msId)] && customMilestoneConfigs[String(msId)][moduleCode]) || {};
+        const values = Object.values(dayConfigs).map(d => Number(d && d.lcOnTime)).filter(v => v > 0);
+        if (values.length > 0) return Math.max(...values);
+    } catch(e) {}
+    return 33;
+}
+
+// Max possible LCs a learner could earn for one module in one milestone,
+// derived from the Creator's configured prerequisite targets (dip/pod/immerse
+// day counts) or configured project point values (projects module).
+function getLqModuleMaxLcs(msId, moduleCode) {
+    const cfg = getMilestonePrereqConfig(msId);
+    if (moduleCode === 'dip') return cfg.targetDips * getLqPerDayMaxLc(msId, moduleCode);
+    if (moduleCode === 'pod') return cfg.targetPod * getLqPerDayMaxLc(msId, moduleCode);
+    if (moduleCode === 'immerse') return cfg.targetImmerse * getLqPerDayMaxLc(msId, moduleCode);
+    if (moduleCode === 'projects') {
+        const projects = customProjectsDB[msId] || customProjectsDB[String(msId)] || [];
+        if (projects.length > 0) return projects.reduce((sum, p) => sum + (Number(p.pts) || 0), 0);
+    }
+    return 0;
+}
+window.getLqModuleMaxLcs = getLqModuleMaxLcs;
+
+// Earned/max LC totals (and the matched raw submissions, for insight
+// generation) for the selected milestone + module filter combination.
+function computeLqStats(userId, msId, moduleFilter) {
+    const enabledMods = getEnabledModulesForMilestone(msId);
+    const lcModules = enabledMods.filter(m => getLqModuleMaxLcs(msId, m) > 0);
+    const targetModules = (moduleFilter === 'all' || !moduleFilter) ? lcModules : [moduleFilter];
+
+    const userSubs = getUserSubmissionsByUserId(userId).filter(s => String(s.milestoneId || 1) === String(msId));
+
+    let earned = 0, max = 0, matchedSubs = [];
+    targetModules.forEach(mod => {
+        const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === normalizeLevelUpType(mod));
+        earned += modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+        max += getLqModuleMaxLcs(msId, mod);
+        matchedSubs = matchedSubs.concat(modSubs);
+    });
+
+    const pct = max > 0 ? Math.min(100, Math.round((earned / max) * 100)) : 0;
+    const zone = pct >= 80 ? 'strong' : (pct >= 50 ? 'average' : 'weak');
+
+    return { earned, max, pct, zone, subs: matchedSubs, modules: targetModules };
+}
+window.computeLqStats = computeLqStats;
+
+// Rule-based (non-LLM) coaching copy — reflects pace (submission count vs
+// target), accuracy (average rubric matchPercentage), and timeliness
+// (on-time vs late submissions), plus a zone-appropriate nudge.
+function generateLqInsights(stats, msId, cfg) {
+    const { subs, zone } = stats;
+    if (!subs || subs.length === 0) {
+        return {
+            overview: 'No check-ins recorded yet for this selection. Complete your first cMPLi Dip or POD check-in to start building your Learnability Quotient.',
+            focus: ['Get Started']
+        };
+    }
+
+    const avgMatch = Math.round(subs.reduce((s, x) => s + (Number(x.matchPercentage) || 0), 0) / subs.length);
+    const lateCount = subs.filter(s => s.isLate === true || s.status === 'late' || (s.status || '').includes('Late')).length;
+    const onTimeRate = Math.round(((subs.length - lateCount) / subs.length) * 100);
+    const podSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === 'pod');
+    const dipSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === 'dip');
+
+    const bits = [];
+    if (podSubs.length > 0) bits.push(`consistent cMPLi POD listening across ${podSubs.length} episode${podSubs.length === 1 ? '' : 's'}`);
+    if (dipSubs.length > 0) bits.push(`Dip reflections averaging ${avgMatch}% rubric match`);
+    if (onTimeRate >= 90) bits.push(`a strong ${onTimeRate}% on-time submission rate`);
+    else if (onTimeRate < 70) bits.push(`${100 - onTimeRate}% of submissions landing after the on-time window`);
+
+    let overview = bits.length ? `You're showing ${bits.join('; ')}.` : 'Keep building your submission history to unlock deeper insights.';
+    if (zone === 'strong') overview += ' You are in the Strong zone — maintain this pace to stay future-ready.';
+    else if (zone === 'average') overview += ' Submit consistently and push rubric depth higher to move from Yellow to Strong Green.';
+    else overview += ' Increase submission frequency and land within the on-time window to move out of the Weak zone.';
+
+    const focus = [];
+    if (avgMatch < 80) focus.push('Reflection Depth & Rubric Alignment');
+    if (onTimeRate < 90) focus.push('Timely Submissions');
+    if (dipSubs.length > 0 && podSubs.length < dipSubs.length * 0.8) focus.push('Active Listening (cMPLi POD)');
+    if (focus.length === 0) focus.push('Maintain Consistency');
+
+    return { overview, focus };
+}
+window.generateLqInsights = generateLqInsights;
+
+function renderLqMilestonePills() {
+    const el = document.getElementById('lqMilestoneFilters');
+    if (!el || typeof milestoneConfig === 'undefined') return;
+    el.innerHTML = milestoneConfig.map(ms => {
+        const active = ms.id === lqSelectedMilestone;
+        return `<button onclick="selectLqMilestone(${ms.id})" class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'}">Milestone ${ms.id}</button>`;
+    }).join('');
+}
+window.renderLqMilestonePills = renderLqMilestonePills;
+
+function renderLqModulePills() {
+    const el = document.getElementById('lqModuleFilters');
+    if (!el) return;
+    const enabledMods = getEnabledModulesForMilestone(lqSelectedMilestone).filter(m => getLqModuleMaxLcs(lqSelectedMilestone, m) > 0);
+    if (lqSelectedModule !== 'all' && !enabledMods.includes(lqSelectedModule)) lqSelectedModule = 'all';
+
+    const pills = [{ code: 'all', name: 'All Modules (Combined)', icon: 'fa-layer-group' }].concat(
+        enabledMods.map(code => ALL_PLATFORM_MODULES.find(m => m.code === code) || { code, name: code.toUpperCase(), icon: 'fa-cube' })
+    );
+    el.innerHTML = pills.map(p => {
+        const active = p.code === lqSelectedModule;
+        return `<button onclick="selectLqModule('${p.code}')" class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-cyan-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'}"><i class="fas ${p.icon}"></i> ${p.name}</button>`;
+    }).join('');
+}
+window.renderLqModulePills = renderLqModulePills;
+
+async function selectLqMilestone(msId) {
+    lqSelectedMilestone = Number(msId);
+    lqSelectedModule = 'all';
+    renderLqMilestonePills();
+    renderLqModulePills();
+    await refreshLearnabilityGauge();
+}
+window.selectLqMilestone = selectLqMilestone;
+
+async function selectLqModule(moduleCode) {
+    lqSelectedModule = moduleCode;
+    renderLqModulePills();
+    await refreshLearnabilityGauge();
+}
+window.selectLqModule = selectLqModule;
+
+// Builds the static gauge SVG (3-zone arc + needle) exactly once; subsequent
+// updates only mutate the needle's transform and the center text so the
+// needle animates smoothly via CSS transition instead of snapping.
+function ensureLqGaugeSvg() {
+    const container = document.getElementById('lqGaugeVisual');
+    if (!container || document.getElementById('lqNeedle')) return;
+
+    const cx = 100, cy = 100, r = 78, strokeW = 16;
+    const polar = (angleDeg) => ({
+        x: cx + r * Math.cos(angleDeg * Math.PI / 180),
+        y: cy - r * Math.sin(angleDeg * Math.PI / 180)
+    });
+    const arcPath = (a1, a2) => {
+        const p1 = polar(a1), p2 = polar(a2);
+        return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+    };
+
+    // Zones: 0-50% Weak (red) | 50-80% Growing (amber) | 80-100% Strong (green)
+    const redPath = arcPath(180, 90);
+    const amberPath = arcPath(90, 36);
+    const greenPath = arcPath(36, 0);
+
+    container.innerHTML = `
+        <svg viewBox="0 0 200 118" class="w-full max-w-xs mx-auto block">
+            <path d="${redPath}" fill="none" stroke="#ef4444" stroke-width="${strokeW}" stroke-linecap="round"/>
+            <path d="${amberPath}" fill="none" stroke="#f59e0b" stroke-width="${strokeW}" stroke-linecap="round"/>
+            <path d="${greenPath}" fill="none" stroke="#10b981" stroke-width="${strokeW}" stroke-linecap="round"/>
+            <g id="lqNeedle" style="transform-origin: ${cx}px ${cy}px; transform: rotate(0deg); transition: transform 1.1s cubic-bezier(0.34, 1.3, 0.4, 1);">
+                <line x1="${cx}" y1="${cy}" x2="${cx - (r - 24)}" y2="${cy}" stroke="#e2e8f0" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="${cx}" cy="${cy}" r="7" fill="#e2e8f0" stroke="#1e293b" stroke-width="2"/>
+            </g>
+            <text x="18" y="113" font-size="9" font-weight="700" fill="#94a3b8">Weak</text>
+            <text x="163" y="113" font-size="9" font-weight="700" fill="#94a3b8">Strong</text>
+        </svg>
+        <div class="absolute inset-x-0 top-[54%] flex flex-col items-center pointer-events-none">
+            <span id="lqEarnedNumber" class="text-3xl md:text-4xl font-black text-white font-mono leading-none">0</span>
+            <span id="lqMaxLabel" class="text-[11px] text-slate-400 font-semibold mt-1">of 0 LCs</span>
+        </div>
+    `;
+}
+window.ensureLqGaugeSvg = ensureLqGaugeSvg;
+
+function updateLqNeedle(pct) {
+    const needle = document.getElementById('lqNeedle');
+    if (!needle) return;
+    const deg = Math.max(0, Math.min(180, (Number(pct) || 0) / 100 * 180));
+    needle.style.transform = `rotate(${deg}deg)`;
+}
+
+function updateLqCenterNumbers(earned, max) {
+    const earnedEl = document.getElementById('lqEarnedNumber');
+    const maxEl = document.getElementById('lqMaxLabel');
+    if (earnedEl) earnedEl.textContent = earned;
+    if (maxEl) maxEl.textContent = `of ${max} LCs`;
+}
+
+function updateLqZoneBadge(zone) {
+    const el = document.getElementById('lqZoneBadge');
+    if (!el) return;
+    const map = {
+        weak: { label: 'Weak Zone', cls: 'badge-pill badge-red' },
+        average: { label: 'Growing Zone', cls: 'badge-pill badge-amber' },
+        strong: { label: 'Strong Zone', cls: 'badge-pill badge-emerald' }
+    };
+    const m = map[zone] || map.weak;
+    el.className = m.cls;
+    el.innerHTML = `<i class="fas fa-bolt mr-1"></i> ${m.label}`;
+}
+
+function updateLqInsights(insights) {
+    const overviewEl = document.getElementById('lqInsightsOverview');
+    if (overviewEl) overviewEl.textContent = insights.overview;
+
+    const focusEl = document.getElementById('lqFocusAreas');
+    if (focusEl) {
+        focusEl.innerHTML = (insights.focus || []).map(f =>
+            `<span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">${f}</span>`
+        ).join('');
+    }
+}
+
+async function refreshLearnabilityGauge(userOverride) {
+    const user = userOverride || currentUser;
+    if (!user || !lqSelectedMilestone) return;
+
+    ensureLqGaugeSvg();
+    const cfg = getMilestonePrereqConfig(lqSelectedMilestone);
+    const stats = computeLqStats(user._id || user, lqSelectedMilestone, lqSelectedModule);
+
+    updateLqNeedle(stats.pct);
+    updateLqCenterNumbers(stats.earned, stats.max);
+    updateLqZoneBadge(stats.zone);
+    updateLqInsights(generateLqInsights(stats, lqSelectedMilestone, cfg));
+}
+window.refreshLearnabilityGauge = refreshLearnabilityGauge;
+
+function initLearnabilityGauge(displayUser) {
+    if (!currentUser) return;
+    if (lqSelectedMilestone === null) {
+        const uState = (userMilestoneState && userMilestoneState[displayUser._id || currentUser._id]) || { highestUnlocked: 1 };
+        lqSelectedMilestone = uState.highestUnlocked || 1;
+    }
+    renderLqMilestonePills();
+    renderLqModulePills();
+    refreshLearnabilityGauge(displayUser);
+}
+window.initLearnabilityGauge = initLearnabilityGauge;
 
 // =========================================================================
 // CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)

@@ -15,7 +15,7 @@
     
     <!-- Tailwind CSS (for layout utilities) & Custom Minimalist Design System -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2.8.9">
 </head>
 <body class="min-h-screen custom-scrollbar">
 
@@ -149,6 +149,44 @@
                             <span><i class="fas fa-coins mr-2"></i> Learning Currencies Ledger</span>
                         </h3>
                         <div id="pointsContent"></div>
+                    </div>
+                </div>
+
+                <!-- Learnability Quotient / Future Readiness Gauge -->
+                <div class="glass-card p-6 md:p-8 border-slate-800">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
+                                <i class="fas fa-gauge-high text-indigo-400"></i> Learnability Quotient &amp; Future Readiness
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-1">Your real-time performance signal across milestones and modules.</p>
+                        </div>
+                        <span id="lqZoneBadge" class="badge-pill badge-amber"><i class="fas fa-bolt mr-1"></i> Growing Zone</span>
+                    </div>
+
+                    <div class="flex flex-col gap-3 mb-6">
+                        <div>
+                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Milestone</label>
+                            <div id="lqMilestoneFilters" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Module</label>
+                            <div id="lqModuleFilters" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+                        <div id="lqGaugeVisual" class="relative lg:col-span-2"></div>
+                        <div class="lg:col-span-3 space-y-3">
+                            <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                                <h5 class="text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5"><i class="fas fa-brain mr-1"></i> Performance Insights</h5>
+                                <p id="lqInsightsOverview" class="text-xs text-slate-300 leading-relaxed"></p>
+                            </div>
+                            <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                                <h5 class="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1.5"><i class="fas fa-crosshairs mr-1"></i> Focus Areas</h5>
+                                <div id="lqFocusAreas" class="flex flex-wrap gap-1.5"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -540,11 +578,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
 
     <!-- Scripts (Cache Busted to Force Instant Live Reload) -->
-    <script src="data.js?v=2.8.8"></script>
-    <script src="timeline.js?v=2.8.8"></script>
-    <script src="courses.js?v=2.8.8"></script>
-    <script src="api.js?v=2.8.8"></script>
-    <script src="app.js?v=2.8.8"></script>
+    <script src="data.js?v=2.8.9"></script>
+    <script src="timeline.js?v=2.8.9"></script>
+    <script src="courses.js?v=2.8.9"></script>
+    <script src="api.js?v=2.8.9"></script>
+    <script src="app.js?v=2.8.9"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
