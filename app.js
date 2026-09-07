@@ -264,28 +264,49 @@ function getLqEligibleDays(userId, msId, moduleCode) {
     if (!userId) return 1;
     const cleanMod = normalizeLevelUpType(moduleCode || 'dip');
 
-    // Collect all candidate start date signals
+    // Collect candidate start date signals for this specific module
     const candidates = [];
     if (moduleCode && moduleCode !== 'all') {
         const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(userId, msId, cleanMod) : null;
         if (modStart) candidates.push(modStart);
-    }
-    const joinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
-    if (joinDate) candidates.push(joinDate);
 
-    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
-    const modSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === cleanMod && String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
-    if (modSubs.length > 0) {
-        modSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
-        const firstSubDate = modSubs[0].dateKey || modSubs[0].date || (modSubs[0].submittedAt ? modSubs[0].submittedAt.split('T')[0] : null);
-        if (firstSubDate) candidates.push(firstSubDate);
-    }
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+        const modSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === cleanMod && String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+        if (modSubs.length > 0) {
+            modSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+            const firstSubDate = modSubs[0].dateKey || modSubs[0].date || (modSubs[0].submittedAt ? modSubs[0].submittedAt.split('T')[0] : null);
+            if (firstSubDate) candidates.push(firstSubDate);
+        }
 
-    const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
-    if (msSubs.length > 0) {
-        msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
-        const firstMsSubDate = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
-        if (firstMsSubDate) candidates.push(firstMsSubDate);
+        // Only fallback to milestone join date or general milestone submissions if candidates is empty AND module is dip or pod
+        if (candidates.length === 0) {
+            if (cleanMod === 'dip' || cleanMod === 'pod') {
+                const joinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
+                if (joinDate) candidates.push(joinDate);
+
+                const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+                if (msSubs.length > 0) {
+                    msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+                    const firstMsSubDate = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
+                    if (firstMsSubDate) candidates.push(firstMsSubDate);
+                }
+            } else {
+                // For specialized modules (like Immerse), if neither creator set a start date nor has user submitted anything, 0 eligible days (Not Started)
+                return 0;
+            }
+        }
+    } else {
+        // Module is 'all' or not specified
+        const joinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
+        if (joinDate) candidates.push(joinDate);
+
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+        const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+        if (msSubs.length > 0) {
+            msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+            const firstMsSubDate = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
+            if (firstMsSubDate) candidates.push(firstMsSubDate);
+        }
     }
 
     // Pick earliest candidate date so un-synced local overrides never shorten actual activity
@@ -319,6 +340,7 @@ function getLqEligibleDays(userId, msId, moduleCode) {
         }
     }
 
+    if (startKey > todayKey) return 0;
     return Math.max(1, eligibleCount);
 }
 window.getLqEligibleDays = getLqEligibleDays;
@@ -575,12 +597,10 @@ function ensureLqGaugeSvg(prefix = 'lq') {
                 <circle cx="216" cy="138" r="3.5" fill="#10b981"/>
             </svg>
 
-            <!-- Center Score Digits (Positioned with high contrast gradient & backdrop-blur capsule at z-20 to avoid needle overlap) -->
-            <div class="absolute inset-x-0 top-[12%] flex flex-col items-center pointer-events-none text-center z-20">
-                <div class="px-4 py-1.5 rounded-2xl bg-slate-950/90 border border-slate-700/80 backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.85)] flex flex-col items-center">
-                    <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow">0</span>
-                    <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-300 font-bold font-mono tracking-wide mt-1">of 0 LCs (Till Date) • 0%</span>
-                </div>
+            <!-- Center Score Digits (Positioned inside gauge arch hollow to keep the rainbow arc 100% visible and un-obscured) -->
+            <div class="absolute inset-x-0 top-[38%] flex flex-col items-center pointer-events-none text-center z-10">
+                <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0</span>
+                <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-200 font-bold font-mono tracking-wide mt-1 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">of 0 LCs (Till Date) • 0%</span>
             </div>
         </div>
     `;
@@ -605,13 +625,13 @@ function updateLqNeedle(pct, zone, prefix = 'lq') {
     const earnedEl = document.getElementById(`${prefix}EarnedNumber`);
     if (earnedEl) {
         if (zone === 'not_started') {
-            earnedEl.className = "text-3xl md:text-4xl font-black text-slate-400 font-mono leading-none tracking-tight";
+            earnedEl.className = "text-3xl md:text-4xl font-black text-slate-400 font-mono leading-none tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]";
         } else if (zone === 'strong') {
-            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-emerald-300 via-teal-100 to-cyan-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_10px_rgba(16,185,129,0.5)]";
+            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-emerald-300 via-teal-100 to-cyan-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(16,185,129,0.6)]";
         } else if (zone === 'average') {
-            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-400 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_10px_rgba(245,158,11,0.5)]";
+            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-400 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(245,158,11,0.6)]";
         } else {
-            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_10px_rgba(239,68,68,0.5)]";
+            earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(239,68,68,0.6)]";
         }
     }
 }
@@ -8767,13 +8787,42 @@ window.showPodSuccessPopup = showPodSuccessPopup;
 // ==============================================================
 // 1. USER MILESTONE JOIN ENGINE
 // ==============================================================
+function resolveUserEmail(userId) {
+    if (!userId) return '';
+    if (typeof userId === 'object' && userId) {
+        return (userId.email || userId.userEmail || '').toLowerCase().trim();
+    }
+    const str = String(userId).trim();
+    if (str.includes('@')) return str.toLowerCase();
+    
+    const pool = (typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0)
+        ? adminRealtimeUsers
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+    const foundUser = pool.find(u => u && (String(u._id) === str || String(u.id) === str || u.email === str));
+    if (foundUser && foundUser.email) return foundUser.email.toLowerCase().trim();
+
+    if (typeof currentUser !== 'undefined' && currentUser && (String(currentUser._id) === str || String(currentUser.id) === str)) {
+        return (currentUser.email || '').toLowerCase().trim();
+    }
+
+    if (typeof getUserSubmissionsByUserId === 'function') {
+        const subs = getUserSubmissionsByUserId(userId);
+        const subWithEmail = subs.find(s => s && (s.userEmail || s.email));
+        if (subWithEmail) return (subWithEmail.userEmail || subWithEmail.email).toLowerCase().trim();
+    }
+
+    return (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+}
+window.resolveUserEmail = resolveUserEmail;
+
 function getUserMilestoneJoinDate(userId, msId) {
     if (!userId) return null;
     let dates = {};
     try { dates = JSON.parse(localStorage.getItem('userMilestoneJoinDates')) || {}; } catch(e) {}
-    const k1 = `${userId}_MS${msId}`;
-    const k2 = `${userId}_${msId}`;
-    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    const uidStr = (typeof userId === 'object' && userId) ? (userId._id || userId.id || '') : String(userId);
+    const k1 = `${uidStr}_MS${msId}`;
+    const k2 = `${uidStr}_${msId}`;
+    const userEmail = resolveUserEmail(userId);
     const k3 = userEmail ? `${userEmail}_MS${msId}` : '';
     const k4 = userEmail ? `${userEmail}_${msId}` : '';
     let foundDate = dates[k1] || dates[k2] || (k3 && dates[k3]) || (k4 && dates[k4]) || null;
@@ -8861,9 +8910,10 @@ function getUserModuleStartDate(userId, msId, moduleName) {
     let dates = {};
     try { dates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
     
-    const k1 = `${userId}_MS${msId}_${mod}`;
-    const k2 = `${userId}_${msId}_${mod}`;
-    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    const uidStr = (typeof userId === 'object' && userId) ? (userId._id || userId.id || '') : String(userId);
+    const k1 = `${uidStr}_MS${msId}_${mod}`;
+    const k2 = `${uidStr}_${msId}_${mod}`;
+    const userEmail = resolveUserEmail(userId);
     const k3 = userEmail ? `${userEmail}_MS${msId}_${mod}` : '';
     const k4 = userEmail ? `${userEmail}_${msId}_${mod}` : '';
     let foundDate = dates[k1] || dates[k2] || (k3 && dates[k3]) || (k4 && dates[k4]) || null;
@@ -8901,11 +8951,12 @@ async function setUserModuleStartDate(userId, msId, moduleName, startDate) {
     let dates = {};
     try { dates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
     
-    const k1 = `${userId}_MS${msId}_${mod}`;
+    const uidStr = (typeof userId === 'object' && userId) ? (userId._id || userId.id || '') : String(userId);
+    const k1 = `${uidStr}_MS${msId}_${mod}`;
     dates[k1] = dateKey;
     const delta = { [k1]: dateKey };
 
-    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    const userEmail = resolveUserEmail(userId);
     if (userEmail) {
         const kEmail = `${userEmail}_MS${msId}_${mod}`;
         dates[kEmail] = dateKey;
@@ -8917,7 +8968,7 @@ async function setUserModuleStartDate(userId, msId, moduleName, startDate) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            userId,
+            userId: uidStr,
             userEmail,
             milestoneId: msId,
             moduleName: mod,
