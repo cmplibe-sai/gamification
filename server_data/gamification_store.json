@@ -526,6 +526,103 @@
       "status": "completed",
       "submittedAt": "2026-08-30T17:58:38.148Z",
       "updatedAt": "2026-08-30T17:58:38.148Z"
+    },
+    {
+      "id": "legacy_test_day5",
+      "userId": "68d3902b54f6579550414e74",
+      "userEmail": "britencloud@gmail.com",
+      "milestoneId": 1,
+      "type": "dip",
+      "moduleType": "dip",
+      "day": 5,
+      "date": "2026-09-03",
+      "dateKey": "2026-09-03",
+      "status": "completed",
+      "lcReward": 3,
+      "matchPercentage": 35,
+      "similarityScore": 35,
+      "remarks": "Legacy low-match record from before the 50% threshold change.",
+      "answers": [],
+      "userName": "SaiChandu",
+      "userPhone": 7672065212
+    },
+    {
+      "id": "sub_1788761215871_k4fvj",
+      "userId": "test_saiyedamala02",
+      "fanId": "test_saiyedamala02",
+      "userEmail": "saiyedamala02@gmail.com",
+      "userName": "Test Learner",
+      "userPhone": "",
+      "milestoneId": 1,
+      "moduleType": "pod",
+      "type": "pod",
+      "day": 8,
+      "sessionDay": 8,
+      "date": "2026-09-07",
+      "dateKey": "2026-09-07",
+      "status": "completed",
+      "lcReward": 22,
+      "originalLcReward": 22,
+      "matchPercentage": 67,
+      "similarityScore": 67,
+      "aiRemarks": "✅ [cMPLi POD Quiz Completed — 22 LCs Awarded]\nScore: 22 / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.",
+      "remarks": "✅ [cMPLi POD Quiz Completed — 22 LCs Awarded]\nScore: 22 / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.",
+      "answers": [
+        {
+          "question": "Which regions does Carrier plan to export to from its new Indian facility?",
+          "answer": "West Asia and Africa",
+          "type": "mcq",
+          "options": [
+            "South America and Europe",
+            "West Asia and Africa",
+            "Southeast Asia and Australia",
+            "Europe and North America"
+          ],
+          "selectedOption": 1,
+          "correctOption": 1,
+          "isCorrect": true,
+          "pts": 11,
+          "maxPts": 11
+        },
+        {
+          "question": "Which entry-level roles provide the highest career velocity for aspirants in this sector?",
+          "answer": "Human Resources",
+          "type": "mcq",
+          "options": [
+            "Human Resources",
+            "Back-office administration",
+            "Software coding",
+            "Client Acquisition and B2B Sales"
+          ],
+          "selectedOption": 0,
+          "correctOption": 3,
+          "isCorrect": false,
+          "pts": 0,
+          "maxPts": 11
+        },
+        {
+          "question": "What happens to server racks in energy-dense data centres when processing cloud applications?",
+          "answer": "They heat up significantly",
+          "type": "mcq",
+          "options": [
+            "They heat up significantly",
+            "They shrink in size",
+            "They consume less electricity",
+            "They require more water"
+          ],
+          "selectedOption": 0,
+          "correctOption": 0,
+          "isCorrect": true,
+          "pts": 11,
+          "maxPts": 11
+        }
+      ],
+      "submittedAt": "2026-09-07T06:06:55.863Z",
+      "createdAt": "2026-09-07T06:06:55.863Z",
+      "updatedAt": "2026-09-07T06:06:55.883Z",
+      "attemptsCount": 1,
+      "attemptNumber": 1,
+      "evaluatedAt": "2026-09-07T06:06:55.883Z"
     }
   ],
   "customMilestoneConfigs": {
@@ -675,6 +772,291 @@
               "pts": 11
             }
           ]
+        },
+        "2026-09-07": {
+          "date": "2026-09-07",
+          "title": "Cooling AI: Carrier’s $1 Billion India Play",
+          "audioTitle": "Cooling AI: Carrier’s $1 Billion India Play",
+          "audioUrl": "/gamification/uploads/pod_creator_audio_1788760959999_2hn9g.m4a",
+          "lcOnTime": 33,
+          "lcLate": 0,
+          "startTime": "00:00",
+          "endTime": "23:59",
+          "questions": [
+            {
+              "id": "q_0_1788760981035",
+              "title": "What is Carrier Global's targeted annual revenue from India by the decade's end?",
+              "type": "mcq",
+              "options": [
+                "$1 Billion",
+                "$500 Million",
+                "$10 Billion",
+                "$100 Million"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q_1_1788760981036",
+              "title": "Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
+              "type": "mcq",
+              "options": [
+                "Automobile Manufacturing",
+                "Data Centres",
+                "Food Processing",
+                "Consumer Electronics"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_2_1788760981036",
+              "title": "What does HVAC stand for in the context of Carrier Global's expertise?",
+              "type": "mcq",
+              "options": [
+                "Heavy Vehicles and Cargo",
+                "Heating, Ventilation & Air-Conditioning",
+                "High Voltage and Current",
+                "Housing, Valuation and Commerce"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_3_1788760981036",
+              "title": "How much is Carrier investing in its new manufacturing facility in India?",
+              "type": "mcq",
+              "options": [
+                "$10 million",
+                "$50 million",
+                "$100 million",
+                "$1 billion"
+              ],
+              "correctOption": 2,
+              "pts": 11
+            },
+            {
+              "id": "q_4_1788760981036",
+              "title": "Where is Carrier's new manufacturing facility situated?",
+              "type": "mcq",
+              "options": [
+                "Bengaluru, Karnataka",
+                "Pune, Maharashtra",
+                "Noida, Uttar Pradesh",
+                "Sri City, Andhra Pradesh"
+              ],
+              "correctOption": 3,
+              "pts": 11
+            },
+            {
+              "id": "q_5_1788760981036",
+              "title": "What is one strategic geographical advantage of Sri City mentioned in the text?",
+              "type": "mcq",
+              "options": [
+                "It has the largest airport in India",
+                "It is located in a cold climate zone",
+                "It is within 100 kilometres of five sea ports",
+                "It borders three different countries"
+              ],
+              "correctOption": 2,
+              "pts": 11
+            },
+            {
+              "id": "q_6_1788760981036",
+              "title": "Which regions does Carrier plan to export to from its new Indian facility?",
+              "type": "mcq",
+              "options": [
+                "Europe and North America",
+                "Southeast Asia and Australia",
+                "West Asia and Africa",
+                "South America and Europe"
+              ],
+              "correctOption": 2,
+              "pts": 11
+            },
+            {
+              "id": "q_7_1788760981036",
+              "title": "What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
+              "type": "mcq",
+              "options": [
+                "High-capacity chillers",
+                "Server racks",
+                "Silicon chips",
+                "Fiber optic cables"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q_8_1788760981036",
+              "title": "Beyond initial equipment sales, how is Carrier securing sustainable revenue?",
+              "type": "mcq",
+              "options": [
+                "By selling consumer electronics",
+                "Through recurring maintenance agreements and digital platforms",
+                "By investing in real estate",
+                "Through cryptocurrency mining"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_9_1788760981036",
+              "title": "Which government framework is Carrier aligning with to optimize component procurement and lower import duties?",
+              "type": "mcq",
+              "options": [
+                "Digital India",
+                "Make in India",
+                "Skill India",
+                "Startup India"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_10_1788760981036",
+              "title": "Who are the primary clients for Carrier's multi-year lifecycle contracts?",
+              "type": "mcq",
+              "options": [
+                "Individual homeowners",
+                "Hyperscalers and industrial developers",
+                "Retail electronics stores",
+                "Educational institutions"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_11_1788760981036",
+              "title": "What happens to server racks in energy-dense data centres when processing cloud applications?",
+              "type": "mcq",
+              "options": [
+                "They shrink in size",
+                "They heat up significantly",
+                "They consume less electricity",
+                "They require more water"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_12_1788760981036",
+              "title": "By what factor is India’s operational data centre capacity expanding?",
+              "type": "mcq",
+              "options": [
+                "Twofold",
+                "Fivefold",
+                "Tenfold",
+                "Twentyfold"
+              ],
+              "correctOption": 2,
+              "pts": 11
+            },
+            {
+              "id": "q_13_1788760981036",
+              "title": "According to the text, what helps build defensible market positions for B2B industrial giants?",
+              "type": "mcq",
+              "options": [
+                "Focusing only on initial sales",
+                "Embedding into multi-year lifecycle contracts",
+                "Selling off manufacturing plants",
+                "Ignoring the hyperscale infrastructure"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_14_1788760981036",
+              "title": "For business and management graduates, what dynamic career pathway is highlighted as an alternative to tech startups?",
+              "type": "mcq",
+              "options": [
+                "Fast-food management",
+                "Industrial and capital goods conglomerates",
+                "Entertainment industry",
+                "Academic research"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_15_1788760981036",
+              "title": "Which entry-level roles provide the highest career velocity for aspirants in this sector?",
+              "type": "mcq",
+              "options": [
+                "Back-office administration",
+                "Client Acquisition and B2B Sales",
+                "Software coding",
+                "Human Resources"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_16_1788760981036",
+              "title": "What kind of interfaces are crucial for young professionals to negotiate high-value contracts?",
+              "type": "mcq",
+              "options": [
+                "Direct interface with facility developers and enterprise clients",
+                "Internal company audits",
+                "Retail customer service",
+                "Social media management"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q_17_1788760981036",
+              "title": "What is the most effective starting point to position oneself for global capital goods leadership in the mid-to-long run?",
+              "type": "mcq",
+              "options": [
+                "Joining a top tech startup",
+                "Cross-functional and cross-industry roles at the local level",
+                "Moving abroad immediately",
+                "Focusing solely on B2C marketing"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_18_1788760981036",
+              "title": "Which of the following is recommended as a starting point for early career development in this sector?",
+              "type": "mcq",
+              "options": [
+                "Regional manufacturing companies or local dealerships",
+                "Multinational IT firms",
+                "Investment banks",
+                "E-commerce aggregators"
+              ],
+              "correctOption": 0,
+              "pts": 11
+            },
+            {
+              "id": "q_19_1788760981036",
+              "title": "What type of expertise builds the ground-level credibility needed for enterprise leadership?",
+              "type": "mcq",
+              "options": [
+                "Consumer app development",
+                "Localized supply chains and direct technical selling",
+                "Graphic design",
+                "Stock market trading"
+              ],
+              "correctOption": 1,
+              "pts": 11
+            },
+            {
+              "id": "q_20_1788760981036",
+              "title": "What is the overarching theme of Carrier's strategy in India?",
+              "type": "mcq",
+              "options": [
+                "Exiting the Asian market",
+                "Transitioning from B2B to B2C retail",
+                "Capitalizing on the AI/data centre boom through localized cooling solutions",
+                "Reducing their product lifecycle to drive fast sales"
+              ],
+              "correctOption": 2,
+              "pts": 11
+            }
+          ]
         }
       },
       "immerse": {
@@ -764,5 +1146,8 @@
         "lastUpdated": "2026-08-29T06:13:02.940Z"
       }
     }
-  }
+  },
+  "submissionsRevision": 1788761215883,
+  "lastUpdated": 1788761215883,
+  "configsRevision": 1788760981048
 }

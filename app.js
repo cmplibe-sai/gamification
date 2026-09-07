@@ -5312,9 +5312,13 @@ function renderAdminCohortSubmissions() {
                         const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • Rejected (<50% match) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''} • 0 LCs`;
                         rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-rose-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-400 text-base"></i><span class="text-[9px] px-1 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-bold" title="Failed: Rubric Match < 50%">Att #${attemptNum}</span></div></td>`;
                     } else {
-                        const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Passed (≥50%) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''}`;
+                        const isPodMod = activeAdminModule === 'pod';
+                        const tooltip = isPodMod
+                            ? `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Completed (Quiz Graded)`
+                            : `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Passed (≥50%) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''}`;
                         const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
-                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-check-circle text-emerald-400 text-base shadow-emerald"></i><div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">${statusLabel}</span><span class="text-[8px] px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono font-bold" title="Passed on Attempt #${attemptNum}">Att #${attemptNum}</span></div></div></td>`;
+                        const attBadge = isPodMod ? '' : `<span class="text-[8px] px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono font-bold" title="Passed on Attempt #${attemptNum}">Att #${attemptNum}</span>`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-check-circle text-emerald-400 text-base shadow-emerald"></i><div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">${statusLabel}</span>${attBadge}</div></div></td>`;
                     }
                 } else {
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
@@ -5454,10 +5458,19 @@ function handlePodCsvUpload(fileInput) {
             alert("No valid questions found in CSV. Please ensure you use the template format.");
             return;
         }
+        if (parsed.length < 3) {
+            alert("Error: At least 3 questions are required to generate a randomized daily quiz.");
+            return;
+        }
 
         // Add to active POD questions container
         renderAdminPodQuestionsInEditor(parsed);
-        alert(`🎉 Successfully loaded ${parsed.length} questions from CSV! 3 will be randomly served to each student.`);
+
+        if (parsed.length < 20 || parsed.length > 50) {
+            alert(`🎉 Loaded ${parsed.length} questions from CSV!\n(Notice: The recommended pool size is between 20 and 50 questions for optimal student randomization). 3 questions will be served randomly to each student.`);
+        } else {
+            alert(`🎉 Successfully loaded ${parsed.length} questions from CSV! 3 will be randomly served to each student.`);
+        }
     };
     reader.readAsText(file);
 }
@@ -5503,6 +5516,9 @@ function updatePodPoolCountBadge() {
     const badge = document.getElementById('podPoolCountBadge');
     if (badge) {
         badge.innerText = `${items.length} Questions in Pool`;
+        if (items.length < 20 || items.length > 50) {
+            badge.title = 'Recommended pool size is 20-50 questions';
+        }
     }
 }
 
@@ -5651,22 +5667,23 @@ function saveAdminPodCheckinConfig(dateKey) {
         }
     });
 
+    if (questions.length < 3) {
+        alert('Cannot save: At least 3 questions are required in the pool to generate daily randomized quizzes for students.');
+        return;
+    }
+
     const audioTitle = document.getElementById('podAudioTitle')?.value.trim() || `cMPLi POD Day Insights`;
     const audioUrl = document.getElementById('podAudioUrl')?.value.trim() || '';
-    const lcOnTime = parseInt(document.getElementById('configLcOnTime')?.value, 10) || 33;
-    const lcLate = parseInt(document.getElementById('configLcLate')?.value, 10) || 3;
-    const startTime = document.getElementById('configStartTime')?.value || '05:00';
-    const endTime = document.getElementById('configEndTime')?.value || '17:00';
 
     const dayConfig = {
         date: dateKey,
         title: audioTitle,
         audioTitle: audioTitle,
         audioUrl: audioUrl,
-        lcOnTime: lcOnTime,
-        lcLate: lcLate,
-        startTime: startTime,
-        endTime: endTime,
+        lcOnTime: 33,
+        lcLate: 0,
+        startTime: '00:00',
+        endTime: '23:59',
         questions: questions
     };
 
@@ -5697,12 +5714,13 @@ function saveAdminPodCheckinConfig(dateKey) {
     const btn = document.getElementById('btnSaveConfig');
     if (btn) {
         const oldHtml = btn.innerHTML;
-        btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved (${questions.length} Questions)!`;
+        const sizeNotice = (questions.length < 20 || questions.length > 50) ? ` (Note: 20-50 recommended)` : '';
+        btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved (${questions.length} Qs)${sizeNotice}!`;
         btn.classList.replace('btn-primary', 'bg-emerald-600');
         setTimeout(() => {
             btn.innerHTML = oldHtml;
             btn.classList.replace('bg-emerald-600', 'btn-primary');
-        }, 1800);
+        }, 2200);
     }
 }
 window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
@@ -5780,13 +5798,30 @@ function loadAdminCheckinEditor(dateKey) {
                     </div>
                     <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
                     <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
-                    <p class="text-xs mt-1.5 text-slate-400">Upload podcast audio & question pool. 3 randomized questions will be served to each student.</p>
+                    <p class="text-xs mt-1.5 text-slate-400">Upload podcast audio & question pool (20-50 recommended). 3 randomized questions will be served to each student.</p>
                 </div>
                 <div class="flex flex-wrap gap-2 items-center">
                     ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="btn-secondary py-2 px-3 text-xs"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
                     <button id="btnSaveConfig" onclick="saveAdminPodCheckinConfig('${dateKey}')" class="btn-primary py-2 px-4 text-xs">
                         <i class="fas fa-save mr-1.5"></i> Save POD Day Setup
                     </button>
+                </div>
+            </div>
+
+            <!-- Scoring & Active Listening Rules Banner -->
+            <div class="glass-card p-4 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600/30 text-indigo-300 flex items-center justify-center text-lg border border-indigo-500/40 shrink-0 shadow-inner">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-xs font-bold text-white uppercase tracking-wider">Quiz Scoring & Gating Rule</h6>
+                        <p class="text-[11px] text-slate-300">Each customer answers 3 randomized questions with jumbled choices. 11 LCs awarded per correct question (<strong>33 LCs Total</strong>). Active listening ≥85% is strictly enforced.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="badge-pill badge-emerald text-xs font-bold">11 LCs / Question</span>
+                    <span class="badge-pill badge-indigo text-xs font-bold">33 LCs Max</span>
                 </div>
             </div>
 
@@ -5815,7 +5850,7 @@ function loadAdminCheckinEditor(dateKey) {
                     </div>
                 </div>
                 <div id="podAudioStatus" class="pt-1">
-                    ${savedConfig.audioUrl ? '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Audio Stream Configured & Ready for Playback</span>' : '<span class="text-xs text-slate-500"><i class="fas fa-info-circle mr-1"></i> No custom audio uploaded yet (default stream will play).</span>'}
+                    ${savedConfig.audioUrl ? '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Audio Stream Configured & Ready for Playback</span>' : '<span class="text-xs text-amber-400/90 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i> Audio file required: Upload an MP3 episode for students to listen to.</span>'}
                 </div>
                 <div id="podAudioPreviewPlayer">
                     ${savedConfig.audioUrl ? `
@@ -5831,31 +5866,11 @@ function loadAdminCheckinEditor(dateKey) {
                 </div>
             </div>
 
-            <!-- Rewards & Time Window Grid -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
-                    <input type="number" id="configLcOnTime" value="${savedConfig.lcOnTime || 33}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (Late)</label>
-                    <input type="number" id="configLcLate" value="${savedConfig.lcLate || 3}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Start Time</label>
-                    <input type="time" id="configStartTime" value="${savedConfig.startTime || '05:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
-                </div>
-                <div>
-                    <label class="block text-[11px] font-bold text-slate-400 mb-1">End Time</label>
-                    <input type="time" id="configEndTime" value="${savedConfig.endTime || '17:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-indigo-500" ${disableAttr}>
-                </div>
-            </div>
-
             <!-- CSV & Question Pool Builder Section -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-2 border-b border-slate-800">
                 <div>
                     <h5 class="text-sm font-bold text-white font-heading">Question Pool (MCQs)</h5>
-                    <p class="text-[11px] text-slate-400">Add individual questions or bulk-upload via CSV.</p>
+                    <p class="text-[11px] text-slate-400">Add individual questions or bulk-upload via CSV (20-50 questions recommended).</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" onclick="downloadPodCsvTemplate()" class="btn-secondary py-1.5 px-3 text-xs text-indigo-300 border-indigo-500/30">
@@ -6852,18 +6867,19 @@ function openPodSessionModal(dayNum, dateKey) {
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 3);
 
-    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER
+    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER (TAG-BASED INDEX MAPPING)
     activePodSessionQuestions = selected.map(q => {
         const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
         const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
-        const correctText = originalOptions[correctIndex];
 
-        const jumbled = [...originalOptions].sort(() => 0.5 - Math.random());
-        const newCorrectIndex = jumbled.indexOf(correctText);
+        // Map each option with isCorrect flag before shuffling to avoid duplicate text string index collisions
+        const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
+        const jumbled = [...tagged].sort(() => 0.5 - Math.random());
+        const newCorrectIndex = jumbled.findIndex(item => item.isCorrect);
 
         return {
             ...q,
-            options: jumbled,
+            options: jumbled.map(item => item.text),
             correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
             pts: q.pts || 11
         };
@@ -6952,9 +6968,12 @@ function openPodSessionModal(dayNum, dateKey) {
                                 </div>
                             </div>
                         ` : `
-                            <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-center space-y-2">
-                                <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
-                                <p class="text-[11px] text-slate-400">Active listening window is ready. Proceed to comprehension quiz below.</p>
+                            <div class="p-5 bg-amber-950/30 rounded-2xl border border-amber-500/40 text-center space-y-2">
+                                <div class="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-lg border border-amber-500/30">
+                                    <i class="fas fa-podcast"></i>
+                                </div>
+                                <h5 class="text-sm font-bold text-white">Audio Episode Not Yet Configured</h5>
+                                <p class="text-xs text-amber-300/80 max-w-md mx-auto">The creator has not yet uploaded podcast audio for Day ${dayNum}. Active listening is required before the comprehension quiz unlocks.</p>
                             </div>
                         `}
                     </div>
@@ -6962,17 +6981,19 @@ function openPodSessionModal(dayNum, dateKey) {
 
                 <!-- Quiz Gated Container -->
                 <div id="podQuizContainer" class="space-y-6">
-                    ${hasAudio ? `
-                        <div id="podQuizLockedNotice" class="p-6 bg-slate-900/90 rounded-2xl border border-amber-500/40 text-center space-y-2">
-                            <div class="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl border border-amber-500/40">
-                                <i class="fas fa-lock"></i>
-                            </div>
-                            <h5 class="text-sm font-bold text-white">Comprehension Quiz Locked</h5>
-                            <p class="text-xs text-slate-400 max-w-sm mx-auto">Please finish listening to at least 85% of the podcast episode above. The quiz will unlock automatically once active listening is verified.</p>
+                    <div id="podQuizLockedNotice" class="p-6 bg-slate-900/90 rounded-2xl border border-amber-500/40 text-center space-y-2">
+                        <div class="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl border border-amber-500/40">
+                            <i class="fas fa-lock"></i>
                         </div>
-                    ` : ''}
+                        <h5 class="text-sm font-bold text-white">Comprehension Quiz Locked</h5>
+                        <p class="text-xs text-slate-400 max-w-sm mx-auto">
+                            ${hasAudio 
+                                ? 'Please finish listening to at least 85% of the podcast episode above. The quiz will unlock automatically once active listening is verified.' 
+                                : 'Active listening to the episode audio is required to unlock this quiz. Please check back after the creator uploads Day ' + dayNum + ' audio.'}
+                        </p>
+                    </div>
 
-                    <div id="podQuizQuestionsArea" class="${hasAudio ? 'hidden' : ''} space-y-5">
+                    <div id="podQuizQuestionsArea" class="hidden space-y-5">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-700">
                             <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                                 <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
@@ -7004,7 +7025,7 @@ function openPodSessionModal(dayNum, dateKey) {
                     <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
                         Cancel
                     </button>
-                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs ${hasAudio ? 'opacity-50 cursor-not-allowed' : ''}" ${hasAudio ? 'disabled' : ''}>
+                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs opacity-50 cursor-not-allowed" disabled>
                         <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
                     </button>
                 </div>
@@ -7060,8 +7081,15 @@ function openPodSessionModal(dayNum, dateKey) {
             }
 
             player.addEventListener('loadedmetadata', () => {
-                if (totalDisplay && player.duration) {
+                if (totalDisplay && player.duration && !isNaN(player.duration)) {
                     totalDisplay.innerText = fmtTime(player.duration);
+                }
+            });
+
+            player.addEventListener('error', (e) => {
+                console.error('POD Audio player error:', e);
+                if (statusText) {
+                    statusText.innerHTML = `<span class="text-rose-400 font-semibold"><i class="fas fa-exclamation-triangle mr-1"></i> Audio load failed. Please check audio file or format.</span>`;
                 }
             });
 
@@ -7202,40 +7230,80 @@ async function submitPodSessionQuiz() {
         aiRemarks: `✅ [cMPLi POD Quiz Graded & Recorded]\nScore: ${calculatedPoints} / 33 LCs | Status: Graded & Recorded\nActive listening requirement verified (≥85%). Points synced to TagMango wallet.`
     };
 
-    // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
-    apiFetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subData)
-    }).catch(e => console.error('Server sync error for POD quiz:', e));
+    const submitBtn = document.getElementById('btnSubmitPodSession');
+    if (submitBtn && submitBtn.dataset.submitting === 'true') return;
+    if (submitBtn) {
+        submitBtn.dataset.submitting = 'true';
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting & Verifying...';
+    }
 
-    // 2. Save locally
-    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    localDB = localDB.filter(s => !(
-        (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
-        String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
-        normalizeLevelUpType(s.type) === 'pod' &&
-        String(s.day) === String(activePodSessionDay)
-    ));
-    localDB.push(subData);
-    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+    try {
+        // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
+        const response = await apiFetch('/api/submissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subData)
+        });
 
-    // 3. Update levelUpSubmissions in-memory bucket
-    const bucketKey = (typeof resolveSubmissionKey === 'function') ? resolveSubmissionKey(currentUser) : null;
-    if (bucketKey && typeof levelUpSubmissions !== 'undefined') {
-        if (!levelUpSubmissions[bucketKey]) levelUpSubmissions[bucketKey] = [];
-        levelUpSubmissions[bucketKey] = levelUpSubmissions[bucketKey].filter(s => !(
+        let resData = null;
+        try {
+            resData = await response.json();
+        } catch (jsonErr) {}
+
+        if (!response.ok || (resData && resData.success === false)) {
+            const errMsg = (resData && resData.error) || `Submission rejected by server (HTTP ${response.status}).`;
+            alert(`Unable to submit POD check-in: ${errMsg}`);
+            if (submitBtn) {
+                submitBtn.dataset.submitting = 'false';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs';
+            }
+            return;
+        }
+
+        // Use verified server reward if returned in response data
+        const awardedPoints = (resData && resData.data && typeof resData.data.lcReward === 'number') 
+            ? resData.data.lcReward 
+            : calculatedPoints;
+        subData.lcReward = awardedPoints;
+
+        // 2. Save locally ONLY after server verification succeeds
+        let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+        localDB = localDB.filter(s => !(
+            (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
             String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
             normalizeLevelUpType(s.type) === 'pod' &&
             String(s.day) === String(activePodSessionDay)
         ));
-        levelUpSubmissions[bucketKey].push(subData);
+        localDB.push(subData);
+        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+
+        // 3. Update levelUpSubmissions in-memory bucket
+        const bucketKey = (typeof resolveSubmissionKey === 'function') ? resolveSubmissionKey(currentUser) : null;
+        if (bucketKey && typeof levelUpSubmissions !== 'undefined') {
+            if (!levelUpSubmissions[bucketKey]) levelUpSubmissions[bucketKey] = [];
+            levelUpSubmissions[bucketKey] = levelUpSubmissions[bucketKey].filter(s => !(
+                String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
+                normalizeLevelUpType(s.type) === 'pod' &&
+                String(s.day) === String(activePodSessionDay)
+            ));
+            levelUpSubmissions[bucketKey].push(subData);
+        }
+
+        document.getElementById('podSessionModal')?.remove();
+        showPodSuccessPopup(awardedPoints, answers.length);
+
+        if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
+    } catch (err) {
+        console.error('Server sync error for POD quiz:', err);
+        alert(`Network error submitting POD check-in: ${err.message || 'Please check your connection and retry.'}`);
+        if (submitBtn) {
+            submitBtn.dataset.submitting = 'false';
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs';
+        }
     }
-
-    document.getElementById('podSessionModal')?.remove();
-    showPodSuccessPopup(calculatedPoints, answers.length);
-
-    if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
 }
 window.submitPodSessionQuiz = submitPodSessionQuiz;
 
@@ -9233,6 +9301,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 </button>
 
                 <!-- CREATOR-SPECIFIC LEARNER PROFILE HEADER -->
+                <!-- CREATOR-SPECIFIC LEARNER PROFILE HEADER -->
                 ${isCreatorView ? `
                     <div class="flex items-center gap-3 p-3.5 bg-indigo-950/70 border border-indigo-500/40 rounded-2xl shadow-inner">
                         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white flex items-center justify-center font-bold text-base shadow">
@@ -9242,7 +9311,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <div class="flex items-center gap-2">
                                 <h4 class="text-sm font-extrabold text-white truncate">${learnerName}</h4>
                                 <span class="badge-pill bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase">Learner Review</span>
-                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
+                                ${isPod ? `
+                                    <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>
+                                ` : `
+                                    <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
+                                `}
                             </div>
                             <p class="text-xs text-slate-400 truncate font-mono mt-0.5">${learnerEmail || ''} ${learnerPhone ? '• ' + learnerPhone : ''}</p>
                         </div>
@@ -9255,7 +9328,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <div class="flex items-center gap-2 mb-1">
                             <span class="badge-pill ${isPod ? 'badge-indigo' : 'badge-amber'} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
                             <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${formattedDatePill}</span>
-                            <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum}</span>
+                            ${isPod ? `
+                                <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>
+                            ` : `
+                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum}</span>
+                            `}
                         </div>
                         <h3 class="text-xl font-extrabold text-white font-heading">${displayTitle}</h3>
                         ${exactSubmittedTimeStr ? `
@@ -9271,7 +9348,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
 
-                <!-- AI EVALUATION REMARKS & RUBRIC CARD -->
+                <!-- AI EVALUATION REMARKS & RUBRIC CARD (DIP ONLY) -->
+                ${!isPod ? `
                 <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
@@ -9294,6 +9372,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
                     </div>
                 </div>
+                ` : ''}
 
                 <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
                 ${bodyHtml}

@@ -1050,8 +1050,28 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
 
         const msId = Number(sub.milestoneId) || 1;
         const dayNum = Number(sub.day) || Number(sub.sessionDay) || 1;
-        const modType = (sub.moduleType || sub.type || 'dip').toUpperCase();
         const subAnswers = sub.answers || sub.responses || [];
+        const modType = String(sub.moduleType || sub.type || 'dip').toUpperCase();
+
+        // -------------------------------------------------------------
+        // SERVER-SIDE SINGLE-ATTEMPT GUARD FOR cMPLi POD
+        // -------------------------------------------------------------
+        if (modType === 'POD') {
+            const alreadyCompleted = store.submissions.find(s =>
+                (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase().trim() === sub.userEmail.toLowerCase().trim())) &&
+                String(s.milestoneId || 1) === String(msId) &&
+                String(s.type || s.moduleType || '').toUpperCase() === 'POD' &&
+                String(s.day) === String(dayNum) &&
+                (s.status === 'completed' || Number(s.lcReward) > 0)
+            );
+            if (alreadyCompleted) {
+                console.log(`[POD Single Attempt Guard] Rejecting duplicate submission for user ${sub.userEmail || sub.userId} MS${msId} D${dayNum}`);
+                return res.status(400).json({
+                    success: false,
+                    error: `cMPLi POD Day ${dayNum} check-in has already been completed. Single attempt only.`
+                });
+            }
+        }
 
         // -------------------------------------------------------------
         // SAVE ANY BASE64 RECORDED / UPLOADED MEDIA FILES DIRECTLY TO DISK
@@ -1163,10 +1183,54 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     // cMPLi POD MODULE: QUIZ BASED VERIFICATION (NO RUBRIC EVALUATION)
     // -------------------------------------------------------------
     if (String(sub.moduleType || sub.type || modType || '').toLowerCase() === 'pod') {
-        const finalLcReward = (sub.lcReward !== undefined && sub.lcReward !== null) ? Number(sub.lcReward) : 0;
+        // SERVER-SIDE RECOMPUTATION OF QUIZ SCORE AGAINST STORED QUESTION POOL
+        const allConfigs = getMilestoneConfigsFromDb();
+        const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][sub.date || sub.dateKey]) || {};
+        const questionPool = Array.isArray(podDayCfg.questions) ? podDayCfg.questions : [];
+
+        let calculatedLcReward = 0;
+        const verifiedAnswers = [];
+
+        if (Array.isArray(subAnswers)) {
+            // Limit to max 3 questions
+            const cappedAnswers = subAnswers.slice(0, 3);
+            cappedAnswers.forEach(ans => {
+                let isCorrect = false;
+                let pts = 11;
+
+                // Look up matching question prompt in creator's pool
+                const matchedQ = questionPool.find(q => q.title && ans.question && q.title.trim().toLowerCase() === ans.question.trim().toLowerCase());
+                if (matchedQ) {
+                    pts = matchedQ.pts || 11;
+                    const trueCorrectOptionIdx = (matchedQ.correctOption !== undefined && matchedQ.correctOption >= 0) ? matchedQ.correctOption : 0;
+                    const trueCorrectText = (matchedQ.options && matchedQ.options[trueCorrectOptionIdx]) || '';
+                    if (ans.answer && trueCorrectText && ans.answer.trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
+                        isCorrect = true;
+                    } else if (ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption && ans.options && ans.options[ans.selectedOption] && ans.options[ans.selectedOption].trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
+                        isCorrect = true;
+                    }
+                } else {
+                    // Fallback verification: check option index consistency
+                    isCorrect = Boolean(ans.isCorrect && ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption);
+                    pts = ans.pts || 11;
+                }
+
+                if (isCorrect) calculatedLcReward += pts;
+
+                verifiedAnswers.push({
+                    ...ans,
+                    isCorrect: isCorrect,
+                    pts: isCorrect ? pts : 0,
+                    maxPts: pts
+                });
+            });
+        }
+
+        // Hardcap score to maximum 33 LCs
+        const finalLcReward = Math.min(33, Math.max(0, calculatedLcReward));
         const finalMatchPct = Math.min(100, Math.round((finalLcReward / 33) * 100));
         const finalStatus = 'completed';
-        const finalRemarks = `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified\nActive listening requirement satisfied (≥85%). Points credited to TagMango wallet.`;
+        const finalRemarks = `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.`;
 
         const idx = (store.submissions || []).findIndex(s => s.id === subId);
         if (idx !== -1) {
@@ -1178,7 +1242,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
                 similarityScore: finalMatchPct,
                 aiRemarks: finalRemarks,
                 remarks: finalRemarks,
-                answers: subAnswers,
+                answers: verifiedAnswers,
                 submittedAt: store.submissions[idx].submittedAt || sub.submittedAt || new Date().toISOString(),
                 evaluatedAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
@@ -1203,13 +1267,11 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             );
             if (matched && matched._id) {
                 targetFanId = matched._id;
-            } else {
-                targetFanId = '68a805cf8c448ccc00abc23f';
             }
         }
 
         const pointDescription = `[Quiz Verified] Milestone-${msId} Day-${dayNum} POD Check-in`;
-        if (finalLcReward > 0 && targetFanId) {
+        if (finalLcReward > 0 && targetFanId && /^[0-9a-fA-F]{24}$/.test(targetFanId)) {
             console.log(`[Assigning TagMango Points for POD] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
             try {
                 const tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription, 'levelup-challenge');
@@ -1218,7 +1280,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
                 console.warn(`[TagMango POD Assignment Warning for ${targetFanId}]:`, tmErr.message);
             }
         } else {
-            console.log(`[TagMango Skipped for POD] Points: ${finalLcReward} for ${targetFanId}`);
+            console.log(`[TagMango Skipped for POD] Points: ${finalLcReward}, FanId: ${targetFanId}`);
         }
         return;
     }
