@@ -235,9 +235,21 @@ const LQ_MILESTONE_NAMES = {
 function getLqPerDayMaxLc(msId, moduleCode) {
     const clean = normalizeLevelUpType(moduleCode || 'dip');
     try {
+        const todayKey = getLocalDateKey(new Date());
         const dayConfigs = (customMilestoneConfigs[String(msId)] && customMilestoneConfigs[String(msId)][clean]) || {};
+
+        // 1. If today has an explicit config, use today's on-time LC reward
+        if (dayConfigs[todayKey] && (dayConfigs[todayKey].lcOnTime || dayConfigs[todayKey].lcReward)) {
+            const todayVal = Number(dayConfigs[todayKey].lcOnTime || dayConfigs[todayKey].lcReward);
+            if (todayVal > 0) return todayVal;
+        }
+
+        // 2. Realistic configured daily values (excluding historical test outliers like 133)
         const values = Object.values(dayConfigs).map(d => Number(d && (d.lcOnTime || d.lcReward || d.pts))).filter(v => v > 0);
-        if (values.length > 0) return Math.max(...values);
+        if (values.length > 0) {
+            const reasonable = values.filter(v => v <= (clean === 'immerse' ? 50 : 35));
+            if (reasonable.length > 0) return Math.max(...reasonable);
+        }
     } catch(e) {}
     if (clean === 'immerse') return 43;
     return 33;
@@ -245,33 +257,42 @@ function getLqPerDayMaxLc(msId, moduleCode) {
 
 // Computes the active elapsed session days from the learner's actual start/join date
 // up to today (inclusive) using the platform's official getMilestoneSessionDate schedule
-// (skips Sundays for DIP/POD, MWF for Immerse). For example, start Aug 29 -> Day 8 on Sept 7.
+// (skips Sundays for DIP/POD, MWF for Immerse). Falls back to the earliest candidate
+// signal (join date, module start date, earliest submission) so a stray local override
+// can never truncate days evidenced by an actual check-in.
 function getLqEligibleDays(userId, msId, moduleCode) {
     if (!userId) return 1;
     const cleanMod = normalizeLevelUpType(moduleCode || 'dip');
 
-    let startKey = null;
+    // Collect all candidate start date signals
+    const candidates = [];
     if (moduleCode && moduleCode !== 'all') {
-        startKey = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(userId, msId, cleanMod) : null;
+        const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(userId, msId, cleanMod) : null;
+        if (modStart) candidates.push(modStart);
     }
-    if (!startKey) {
-        startKey = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
+    const joinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
+    if (joinDate) candidates.push(joinDate);
+
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+    const modSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === cleanMod && String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+    if (modSubs.length > 0) {
+        modSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+        const firstSubDate = modSubs[0].dateKey || modSubs[0].date || (modSubs[0].submittedAt ? modSubs[0].submittedAt.split('T')[0] : null);
+        if (firstSubDate) candidates.push(firstSubDate);
     }
-    if (!startKey) {
-        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
-        const modSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === cleanMod && String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
-        if (modSubs.length > 0) {
-            modSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
-            startKey = modSubs[0].dateKey || modSubs[0].date || (modSubs[0].submittedAt ? modSubs[0].submittedAt.split('T')[0] : null);
-        }
+
+    const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+    if (msSubs.length > 0) {
+        msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+        const firstMsSubDate = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
+        if (firstMsSubDate) candidates.push(firstMsSubDate);
     }
-    if (!startKey) {
-        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
-        const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
-        if (msSubs.length > 0) {
-            msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
-            startKey = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
-        }
+
+    // Pick earliest candidate date so un-synced local overrides never shorten actual activity
+    let startKey = null;
+    if (candidates.length > 0) {
+        candidates.sort();
+        startKey = candidates[0];
     }
     if (!startKey) startKey = getLocalDateKey(new Date());
 
@@ -309,9 +330,12 @@ function getLqModuleMaxLcs(msId, moduleCode, userId) {
     const cfg = getMilestonePrereqConfig(msId);
     const perDay = getLqPerDayMaxLc(msId, cleanMod);
 
-    // If learner has already completed this milestone in the past, all days were eligible
     const highest = (userId && userMilestoneState && userMilestoneState[userId]?.highestUnlocked) || 1;
     const isPastMilestone = Number(msId) < Number(highest);
+    const isFutureMilestone = Number(msId) > Number(highest);
+
+    // Future locked milestones have 0 eligible days till date
+    if (isFutureMilestone) return 0;
 
     if (cleanMod === 'dip') {
         const targetDays = cfg.targetDips || 21;
@@ -353,9 +377,8 @@ function computeLqStats(userId, msId, moduleFilter) {
         matchedSubs = matchedSubs.concat(modSubs);
     });
 
-    if (max <= 0) max = 33; // Safeguard so denominator is never 0
-    const pct = Math.min(100, Math.round((earned / max) * 100));
-    const zone = pct >= 80 ? 'strong' : (pct >= 50 ? 'average' : 'weak');
+    const pct = max > 0 ? Math.min(100, Math.round((earned / max) * 100)) : 0;
+    const zone = max <= 0 ? 'not_started' : (pct >= 80 ? 'strong' : (pct >= 50 ? 'average' : 'weak'));
 
     return { earned, max, pct, zone, subs: matchedSubs, modules: targetModules };
 }
@@ -570,18 +593,20 @@ function updateLqNeedle(pct, zone, prefix = 'lq') {
     const deg = Math.max(0, Math.min(180, (Number(pct) || 0) / 100 * 180));
     needle.style.transform = `rotate(${deg}deg)`;
 
-    const zoneColor = (zone === 'strong') ? '#10b981' : ((zone === 'average') ? '#f59e0b' : '#ef4444');
+    const zoneColor = (zone === 'strong') ? '#10b981' : ((zone === 'average') ? '#f59e0b' : (zone === 'not_started' ? '#64748b' : '#ef4444'));
     const needlePoly = document.getElementById(`${prefix}NeedlePoly`);
     const needlePin = document.getElementById(`${prefix}NeedlePin`);
     const needleLine = document.getElementById(`${prefix}NeedleLine`);
     if (needlePoly) needlePoly.setAttribute('fill', zoneColor);
     if (needlePin) needlePin.setAttribute('fill', zoneColor);
-    if (needleLine) needleLine.setAttribute('stroke', zoneColor === '#ef4444' ? '#fca5a5' : (zoneColor === '#f59e0b' ? '#fef08a' : '#a7f3d0'));
+    if (needleLine) needleLine.setAttribute('stroke', zoneColor === '#ef4444' ? '#fca5a5' : (zoneColor === '#f59e0b' ? '#fef08a' : (zoneColor === '#64748b' ? '#94a3b8' : '#a7f3d0')));
 
     // Dynamic gradient and glow on center score text to match active zone
     const earnedEl = document.getElementById(`${prefix}EarnedNumber`);
     if (earnedEl) {
-        if (zone === 'strong') {
+        if (zone === 'not_started') {
+            earnedEl.className = "text-3xl md:text-4xl font-black text-slate-400 font-mono leading-none tracking-tight";
+        } else if (zone === 'strong') {
             earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-emerald-300 via-teal-100 to-cyan-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_10px_rgba(16,185,129,0.5)]";
         } else if (zone === 'average') {
             earnedEl.className = "text-3xl md:text-4xl font-black bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-400 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_10px_rgba(245,158,11,0.5)]";
@@ -595,12 +620,23 @@ function updateLqCenterNumbers(earned, max, pct, prefix = 'lq') {
     const earnedEl = document.getElementById(`${prefix}EarnedNumber`);
     const maxEl = document.getElementById(`${prefix}MaxLabel`);
     if (earnedEl) earnedEl.textContent = earned;
-    if (maxEl) maxEl.textContent = `of ${max} LCs (Till Date) • ${pct}%`;
+    if (maxEl) {
+        if (max <= 0) {
+            maxEl.textContent = `of 0 LCs (Milestone Not Started)`;
+        } else {
+            maxEl.textContent = `of ${max} LCs (Till Date) • ${pct}%`;
+        }
+    }
 }
 
-function updateLqZoneBadge(zone, pct, prefix = 'lq') {
+function updateLqZoneBadge(zone, pct, prefix = 'lq', max = 1) {
     const el = document.getElementById(`${prefix}ZoneBadge`);
     if (!el) return;
+    if (zone === 'not_started' || max <= 0) {
+        el.className = 'badge-pill badge-slate';
+        el.innerHTML = `<i class="fas fa-lock mr-1"></i> Not Started`;
+        return;
+    }
     const map = {
         weak: { label: `Weak Zone (${pct}%)`, cls: 'badge-pill badge-red' },
         average: { label: `Growing Zone (${pct}%)`, cls: 'badge-pill badge-amber' },
@@ -636,7 +672,7 @@ async function refreshLearnabilityGauge(prefix = 'lq') {
 
     updateLqNeedle(stats.pct, stats.zone, prefix);
     updateLqCenterNumbers(stats.earned, stats.max, stats.pct, prefix);
-    updateLqZoneBadge(stats.zone, stats.pct, prefix);
+    updateLqZoneBadge(stats.zone, stats.pct, prefix, stats.max);
     updateLqInsights(generateLqInsights(stats, msId, cfg, user), prefix);
 }
 window.refreshLearnabilityGauge = refreshLearnabilityGauge;
@@ -5324,15 +5360,22 @@ currentUser = currentUser || null;
 isAdminLogin = isAdminLogin || false;
 
 function getEnabledModulesForMilestone(msId) {
+    let mods = [];
     const saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {};
     if (saved[msId] && Array.isArray(saved[msId]) && saved[msId].length > 0) {
-        return saved[msId].filter(m => m && m !== 'undefined');
-    }
-    if (typeof milestoneConfig !== 'undefined' && Array.isArray(milestoneConfig)) {
+        mods = saved[msId].filter(m => m && m !== 'undefined');
+    } else if (typeof milestoneConfig !== 'undefined' && Array.isArray(milestoneConfig)) {
         const ms = milestoneConfig.find(m => m.id === Number(msId));
-        if (ms && ms.defaultModules) return [...ms.defaultModules];
+        if (ms && ms.defaultModules) mods = [...ms.defaultModules];
     }
-    return ['dip', 'pod'];
+    if (mods.length === 0) mods = ['dip', 'pod'];
+
+    // If Creator has configured a non-zero target for Immerse in prerequisites, ensure it is included
+    const prereqs = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(msId) : null;
+    if (prereqs && prereqs.targetImmerse > 0 && !mods.includes('immerse')) {
+        mods.push('immerse');
+    }
+    return mods;
 }
 
 // ==============================================================
@@ -7466,15 +7509,6 @@ function getUserSubmissionsByUserId(userIdentifier) {
     try {
         localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
     } catch(e) {}
-
-    // Ensure Chandra's Day 1 DIP submission reflects 6 LCs as specified by Creator
-    localDB.forEach(s => {
-        if (s && s.id === 'sub_1788004511662_n00meu') {
-            s.lcReward = 6;
-            s.originalLcReward = 6;
-            if (!s.userEmail) s.userEmail = 'chandrasai349@gmail.com';
-        }
-    });
 
     if (!userIdentifier) return [];
 
