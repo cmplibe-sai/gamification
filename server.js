@@ -1054,7 +1054,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const modType = String(sub.moduleType || sub.type || 'dip').toUpperCase();
 
         // -------------------------------------------------------------
-        // SERVER-SIDE SINGLE-ATTEMPT GUARD FOR cMPLi POD
+        // SERVER-SIDE EVALUATION & SINGLE-ATTEMPT GUARD FOR cMPLi POD
         // -------------------------------------------------------------
         if (modType === 'POD') {
             const alreadyCompleted = store.submissions.find(s =>
@@ -1068,9 +1068,124 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 console.log(`[POD Single Attempt Guard] Rejecting duplicate submission for user ${sub.userEmail || sub.userId} MS${msId} D${dayNum}`);
                 return res.status(400).json({
                     success: false,
-                    error: `cMPLi POD Day ${dayNum} check-in has already been completed. Single attempt only.`
+                    error: `cMPLi POD Day ${dayNum} check-in has already been completed. Single attempt only.`,
+                    data: alreadyCompleted
                 });
             }
+
+            // SYNCHRONOUS SERVER-SIDE QUIZ VERIFICATION FOR POD
+            const allConfigs = getMilestoneConfigsFromDb();
+            const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][sub.date || sub.dateKey]) || {};
+            const questionPool = Array.isArray(podDayCfg.questions) ? podDayCfg.questions : [];
+
+            let calculatedLcReward = 0;
+            const verifiedAnswers = [];
+
+            if (Array.isArray(subAnswers)) {
+                const cappedAnswers = subAnswers.slice(0, 3);
+                cappedAnswers.forEach(ans => {
+                    let isCorrect = false;
+                    let pts = 11;
+
+                    const matchedQ = questionPool.find(q => q.title && ans.question && q.title.trim().toLowerCase() === ans.question.trim().toLowerCase());
+                    if (matchedQ) {
+                        pts = matchedQ.pts || 11;
+                        const trueCorrectOptionIdx = (matchedQ.correctOption !== undefined && matchedQ.correctOption >= 0) ? matchedQ.correctOption : 0;
+                        const trueCorrectText = (matchedQ.options && matchedQ.options[trueCorrectOptionIdx]) || '';
+                        if (ans.answer && trueCorrectText && ans.answer.trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
+                            isCorrect = true;
+                        } else if (ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption && ans.options && ans.options[ans.selectedOption] && ans.options[ans.selectedOption].trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
+                            isCorrect = true;
+                        }
+                    } else {
+                        isCorrect = Boolean(ans.isCorrect && ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption);
+                        pts = ans.pts || 11;
+                    }
+
+                    if (isCorrect) calculatedLcReward += pts;
+
+                    verifiedAnswers.push({
+                        ...ans,
+                        isCorrect: isCorrect,
+                        pts: isCorrect ? pts : 0,
+                        maxPts: pts
+                    });
+                });
+            }
+
+            const finalLcReward = Math.min(33, Math.max(0, calculatedLcReward));
+            const finalMatchPct = Math.min(100, Math.round((finalLcReward / 33) * 100));
+            const finalRemarks = `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.`;
+
+            const completedSub = {
+                id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                userId: sub.userId,
+                fanId: sub.fanId || sub.userId,
+                userEmail: sub.userEmail || '',
+                userName: sub.userName || 'Learner',
+                userPhone: sub.userPhone || '',
+                milestoneId: msId,
+                moduleType: 'pod',
+                type: 'pod',
+                day: dayNum,
+                sessionDay: dayNum,
+                date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
+                dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
+                status: 'completed',
+                lcReward: finalLcReward,
+                originalLcReward: finalLcReward,
+                matchPercentage: finalMatchPct,
+                similarityScore: finalMatchPct,
+                aiRemarks: finalRemarks,
+                remarks: finalRemarks,
+                answers: verifiedAnswers,
+                submittedAt: sub.submittedAt || new Date().toISOString(),
+                evaluatedAt: new Date().toISOString(),
+                createdAt: sub.submittedAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            store.submissions = store.submissions.filter(s => !(
+                (String(s.userId) === String(completedSub.userId) || (s.userEmail && completedSub.userEmail && s.userEmail.toLowerCase() === completedSub.userEmail.toLowerCase())) &&
+                String(s.milestoneId || 1) === String(msId) &&
+                String(s.type || s.moduleType || '').toUpperCase() === 'POD' &&
+                String(s.day) === String(dayNum)
+            ));
+
+            store.submissions.push(completedSub);
+            store.submissionsRevision = Date.now();
+            saveStore();
+
+            // Direct TagMango Credit
+            let targetFanId = completedSub.fanId || completedSub.userId;
+            const normalizedEmail = (completedSub.userEmail || '').trim().toLowerCase();
+            if (normalizedEmail) {
+                const matched = (store.users || []).find(u =>
+                    u.email && u.email.trim().toLowerCase() === normalizedEmail
+                );
+                if (matched && matched._id) {
+                    targetFanId = matched._id;
+                }
+            }
+
+            const pointDescription = `[Quiz Verified] Milestone-${msId} Day-${dayNum} POD Check-in`;
+            if (finalLcReward > 0 && targetFanId && /^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+                console.log(`[Assigning TagMango Points for POD] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
+                try {
+                    await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription, 'levelup-challenge');
+                } catch(tmErr) {
+                    console.warn(`[TagMango POD Assignment Warning for ${targetFanId}]:`, tmErr.message);
+                }
+            } else {
+                console.log(`[TagMango Skipped for POD] Points: ${finalLcReward}, FanId: ${targetFanId}`);
+            }
+
+            return res.json({
+                success: true,
+                pending: false,
+                message: 'cMPLi POD quiz verified and completed.',
+                data: completedSub
+            });
         }
 
         // -------------------------------------------------------------

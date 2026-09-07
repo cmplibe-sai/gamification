@@ -7251,8 +7251,17 @@ async function submitPodSessionQuiz() {
             resData = await response.json();
         } catch (jsonErr) {}
 
+        // Handle server rejection or already-completed state
         if (!response.ok || (resData && resData.success === false)) {
             const errMsg = (resData && resData.error) || `Submission rejected by server (HTTP ${response.status}).`;
+            
+            // If already completed, gracefully close modal, update state and inform user
+            if (errMsg.toLowerCase().includes('already been completed')) {
+                document.getElementById('podSessionModal')?.remove();
+                if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
+                return alert(`cMPLi POD Day ${activePodSessionDay} is already completed. Your check-in and LCs are recorded.`);
+            }
+
             alert(`Unable to submit POD check-in: ${errMsg}`);
             if (submitBtn) {
                 submitBtn.dataset.submitting = 'false';
@@ -7263,32 +7272,53 @@ async function submitPodSessionQuiz() {
         }
 
         // Use verified server reward if returned in response data
-        const awardedPoints = (resData && resData.data && typeof resData.data.lcReward === 'number') 
-            ? resData.data.lcReward 
+        const finalServerData = resData?.data || subData;
+        const awardedPoints = (finalServerData && typeof finalServerData.lcReward === 'number' && finalServerData.lcReward > 0) 
+            ? finalServerData.lcReward 
             : calculatedPoints;
-        subData.lcReward = awardedPoints;
+        finalServerData.lcReward = awardedPoints;
+        finalServerData.status = 'completed';
 
-        // 2. Save locally ONLY after server verification succeeds
-        let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-        localDB = localDB.filter(s => !(
-            (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
-            String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
-            normalizeLevelUpType(s.type) === 'pod' &&
-            String(s.day) === String(activePodSessionDay)
-        ));
-        localDB.push(subData);
-        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+        // Update currentUser.lcs and navbar live counter
+        if (currentUser && awardedPoints > 0) {
+            currentUser.lcs = (Number(currentUser.lcs) || 0) + awardedPoints;
+            try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
+            const navPointsEl = document.getElementById('userPoints');
+            if (navPointsEl) {
+                const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
+                navPointsEl.innerText = curVal + awardedPoints;
+            }
+        }
 
-        // 3. Update levelUpSubmissions in-memory bucket
-        const bucketKey = (typeof resolveSubmissionKey === 'function') ? resolveSubmissionKey(currentUser) : null;
-        if (bucketKey && typeof levelUpSubmissions !== 'undefined') {
-            if (!levelUpSubmissions[bucketKey]) levelUpSubmissions[bucketKey] = [];
-            levelUpSubmissions[bucketKey] = levelUpSubmissions[bucketKey].filter(s => !(
+        // 2. Save locally safely (never let localStorage quota error crash the flow)
+        try {
+            let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            localDB = localDB.filter(s => !(
+                (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
                 String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
                 normalizeLevelUpType(s.type) === 'pod' &&
                 String(s.day) === String(activePodSessionDay)
             ));
-            levelUpSubmissions[bucketKey].push(subData);
+            localDB.push(finalServerData);
+            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+        } catch(storageErr) {
+            console.warn('LocalStorage save skipped (quota limit):', storageErr);
+        }
+
+        // 3. Update levelUpSubmissions in-memory bucket safely
+        try {
+            const bucketKey = (typeof resolveSubmissionKey === 'function') ? resolveSubmissionKey(currentUser) : null;
+            if (bucketKey && typeof levelUpSubmissions !== 'undefined') {
+                if (!levelUpSubmissions[bucketKey]) levelUpSubmissions[bucketKey] = [];
+                levelUpSubmissions[bucketKey] = levelUpSubmissions[bucketKey].filter(s => !(
+                    String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
+                    normalizeLevelUpType(s.type) === 'pod' &&
+                    String(s.day) === String(activePodSessionDay)
+                ));
+                levelUpSubmissions[bucketKey].push(finalServerData);
+            }
+        } catch(bucketErr) {
+            console.warn('In-memory bucket update error:', bucketErr);
         }
 
         document.getElementById('podSessionModal')?.remove();
