@@ -388,6 +388,24 @@ const resolvedCollisionMap = buildDaySubMap([olderFailedSub, newerPassedSub], ne
 assert.strictEqual(resolvedCollisionMap[1].id, 'sub_passed_2', 'Collision tie-break must select completed/higher reward submission over rejected attempt');
 console.log('✅ Collision tie-break test passed!');
 
+// Test submitCheckinForm execution without throwing ReferenceError
+console.log('--- Testing 7: submitCheckinForm execution ---');
+global.activeMilestoneId = 1;
+global.currentUser = { _id: 'usr_cust_123', email: 'student@example.com', name: 'John Learner' };
+const mockForm = { id: 'activeCheckinForm' };
+const mockSubmitBtn = { disabled: false, innerHTML: '' };
+let evaluatingModalOpened = false;
+global.document.getElementById = (id) => {
+    if (id === 'activeCheckinForm') return mockForm;
+    if (id === 'btnSubmitCheckinForm') return mockSubmitBtn;
+    if (id === 'checkin_input_0') return { value: 'This is my text reflection answer.' };
+    if (id === 'checkin_audio_data_1') return { value: 'https://example.com/audio.mp3' };
+    return { innerHTML: '', querySelectorAll: () => [], classList: { contains: () => false, add: () => {}, remove: () => {} }, remove: () => {} };
+};
+await submitCheckinForm(1, 'dip', '2026-09-07', 33, 3, '17:00');
+assert.ok(document.body.lastInsertedHtml.includes('evaluatingCheckinModal'), 'submitCheckinForm must open evaluatingCheckinModal modal without throwing ReferenceError');
+console.log('✅ submitCheckinForm test passed!');
+
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
 }
 

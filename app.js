@@ -9181,226 +9181,239 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Securing Submission...';
     }
 
-    const msId = activeMilestoneId || 1;
-    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
-        ? customMilestoneConfigs[msId][moduleName] 
-        : {};
-    const dayConfig = msConfigs[cardDateKey] || {};
+    try {
+        const msId = activeMilestoneId || 1;
+        const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
+            ? customMilestoneConfigs[msId][moduleName] 
+            : {};
+        const dayConfig = msConfigs[cardDateKey] || {};
 
-    const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
-        ? dayConfig.questions 
-        : [
-            { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
-        ];
+        const isImmerseMod = String(moduleName || '').toLowerCase() === 'immerse';
+        const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
+            ? dayConfig.questions 
+            : (
+                isImmerseMod ? [
+                    { title: dayConfig.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }
+                ] : [
+                    { title: "What key insight or reflection did you gain today?", type: "text" },
+                    { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
+                ]
+            );
 
-    const answers = [];
-    let hasValidAudio = false;
+        const answers = [];
+        let hasValidAudio = false;
 
-    for (let idx = 0; idx < questions.length; idx++) {
-        const q = questions[idx];
-        const qTitle = q.title || `Question ${idx + 1}`;
-        const qType = (q.type || 'text').toLowerCase();
-        let val = '';
-        let audioUrl = '';
-        let videoUrl = '';
+        for (let idx = 0; idx < questions.length; idx++) {
+            const q = questions[idx];
+            const qTitle = q.title || `Question ${idx + 1}`;
+            const qType = (q.type || 'text').toLowerCase();
+            let val = '';
+            let audioUrl = '';
+            let videoUrl = '';
 
-        if (qType === 'mcq') {
-            const checked = document.querySelector(`input[name="checkin_mcq_${idx}"]:checked`);
-            val = checked ? checked.value : '';
-        } else if (qType === 'audio') {
-            // Wait for any in-flight recording/file upload to finish so we send the
-            // server a real uploaded path instead of a browser-only blob: URL that
-            // AssemblyAI can never transcribe.
-            if (window._audioUploadPromises && window._audioUploadPromises[idx]) {
-                try { await window._audioUploadPromises[idx]; } catch(e) {}
-            }
-            const serverUrl = window._recordedAudioServerUrls && window._recordedAudioServerUrls[idx];
-            const recData = document.getElementById(`checkin_audio_data_${idx}`)?.value || (window._recordedAudioData && window._recordedAudioData[idx]) || '';
-            const previewEl = document.getElementById(`audio_preview_${idx}`);
-            const fileInp = document.getElementById(`checkin_input_${idx}`);
-            
-            audioUrl = serverUrl || recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+            if (qType === 'mcq') {
+                const checked = document.querySelector(`input[name="checkin_mcq_${idx}"]:checked`);
+                val = checked ? checked.value : '';
+            } else if (qType === 'audio') {
+                // Wait for any in-flight recording/file upload to finish so we send the
+                // server a real uploaded path instead of a browser-only blob: URL that
+                // AssemblyAI can never transcribe.
+                if (window._audioUploadPromises && window._audioUploadPromises[idx]) {
+                    try { await window._audioUploadPromises[idx]; } catch(e) {}
+                }
+                const serverUrl = window._recordedAudioServerUrls && window._recordedAudioServerUrls[idx];
+                const recData = document.getElementById(`checkin_audio_data_${idx}`)?.value || (window._recordedAudioData && window._recordedAudioData[idx]) || '';
+                const previewEl = document.getElementById(`audio_preview_${idx}`);
+                const fileInp = document.getElementById(`checkin_input_${idx}`);
+                
+                audioUrl = serverUrl || recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
 
-            // If audio is base64 and not yet on server, upload to get static URL
-            if (audioUrl && audioUrl.startsWith('data:')) {
-                try {
-                    const upRes = await apiFetch('/api/upload-media', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dataUrl: audioUrl, prefix: `audio_q${idx + 1}` })
-                    }).then(r => r.json());
-                    if (upRes && upRes.success && upRes.url) {
-                        audioUrl = upRes.url;
-                        window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
-                        window._recordedAudioServerUrls[idx] = upRes.url;
+                // If audio is base64 and not yet on server, upload to get static URL
+                if (audioUrl && audioUrl.startsWith('data:')) {
+                    try {
+                        const upRes = await apiFetch('/api/upload-media', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dataUrl: audioUrl, prefix: `audio_q${idx + 1}` })
+                        }).then(r => r.json());
+                        if (upRes && upRes.success && upRes.url) {
+                            audioUrl = upRes.url;
+                            window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                            window._recordedAudioServerUrls[idx] = upRes.url;
+                        }
+                    } catch(e) {}
+                }
+
+                // Safety net: never embed a raw base64 audio blob in the /api/submissions
+                // JSON body. If it's still here, the upload genuinely failed (even after
+                // the retry above) — sending it anyway would blow past the proxy's request
+                // size limit (413) or make the request huge/slow, and previously produced
+                // a confusing "Connection Error" with no clear cause. Fail fast instead.
+                if (audioUrl && audioUrl.startsWith('data:')) {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Submit Check-in';
                     }
+                    alert('Your audio recording could not be uploaded to the server (this usually means the file is too large or the connection dropped mid-upload). Please try a shorter recording or check your connection, then submit again.');
+                    return;
+                }
+
+                if (audioUrl && (audioUrl.startsWith('http') || audioUrl.startsWith('/') || audioUrl.startsWith('blob:'))) {
+                    hasValidAudio = true;
+                }
+
+                val = audioUrl ? 'Audio Voice Reflection Recorded & Verified' : 'Audio Reflection submitted';
+            } else if (qType === 'video') {
+                const recData = document.getElementById(`checkin_video_data_${idx}`)?.value || (window._recordedVideoData && window._recordedVideoData[idx]) || '';
+                const previewEl = document.getElementById(`video_preview_${idx}`);
+                const fileInp = document.getElementById(`checkin_input_${idx}`);
+                videoUrl = recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
+
+                // Upload base64 video to server disk to get clean static URL for AssemblyAI
+                if (videoUrl && videoUrl.startsWith('data:')) {
+                    try {
+                        const upRes = await apiFetch('/api/upload-media', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dataUrl: videoUrl, prefix: `video_q${idx + 1}` })
+                        }).then(r => r.json());
+                        if (upRes && upRes.success && upRes.url) {
+                            videoUrl = upRes.url;
+                            if (previewEl) previewEl.src = upRes.url;
+                        }
+                    } catch(e) {
+                        console.warn('Video upload error:', e);
+                    }
+                }
+
+                const recordedBlob = (window._recordedVideoBlobs && window._recordedVideoBlobs[idx]) || null;
+                val = videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (recordedBlob ? URL.createObjectURL(recordedBlob) : '') || 'Video Reflection submitted';
+            } else {
+                const inp = document.getElementById(`checkin_input_${idx}`);
+                val = inp ? inp.value.trim() : '';
+            }
+
+            const recordedBlob = (window._recordedVideoBlobs && window._recordedVideoBlobs[idx]) || null;
+            const exactVideoVal = (qType === 'video') ? (videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (recordedBlob ? URL.createObjectURL(recordedBlob) : '')) : '';
+
+            answers.push({
+                title: qTitle,
+                question: qTitle,
+                answer: exactVideoVal ? 'Video Reflection Recorded & Verified' : (val || 'Completed'),
+                value: exactVideoVal || val || 'Completed',
+                type: qType,
+                audioUrl: audioUrl,
+                videoUrl: videoUrl || exactVideoVal,
+                transcription: (window._liveTranscripts && window._liveTranscripts[idx]) || ''
+            });
+        }
+
+        // Check on-time vs late (Immerse uses ontime LCs only)
+        const now = new Date();
+        const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        const isLate = (!isImmerseMod && endTime) ? (currentHHMM > endTime) : false;
+        const basePoints = (isLate && !isImmerseMod) ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
+
+        const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
+        const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
+        const userPhoneStr = currentUser.phone ? String(currentUser.phone).trim() : '';
+
+        const payload = {
+            id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            userId: userIdStr,
+            fanId: String(currentUser.fanId || userIdStr),
+            userEmail: userEmailStr,
+            userName: currentUser.name || 'Learner',
+            userPhone: userPhoneStr,
+            milestoneId: Number(msId) || 1,
+            moduleType: String(moduleName || 'dip').toLowerCase(),
+            type: String(moduleName || 'dip').toLowerCase(),
+            day: Number(dayNum) || 1,
+            sessionDay: Number(dayNum) || 1,
+            date: cardDateKey,
+            dateKey: cardDateKey,
+            submittedAt: new Date().toISOString(),
+            lcReward: basePoints,
+            originalLcReward: basePoints,
+            isLate: isLate,
+            title: dayConfig.title || '',
+            sessionTitle: dayConfig.title || '',
+            description: dayConfig.description || '',
+            sessionDescription: dayConfig.description || '',
+            mainQuestion: dayConfig.mainQuestion || '',
+            videoUrl: (answers.find(a => a.videoUrl)?.videoUrl) || '',
+            answers: answers,
+            responses: answers
+        };
+
+        // Close submission input form
+        document.getElementById('submissionModalDynamic')?.remove();
+
+        const doneHandler = (finalData) => {
+            const pts = Number(finalData?.lcReward) || 0;
+            const matchScore = Number(finalData?.matchPercentage) || 0;
+            const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch' || matchScore < 50);
+
+            if (finalData) {
+                // Save submission record to client DB so card immediately reflects status (completed vs retry)
+                try {
+                    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+                    localDB = localDB.filter(s => !(
+                        (
+                            (s.userId && userIdStr && String(s.userId) === userIdStr) ||
+                            (s.userEmail && userEmailStr && s.userEmail.toLowerCase().trim() === userEmailStr)
+                        ) &&
+                        String(s.milestoneId || 1) === String(finalData.milestoneId || 1) &&
+                        normalizeLevelUpType(s.type) === normalizeLevelUpType(finalData.type) &&
+                        (String(s.day) === String(finalData.day) || (s.dateKey && finalData.dateKey && s.dateKey === finalData.dateKey))
+                    ));
+                    localDB.push(finalData);
+                    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
                 } catch(e) {}
-            }
 
-            // Safety net: never embed a raw base64 audio blob in the /api/submissions
-            // JSON body. If it's still here, the upload genuinely failed (even after
-            // the retry above) — sending it anyway would blow past the proxy's request
-            // size limit (413) or make the request huge/slow, and previously produced
-            // a confusing "Connection Error" with no clear cause. Fail fast instead.
-            if (audioUrl && audioUrl.startsWith('data:')) {
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Submit Check-in';
-                }
-                alert('Your audio recording could not be uploaded to the server (this usually means the file is too large or the connection dropped mid-upload). Please try a shorter recording or check your connection, then submit again.');
-                return;
-            }
+                if (!isMismatch && currentUser && pts > 0) {
+                    currentUser.lcs = (Number(currentUser.lcs) || 0) + pts;
+                    try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
 
-            if (audioUrl && (audioUrl.startsWith('http') || audioUrl.startsWith('/') || audioUrl.startsWith('blob:'))) {
-                hasValidAudio = true;
-            }
-
-            val = audioUrl ? 'Audio Voice Reflection Recorded & Verified' : 'Audio Reflection submitted';
-        } else if (qType === 'video') {
-            const recData = document.getElementById(`checkin_video_data_${idx}`)?.value || (window._recordedVideoData && window._recordedVideoData[idx]) || '';
-            const previewEl = document.getElementById(`video_preview_${idx}`);
-            const fileInp = document.getElementById(`checkin_input_${idx}`);
-            videoUrl = recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
-
-            // Upload base64 video to server disk to get clean static URL for AssemblyAI
-            if (videoUrl && videoUrl.startsWith('data:')) {
-                try {
-                    const upRes = await apiFetch('/api/upload-media', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dataUrl: videoUrl, prefix: `video_q${idx + 1}` })
-                    }).then(r => r.json());
-                    if (upRes && upRes.success && upRes.url) {
-                        videoUrl = upRes.url;
-                        if (previewEl) previewEl.src = upRes.url;
+                    // Immediately update the navbar LC counter so student sees +pts instantly
+                    const navPointsEl = document.getElementById('userPoints');
+                    if (navPointsEl && pts > 0) {
+                        const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
+                        navPointsEl.innerText = curVal + pts;
                     }
-                } catch(e) {
-                    console.warn('Video upload error:', e);
+                } else if (isMismatch) {
+                    console.log('❌ Submission scored < 50% rubric match (0 LCs awarded). Card set to Retry.');
                 }
             }
 
-            val = videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (videoBlob ? URL.createObjectURL(videoBlob) : '') || 'Video Reflection submitted';
-        } else {
-            const inp = document.getElementById(`checkin_input_${idx}`);
-            val = inp ? inp.value.trim() : '';
+            // Refresh UI
+            if (typeof switchMilestoneTab === 'function') switchMilestoneTab(moduleName);
+            if (typeof updateDashboardUI === 'function') updateDashboardUI();
+            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                renderAdminCohortSubmissions();
+            }
+            if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
+        };
+
+        // Keep the payload + done handler reachable so a genuine connection failure
+        // can retry the exact same submission without re-collecting form data from a form that's already closed.
+        window._lastCheckinPayload = payload;
+        window._lastCheckinDoneHandler = doneHandler;
+
+        // SERVER-SIDE EVALUATION PROMISE: server saves the submission immediately, then
+        // transcribes with AssemblyAI and evaluates against the rubric in the background.
+        const serverEvalPromise = submitPayloadToServer(payload);
+
+        // OPEN ANIMATED AI EVALUATION MODAL — WAITS FOR SERVER EVALUATION RESULT
+        showAiEvaluatingLagtime(serverEvalPromise, doneHandler);
+    } catch (err) {
+        console.error('Submit Checkin Error:', err);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Submit Check-in';
         }
-
-        const exactVideoVal = (qType === 'video') ? (videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (videoBlob ? URL.createObjectURL(videoBlob) : '')) : '';
-
-        answers.push({
-            title: qTitle,
-            question: qTitle,
-            answer: exactVideoVal ? 'Video Reflection Recorded & Verified' : (val || 'Completed'),
-            value: exactVideoVal || val || 'Completed',
-            type: qType,
-            audioUrl: audioUrl,
-            videoUrl: videoUrl || exactVideoVal,
-            transcription: (window._liveTranscripts && window._liveTranscripts[idx]) || ''
-        });
+        alert('Could not submit check-in: ' + (err.message || err));
     }
-
-    // Check on-time vs late (Immerse uses ontime LCs only)
-    const isImmerseMod = String(moduleName || '').toLowerCase() === 'immerse';
-    const now = new Date();
-    const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    const isLate = (!isImmerseMod && endTime) ? (currentHHMM > endTime) : false;
-    const basePoints = (isLate && !isImmerseMod) ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
-
-    const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
-    const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
-    const userPhoneStr = currentUser.phone ? String(currentUser.phone).trim() : '';
-
-    const payload = {
-        id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        userId: userIdStr,
-        fanId: String(currentUser.fanId || userIdStr),
-        userEmail: userEmailStr,
-        userName: currentUser.name || 'Learner',
-        userPhone: userPhoneStr,
-        milestoneId: Number(msId) || 1,
-        moduleType: String(moduleName || 'dip').toLowerCase(),
-        type: String(moduleName || 'dip').toLowerCase(),
-        day: Number(dayNum) || 1,
-        sessionDay: Number(dayNum) || 1,
-        date: cardDateKey,
-        dateKey: cardDateKey,
-        submittedAt: new Date().toISOString(),
-        lcReward: basePoints,
-        originalLcReward: basePoints,
-        isLate: isLate,
-        title: dayConfig.title || '',
-        sessionTitle: dayConfig.title || '',
-        description: dayConfig.description || '',
-        sessionDescription: dayConfig.description || '',
-        mainQuestion: dayConfig.mainQuestion || '',
-        videoUrl: (answers.find(a => a.videoUrl)?.videoUrl) || videoUrl || '',
-        answers: answers,
-        responses: answers
-    };
-
-    // Close submission input form
-    document.getElementById('submissionModalDynamic')?.remove();
-
-    const doneHandler = (finalData) => {
-        const pts = Number(finalData?.lcReward) || 0;
-        const matchScore = Number(finalData?.matchPercentage) || 0;
-        const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch' || matchScore < 50);
-
-        if (finalData) {
-            // Save submission record to client DB so card immediately reflects status (completed vs retry)
-            try {
-                let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-                localDB = localDB.filter(s => !(
-                    (
-                        (s.userId && userIdStr && String(s.userId) === userIdStr) ||
-                        (s.userEmail && userEmailStr && s.userEmail.toLowerCase().trim() === userEmailStr)
-                    ) &&
-                    String(s.milestoneId || 1) === String(finalData.milestoneId || 1) &&
-                    normalizeLevelUpType(s.type) === normalizeLevelUpType(finalData.type) &&
-                    (String(s.day) === String(finalData.day) || (s.dateKey && finalData.dateKey && s.dateKey === finalData.dateKey))
-                ));
-                localDB.push(finalData);
-                localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
-            } catch(e) {}
-
-            if (!isMismatch && currentUser && pts > 0) {
-                currentUser.lcs = (Number(currentUser.lcs) || 0) + pts;
-                try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
-
-                // Immediately update the navbar LC counter so student sees +pts instantly
-                const navPointsEl = document.getElementById('userPoints');
-                if (navPointsEl && pts > 0) {
-                    const curVal = parseInt(navPointsEl.innerText.replace(/\D/g, ''), 10) || 0;
-                    navPointsEl.innerText = curVal + pts;
-                }
-            } else if (isMismatch) {
-                console.log('❌ Submission scored < 50% rubric match (0 LCs awarded). Card set to Retry.');
-            }
-        }
-
-        // Refresh UI
-        if (typeof switchMilestoneTab === 'function') switchMilestoneTab(moduleName);
-        if (typeof updateDashboardUI === 'function') updateDashboardUI();
-        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
-            renderAdminCohortSubmissions();
-        }
-        if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
-    };
-
-    // Keep the payload + done handler reachable so a genuine connection failure
-    // (see submitPayloadToServer / showAiEvaluatingLagtime) can retry the exact
-    // same submission without re-collecting form data from a form that's already closed.
-    window._lastCheckinPayload = payload;
-    window._lastCheckinDoneHandler = doneHandler;
-
-    // SERVER-SIDE EVALUATION PROMISE: server saves the submission immediately, then
-    // transcribes with AssemblyAI and evaluates against the 5-tier rubric in the
-    // background (see submitPayloadToServer for why).
-    const serverEvalPromise = submitPayloadToServer(payload);
-
-    // OPEN ANIMATED AI EVALUATION MODAL — WAITS FOR SERVER EVALUATION RESULT
-    showAiEvaluatingLagtime(serverEvalPromise, doneHandler);
 }
 window.submitCheckinForm = submitCheckinForm;
 
