@@ -266,7 +266,7 @@ function getLqEligibleDays(userId, msId, moduleCode) {
 
     // Collect candidate start date signals for this specific module
     const candidates = [];
-    if (moduleCode && moduleCode !== 'all') {
+    if (cleanMod && cleanMod !== 'all') {
         const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(userId, msId, cleanMod) : null;
         if (modStart) candidates.push(modStart);
 
@@ -597,10 +597,10 @@ function ensureLqGaugeSvg(prefix = 'lq') {
                 <circle cx="216" cy="138" r="3.5" fill="#10b981"/>
             </svg>
 
-            <!-- Center Score Digits (Positioned inside gauge arch hollow to keep the rainbow arc 100% visible and un-obscured) -->
-            <div class="absolute inset-x-0 top-[38%] flex flex-col items-center pointer-events-none text-center z-10">
+            <!-- Center Score Digits (Positioned cleanly below the gauge pivot: ZERO collision with needle or arc at any angle) -->
+            <div class="flex flex-col items-center text-center mt-1 select-none">
                 <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0</span>
-                <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-200 font-bold font-mono tracking-wide mt-1 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">of 0 LCs (Till Date) • 0%</span>
+                <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-300 font-bold font-mono tracking-wide mt-1 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">of 0 LCs (Till Date) • 0%</span>
             </div>
         </div>
     `;
@@ -8811,7 +8811,7 @@ function resolveUserEmail(userId) {
         if (subWithEmail) return (subWithEmail.userEmail || subWithEmail.email).toLowerCase().trim();
     }
 
-    return (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    return '';
 }
 window.resolveUserEmail = resolveUserEmail;
 
