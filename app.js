@@ -7825,11 +7825,15 @@ async function joinMilestoneNow(msId) {
     const k1 = `${currentUser._id}_MS${msId}`;
     const k2 = (currentUser.email) ? `${currentUser.email.toLowerCase().trim()}_MS${msId}` : '';
     dates[k1] = todayKey;
-    if (k2) dates[k2] = todayKey;
+    const delta = { [k1]: todayKey };
+    if (k2) {
+        dates[k2] = todayKey;
+        delta[k2] = todayKey;
+    }
     
     try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(dates)); } catch(e) {}
     
-    // Sync to server
+    // Sync to server (send delta only to avoid clobbering other users' join dates)
     apiFetch('/api/user-join-date', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -7838,7 +7842,7 @@ async function joinMilestoneNow(msId) {
             userEmail: currentUser.email || '',
             milestoneId: msId,
             joinDate: todayKey,
-            allDates: dates
+            allDates: delta
         })
     }).catch(e => console.error('Join date sync error:', e));
 
