@@ -215,6 +215,26 @@ if (!store.submissionsRevision) {
     saveStore();
 }
 
+// Auto-migration for Chandra's Day 1 DIP submission to credit 6 LCs as required by Creator
+if (Array.isArray(store.submissions)) {
+    let touched = false;
+    store.submissions.forEach(s => {
+        if (s.id === 'sub_1788004511662_n00meu' && (s.lcReward !== 6 || !s.userEmail)) {
+            s.lcReward = 6;
+            s.originalLcReward = 6;
+            s.userEmail = 'chandrasai349@gmail.com';
+            s.userName = 'Chandra';
+            s.userPhone = '8217707977';
+            touched = true;
+            console.log('[Store Migration] Updated sub_1788004511662_n00meu to 6 LCs for Chandra');
+        }
+    });
+    if (touched) {
+        store.submissionsRevision = Date.now();
+        saveStore();
+    }
+}
+
 function saveStore() {
     try {
         store.lastUpdated = Date.now();

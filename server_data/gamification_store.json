@@ -213,9 +213,9 @@
     {
       "id": "sub_1788004511662_n00meu",
       "userId": "68d38fe3824e7a950617f8af",
-      "userEmail": "",
-      "userName": "",
-      "userPhone": "",
+      "userEmail": "chandrasai349@gmail.com",
+      "userName": "Chandra",
+      "userPhone": "8217707977",
       "milestoneId": 1,
       "type": "dip",
       "day": "1",
@@ -240,10 +240,11 @@
       "summary": "",
       "media": null,
       "mediaUrl": "",
-      "lcReward": 3,
+      "lcReward": 6,
       "status": "completed",
       "submittedAt": "2026-08-29T11:55:10.806Z",
-      "updatedAt": "2026-08-30T05:51:34.700Z"
+      "updatedAt": "2026-08-30T05:51:34.700Z",
+      "originalLcReward": 6
     },
     {
       "id": "sub_1788068835587_vawqxp",
@@ -1201,7 +1202,7 @@
       }
     }
   },
-  "submissionsRevision": 1788761215883,
+  "submissionsRevision": 1788799954448,
   "lastUpdated": 1788761215883,
   "configsRevision": 1788760981048
 }
