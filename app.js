@@ -5349,8 +5349,8 @@ function renderAdminCohortSubmissions() {
                             <p class="text-sm font-bold text-white truncate w-40">${user.name || 'Customer'}</p>
                             <p class="text-[10px] text-slate-400 truncate w-40">${user.email || user.phone}</p>
                             <div class="flex items-center gap-1.5 mt-0.5">
-                                <button type="button" onclick="promptSetCustomerModuleStartDate('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', '${activeAdminModule}')" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-indigo-500/50 transition-all flex items-center gap-1" title="Set or change Day 1 Start Date for ${activeAdminModule.toUpperCase()}">
-                                    <i class="fas fa-calendar-day text-indigo-400 text-[9px]"></i> Day 1: ${displayModDate}
+                                <button type="button" onclick="promptSetCustomerModuleStartDate('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', '${activeAdminModule}')" class="text-slate-500 hover:text-indigo-400 p-0.5 rounded transition-all inline-flex items-center gap-1 text-[10px]" title="Edit Day 1 Start Date for ${activeAdminModule.toUpperCase()}">
+                                    <i class="fas fa-pen-to-square"></i>
                                 </button>
                             </div>
                         </div>
@@ -5375,15 +5375,42 @@ function renderAdminCohortSubmissions() {
                 }
             }
         } else {
+            // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE column
+            const userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(user._id, activeAdminMilestoneId || 1) : null) || getLocalDateKey(new Date());
+            let userMilestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
+            if (isNaN(userMilestoneStartDate.getTime())) userMilestoneStartDate = new Date();
+            userMilestoneStartDate.setHours(0,0,0,0);
+
+            const userModSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === activeAdminModule);
+            const daySubMap = {};
+            userModSubs.forEach(s => {
+                let mappedDay = null;
+                const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
+                if (subDate) {
+                    for (let d = 1; d <= maxDays; d++) {
+                        const cDateKey = getLocalDateKey(getMilestoneSessionDate(userMilestoneStartDate, d, activeAdminModule));
+                        if (cDateKey === subDate) {
+                            mappedDay = d;
+                            break;
+                        }
+                    }
+                }
+                if (!mappedDay && s.day !== undefined && s.day !== null) {
+                    const rawDay = Number(s.day);
+                    if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= maxDays) {
+                        mappedDay = rawDay;
+                    }
+                }
+                if (mappedDay && !daySubMap[mappedDay]) {
+                    daySubMap[mappedDay] = s;
+                }
+            });
+
             for (let d = 1; d <= maxDays; d++) {
                 let actualDay = d;
                 if (activeAdminModule === 'ios') actualDay = d + 30; 
                 
-                const matchingSub = subs.find(entry => {
-                    if (normalizeLevelUpType(entry.type) !== activeAdminModule) return false;
-                    if (entry.day !== undefined && String(entry.day) === String(actualDay)) return true;
-                    return false;
-                });
+                const matchingSub = daySubMap[d] || null;
                 
                 if (matchingSub) {
                     const isEval = matchingSub.status === 'evaluating';
@@ -7225,7 +7252,19 @@ function openPodSessionModal(dayNum, dateKey) {
     const oldModal = document.getElementById('podSessionModal');
     if (oldModal) oldModal.remove();
 
+    const isTestMode = (typeof isTestUser === 'function') && isTestUser();
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
+    const isConfigured = Boolean(
+        dayConfig && (
+            dayConfig.audioUrl || 
+            (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
+        )
+    );
+    if (!isConfigured && !isTestMode) {
+        showCheckinSetupInProgressModal('pod', activePodSessionDateKey);
+        return;
+    }
+
     const audioTitle = dayConfig.audioTitle || dayConfig.title || `cMPLi POD Day ${dayNum} Insights`;
     const audioUrl = dayConfig.audioUrl || '';
     const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
@@ -8436,6 +8475,37 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
 }
 window.getMilestoneSessionDate = getMilestoneSessionDate;
 
+function showCheckinSetupInProgressModal(moduleName, dateDisplayStr) {
+    const modalId = 'checkinSetupModal';
+    document.getElementById(modalId)?.remove();
+
+    const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
+    const modTitles = { dip: 'cMPLi Dip', pod: 'cMPLi POD', immerse: 'cMPLi Immerse' };
+    const modLabel = modTitles[normalizedMod] || 'Daily Check-in';
+
+    const modalHtml = `
+        <div id="${modalId}" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div class="glass-card max-w-md w-full p-8 border border-amber-500/40 text-center space-y-5 rounded-2xl shadow-2xl relative bg-gradient-to-b from-slate-900 to-slate-950">
+                <div class="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30 text-3xl shadow-inner animate-pulse">
+                    <i class="fas fa-hourglass-half fa-spin text-amber-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-extrabold text-white font-heading">Check-in Setup in Progress</h3>
+                    <p class="text-xs text-amber-300/90 font-mono font-semibold mt-1 uppercase tracking-wider">${modLabel} • ${dateDisplayStr || 'Scheduled Session'}</p>
+                </div>
+                <p class="text-slate-300 text-xs leading-relaxed bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 font-sans shadow-inner">
+                    Check-in: creator is configuring the setup. Please wait for a few moments and check later.
+                </p>
+                <button type="button" onclick="document.getElementById('${modalId}')?.remove()" class="w-full btn-primary py-3 px-4 text-xs font-bold shadow-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-heading tracking-wide cursor-pointer transition-all">
+                    <i class="fas fa-check-circle mr-1.5"></i> Got It, I'll Check Back Soon
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+window.showCheckinSetupInProgressModal = showCheckinSetupInProgressModal;
+
 function openSubmissionModal(dayNum, moduleName) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
@@ -8449,6 +8519,7 @@ function openSubmissionModal(dayNum, moduleName) {
     milestoneStartDate.setHours(0,0,0,0);
 
     const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
+    const isTestMode = (typeof isTestUser === 'function') && isTestUser();
 
     // Calculate session card date (MWF for Immerse; Mon-Sat for DIP)
     const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
@@ -8459,7 +8530,22 @@ function openSubmissionModal(dayNum, moduleName) {
         ? customMilestoneConfigs[msId][moduleName] 
         : {};
     
-    const savedDayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName] && (customMilestoneConfigs[msId][moduleName][cardDateKey] || customMilestoneConfigs[msId][moduleName][todayKey])) || {};
+    // STRICT: Only check this specific cardDateKey (no todayKey fallback leak!)
+    const savedDayCfg = msConfigs[cardDateKey] || {};
+    
+    // Check if creator has configured this day
+    const isConfigured = Boolean(
+        savedDayCfg && (
+            (savedDayCfg.title && savedDayCfg.title.trim()) ||
+            (savedDayCfg.mainQuestion && savedDayCfg.mainQuestion.trim()) ||
+            (savedDayCfg.questions && Array.isArray(savedDayCfg.questions) && savedDayCfg.questions.length > 0)
+        )
+    );
+
+    if (!isConfigured && !isTestMode) {
+        showCheckinSetupInProgressModal(moduleName, displayDate);
+        return;
+    }
     const dayConfig = {
         title: savedDayCfg.title || '',
         mainQuestion: savedDayCfg.mainQuestion || savedDayCfg.title || '',
@@ -9059,7 +9145,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
         ? customMilestoneConfigs[msId][moduleName] 
         : {};
-    const dayConfig = msConfigs[cardDateKey] || msConfigs[getLocalDateKey(new Date())] || {};
+    const dayConfig = msConfigs[cardDateKey] || {};
 
     const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
         ? dayConfig.questions 
@@ -9455,22 +9541,47 @@ function switchMilestoneTab(moduleName, btnElement) {
     let totalSessions = isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30);
     let cardsHtml = '';
 
+    // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card
+    const daySubMap = {};
+    typeSubs.forEach(s => {
+        let mappedDay = null;
+        const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
+        if (subDate) {
+            for (let d = 1; d <= totalSessions; d++) {
+                const cDateKey = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName));
+                if (cDateKey === subDate) {
+                    mappedDay = d;
+                    break;
+                }
+            }
+        }
+        if (!mappedDay && s.day !== undefined && s.day !== null) {
+            const rawDay = Number(s.day);
+            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
+                mappedDay = rawDay;
+            }
+        }
+        if (mappedDay && !daySubMap[mappedDay]) {
+            daySubMap[mappedDay] = s;
+        }
+    });
+
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
         // Compute session date (MWF for Immerse; Mon-Sat for DIP/POD)
         const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
         const cardDateKey = getLocalDateKey(cardDate);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
-        const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
+        // EXCLUSIVE RESOLUTION: matching submission from daySubMap
+        const sub = daySubMap[dayNum] || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
         const isCompleted = sub && (isPod || (!isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0)));
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
-        const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
-        const dayTitle = dayCfg.title || (isImmerse ? (dayCfg.mainQuestion || `Session ${dayNum}: Video Reflection`) : (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : '')));
+        const dayCfg = msConfigs[cardDateKey] || {};
+        const dayTitle = dayCfg.title || (isImmerse ? (dayCfg.mainQuestion || '') : (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : '')));
 
         const isToday = (cardDateKey === todayKey);
         const isPast = (cardDateKey < todayKey);
@@ -9613,11 +9724,46 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleName) {
     }
     const msId = activeMilestoneId || 1;
     const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(targetUserId) : [];
-    let sub = subs.find(s => String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
+    const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
+    const typeSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod);
+
+    const userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(targetUserId, msId, normalizedMod) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(targetUserId, msId) : null) || getLocalDateKey(new Date());
+    let milestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
+    if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
+    milestoneStartDate.setHours(0,0,0,0);
+
+    const isImmerse = (normalizedMod === 'immerse');
+    const totalSessions = isImmerse ? (msId === 1 ? 9 : 12) : ((msId === 1) ? 21 : 30);
+
+    const daySubMap = {};
+    typeSubs.forEach(s => {
+        let mappedDay = null;
+        const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
+        if (subDate) {
+            for (let d = 1; d <= totalSessions; d++) {
+                const cDateKey = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, normalizedMod));
+                if (cDateKey === subDate) {
+                    mappedDay = d;
+                    break;
+                }
+            }
+        }
+        if (!mappedDay && s.day !== undefined && s.day !== null) {
+            const rawDay = Number(s.day);
+            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
+                mappedDay = rawDay;
+            }
+        }
+        if (mappedDay && !daySubMap[mappedDay]) {
+            daySubMap[mappedDay] = s;
+        }
+    });
+
+    let sub = daySubMap[Number(dayNumber)];
     if (!sub) {
         try {
             const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
+            sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod && String(s.day) === String(dayNumber));
         } catch(e) {}
     }
     if (!sub) {
@@ -9839,7 +9985,13 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     }
 
     let bodyHtml = `
-        <div class="space-y-4">
+        <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-clipboard-list text-indigo-400"></i> Check-in Questions & Responses
+                </span>
+                <span class="text-[11px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full">${responses.length} Question${responses.length > 1 ? 's' : ''}</span>
+            </div>
             ${responses.map((q, qIdx) => {
                 const qNum = qIdx + 1;
                 const qTitle = q.title || q.question || `Question ${qNum}`;
@@ -9853,7 +10005,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
 
                     return `
-                        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
+                        <div class="space-y-2.5 ${qIdx > 0 ? 'pt-4 border-t border-slate-800/80' : ''}">
                             <div class="flex items-center justify-between">
                                 <span class="badge-pill ${isCorrect ? 'badge-emerald' : 'badge-amber'} text-[10px] font-bold">
                                     <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qNum}
@@ -9888,37 +10040,43 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     `;
                 }
 
+                const isExplicitText = (qType === 'text') || (qType === 'reflection') || (!qType && !q.videoUrl && !q.audioUrl && q.answer && !String(q.answer).includes('/uploads/'));
                 const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
 
-                let exactAudioSrc = isValidMedia(q.audioUrl) ? q.audioUrl : (isValidMedia(q.value) && (q.value.startsWith('data:audio') || q.value.includes('/uploads/')) ? q.value : '');
-                let exactVideoSrc = isValidMedia(q.videoUrl) ? q.videoUrl :
-                    (isValidMedia(q.url) ? q.url :
-                    (isValidMedia(q.mediaUrl) ? q.mediaUrl :
-                    (isValidMedia(q.value) && (q.value.startsWith('data:video') || q.value.startsWith('blob:') || q.value.includes('/uploads/') || q.value.endsWith('.webm') || q.value.endsWith('.mp4')) ? q.value :
-                    (isValidMedia(sub.videoUrl) ? sub.videoUrl : ''))));
-
-                if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[qIdx]) {
-                    try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[qIdx]); } catch(e) {}
-                }
-                if (!isImmerse && !exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
-                    exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+                let exactAudioSrc = '';
+                let isAudio = !isExplicitText && ((qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(q.audioUrl));
+                if (isAudio) {
+                    exactAudioSrc = isValidMedia(q.audioUrl) ? q.audioUrl : (isValidMedia(q.value) && (q.value.startsWith('data:audio') || q.value.includes('/uploads/')) ? q.value : '');
+                    if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[qIdx]) {
+                        try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[qIdx]); } catch(e) {}
+                    }
+                    if (!isImmerse && !exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
+                        exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+                    }
                 }
 
-                if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[qIdx]) {
-                    try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[qIdx]); } catch(e) {}
-                }
-                if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[0]) {
-                    try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[0]); } catch(e) {}
-                }
-                if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[qIdx]) {
-                    exactVideoSrc = window._recordedVideoData[qIdx];
-                }
-                if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[0]) {
-                    exactVideoSrc = window._recordedVideoData[0];
-                }
+                let exactVideoSrc = '';
+                let isVideo = !isExplicitText && ((qType === 'video') || qTitle.toLowerCase().includes('video') || (responses.length === 1 && isImmerse) || Boolean(q.videoUrl));
+                if (isVideo) {
+                    exactVideoSrc = isValidMedia(q.videoUrl) ? q.videoUrl :
+                        (isValidMedia(q.url) ? q.url :
+                        (isValidMedia(q.mediaUrl) ? q.mediaUrl :
+                        (isValidMedia(q.value) && (q.value.startsWith('data:video') || q.value.startsWith('blob:') || q.value.includes('/uploads/') || q.value.endsWith('.webm') || q.value.endsWith('.mp4')) ? q.value :
+                        (isValidMedia(sub.videoUrl) ? sub.videoUrl : ''))));
 
-                let isAudio = (qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc);
-                let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
+                    if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[qIdx]) {
+                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[qIdx]); } catch(e) {}
+                    }
+                    if (!exactVideoSrc && (responses.length === 1 || qType === 'video') && window._recordedVideoBlobs && window._recordedVideoBlobs[0]) {
+                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[0]); } catch(e) {}
+                    }
+                    if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[qIdx]) {
+                        exactVideoSrc = window._recordedVideoData[qIdx];
+                    }
+                    if (!exactVideoSrc && (responses.length === 1 || qType === 'video') && window._recordedVideoData && window._recordedVideoData[0]) {
+                        exactVideoSrc = window._recordedVideoData[0];
+                    }
+                }
 
                 let mediaTitle = isAudio 
                     ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
@@ -9973,8 +10131,13 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 }
 
                 return `
-                    <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Question ${qNum}</span>
+                    <div class="space-y-2.5 ${qIdx > 0 ? 'pt-4 border-t border-slate-800/80' : ''}">
+                        <div class="flex items-center justify-between">
+                            <span class="badge-pill bg-indigo-950/60 text-indigo-300 border border-indigo-700/40 text-[10px] font-bold">
+                                <i class="fas fa-question-circle mr-1 text-indigo-400"></i> Question ${qNum}
+                            </span>
+                            <span class="text-[10px] font-mono text-slate-400 uppercase">${qType || 'response'}</span>
+                        </div>
                         <h5 class="text-xs font-bold text-white">${qTitle}</h5>
                         ${contentHtml}
                     </div>

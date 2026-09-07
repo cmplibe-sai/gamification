@@ -234,7 +234,113 @@ const creatorHtml = document.body.lastInsertedHtml;
 assert.ok(creatorHtml.includes('Factor 1 (70% Attempt):'), 'Creator view must retain Factor 1 audit info');
 assert.ok(creatorHtml.includes('Factor 2 (30% Relatability):'), 'Creator view must retain Factor 2 audit info');
 assert.ok(creatorHtml.includes('Reviewing as Creator'), 'Creator review mode indicator must be present');
-console.log('✅ Creator View Modal test passed!');
+console.log('--- Testing 4: User Desert Story (Text) + Watch Brand (Video) & Unified Block ---');
+const userCheckinSub = {
+    id: 'sub_desert_watch',
+    userId: 'usr_chandra_349',
+    userEmail: 'chandrasai349@gmail.com',
+    type: 'immerse',
+    moduleType: 'immerse',
+    milestoneId: 1,
+    day: 1,
+    dateKey: '2026-09-07',
+    submittedAt: '2026-09-07T12:00:00Z',
+    videoUrl: 'https://example.com/uploads/watch_brand_video.webm',
+    responses: [
+        {
+            title: "Today's story is about the desert",
+            type: "text",
+            answer: "The desert taught us resilience and conserving scarce resources."
+        },
+        {
+            title: "Which is your favorite watch brand and why?",
+            type: "video",
+            videoUrl: "https://example.com/uploads/watch_brand_video.webm",
+            answer: "Video Reflection Recorded & Verified"
+        }
+    ]
+};
+renderSubmissionDetailModal(userCheckinSub, 'usr_chandra_349', 'Day 1', 'immerse');
+const desertHtml = document.body.lastInsertedHtml;
+// Check unified container exists
+assert.ok(desertHtml.includes('Check-in Questions & Responses'), 'Must contain unified container header');
+assert.ok(desertHtml.includes("Today's story is about the desert"), 'Question 1 prompt must be present');
+assert.ok(desertHtml.includes("The desert taught us resilience"), 'Question 1 text response must be present');
+assert.ok(desertHtml.includes("Which is your favorite watch brand and why?"), 'Question 2 prompt must be present');
+assert.ok(desertHtml.includes("watch_brand_video.webm"), 'Question 2 video must be present');
+
+// Count <video occurrences: must be exactly 1!
+const videoTags = (desertHtml.match(/<video/g) || []).length;
+assert.strictEqual(videoTags, 1, 'There must be EXACTLY ONE <video> player, not two!');
+console.log('✅ Desert Story (Text) and Watch Brand (Video) unified block & single video test passed!');
+
+console.log('--- Testing 5: Title Leak & Hourglass Modal ---');
+// Config only for 2026-09-07
+customMilestoneConfigs[1] = customMilestoneConfigs[1] || {};
+customMilestoneConfigs[1]['immerse'] = {
+    '2026-09-07': { title: "#cd514: Tissot's D2C Tick-Tock", mainQuestion: "Explain D2C channels" }
+};
+const timelineContainer = { innerHTML: '' };
+global.document.getElementById = (id) => {
+    if (id === 'milestoneTimelinesContent' || id === 'milestoneTimeline') return timelineContainer;
+    return { innerHTML: '', querySelectorAll: () => [], classList: { contains: (c) => (c === 'hidden'), add: () => {}, remove: () => {} }, remove: () => {} };
+};
+
+// Test switchMilestoneTab for Day 2 (2026-09-09)
+global.currentUser = { _id: 'usr_cust_123', email: 'student@example.com', role: 'learner' };
+global.activeMilestoneId = 1;
+switchMilestoneTab('immerse');
+const timelineHtml = timelineContainer.innerHTML;
+assert.ok(timelineHtml.includes("7 Sept"), 'Day 1 date present');
+assert.ok(timelineHtml.includes("#cd514: Tissot's D2C Tick-Tock"), 'Day 1 title present');
+// But for Day 2 (9 Sept), it must NOT have the title "#cd514: Tissot's D2C Tick-Tock" attached to it!
+const day2Segment = timelineHtml.substring(timelineHtml.indexOf('9 Sept'), timelineHtml.indexOf('11 Sept'));
+assert.ok(!day2Segment.includes("Tissot's D2C Tick-Tock"), 'Day 2 must NOT inherit Day 1 title!');
+console.log('✅ Title leak test passed!');
+
+// Test openSubmissionModal on Day 2 (unconfigured day)
+document.body.lastInsertedHtml = '';
+openSubmissionModal(2, 'immerse');
+assert.ok(document.body.lastInsertedHtml.includes('Check-in Setup in Progress'), 'Must show setup in progress modal for unconfigured day');
+assert.ok(document.body.lastInsertedHtml.includes('Check-in: creator is configuring the setup'), 'Must show configuring setup message');
+console.log('✅ Hourglass Setup In Progress Modal test passed!');
+
+console.log('--- Testing 6: Cohort Grid Chandra Legacy Day 4 -> Day 1 Mapping ---');
+// Chandra's start date is 2026-09-07
+await setUserModuleStartDate('usr_chandra_349', 1, 'immerse', '2026-09-07');
+switchAdminModuleTab('immerse');
+activeAdminMilestoneId = 1;
+TEST_EMAILS = ['chandrasai349@gmail.com'];
+levelUpAccessConfig = ['mango_1'];
+adminRealtimeUsers = [
+    { _id: 'usr_chandra_349', name: 'Chandra', email: 'chandrasai349@gmail.com', subscribedMangoes: ['mango_1'] }
+];
+actualUsers = adminRealtimeUsers;
+// Chandra's submission has legacy day: 4, but dateKey: '2026-09-07'
+const chandraLegacySub = {
+    id: 'sub_chandra_legacy',
+    userId: 'usr_chandra_349',
+    type: 'immerse',
+    day: 4,
+    dateKey: '2026-09-07',
+    status: 'completed',
+    lcReward: 43
+};
+getUserSubmissionsByUserId = (uid) => {
+    const id = (uid && typeof uid === 'object') ? uid._id : uid;
+    return id === 'usr_chandra_349' ? [chandraLegacySub] : [];
+};
+const mockTable = { innerHTML: '' };
+document.getElementById = (id) => {
+    if (id === 'adminCompletionTable') return mockTable;
+    if (id === 'adminCohortSubmissionsCount') return { innerHTML: '' };
+    return { innerHTML: '', querySelectorAll: () => [], classList: { contains: (c) => (c === 'hidden'), add: () => {}, remove: () => {} }, remove: () => {} };
+};
+renderAdminCohortSubmissions();
+console.log('MOCK TABLE HTML:', mockTable.innerHTML);
+assert.ok(mockTable.innerHTML.includes('43 LCs'), 'Chandra D1 must show 43 LCs');
+assert.ok(!mockTable.innerHTML.includes('Day 1: 7 Sept'), 'Bulky Day 1 badge text must be removed from customer cell');
+console.log('✅ Cohort Grid Chandra D1 mapping and badge removal test passed!');
 
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
 }
