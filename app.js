@@ -10047,7 +10047,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     `;
                 }
 
-                const isSoleImmerseVideo = (responses.length === 1 && isImmerse && Boolean(sub.videoUrl || q.videoUrl || (q.answer && String(q.answer).toLowerCase().includes('video'))));
+                const isSoleImmerseVideo = (responses.length === 1 && isImmerse && Boolean(sub.videoUrl || q.videoUrl || (q.answer && String(q.answer).toLowerCase().includes('video reflection'))));
                 const isExplicitText = !isSoleImmerseVideo && (
                     (qType === 'text') || 
                     (qType === 'reflection') || 
