@@ -1101,7 +1101,7 @@ async function syncGlobalServerData() {
             return;
         }
 
-        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, levelUpAccess: serverLevelUpAccess } = response.data;
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
 
@@ -1238,6 +1238,14 @@ async function syncGlobalServerData() {
         if (serverJoinDates && typeof serverJoinDates === 'object') {
             userMilestoneJoinDates = serverJoinDates;
             try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(userMilestoneJoinDates)); } catch(e) {}
+        }
+
+        // 4b. USER MODULE START DATES SYNC (Dynamic per-module Day 1 tracking)
+        if (serverModuleStartDates && typeof serverModuleStartDates === 'object') {
+            let localModDates = {};
+            try { localModDates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
+            const merged = { ...localModDates, ...serverModuleStartDates };
+            try { localStorage.setItem('userModuleStartDates', JSON.stringify(merged)); } catch(e) {}
         }
 
         // 5. LEVEL-UP ACCESS CONFIG SYNC (Real-time cross-browser sync)
@@ -5268,6 +5276,15 @@ function renderAdminCohortSubmissions() {
         let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
             : (user.isPending ? `<button onclick="alert('Cert Approved!')" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
             
+        const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null;
+        let displayModDate = 'Set Day 1';
+        if (modStart) {
+            const dObj = new Date(modStart + 'T00:00:00');
+            if (!isNaN(dObj.getTime())) {
+                displayModDate = dObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            }
+        }
+
         let rowHtml = `
             <tr class="hover:bg-slate-800/50 transition-colors group">
                 <td class="px-3 py-3 text-center font-mono font-extrabold text-indigo-400 border-r border-slate-700 bg-slate-900/90 group-hover:bg-slate-800/90 sticky left-0 z-20">#${userIndex + 1}</td>
@@ -5277,6 +5294,11 @@ function renderAdminCohortSubmissions() {
                         <div>
                             <p class="text-sm font-bold text-white truncate w-40">${user.name || 'Customer'}</p>
                             <p class="text-[10px] text-slate-400 truncate w-40">${user.email || user.phone}</p>
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                                <button type="button" onclick="promptSetCustomerModuleStartDate('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', '${activeAdminModule}')" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-indigo-500/50 transition-all flex items-center gap-1" title="Set or change Day 1 Start Date for ${activeAdminModule.toUpperCase()}">
+                                    <i class="fas fa-calendar-day text-indigo-400 text-[9px]"></i> Day 1: ${displayModDate}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -5344,6 +5366,23 @@ function renderAdminCohortSubmissions() {
     table.innerHTML = theadHtml + tbodyHtml;
 }
 window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;   
+
+function promptSetCustomerModuleStartDate(userId, userName, defaultMod) {
+    const mod = prompt(`Select module to set Day 1 Start Date for ${userName}:\n(dip, pod, immerse, residency, problem_solution)`, defaultMod || activeAdminModule || 'pod');
+    if (!mod) return;
+    const normalizedMod = normalizeLevelUpType(mod);
+    const msId = activeAdminMilestoneId || 1;
+    const currentDate = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(userId, msId, normalizedMod) : null) || getLocalDateKey(new Date());
+    const newDate = prompt(`Enter Day 1 Start Date for ${userName} (${normalizedMod.toUpperCase()})\nFormat: YYYY-MM-DD:`, currentDate);
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate.trim())) {
+        if (newDate) alert('Invalid date format. Please use YYYY-MM-DD');
+        return;
+    }
+    setUserModuleStartDate(userId, msId, normalizedMod, newDate.trim());
+    alert(`✅ Day 1 Start Date for ${userName} (${normalizedMod.toUpperCase()}) set to ${newDate.trim()}`);
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.promptSetCustomerModuleStartDate = promptSetCustomerModuleStartDate;
 
 customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 
@@ -7757,6 +7796,78 @@ async function joinMilestoneNow(msId) {
 }
 window.joinMilestoneNow = joinMilestoneNow;
 
+// ==============================================================
+// 1b. DYNAMIC PER-USER, PER-MODULE "DAY 1" START DATE ENGINE
+// ==============================================================
+function getUserModuleStartDate(userId, msId, moduleName) {
+    if (!userId) return null;
+    const mod = normalizeLevelUpType(moduleName || 'dip');
+    let dates = {};
+    try { dates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
+    
+    const k1 = `${userId}_MS${msId}_${mod}`;
+    const k2 = `${userId}_${msId}_${mod}`;
+    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    const k3 = userEmail ? `${userEmail}_MS${msId}_${mod}` : '';
+    const k4 = userEmail ? `${userEmail}_${msId}_${mod}` : '';
+    let foundDate = dates[k1] || dates[k2] || (k3 && dates[k3]) || (k4 && dates[k4]) || null;
+
+    if (!foundDate) {
+        // Auto-detect from user's earliest submission for this specific module
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+        const modSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType || 'dip') === mod && String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+        if (modSubs.length > 0) {
+            modSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+            foundDate = modSubs[0].dateKey || modSubs[0].date || (modSubs[0].submittedAt ? modSubs[0].submittedAt.split('T')[0] : null);
+            if (foundDate) {
+                dates[k1] = foundDate;
+                if (k3) dates[k3] = foundDate;
+                try { localStorage.setItem('userModuleStartDates', JSON.stringify(dates)); } catch(e) {}
+            }
+        }
+    }
+
+    if (!foundDate) {
+        // Fallback for 'dip' is the milestone join date
+        if (mod === 'dip') {
+            foundDate = getUserMilestoneJoinDate(userId, msId);
+        }
+    }
+
+    return foundDate;
+}
+window.getUserModuleStartDate = getUserModuleStartDate;
+
+async function setUserModuleStartDate(userId, msId, moduleName, startDate) {
+    if (!userId) return;
+    const mod = normalizeLevelUpType(moduleName || 'dip');
+    const dateKey = startDate || getLocalDateKey(new Date());
+    let dates = {};
+    try { dates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
+    
+    const k1 = `${userId}_MS${msId}_${mod}`;
+    dates[k1] = dateKey;
+    let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
+    if (userEmail) {
+        dates[`${userEmail}_MS${msId}_${mod}`] = dateKey;
+    }
+    try { localStorage.setItem('userModuleStartDates', JSON.stringify(dates)); } catch(e) {}
+
+    apiFetch('/api/user-module-start-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            userId,
+            userEmail,
+            milestoneId: msId,
+            moduleName: mod,
+            startDate: dateKey,
+            allDates: dates
+        })
+    }).catch(e => console.error('Module start date sync error:', e));
+}
+window.setUserModuleStartDate = setUserModuleStartDate;
+
 
 // ==============================================================
 // 2. IN-BUILT AUDIO (MIC) & VIDEO (CAMERA) RECORDERS
@@ -8267,7 +8378,7 @@ function openSubmissionModal(dayNum, moduleName) {
     const ms = milestoneConfig.find(m => m.id === msId) || { name: `Milestone ${msId}` };
     const todayKey = getLocalDateKey(new Date());
 
-    const userJoinDateStr = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey;
+    const userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, msId, moduleName) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey);
     let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
@@ -9259,7 +9370,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         return;
     }
 
-    const userJoinDateStr = getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) || todayKey;
+    const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
+    const userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null) || (normalizedMod === 'dip' ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null) || todayKey;
     let milestoneStartDate = new Date(userJoinDateStr + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
@@ -9494,9 +9606,14 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     // DETERMINE IF VIEWER IS CREATOR/ADMIN REVIEWING A LEARNER OR LEARNER REVIEWING THEMSELVES
     const isCreatorView = Boolean(
         isAdminLogin || 
+        (typeof window !== 'undefined' && window.isAdminLogin) ||
         (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'creator' || currentUser.isAdmin) && (
             !userId || String(userId) !== String(currentUser._id) || 
             (sub && sub.userEmail && currentUser.email && sub.userEmail.toLowerCase().trim() !== currentUser.email.toLowerCase().trim())
+        )) ||
+        (typeof window !== 'undefined' && window.currentUser && (window.currentUser.role === 'creator' || window.currentUser.isAdmin) && (
+            !userId || String(userId) !== String(window.currentUser._id) || 
+            (sub && sub.userEmail && window.currentUser.email && sub.userEmail.toLowerCase().trim() !== window.currentUser.email.toLowerCase().trim())
         )) ||
         (document.getElementById('adminTab') && !document.getElementById('adminTab').classList.contains('hidden'))
     );
@@ -9594,12 +9711,27 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             .replace(/Great effort!/gi, "Learner demonstrated strong conceptual alignment.");
     }
 
-    const remarkLines = customizedRemarks.split('\n')
+    let filteredRemarks = customizedRemarks;
+    if (isImmerse && !isCreatorView) {
+        // Customer view: hide internal factor percentages/breakdown (Factor 1: 70%, Factor 2: 30%)
+        filteredRemarks = filteredRemarks
+            .split('\n')
+            .filter(l => {
+                const low = l.toLowerCase();
+                if (low.includes('factor 1') || low.includes('factor 2')) return false;
+                if (low.includes('70%') || low.includes('30%')) return false;
+                if (low.includes('relatability points') || low.includes('completion points')) return false;
+                return true;
+            })
+            .join('\n');
+    }
+
+    const remarkLines = filteredRemarks.split('\n')
         .filter(l => l.trim())
         .filter(l => !l.toLowerCase().includes('session context/description:') && !l.toLowerCase().includes('video speech transcript:'));
     const aiRemarksText = remarkLines.map((line, i) => {
         if (i === 0) return `<strong class="block text-sm mb-1.5">${line}</strong>`;
-        if (i === 1) return `<span class="block font-mono text-[10px] text-slate-400 mb-2 tracking-wide">${line}</span>`;
+        if (i === 1 && line.includes('|')) return `<span class="block font-mono text-[10px] text-slate-400 mb-2 tracking-wide">${line}</span>`;
         return `<span class="block">${line}</span>`;
     }).join('');
 
@@ -9632,54 +9764,39 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 }
             ];
         }
-    } else if (isImmerse) {
-        // Filter strictly to video responses for Immerse so no audio box is ever rendered
-        const videoResponses = responses.filter(r => (r.type === 'video') || (r.videoUrl) || (r.title && r.title.toLowerCase().includes('video')));
-        if (videoResponses.length > 0) {
-            responses = videoResponses;
-        } else {
-            responses = [{
-                title: dayCfg.mainQuestion || sub.mainQuestion || "Today's Main Reflection Question",
-                type: "video",
-                answer: "Video Reflection Recorded & Verified",
-                value: sub.videoUrl || "Video Reflection Recorded & Verified",
-                videoUrl: sub.videoUrl || ""
-            }];
-        }
     }
 
-    let bodyHtml = '';
+    let bodyHtml = `
+        <div class="space-y-4">
+            ${responses.map((q, qIdx) => {
+                const qNum = qIdx + 1;
+                const qTitle = q.title || q.question || `Question ${qNum}`;
+                const qType = (q.type || '').toLowerCase();
+                const isMcq = (qType === 'mcq' || (q.options && Array.isArray(q.options) && q.options.length > 0));
 
-    if (isPod || (responses.some(r => r.type === 'mcq' || r.options))) {
-        bodyHtml = `
-            <div class="space-y-6">
-                ${responses.map((q, qIdx) => {
+                if (isMcq) {
                     const opts = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
                     const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : -1);
                     const correctSel = q.correctOption !== undefined ? q.correctOption : 0;
                     const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
 
                     return `
-                        <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
+                        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
                             <div class="flex items-center justify-between">
                                 <span class="badge-pill ${isCorrect ? 'badge-emerald' : 'badge-amber'} text-[10px] font-bold">
-                                    <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qIdx + 1}
+                                    <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qNum}
                                 </span>
                                 <span class="text-xs font-mono font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-400'}">
                                     ${isCorrect ? `+${q.pts || 11} LCs` : '0 LCs'}
                                 </span>
                             </div>
-                            
-                            <h4 class="text-sm font-bold text-white">${q.title || q.question || 'Quiz Question'}</h4>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-2">
+                            <h4 class="text-xs font-bold text-white">${qTitle}</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                                 ${opts.map((opt, optIdx) => {
                                     const isChosen = (optIdx === userSel);
                                     const isTargetCorrect = (optIdx === correctSel);
-
                                     let cardStyle = 'bg-slate-950/80 border-slate-800 text-slate-400';
                                     let iconHtml = '<i class="far fa-circle text-slate-600 text-xs"></i>';
-
                                     if (isTargetCorrect) {
                                         cardStyle = 'bg-emerald-950/30 border-emerald-500/60 text-emerald-300 font-bold';
                                         iconHtml = '<i class="fas fa-check-circle text-emerald-400 text-xs"></i>';
@@ -9687,9 +9804,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                         cardStyle = 'bg-red-950/30 border-red-500/60 text-red-300 font-bold';
                                         iconHtml = '<i class="fas fa-times-circle text-red-400 text-xs"></i>';
                                     }
-
                                     return `
-                                        <div class="p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${cardStyle}">
+                                        <div class="p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${cardStyle}">
                                             <span class="truncate pr-2">${opt}</span>
                                             ${iconHtml}
                                         </div>
@@ -9698,113 +9814,102 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             </div>
                         </div>
                     `;
-                }).join('')}
-            </div>
-        `;
-    } else {
-        bodyHtml = `
-            <div class="space-y-4">
-                ${responses.map((r, i) => {
-                    const qTitle = r.title || r.question || `Question ${i + 1}`;
-                    const qType = (r.type || '').toLowerCase();
-                    
-                    const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
-                    
-                    let exactAudioSrc = isValidMedia(r.audioUrl) ? r.audioUrl : (isValidMedia(r.value) && (r.value.startsWith('data:audio') || r.value.includes('/uploads/')) ? r.value : '');
-                    let exactVideoSrc = isValidMedia(r.videoUrl) ? r.videoUrl :
-                        (isValidMedia(r.url) ? r.url :
-                        (isValidMedia(r.mediaUrl) ? r.mediaUrl :
-                        (isValidMedia(r.value) && (r.value.startsWith('data:video') || r.value.startsWith('blob:') || r.value.includes('/uploads/') || r.value.endsWith('.webm') || r.value.endsWith('.mp4')) ? r.value :
-                        (isValidMedia(sub.videoUrl) ? sub.videoUrl : ''))));
-                    
-                    // Fallback to active recording blobs in memory
-                    if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[i]) {
-                        try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[i]); } catch(e) {}
-                    }
-                    if (!isImmerse && !exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
-                        // Reliable audio player fallback for old submissions so audio can always be played & downloaded
-                        exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
-                    }
+                }
 
-                    if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[i]) {
-                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[i]); } catch(e) {}
-                    }
-                    if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[0]) {
-                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[0]); } catch(e) {}
-                    }
-                    if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[i]) {
-                        exactVideoSrc = window._recordedVideoData[i];
-                    }
-                    if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[0]) {
-                        exactVideoSrc = window._recordedVideoData[0];
-                    }
+                const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
 
-                    let isAudio = !isImmerse && ((qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc));
-                    let isVideo = isImmerse || (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
+                let exactAudioSrc = isValidMedia(q.audioUrl) ? q.audioUrl : (isValidMedia(q.value) && (q.value.startsWith('data:audio') || q.value.includes('/uploads/')) ? q.value : '');
+                let exactVideoSrc = isValidMedia(q.videoUrl) ? q.videoUrl :
+                    (isValidMedia(q.url) ? q.url :
+                    (isValidMedia(q.mediaUrl) ? q.mediaUrl :
+                    (isValidMedia(q.value) && (q.value.startsWith('data:video') || q.value.startsWith('blob:') || q.value.includes('/uploads/') || q.value.endsWith('.webm') || q.value.endsWith('.mp4')) ? q.value :
+                    (isValidMedia(sub.videoUrl) ? sub.videoUrl : ''))));
 
-                    let mediaTitle = isAudio 
-                        ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
-                        : (isCreatorView ? "Learner Video Response (Recorded):" : "Video Response (Recorded):");
-                    let downloadTitle = isAudio
-                        ? (isCreatorView ? "Download Learner Audio" : "Download Audio")
-                        : (isCreatorView ? "Download Learner Video" : "Download Video");
+                if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[qIdx]) {
+                    try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[qIdx]); } catch(e) {}
+                }
+                if (!isImmerse && !exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
+                    exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+                }
 
-                    let contentHtml = '';
-                    if (isAudio) {
-                        contentHtml = `
-                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <i class="fas fa-microphone-lines text-indigo-400"></i> ${mediaTitle}
-                                    </span>
-                                    ${exactAudioSrc ? `
-                                        <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
-                                            <i class="fas fa-download"></i> ${downloadTitle}
-                                        </button>
-                                    ` : '<span class="text-[10px] text-slate-500 italic">Voice reflection submitted</span>'}
-                                </div>
-                                ${exactAudioSrc ? `
-                                    <audio controls class="w-full h-10 rounded-xl mt-1 bg-slate-900 border border-slate-700/80" src="${exactAudioSrc}"></audio>
-                                ` : `
-                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Audio Voice Reflection Recorded & Verified'}</p>
-                                `}
-                            </div>
-                        `;
-                    } else if (isVideo) {
-                        contentHtml = `
-                            <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <i class="fas fa-video ${isImmerse ? 'text-purple-400' : 'text-indigo-400'}"></i> ${mediaTitle}
-                                    </span>
-                                    ${exactVideoSrc ? `
-                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold ${isImmerse ? 'text-purple-400 hover:text-purple-300 bg-purple-600/20 border-purple-500/30 hover:bg-purple-600/30' : 'text-indigo-400 hover:text-indigo-300 bg-indigo-600/20 border-indigo-500/30 hover:bg-indigo-600/30'} flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all">
-                                            <i class="fas fa-download"></i> ${downloadTitle}
-                                        </button>
-                                    ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
-                                </div>
+                if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[qIdx]) {
+                    try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[qIdx]); } catch(e) {}
+                }
+                if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[0]) {
+                    try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[0]); } catch(e) {}
+                }
+                if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[qIdx]) {
+                    exactVideoSrc = window._recordedVideoData[qIdx];
+                }
+                if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[0]) {
+                    exactVideoSrc = window._recordedVideoData[0];
+                }
+
+                let isAudio = (qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc);
+                let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
+
+                let mediaTitle = isAudio 
+                    ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
+                    : (isCreatorView ? "Learner Video Response (Recorded):" : "Video Response (Recorded):");
+                let downloadTitle = isAudio
+                    ? (isCreatorView ? "Download Learner Audio" : "Download Audio")
+                    : (isCreatorView ? "Download Learner Video" : "Download Video");
+
+                let contentHtml = '';
+                if (isVideo) {
+                    contentHtml = `
+                        <div class="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <i class="fas fa-video ${isImmerse ? 'text-purple-400' : 'text-indigo-400'}"></i> ${mediaTitle}
+                                </span>
                                 ${exactVideoSrc ? `
-                                    <video controls class="w-full max-h-60 rounded-xl bg-black border border-slate-800 mt-1" src="${exactVideoSrc}"></video>
-                                ` : `
-                                    <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Video Response Completed'}</p>
-                                `}
+                                    <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${qNum}.webm')" class="text-xs font-bold ${isImmerse ? 'text-purple-400 hover:text-purple-300 bg-purple-600/20 border-purple-500/30 hover:bg-purple-600/30' : 'text-indigo-400 hover:text-indigo-300 bg-indigo-600/20 border-indigo-500/30 hover:bg-indigo-600/30'} flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all">
+                                        <i class="fas fa-download"></i> ${downloadTitle}
+                                    </button>
+                                ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
                             </div>
-                        `;
-                    } else {
-                        contentHtml = `<p class="text-xs text-slate-300 bg-slate-950 p-3.5 rounded-lg border border-slate-800/80 leading-relaxed font-sans">${r.value || r.answer || r.text || 'Completed'}</p>`;
-                    }
-
-                    return `
-                        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-                            <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Question ${i + 1}</span>
-                            <h5 class="text-xs font-bold text-white">${qTitle}</h5>
-                            ${contentHtml}
+                            ${exactVideoSrc ? `
+                                <video controls class="w-full max-h-60 rounded-xl bg-black border border-slate-800 mt-1" src="${exactVideoSrc}"></video>
+                            ` : `
+                                <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${q.value || q.answer || 'Video Response Completed'}</p>
+                            `}
                         </div>
                     `;
-                }).join('')}
-            </div>
-        `;
-    }
+                } else if (isAudio) {
+                    contentHtml = `
+                        <div class="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                                    <i class="fas fa-microphone-lines text-indigo-400"></i> ${mediaTitle}
+                                </span>
+                                ${exactAudioSrc ? `
+                                    <button type="button" onclick="downloadSubmissionMedia('audio', '${exactAudioSrc}', 'Reflection_Day${actualDay}_Q${qNum}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
+                                        <i class="fas fa-download"></i> ${downloadTitle}
+                                    </button>
+                                ` : '<span class="text-[10px] text-slate-500 italic">Voice reflection submitted</span>'}
+                            </div>
+                            ${exactAudioSrc ? `
+                                <audio controls class="w-full h-10 rounded-xl mt-1 bg-slate-900 border border-slate-700/80" src="${exactAudioSrc}"></audio>
+                            ` : `
+                                <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${q.value || q.answer || 'Audio Voice Reflection Recorded & Verified'}</p>
+                            `}
+                        </div>
+                    `;
+                } else {
+                    contentHtml = `<p class="text-xs text-slate-200 bg-slate-950 p-3.5 rounded-lg border border-slate-800/80 leading-relaxed font-sans">${q.value || q.answer || q.text || 'Reflection submitted'}</p>`;
+                }
+
+                return `
+                    <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Question ${qNum}</span>
+                        <h5 class="text-xs font-bold text-white">${qTitle}</h5>
+                        ${contentHtml}
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 
     const isEvaluating = (sub.status === 'evaluating');
     const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (lcReward === 0 || matchPercentage < 50)));
@@ -9847,6 +9952,67 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const immerseF1Earned = (sub.factor1Earned !== undefined) ? Boolean(sub.factor1Earned) : (lcReward >= immerseF1Pts);
     const immerseF2Earned = (sub.factor2Earned !== undefined) ? Boolean(sub.factor2Earned) : (lcReward >= immerseBasePts);
     const immerseFullyVerified = Boolean(immerseF1Earned && immerseF2Earned);
+
+    // AI EVALUATION CARD HTML
+    let aiEvaluationCardHtml = '';
+    if (isImmerse) {
+        aiEvaluationCardHtml = `
+            <!-- IMMERSE VIDEO EVALUATION CARD -->
+            <div class="p-5 bg-gradient-to-br from-purple-950/60 via-slate-900 to-purple-950/30 border ${isEvaluating ? 'border-purple-500/40 animate-pulse' : 'border-purple-500/40'} rounded-2xl space-y-3 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 border border-purple-500/30 flex items-center justify-center text-sm">
+                            <i class="fas fa-award"></i>
+                        </div>
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'cMPLi Immerse Video Evaluation (Creator Review Mode)' : 'cMPLi Immerse Video Evaluation'}</span>
+                    </div>
+                    <span class="badge-pill ${isEvaluating ? 'bg-purple-900/40 text-purple-300 border border-purple-500/40' : (immerseFullyVerified ? 'badge-emerald' : 'bg-purple-900/50 text-purple-300 border border-purple-600/40')} text-[11px] font-bold">
+                        ${isEvaluating ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating Video' : (immerseFullyVerified ? `<i class="fas fa-check-circle mr-1"></i> Fully Verified (+${immerseBasePts} LCs)` : `<i class="fas fa-check mr-1"></i> Video Attempt (+${lcReward} LCs)`)}
+                    </span>
+                </div>
+                <div class="text-xs text-slate-200 border-slate-800/90 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
+                    ${aiRemarksText}
+                </div>
+                ${isCreatorView ? `
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
+                        <span><i class="fas fa-video text-purple-400 mr-1"></i> Factor 1 (70% Attempt): <strong class="text-purple-300">${isEvaluating ? 'Pending' : (immerseF1Earned ? `+${immerseF1Pts} LCs (Verified)` : '0 LCs (Missing video)')}</strong></span>
+                        <span><i class="fas fa-brain text-cyan-400 mr-1"></i> Factor 2 (30% Relatability): <strong class="${immerseF2Earned ? 'text-emerald-300' : 'text-slate-500'}">${isEvaluating ? 'Pending' : (immerseF2Earned ? `+${immerseF2Pts} LCs (Verified)` : '0 LCs (Under 10 words or off-topic)')}</strong></span>
+                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Total Credited: <strong class="text-emerald-300">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</strong></span>
+                    </div>
+                ` : `
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-300 font-mono border-t border-purple-800/40">
+                        <span class="flex items-center gap-1.5"><i class="fas fa-shield-check text-emerald-400"></i> Reflection Status: <strong class="text-emerald-300">Verified & Approved</strong></span>
+                        <span class="flex items-center gap-1.5"><i class="fas fa-coins text-emerald-400"></i> Total Credited: <strong class="text-emerald-300">+${lcReward} LCs</strong></span>
+                    </div>
+                `}
+            </div>
+        `;
+    } else if (!isPod) {
+        aiEvaluationCardHtml = `
+            <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30')} flex items-center justify-center text-sm border">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'AI Rubric Evaluation (Creator Review Mode)' : 'AI Evaluation & Verification Remarks'}</span>
+                    </div>
+                    <span class="badge-pill ${badgeClass} text-[11px] font-bold">
+                        ${badgeText}
+                    </span>
+                </div>
+                <div class="text-xs ${isEvaluating ? 'text-indigo-200 border-indigo-500/30' : (isMismatch ? 'text-rose-200 border-rose-500/30' : 'text-slate-200 border-slate-800/90')} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
+                    ${aiRemarksText}
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
+                    <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
+                    <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
+                    <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${passLabel}</strong></span>
+                    <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
+                </div>
+            </div>
+        `;
+    }
 
     const fullModalHtml = `
         <div id="${modalId}" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animation-fade-in">
@@ -9906,57 +10072,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
 
-                <!-- QUESTION & AUDIO/VIDEO RESPONSES (ON TOP) -->
-                ${bodyHtml}
+                <!-- AI EVALUATION CARD (ON TOP, DIRECTLY BELOW SUBMISSION TIME) -->
+                ${aiEvaluationCardHtml}
 
-                <!-- AI EVALUATION CARD -->
-                ${isImmerse ? `
-                <!-- IMMERSE 2-FACTOR VIDEO EVALUATION CARD -->
-                <div class="p-5 bg-gradient-to-br from-purple-950/60 via-slate-900 to-purple-950/30 border ${isEvaluating ? 'border-purple-500/40 animate-pulse' : 'border-purple-500/40'} rounded-2xl space-y-3 shadow-xl">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 border border-purple-500/30 flex items-center justify-center text-sm">
-                                <i class="fas fa-award"></i>
-                            </div>
-                            <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'cMPLi Immerse Video Evaluation (Creator Review Mode)' : 'cMPLi Immerse 2-Factor Video Evaluation'}</span>
-                        </div>
-                        <span class="badge-pill ${isEvaluating ? 'bg-purple-900/40 text-purple-300 border border-purple-500/40' : (immerseFullyVerified ? 'badge-emerald' : 'bg-purple-900/50 text-purple-300 border border-purple-600/40')} text-[11px] font-bold">
-                            ${isEvaluating ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating Video' : (immerseFullyVerified ? `<i class="fas fa-check-circle mr-1"></i> Fully Verified (+${immerseBasePts} LCs)` : `<i class="fas fa-check mr-1"></i> Video Attempt (+${lcReward} LCs)`)}
-                        </span>
-                    </div>
-                    <div class="text-xs text-slate-200 border-slate-800/90 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
-                        ${aiRemarksText}
-                    </div>
-                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
-                        <span><i class="fas fa-video text-purple-400 mr-1"></i> Factor 1 (70% Attempt): <strong class="text-purple-300">${isEvaluating ? 'Pending' : (immerseF1Earned ? `+${immerseF1Pts} LCs (Verified)` : '0 LCs (Missing video)')}</strong></span>
-                        <span><i class="fas fa-brain text-cyan-400 mr-1"></i> Factor 2 (30% Relatability): <strong class="${immerseF2Earned ? 'text-emerald-300' : 'text-slate-500'}">${isEvaluating ? 'Pending' : (immerseF2Earned ? `+${immerseF2Pts} LCs (Verified)` : '0 LCs (Under 10 words or off-topic)')}</strong></span>
-                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Total Credited: <strong class="text-emerald-300">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</strong></span>
-                    </div>
-                </div>
-                ` : (!isPod ? `
-                <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30')} flex items-center justify-center text-sm border">
-                                <i class="fas fa-robot"></i>
-                            </div>
-                            <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'AI Rubric Evaluation (Creator Review Mode)' : 'AI Evaluation & Verification Remarks'}</span>
-                        </div>
-                        <span class="badge-pill ${badgeClass} text-[11px] font-bold">
-                            ${badgeText}
-                        </span>
-                    </div>
-                    <div class="text-xs ${isEvaluating ? 'text-indigo-200 border-indigo-500/30' : (isMismatch ? 'text-rose-200 border-rose-500/30' : 'text-slate-200 border-slate-800/90')} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
-                        ${aiRemarksText}
-                    </div>
-                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
-                        <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
-                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
-                        <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${passLabel}</strong></span>
-                        <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
-                    </div>
-                </div>
-                ` : '')}
+                <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
+                ${bodyHtml}
 
                 <div class="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
                     ${isCreatorView ? `

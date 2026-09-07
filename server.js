@@ -678,6 +678,67 @@ app.post(['/api/user-join-date', '/gamification/api/user-join-date'], (req, res)
     }
 });
 
+// ==============================================================
+// DEDICATED USER MODULE START DATES DATABASE ENGINE
+// ==============================================================
+const USER_MODULE_START_DATES_FILE = path.join(DATA_DIR, 'user_module_start_dates.json');
+
+function getUserModuleStartDatesFromDb() {
+    try {
+        if (fs.existsSync(USER_MODULE_START_DATES_FILE)) {
+            const raw = fs.readFileSync(USER_MODULE_START_DATES_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading user_module_start_dates.json:', e);
+    }
+    return store.userModuleStartDates || {};
+}
+
+function saveUserModuleStartDatesToDb(dates) {
+    try {
+        const obj = (dates && typeof dates === 'object') ? dates : {};
+        fs.writeFileSync(USER_MODULE_START_DATES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.userModuleStartDates = obj;
+        saveStore();
+        console.log(`[User Module Start Dates DB] Saved to ${USER_MODULE_START_DATES_FILE}`);
+        return obj;
+    } catch(e) {
+        console.error('Error writing user_module_start_dates.json:', e);
+        return store.userModuleStartDates || {};
+    }
+}
+
+// GET endpoint — returns current module start dates
+app.get(['/api/user-module-start-date', '/gamification/api/user-module-start-date'], (req, res) => {
+    const data = getUserModuleStartDatesFromDb();
+    res.json({ success: true, data });
+});
+
+// POST endpoint — saves a user's start date for a specific module
+app.post(['/api/user-module-start-date', '/gamification/api/user-module-start-date'], (req, res) => {
+    try {
+        const { userId, userEmail, milestoneId, moduleName, startDate, allDates } = req.body;
+        const current = getUserModuleStartDatesFromDb();
+
+        if (allDates && typeof allDates === 'object') {
+            Object.assign(current, allDates);
+        } else if ((userId || userEmail) && milestoneId && moduleName && startDate) {
+            const msId = String(milestoneId);
+            const mod = String(moduleName).toLowerCase().trim();
+            const dateStr = String(startDate);
+            if (userId) current[`${userId}_MS${msId}_${mod}`] = dateStr;
+            if (userEmail) current[`${userEmail.toLowerCase().trim()}_MS${msId}_${mod}`] = dateStr;
+        }
+
+        const saved = saveUserModuleStartDatesToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
@@ -705,6 +766,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
             joinDates: getUserJoinDatesFromDb(),
+            userModuleStartDates: getUserModuleStartDatesFromDb(),
             levelUpAccess: liveLevelUpAccess,
             milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
         }
@@ -1508,7 +1570,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             await Promise.allSettled(transcriptionPromises);
         }
 
-        // 2. Extract combined video transcript and word count (strictly genuine speech transcripts)
+        // 2. Extract combined video transcript, text answers, and word count
         let videoTranscript = '';
         if (Array.isArray(subAnswers)) {
             subAnswers.forEach(a => {
@@ -1522,18 +1584,31 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         }
         videoTranscript = videoTranscript.trim();
 
-        const words = videoTranscript.split(/\s+/).filter(w => w.length > 0);
+        // Also incorporate text answers from normal reflection questions if present
+        let combinedContent = videoTranscript;
+        if (Array.isArray(subAnswers)) {
+            subAnswers.forEach(a => {
+                if (a.type === 'text' && a.answer && typeof a.answer === 'string') {
+                    combinedContent += ' ' + a.answer.trim();
+                } else if (a.type === 'text' && a.value && typeof a.value === 'string' && !a.value.startsWith('data:') && !a.value.startsWith('http')) {
+                    combinedContent += ' ' + a.value.trim();
+                }
+            });
+        }
+        combinedContent = combinedContent.trim();
+
+        const words = (combinedContent || videoTranscript).split(/\s+/).filter(w => w.length > 0);
         const wordCount = words.length;
 
-        const hasVideo = Array.isArray(subAnswers) && subAnswers.some(a => {
-            const u = a.videoUrl || ((a.type === 'video') ? (a.value || '') : '');
+        const hasMedia = Array.isArray(subAnswers) && subAnswers.some(a => {
+            const u = a.videoUrl || a.audioUrl || ((a.type === 'video' || a.type === 'audio') ? (a.value || '') : '');
             if (!u || typeof u !== 'string') return false;
             if (u.includes('/uploads/')) {
                 const filename = path.basename(u.split('?')[0]);
                 const localPath = path.join(UPLOADS_DIR, filename);
                 return fs.existsSync(localPath);
             }
-            return (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('data:video') || u.startsWith('blob:'));
+            return (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('data:') || u.startsWith('blob:'));
         });
 
         // 3. 2-Factor Scoring Calculation (70% Attempt / 30% Relatability)
@@ -1545,15 +1620,15 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         let factor1Earned = false;
         let factor2Earned = false;
 
-        // Factor 1: 70% of on-time LCs for completion / video attempt (strictly gated on actual video file/recording)
-        const hasValidVideoAttempt = Boolean(hasVideo);
+        // Factor 1: 70% of on-time LCs for completion / media attempt (strictly gated on actual video/media file/recording)
+        const hasValidVideoAttempt = Boolean(hasMedia || (sub.videoUrl && String(sub.videoUrl).length > 5));
         if (hasValidVideoAttempt) {
             finalLcReward += completionPoints;
             factor1Earned = true;
         }
 
-        // Factor 2: 30% based on relatability to main question + session description (min 10 words spoken)
-        const relatabilityResult = evaluateImmerseRelatability(mainQuestion, sessionDescription, videoTranscript, wordCount);
+        // Factor 2: 30% based on relatability to main question + session description (min 10 words spoken/answered)
+        const relatabilityResult = evaluateImmerseRelatability(mainQuestion, sessionDescription, combinedContent || videoTranscript, wordCount);
         if (relatabilityResult.isRelated && wordCount >= 10) {
             finalLcReward += relatabilityPoints;
             factor2Earned = true;
@@ -1568,6 +1643,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             `• Status: ${factor1Earned && factor2Earned ? 'Fully Verified' : (factor1Earned ? 'Video Attempt Recorded' : 'Incomplete')}`;
 
         const topVideoUrl = (Array.isArray(subAnswers) && (subAnswers.find(a => a.videoUrl)?.videoUrl || subAnswers.find(a => a.type === 'video' && a.value)?.value)) || sub.videoUrl || '';
+        const topAudioUrl = (Array.isArray(subAnswers) && (subAnswers.find(a => a.audioUrl)?.audioUrl || subAnswers.find(a => a.type === 'audio' && a.value)?.value)) || sub.audioUrl || '';
 
         const idx = (store.submissions || []).findIndex(s => s.id === subId);
         if (idx !== -1) {
