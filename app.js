@@ -5198,6 +5198,68 @@ function closeAdminMilestoneView() {
 // --- Global store for mock approvals ---
 mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 
+// --- Shared Exclusive Day Resolution Helper ---
+function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions) {
+    const daySubMap = {};
+    if (!Array.isArray(subs) || subs.length === 0) return daySubMap;
+
+    let startDateObj = milestoneStartDate;
+    if (!(startDateObj instanceof Date) || isNaN(startDateObj.getTime())) {
+        startDateObj = new Date(String(startDateObj || '') + 'T00:00:00');
+        if (isNaN(startDateObj.getTime())) startDateObj = new Date();
+    }
+    startDateObj.setHours(0, 0, 0, 0);
+
+    // Precompute dateKeys for all days 1..totalSessions
+    const dayDateKeys = {};
+    for (let d = 1; d <= totalSessions; d++) {
+        dayDateKeys[d] = getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName));
+    }
+
+    // Sort submissions to break ties on collision:
+    // 1. Status 'completed' or having LC reward takes precedence over failed/evaluating
+    // 2. Higher lcReward
+    // 3. Most recent submission (submittedAt / timestamp / date) wins over older legacy records
+    const sortedSubs = [...subs].sort((a, b) => {
+        const aCompleted = (a.status === 'completed' || Number(a.lcReward) > 0) ? 1 : 0;
+        const bCompleted = (b.status === 'completed' || Number(b.lcReward) > 0) ? 1 : 0;
+        if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+
+        const aReward = Number(a.lcReward) || 0;
+        const bReward = Number(b.lcReward) || 0;
+        if (aReward !== bReward) return bReward - aReward;
+
+        const timeA = new Date(a.submittedAt || a.timestamp || a.date || 0).getTime();
+        const timeB = new Date(b.submittedAt || b.timestamp || b.date || 0).getTime();
+        return timeB - timeA;
+    });
+
+    sortedSubs.forEach(s => {
+        let mappedDay = null;
+        const rawDate = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
+        if (rawDate) {
+            for (let d = 1; d <= totalSessions; d++) {
+                if (dayDateKeys[d] === rawDate) {
+                    mappedDay = d;
+                    break;
+                }
+            }
+        }
+        if (!mappedDay && s.day !== undefined && s.day !== null) {
+            const rawDay = Number(s.day);
+            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
+                mappedDay = rawDay;
+            }
+        }
+        if (mappedDay && !daySubMap[mappedDay]) {
+            daySubMap[mappedDay] = s;
+        }
+    });
+
+    return daySubMap;
+}
+if (typeof window !== 'undefined') window.buildDaySubMap = buildDaySubMap;
+
 // Update the Cohort Renderer to respect the active module
 function renderAdminCohortSubmissions() {
     const table = document.getElementById('adminCompletionTable');
@@ -5382,29 +5444,7 @@ function renderAdminCohortSubmissions() {
             userMilestoneStartDate.setHours(0,0,0,0);
 
             const userModSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === activeAdminModule);
-            const daySubMap = {};
-            userModSubs.forEach(s => {
-                let mappedDay = null;
-                const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
-                if (subDate) {
-                    for (let d = 1; d <= maxDays; d++) {
-                        const cDateKey = getLocalDateKey(getMilestoneSessionDate(userMilestoneStartDate, d, activeAdminModule));
-                        if (cDateKey === subDate) {
-                            mappedDay = d;
-                            break;
-                        }
-                    }
-                }
-                if (!mappedDay && s.day !== undefined && s.day !== null) {
-                    const rawDay = Number(s.day);
-                    if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= maxDays) {
-                        mappedDay = rawDay;
-                    }
-                }
-                if (mappedDay && !daySubMap[mappedDay]) {
-                    daySubMap[mappedDay] = s;
-                }
-            });
+            const daySubMap = buildDaySubMap(userModSubs, userMilestoneStartDate, activeAdminModule, maxDays);
 
             for (let d = 1; d <= maxDays; d++) {
                 let actualDay = d;
@@ -9542,29 +9582,7 @@ function switchMilestoneTab(moduleName, btnElement) {
     let cardsHtml = '';
 
     // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card
-    const daySubMap = {};
-    typeSubs.forEach(s => {
-        let mappedDay = null;
-        const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
-        if (subDate) {
-            for (let d = 1; d <= totalSessions; d++) {
-                const cDateKey = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName));
-                if (cDateKey === subDate) {
-                    mappedDay = d;
-                    break;
-                }
-            }
-        }
-        if (!mappedDay && s.day !== undefined && s.day !== null) {
-            const rawDay = Number(s.day);
-            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
-                mappedDay = rawDay;
-            }
-        }
-        if (mappedDay && !daySubMap[mappedDay]) {
-            daySubMap[mappedDay] = s;
-        }
-    });
+    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions);
 
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
         // Compute session date (MWF for Immerse; Mon-Sat for DIP/POD)
@@ -9685,6 +9703,17 @@ function viewSubmissionById(subId, userId, dayLabel, moduleType) {
         sub = subs.find(s => String(s.id || s._id) === String(subId));
     }
     if (!sub && dayLabel) {
+        const msId = (typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId) || (typeof activeMilestoneId !== 'undefined' && activeMilestoneId) || 1;
+        const normalizedMod = normalizeLevelUpType(moduleType || 'dip');
+        const userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(userId, msId, normalizedMod) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null) || getLocalDateKey(new Date());
+        let milestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
+        const isImmerse = (normalizedMod === 'immerse');
+        const totalSessions = isImmerse ? (msId === 1 ? 9 : 12) : ((msId === 1) ? 21 : 30);
+        const modSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod);
+        const dMap = buildDaySubMap(modSubs, milestoneStartDate, normalizedMod, totalSessions);
+        sub = dMap[Number(dayLabel)] || null;
+    }
+    if (!sub && dayLabel) {
         sub = subs.find(s => String(s.day) === String(dayLabel) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleType));
     }
     if (!sub) {
@@ -9735,29 +9764,7 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleName) {
     const isImmerse = (normalizedMod === 'immerse');
     const totalSessions = isImmerse ? (msId === 1 ? 9 : 12) : ((msId === 1) ? 21 : 30);
 
-    const daySubMap = {};
-    typeSubs.forEach(s => {
-        let mappedDay = null;
-        const subDate = s.dateKey || (s.date ? s.date.split('T')[0] : null);
-        if (subDate) {
-            for (let d = 1; d <= totalSessions; d++) {
-                const cDateKey = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, normalizedMod));
-                if (cDateKey === subDate) {
-                    mappedDay = d;
-                    break;
-                }
-            }
-        }
-        if (!mappedDay && s.day !== undefined && s.day !== null) {
-            const rawDay = Number(s.day);
-            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
-                mappedDay = rawDay;
-            }
-        }
-        if (mappedDay && !daySubMap[mappedDay]) {
-            daySubMap[mappedDay] = s;
-        }
-    });
+    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, normalizedMod, totalSessions);
 
     let sub = daySubMap[Number(dayNumber)];
     if (!sub) {
@@ -10040,7 +10047,12 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     `;
                 }
 
-                const isExplicitText = (qType === 'text') || (qType === 'reflection') || (!qType && !q.videoUrl && !q.audioUrl && q.answer && !String(q.answer).includes('/uploads/'));
+                const isSoleImmerseVideo = (responses.length === 1 && isImmerse && Boolean(sub.videoUrl || q.videoUrl || (q.answer && String(q.answer).toLowerCase().includes('video'))));
+                const isExplicitText = !isSoleImmerseVideo && (
+                    (qType === 'text') || 
+                    (qType === 'reflection') || 
+                    (!qType && !q.videoUrl && !q.audioUrl && !qTitle.toLowerCase().includes('video') && !qTitle.toLowerCase().includes('reflection') && q.answer && !String(q.answer).includes('/uploads/') && !String(q.answer).toLowerCase().includes('video reflection'))
+                );
                 const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
 
                 let exactAudioSrc = '';

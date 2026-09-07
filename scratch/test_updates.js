@@ -224,6 +224,27 @@ renderSubmissionDetailModal(legacySub, 'usr_cust_123', 'Day 5', 'immerse');
 assert.ok(document.body.lastInsertedHtml.includes('How do you record and audit your distributed telemetry logs?'), 'Must find main question even if it contains the word record');
 console.log('✅ Legacy submission and "record" question title test passed!');
 
+// Test legacy Immerse single-response submission without explicit type or videoUrl on question
+const legacySingleSub = {
+    id: 'sub_single_legacy',
+    userId: 'usr_cust_123',
+    type: 'immerse',
+    moduleType: 'immerse',
+    milestoneId: 1,
+    day: 1,
+    dateKey: '2026-09-07',
+    videoUrl: 'https://example.com/uploads/legacy_single.webm',
+    responses: [
+        {
+            title: 'Reflect on system latency',
+            answer: 'Video Reflection Recorded & Verified'
+        }
+    ]
+};
+renderSubmissionDetailModal(legacySingleSub, 'usr_cust_123', 'Day 1', 'immerse');
+assert.ok(document.body.lastInsertedHtml.includes('legacy_single.webm'), 'Legacy single-response Immerse video must render from sub.videoUrl');
+console.log('✅ Legacy single-response Immerse video preservation test passed!');
+
 console.log('--- Testing 3: Review Modal Creator View ---');
 global.isAdminLogin = true;
 global.currentUser = { _id: 'creator_admin', email: 'cmplibesai@gmail.com', role: 'creator' };
@@ -341,6 +362,31 @@ console.log('MOCK TABLE HTML:', mockTable.innerHTML);
 assert.ok(mockTable.innerHTML.includes('43 LCs'), 'Chandra D1 must show 43 LCs');
 assert.ok(!mockTable.innerHTML.includes('Day 1: 7 Sept'), 'Bulky Day 1 badge text must be removed from customer cell');
 console.log('✅ Cohort Grid Chandra D1 mapping and badge removal test passed!');
+
+// Test Collision Tie-Break: Older rejected submission + Newer completed submission for the same date
+const olderFailedSub = {
+    id: 'sub_failed_1',
+    userId: 'usr_chandra_349',
+    type: 'immerse',
+    day: 1,
+    dateKey: '2026-09-07',
+    status: 'rejected_mismatch',
+    lcReward: 0,
+    submittedAt: '2026-09-07T08:00:00Z'
+};
+const newerPassedSub = {
+    id: 'sub_passed_2',
+    userId: 'usr_chandra_349',
+    type: 'immerse',
+    day: 1,
+    dateKey: '2026-09-07',
+    status: 'completed',
+    lcReward: 43,
+    submittedAt: '2026-09-07T14:00:00Z'
+};
+const resolvedCollisionMap = buildDaySubMap([olderFailedSub, newerPassedSub], new Date('2026-09-07T00:00:00'), 'immerse', 9);
+assert.strictEqual(resolvedCollisionMap[1].id, 'sub_passed_2', 'Collision tie-break must select completed/higher reward submission over rejected attempt');
+console.log('✅ Collision tie-break test passed!');
 
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
 }
