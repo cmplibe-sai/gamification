@@ -5216,7 +5216,7 @@ function renderAdminCohortSubmissions() {
         projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []);
         maxDays = projectHeaders.length; 
     } else if (activeAdminMilestoneId === 2 || activeAdminMilestoneId === 3) {
-        if (activeAdminModule === 'dip' || activeAdminModule === 'immerse') maxDays = 30;
+        if (activeAdminModule === 'dip' || activeAdminModule === 'immerse' || activeAdminModule === 'pod') maxDays = 30;
         if (activeAdminModule === 'ios') maxDays = 15; 
     }
     
@@ -5538,6 +5538,196 @@ function addSinglePodQuestionToEditor() {
     container.insertAdjacentHTML('beforeend', newHtml);
     updatePodPoolCountBadge();
 }
+
+// -------------------------------------------------------------
+// cMPLi POD: AUDIO UPLOAD ENGINE (SAVES TO DISK VIA /api/upload-media)
+// -------------------------------------------------------------
+async function uploadPodAudioFile(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('podAudioStatus');
+    const previewEl = document.getElementById('podAudioPreviewPlayer');
+    const urlInput = document.getElementById('podAudioUrl');
+
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="text-xs text-indigo-400 font-bold flex items-center gap-1.5"><i class="fas fa-spinner fa-spin"></i> Uploading audio to server...</span>';
+    }
+
+    try {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const dataUrl = e.target.result;
+            try {
+                const res = await apiFetch('/api/upload-media', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dataUrl: dataUrl,
+                        prefix: 'pod_creator_audio',
+                        filename: file.name
+                    })
+                });
+                const data = await res.json();
+                if (data.success && data.url) {
+                    if (urlInput) urlInput.value = data.url;
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1.5"><i class="fas fa-check-circle"></i> Audio uploaded & stream ready!</span>';
+                    }
+                    if (previewEl) {
+                        previewEl.innerHTML = `
+                            <div class="mt-2 p-3 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                                    <i class="fas fa-play text-xs"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <audio controls class="w-full h-8 rounded-lg" src="${data.url}"></audio>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    throw new Error(data.error || 'Upload failed');
+                }
+            } catch (apiErr) {
+                console.warn('Direct server upload fallback:', apiErr);
+                if (urlInput) urlInput.value = dataUrl;
+                if (statusEl) {
+                    statusEl.innerHTML = '<span class="text-xs text-emerald-400 font-bold flex items-center gap-1.5"><i class="fas fa-check-circle"></i> Audio stream ready (Direct Stream)</span>';
+                }
+                if (previewEl) {
+                    previewEl.innerHTML = `
+                        <div class="mt-2 p-3 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                                <i class="fas fa-play text-xs"></i>
+                            </div>
+                            <div class="flex-1">
+                                <audio controls class="w-full h-8 rounded-lg" src="${dataUrl}"></audio>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('File reading error:', err);
+        if (statusEl) {
+            statusEl.innerHTML = `<span class="text-xs text-rose-400 font-bold flex items-center gap-1.5"><i class="fas fa-exclamation-triangle"></i> Failed to read file: ${err.message}</span>`;
+        }
+    }
+}
+window.uploadPodAudioFile = uploadPodAudioFile;
+
+// -------------------------------------------------------------
+// cMPLi POD: SAVE ADMIN CONFIGURATION TO BACKEND & LOCAL STORAGE
+// -------------------------------------------------------------
+function saveAdminPodCheckinConfig(dateKey) {
+    if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
+    if (!customMilestoneConfigs[activeAdminMilestoneId]['pod']) customMilestoneConfigs[activeAdminMilestoneId]['pod'] = {};
+
+    const questions = [];
+    const items = document.querySelectorAll('#adminPodQuestionsContainer .pod-q-item');
+    items.forEach((item, idx) => {
+        const title = item.querySelector('.pod-q-title')?.value.trim() || '';
+        const pts = parseInt(item.getAttribute('data-pts') || item.dataset.pts || '11', 10) || 11;
+        const optInputs = item.querySelectorAll('.pod-q-opt');
+        const options = [];
+        optInputs.forEach((optInput, optIdx) => {
+            options.push(optInput.value.trim() || `Option ${String.fromCharCode(65 + optIdx)}`);
+        });
+        const checkedRadio = item.querySelector(`input[type="radio"]:checked`);
+        const correctOption = checkedRadio ? parseInt(checkedRadio.value, 10) : 0;
+
+        if (title.length > 0) {
+            questions.push({
+                id: 'q_' + idx + '_' + Date.now(),
+                title: title,
+                type: 'mcq',
+                options: options,
+                correctOption: correctOption,
+                pts: pts
+            });
+        }
+    });
+
+    const audioTitle = document.getElementById('podAudioTitle')?.value.trim() || `cMPLi POD Day Insights`;
+    const audioUrl = document.getElementById('podAudioUrl')?.value.trim() || '';
+    const lcOnTime = parseInt(document.getElementById('configLcOnTime')?.value, 10) || 33;
+    const lcLate = parseInt(document.getElementById('configLcLate')?.value, 10) || 3;
+    const startTime = document.getElementById('configStartTime')?.value || '05:00';
+    const endTime = document.getElementById('configEndTime')?.value || '17:00';
+
+    const dayConfig = {
+        date: dateKey,
+        title: audioTitle,
+        audioTitle: audioTitle,
+        audioUrl: audioUrl,
+        lcOnTime: lcOnTime,
+        lcLate: lcLate,
+        startTime: startTime,
+        endTime: endTime,
+        questions: questions
+    };
+
+    customMilestoneConfigs[activeAdminMilestoneId]['pod'][dateKey] = dayConfig;
+    try {
+        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    } catch(e) {
+        console.warn('localStorage save warning:', e);
+    }
+
+    // Sync to Server backend for cross-browser persistence
+    apiFetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: activeAdminMilestoneId,
+            moduleName: 'pod',
+            dateKey: dateKey,
+            config: dayConfig,
+            allConfigs: customMilestoneConfigs
+        })
+    }).then(r => r.json()).then(data => {
+        console.log('✅ POD Milestone configs synced to server:', data);
+    }).catch(e => console.error('Server sync error for POD:', e));
+
+    renderAdminCheckinsList();
+
+    const btn = document.getElementById('btnSaveConfig');
+    if (btn) {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved (${questions.length} Questions)!`;
+        btn.classList.replace('btn-primary', 'bg-emerald-600');
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.classList.replace('bg-emerald-600', 'btn-primary');
+        }, 1800);
+    }
+}
+window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
+
+// Helper: retrieve config for a specific date and module
+function getAdminConfigForDate(dateKey, moduleName = 'pod') {
+    const msId = (typeof activeAdminMilestoneId !== 'undefined' && activeAdminMilestoneId) ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
+    if (typeof customMilestoneConfigs !== 'undefined' && customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) {
+        return customMilestoneConfigs[msId][moduleName][dateKey] || null;
+    }
+    return null;
+}
+window.getAdminConfigForDate = getAdminConfigForDate;
+
+// Fallback question pool for POD if creator has not uploaded CSV yet
+function getPodQuestionsPool() {
+    return [
+        { title: "What is the #1 driver of consistent habit formation discussed in today's podcast?", options: ["Intrinsic Motivation & Identity Shift", "External Pressure only", "Random Motivation Spikes", "Waiting for Perfect Timing"], correctOption: 0, pts: 11 },
+        { title: "What core strategy was recommended for handling unexpected daily schedule disruptions?", options: ["If-Then Implementation Intentions", "Giving up until next week", "Ignoring the problem", "Immediate Escalation"], correctOption: 0, pts: 11 },
+        { title: "Which mindset distinguishes a Challenge Embracer from a passive learner?", options: ["Viewing friction as growth feedback", "Avoiding all difficult tasks", "Seeking quick shortcuts", "Focusing solely on outcomes"], correctOption: 0, pts: 11 },
+        { title: "How long is the ideal daily morning focus window recommended in the session?", options: ["60-90 minutes of uninterrupted work", "10 minutes while multitasking", "5 hours without breaks", "20 minutes with frequent notifications"], correctOption: 0, pts: 11 },
+        { title: "What is the role of continuous micro-reflections in mastery?", options: ["Consolidates neural pathways and self-awareness", "Wastes valuable time", "Only useful for exams", "Creates unnecessary friction"], correctOption: 0, pts: 11 }
+    ];
+}
+window.getPodQuestionsPool = getPodQuestionsPool;
 
 function loadAdminCheckinEditor(dateKey) {
     activeAdminDateKey = dateKey;
@@ -6626,6 +6816,24 @@ activePodSessionQuestions = [];
 activePodSessionDay = 1;
 activePodSessionDateKey = null;
 
+// -------------------------------------------------------------
+// cMPLi POD: SPEED CONTROLLER HELPER
+// -------------------------------------------------------------
+window.setPodPlaybackSpeed = function(speed, btn) {
+    const player = document.getElementById('podAudioPlayerElement');
+    if (player) {
+        player.playbackRate = parseFloat(speed);
+    }
+    document.querySelectorAll('.pod-speed-btn').forEach(b => {
+        b.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+        b.classList.add('text-slate-400');
+    });
+    if (btn) {
+        btn.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+        btn.classList.remove('text-slate-400');
+    }
+};
+
 function openPodSessionModal(dayNum, dateKey) {
     activePodSessionDay = dayNum;
     activePodSessionDateKey = dateKey || getLocalDateKey(new Date());
@@ -6634,7 +6842,7 @@ function openPodSessionModal(dayNum, dateKey) {
     if (oldModal) oldModal.remove();
 
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
-    const audioTitle = dayConfig.audioTitle || `cMPLi POD Day ${dayNum} Insights`;
+    const audioTitle = dayConfig.audioTitle || dayConfig.title || `cMPLi POD Day ${dayNum} Insights`;
     const audioUrl = dayConfig.audioUrl || '';
     const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
         ? dayConfig.questions 
@@ -6670,38 +6878,83 @@ function openPodSessionModal(dayNum, dateKey) {
                 
                 <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
                     <div>
-                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast"></i> cMPLi POD Day ${dayNum}</span>
+                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> cMPLi POD • Day ${dayNum}</span>
                         <h3 class="text-2xl font-extrabold text-white font-heading">${audioTitle}</h3>
-                        <p class="text-xs text-slate-400 mt-1">Date: <strong class="text-slate-200">${activePodSessionDateKey}</strong></p>
+                        <p class="text-xs text-slate-400 mt-1">Scheduled Date: <strong class="text-slate-200">${activePodSessionDateKey}</strong></p>
                     </div>
                     <button onclick="document.getElementById('podSessionModal').remove()" class="text-slate-400 hover:text-white bg-slate-700/60 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
-                <!-- Secure In-Browser Podcast Audio Player (No customer download) -->
+                <!-- Secure In-Browser Podcast Audio Player (No seekbar, forward/backward disabled, speed selector) -->
                 <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 space-y-4 shadow-lg">
                     <div class="flex items-center gap-4">
                         <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
                             <i class="fas fa-headphones-alt"></i>
                         </div>
                         <div class="overflow-hidden flex-1">
-                            <p class="text-xs font-bold text-indigo-300 uppercase tracking-widest">Streaming Episode</p>
-                            <h4 class="text-sm font-bold text-white truncate">${audioTitle}</h4>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Listen to the complete episode to unlock the comprehension quiz</p>
+                            <div class="flex items-center gap-2">
+                                <span class="badge-pill badge-indigo text-[9px] uppercase tracking-widest">Active Listening Stream</span>
+                                <span id="podListeningBadge" class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">85% Required</span>
+                            </div>
+                            <h4 class="text-sm font-bold text-white truncate mt-1">${audioTitle}</h4>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Listen to at least 85% of this episode to unlock the 3 comprehension questions.</p>
                         </div>
                     </div>
 
-                    <div class="pt-2">
+                    <div class="pt-2 space-y-3">
                         ${hasAudio ? `
-                            <audio id="podAudioPlayerElement" controls controlsList="nodownload" oncontextmenu="return false;" class="w-full rounded-xl bg-slate-900 border border-slate-700 shadow-inner" src="${audioUrl}"></audio>
-                            <div class="flex justify-between items-center text-[11px] text-slate-400 pt-2 px-1">
-                                <span id="podAudioStatusText"><i class="fas fa-play-circle text-indigo-400 mr-1"></i> Press Play to Begin</span>
-                                <span id="podAudioProgressPercent" class="font-bold text-indigo-300">0% Listened</span>
+                            <audio id="podAudioPlayerElement" preload="metadata" class="hidden" src="${audioUrl}"></audio>
+                            
+                            <div class="p-4 bg-slate-950/90 rounded-2xl border border-indigo-500/30 space-y-3">
+                                <!-- Top controls: Play/Pause Button + Time + Speed selector -->
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div class="flex items-center gap-3">
+                                        <button id="podPlayToggleBtn" type="button" class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 transition-transform active:scale-95">
+                                            <i id="podPlayIcon" class="fas fa-play ml-0.5"></i>
+                                        </button>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <span id="podCurrentTimeDisplay" class="font-mono text-xs text-white font-bold">00:00</span>
+                                                <span class="text-slate-500 text-xs">/</span>
+                                                <span id="podTotalTimeDisplay" class="font-mono text-xs text-slate-400">--:--</span>
+                                            </div>
+                                            <span id="podAudioStatusText" class="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                                <i class="fas fa-play-circle text-indigo-400"></i> Press Play to Begin
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Playback Speed Controls: 0.5x, 1x, 1.25x, 1.5x, 1.75x, 2x -->
+                                    <div class="flex items-center gap-1 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+                                        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase tracking-tight"><i class="fas fa-gauge-high mr-0.5"></i> Speed:</span>
+                                        ${['0.5', '1', '1.25', '1.5', '1.75', '2'].map(spd => `
+                                            <button type="button" onclick="setPodPlaybackSpeed(${spd}, this)" class="pod-speed-btn text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${spd === '1' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}">
+                                                ${spd}x
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+
+                                <!-- Non-interactive Listen Progress Bar (Forward/Backward scrubbing disabled) -->
+                                <div class="space-y-1 pt-1">
+                                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden relative cursor-not-allowed" title="Seeking disabled: Active listening required">
+                                        <!-- 85% Target Indicator -->
+                                        <div class="absolute top-0 bottom-0 left-[85%] w-0.5 bg-amber-400 z-10 opacity-70" title="85% unlock threshold"></div>
+                                        <!-- Progress Fill -->
+                                        <div id="podAudioProgressBar" class="bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 h-full w-0 transition-all duration-150"></div>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[10px] text-slate-400 px-0.5">
+                                        <span id="podAudioProgressPercent" class="font-bold text-indigo-300">0% Listened</span>
+                                        <span class="text-amber-400/80 font-semibold"><i class="fas fa-lock text-[9px] mr-1"></i> 85% required to unlock quiz</span>
+                                    </div>
+                                </div>
                             </div>
                         ` : `
-                            <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-700 text-center">
+                            <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-700 text-center space-y-2">
                                 <p class="text-xs text-slate-300 font-semibold"><i class="fas fa-headphones text-indigo-400 mr-2"></i>Podcast audio stream loaded & verified for Day ${dayNum}.</p>
+                                <p class="text-[11px] text-slate-400">Active listening window is ready. Proceed to comprehension quiz below.</p>
                             </div>
                         `}
                     </div>
@@ -6715,7 +6968,7 @@ function openPodSessionModal(dayNum, dateKey) {
                                 <i class="fas fa-lock"></i>
                             </div>
                             <h5 class="text-sm font-bold text-white">Comprehension Quiz Locked</h5>
-                            <p class="text-xs text-slate-400 max-w-sm mx-auto">Please finish listening to the podcast audio episode above. The quiz will automatically unlock once the playback completes.</p>
+                            <p class="text-xs text-slate-400 max-w-sm mx-auto">Please finish listening to at least 85% of the podcast episode above. The quiz will unlock automatically once active listening is verified.</p>
                         </div>
                     ` : ''}
 
@@ -6731,7 +6984,7 @@ function openPodSessionModal(dayNum, dateKey) {
                             <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
                                 <div class="flex justify-between items-center">
                                     <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
-                                    <span class="text-[10px] font-bold text-slate-400">11 LCs</span>
+                                    <span class="text-[10px] font-bold text-indigo-300 font-mono">+${q.pts || 11} LCs</span>
                                 </div>
                                 <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
                                 <div class="space-y-2 pt-1">
@@ -6761,64 +7014,133 @@ function openPodSessionModal(dayNum, dateKey) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    // Attach Audio Gating Listener
+    // Attach Audio Gating & Anti-Scrubbing Listener
     if (hasAudio) {
         setTimeout(() => {
             const player = document.getElementById('podAudioPlayerElement');
             const lockedNotice = document.getElementById('podQuizLockedNotice');
             const questionsArea = document.getElementById('podQuizQuestionsArea');
             const submitBtn = document.getElementById('btnSubmitPodSession');
+            const playBtn = document.getElementById('podPlayToggleBtn');
+            const playIcon = document.getElementById('podPlayIcon');
+            const curDisplay = document.getElementById('podCurrentTimeDisplay');
+            const totalDisplay = document.getElementById('podTotalTimeDisplay');
+            const bar = document.getElementById('podAudioProgressBar');
+            const pctText = document.getElementById('podAudioProgressPercent');
             const statusText = document.getElementById('podAudioStatusText');
-            const progressPercent = document.getElementById('podAudioProgressPercent');
+            const badge = document.getElementById('podListeningBadge');
 
-            if (player) {
-                let maxAudibleTime = 0;
-            
-            // Anti-Scrubbing: Prevent dragging or skipping forward
+            if (!player) return;
+
+            let maxAudibleTime = 0;
+
+            const fmtTime = (secs) => {
+                if (isNaN(secs) || secs < 0) return '00:00';
+                const m = Math.floor(secs / 60);
+                const s = Math.floor(secs % 60);
+                return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+            };
+
+            if (playBtn) {
+                playBtn.onclick = function() {
+                    if (player.paused) {
+                        player.play().catch(e => console.warn('Audio play failed:', e));
+                        if (playIcon) {
+                            playIcon.classList.remove('fa-play', 'ml-0.5');
+                            playIcon.classList.add('fa-pause');
+                        }
+                    } else {
+                        player.pause();
+                        if (playIcon) {
+                            playIcon.classList.remove('fa-pause');
+                            playIcon.classList.add('fa-play', 'ml-0.5');
+                        }
+                    }
+                };
+            }
+
+            player.addEventListener('loadedmetadata', () => {
+                if (totalDisplay && player.duration) {
+                    totalDisplay.innerText = fmtTime(player.duration);
+                }
+            });
+
+            // Anti-Scrubbing & Seeking Prevention: Forward AND Backward seeking disabled!
+            player.addEventListener('seeking', () => {
+                if (Math.abs(player.currentTime - maxAudibleTime) > 1.2) {
+                    player.currentTime = maxAudibleTime; // Snap back strictly!
+                }
+            });
+
             player.addEventListener('timeupdate', () => {
-                if (player.currentTime > maxAudibleTime + 1.5) {
-                    player.currentTime = maxAudibleTime; // Snap back immediately!
+                if (player.currentTime > maxAudibleTime + 1.2) {
+                    player.currentTime = maxAudibleTime; // Snap back!
                 } else {
                     maxAudibleTime = Math.max(maxAudibleTime, player.currentTime);
                 }
 
+                if (curDisplay) curDisplay.innerText = fmtTime(player.currentTime);
+                if (totalDisplay && player.duration && (!totalDisplay.innerText || totalDisplay.innerText === '--:--')) {
+                    totalDisplay.innerText = fmtTime(player.duration);
+                }
+
                 if (player.duration) {
                     const pct = Math.min(100, Math.round((maxAudibleTime / player.duration) * 100));
-                    if (progressPercent) progressPercent.innerText = `${pct}% Listened`;
-                    if (statusText) statusText.innerHTML = `<i class="fas fa-volume-up text-emerald-400 mr-1"></i> Listening (Seeking Disabled)...`;
+                    if (bar) bar.style.width = `${pct}%`;
+                    if (pctText) pctText.innerText = `${pct}% Listened`;
+                    if (statusText && !player.paused) {
+                        statusText.innerHTML = `<i class="fas fa-volume-up text-indigo-400 mr-1"></i> Active Listening In Progress...`;
+                    }
 
-                    if (pct >= 95 || player.ended) {
+                    // 85% THRESHOLD UNLOCKS QUIZ
+                    if (pct >= 85 || player.ended) {
                         if (lockedNotice) lockedNotice.classList.add('hidden');
                         if (questionsArea) questionsArea.classList.remove('hidden');
                         if (submitBtn) {
                             submitBtn.disabled = false;
                             submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                         }
-                        if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                        if (statusText) {
+                            statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Active Listening Complete (≥85%). Quiz Unlocked!`;
+                        }
+                        if (badge) {
+                            badge.className = 'badge-pill badge-emerald text-[9px] font-bold';
+                            badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 85% Verified';
+                        }
                     }
                 }
             });
 
-            player.addEventListener('seeking', () => {
-                if (player.currentTime > maxAudibleTime + 1.5) {
-                    player.currentTime = maxAudibleTime; // Snap back!
+            player.addEventListener('pause', () => {
+                if (playIcon) {
+                    playIcon.classList.remove('fa-pause');
+                    playIcon.classList.add('fa-play', 'ml-0.5');
                 }
             });
 
             player.addEventListener('ended', () => {
+                if (playIcon) {
+                    playIcon.classList.remove('fa-pause');
+                    playIcon.classList.add('fa-play', 'ml-0.5');
+                }
                 if (lockedNotice) lockedNotice.classList.add('hidden');
                 if (questionsArea) questionsArea.classList.remove('hidden');
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
-                if (statusText) statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                if (statusText) {
+                    statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                }
             });
-            }
         }, 100);
     }
 }
+window.openPodSessionModal = openPodSessionModal;
 
+// -------------------------------------------------------------
+// cMPLi POD: SUBMISSION & SINGLE ATTEMPT EVALUATION
+// -------------------------------------------------------------
 async function submitPodSessionQuiz() {
     if (!currentUser) return alert('Please login first.');
 
@@ -6848,10 +7170,10 @@ async function submitPodSessionQuiz() {
     });
 
     if (!allAnswered) {
-        return alert("Please answer all comprehension questions before submitting.");
+        return alert("Please answer all 3 comprehension questions before submitting.");
     }
 
-    // STRICT ACCURACY CALCULATION (e.g. 1/3 = 11, 2/3 = 22, 3/3 = 33)
+    // STRICT ACCURACY CALCULATION (11 LCs per correct question = up to 33 LCs)
     let calculatedPoints = 0;
     answers.forEach(a => {
         if (a.isCorrect) calculatedPoints += (a.pts || 11);
@@ -6869,11 +7191,15 @@ async function submitPodSessionQuiz() {
         day: activePodSessionDay,
         sessionDay: activePodSessionDay,
         date: activePodSessionDateKey,
+        dateKey: activePodSessionDateKey,
         submittedAt: new Date().toISOString(),
         lcReward: calculatedPoints, // EXACT GRADED SCORE
-        status: 'evaluating',
+        matchPercentage: Math.round((calculatedPoints / 33) * 100),
+        similarityScore: Math.round((calculatedPoints / 33) * 100),
+        status: 'completed', // Immediately completed (Single Attempt)
         answers: answers,
-        responses: answers
+        responses: answers,
+        aiRemarks: `✅ [cMPLi POD Quiz Graded & Recorded]\nScore: ${calculatedPoints} / 33 LCs | Status: Graded & Recorded\nActive listening requirement verified (≥85%). Points synced to TagMango wallet.`
     };
 
     // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
@@ -6885,15 +7211,85 @@ async function submitPodSessionQuiz() {
 
     // 2. Save locally
     let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    localDB = localDB.filter(s => !(s.userId === currentUser._id && String(s.milestoneId || 1) === String(activeMilestoneId || 1) && normalizeLevelUpType(s.type) === 'pod' && String(s.day) === String(activePodSessionDay)));
+    localDB = localDB.filter(s => !(
+        (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
+        String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
+        normalizeLevelUpType(s.type) === 'pod' &&
+        String(s.day) === String(activePodSessionDay)
+    ));
     localDB.push(subData);
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
 
+    // 3. Update levelUpSubmissions in-memory bucket
+    const bucketKey = (typeof resolveSubmissionKey === 'function') ? resolveSubmissionKey(currentUser) : null;
+    if (bucketKey && typeof levelUpSubmissions !== 'undefined') {
+        if (!levelUpSubmissions[bucketKey]) levelUpSubmissions[bucketKey] = [];
+        levelUpSubmissions[bucketKey] = levelUpSubmissions[bucketKey].filter(s => !(
+            String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
+            normalizeLevelUpType(s.type) === 'pod' &&
+            String(s.day) === String(activePodSessionDay)
+        ));
+        levelUpSubmissions[bucketKey].push(subData);
+    }
+
     document.getElementById('podSessionModal')?.remove();
-    showPendingEvaluationPopup(calculatedPoints);
+    showPodSuccessPopup(calculatedPoints, answers.length);
 
     if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
 }
+window.submitPodSessionQuiz = submitPodSessionQuiz;
+
+// -------------------------------------------------------------
+// cMPLi POD: POPUP CELEBRATING GRADED QUIZ RESULT
+// -------------------------------------------------------------
+function showPodSuccessPopup(calculatedPoints, totalQuestions = 3) {
+    const oldPopup = document.getElementById('podSuccessPopup');
+    if (oldPopup) oldPopup.remove();
+
+    const maxPts = totalQuestions * 11;
+    const isPerfect = calculatedPoints === maxPts;
+    const isGood = calculatedPoints > 0;
+
+    const popupHtml = `
+        <div id="podSuccessPopup" class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+            <div class="relative bg-slate-900 border ${isGood ? 'border-emerald-500/40' : 'border-amber-500/40'} rounded-3xl p-8 max-w-md w-full text-center space-y-6 shadow-2xl animate-fade-in-up">
+                <div class="w-20 h-20 mx-auto rounded-3xl ${isGood ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-emerald' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'} flex items-center justify-center text-4xl">
+                    <i class="fas ${isPerfect ? 'fa-trophy' : (isGood ? 'fa-check-circle' : 'fa-info-circle')}"></i>
+                </div>
+                
+                <div>
+                    <span class="badge-pill ${isGood ? 'badge-emerald' : 'badge-amber'} mb-2 text-xs font-bold uppercase tracking-wider">
+                        ${isPerfect ? 'Perfect Score!' : (isGood ? 'Quiz Completed!' : 'Quiz Recorded')}
+                    </span>
+                    <h3 class="text-2xl font-black text-white font-heading">
+                        +${calculatedPoints} LCs Earned
+                    </h3>
+                    <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+                        ${isGood ? `Your comprehension quiz responses have been recorded and <strong>+${calculatedPoints} LCs</strong> have been credited to your TagMango wallet.` : `Your comprehension quiz responses have been recorded.`}
+                    </p>
+                </div>
+
+                <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-around">
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Score</span>
+                        <span class="font-mono text-lg font-black ${isGood ? 'text-emerald-400' : 'text-slate-400'}">${calculatedPoints} / ${maxPts}</span>
+                    </div>
+                    <div class="w-px h-8 bg-slate-800"></div>
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Status</span>
+                        <span class="text-xs font-bold text-emerald-400 block mt-1"><i class="fas fa-check-circle mr-1"></i> Recorded</span>
+                    </div>
+                </div>
+
+                <button onclick="document.getElementById('podSuccessPopup').remove()" class="btn-primary w-full py-3 text-xs font-bold bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-xl">
+                    Done & Return to Timeline
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', popupHtml);
+}
+window.showPodSuccessPopup = showPodSuccessPopup;
 
 // ==============================================================
 // SUBMISSION SUCCESS POPUP
@@ -8322,9 +8718,10 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         // STRICT MATCHING: submission must be on or matching the specific card date or day recorded for this date
         const sub = typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey) || String(s.day) === String(dayNum));
-        const isEvaluating = sub && sub.status === 'evaluating';
-        const isMismatch = sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
-        const isCompleted = sub && !isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
+        const isPod = (normalizeLevelUpType(moduleName) === 'pod');
+        const isEvaluating = !isPod && sub && sub.status === 'evaluating';
+        const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
+        const isCompleted = sub && (isPod || (!isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0)));
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
@@ -8399,7 +8796,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                             </div>
                             ${statusBadge}
                         </div>
-                        <span class="text-[10px] text-slate-400 font-mono">+33 LCs Available</span>
+                        <span class="text-[10px] ${isCompleted ? 'text-emerald-400 font-bold' : 'text-slate-400'} font-mono">${isCompleted && sub && sub.lcReward !== undefined ? `+${sub.lcReward} LCs Earned` : '+33 LCs Available'}</span>
                     </div>
                 </div>
                 <div>${actionBtn}</div>

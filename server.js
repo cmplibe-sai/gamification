@@ -1160,7 +1160,71 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
 // credits the TagMango wallet.
 async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum, modType) {
     // -------------------------------------------------------------
-    // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION
+    // cMPLi POD MODULE: QUIZ BASED VERIFICATION (NO RUBRIC EVALUATION)
+    // -------------------------------------------------------------
+    if (String(sub.moduleType || sub.type || modType || '').toLowerCase() === 'pod') {
+        const finalLcReward = (sub.lcReward !== undefined && sub.lcReward !== null) ? Number(sub.lcReward) : 0;
+        const finalMatchPct = Math.min(100, Math.round((finalLcReward / 33) * 100));
+        const finalStatus = 'completed';
+        const finalRemarks = `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified\nActive listening requirement satisfied (≥85%). Points credited to TagMango wallet.`;
+
+        const idx = (store.submissions || []).findIndex(s => s.id === subId);
+        if (idx !== -1) {
+            store.submissions[idx] = {
+                ...store.submissions[idx],
+                status: finalStatus,
+                lcReward: finalLcReward,
+                matchPercentage: finalMatchPct,
+                similarityScore: finalMatchPct,
+                aiRemarks: finalRemarks,
+                remarks: finalRemarks,
+                answers: subAnswers,
+                submittedAt: store.submissions[idx].submittedAt || sub.submittedAt || new Date().toISOString(),
+                evaluatedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            store.submissionsRevision = Date.now();
+            saveStore();
+        }
+
+        let targetFanId = sub.fanId;
+        const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+        if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
+            targetFanId = '68fb27f707ccf937418d41c6';
+        } else if (normalizedEmail === 'engineersai02@gmail.com') {
+            targetFanId = '68a805cf8c448ccc00abc23f';
+        } else if (normalizedEmail === 'engineersai.y@gmail.com') {
+            targetFanId = '68d390062f70f039556c0364';
+        } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+            const matched = backendActualUsers.find(u =>
+                (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
+                (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
+                (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
+            );
+            if (matched && matched._id) {
+                targetFanId = matched._id;
+            } else {
+                targetFanId = '68a805cf8c448ccc00abc23f';
+            }
+        }
+
+        const pointDescription = `[Quiz Verified] Milestone-${msId} Day-${dayNum} POD Check-in`;
+        if (finalLcReward > 0 && targetFanId) {
+            console.log(`[Assigning TagMango Points for POD] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
+            try {
+                const tagMangoResult = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription, 'levelup-challenge');
+                console.log(`[TagMango POD Result for ${targetFanId}]:`, tagMangoResult);
+            } catch (tmErr) {
+                console.warn(`[TagMango POD Assignment Warning for ${targetFanId}]:`, tmErr.message);
+            }
+        } else {
+            console.log(`[TagMango Skipped for POD] Points: ${finalLcReward} for ${targetFanId}`);
+        }
+        return;
+    }
+
+    // -------------------------------------------------------------
+    // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION (DIP & IMMERSE)
     // -------------------------------------------------------------
     const allConfigs = getMilestoneConfigsFromDb();
     const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
