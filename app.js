@@ -66,6 +66,10 @@ function displayAdminLearnerDataById(userId) {
         renderTimelineGrid(user.email, 'adminCompletionGrid');
     }
 
+    if (typeof initLearnabilityGauge === 'function') {
+        initLearnabilityGauge(user, 'adminLq');
+    }
+
     reportContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 window.displayAdminLearnerDataById = displayAdminLearnerDataById;
@@ -258,12 +262,25 @@ window.updateDashboardUI = updateDashboardUI;
 
 // ==============================================================
 // LEARNABILITY QUOTIENT / FUTURE READINESS SPEEDOMETER GAUGE
-// Shows Earned LCs vs Max Possible LCs for the selected milestone +
-// module as a needle position only — the numeric percentage is
-// intentionally never rendered, per product requirement.
+// Supports both Customer Dashboard and Creator/Admin Customer View.
+// Shows Earned LCs vs Eligible Max LCs (Till Date) for the selected
+// milestone + module as a needle position only — the numeric percentage
+// is intentionally never rendered, per product requirement.
 // ==============================================================
+var lqActiveUser = null;
 var lqSelectedMilestone = null;
 var lqSelectedModule = 'all';
+
+var adminLqActiveUser = null;
+var adminLqSelectedMilestone = null;
+var adminLqSelectedModule = 'all';
+
+const LQ_MILESTONE_NAMES = {
+    1: 'cMPLi Challenge Embracer',
+    2: 'cMPLi Curious',
+    3: 'cMPLi Committed',
+    4: 'cMPLi futuREadi earliTalent'
+};
 
 // The "on-time" LC value the Creator has configured for a given module's
 // check-in day(s); falls back to the platform default of 33 LCs/day when
@@ -277,14 +294,70 @@ function getLqPerDayMaxLc(msId, moduleCode) {
     return 33;
 }
 
-// Max possible LCs a learner could earn for one module in one milestone,
-// derived from the Creator's configured prerequisite targets (dip/pod/immerse
-// day counts) or configured project point values (projects module).
-function getLqModuleMaxLcs(msId, moduleCode) {
+// Computes the active elapsed days from the learner's actual start/join date
+// up to today (inclusive). For example: joined Sept 4, today Sept 7 = 4 days.
+function getLqElapsedDays(userId, msId, moduleCode) {
+    if (!userId) return 1;
+    let startKey = null;
+    const cleanMod = normalizeLevelUpType(moduleCode || 'dip');
+
+    if (moduleCode && moduleCode !== 'all') {
+        startKey = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(userId, msId, cleanMod) : null;
+    }
+    if (!startKey) {
+        startKey = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(userId, msId) : null;
+    }
+    if (!startKey) {
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+        const msSubs = subs.filter(s => String(s.milestoneId || 1) === String(msId) && (s.dateKey || s.date || s.submittedAt));
+        if (msSubs.length > 0) {
+            msSubs.sort((a, b) => String(a.dateKey || a.date || a.submittedAt).localeCompare(String(b.dateKey || b.date || b.submittedAt)));
+            startKey = msSubs[0].dateKey || msSubs[0].date || (msSubs[0].submittedAt ? msSubs[0].submittedAt.split('T')[0] : null);
+        }
+    }
+    if (!startKey) startKey = getLocalDateKey(new Date());
+
+    try {
+        const start = new Date(startKey + 'T00:00:00');
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffMs = todayMid.getTime() - start.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1; // Start day counts as Day 1
+        return Math.max(1, diffDays);
+    } catch(e) {
+        return 1;
+    }
+}
+window.getLqElapsedDays = getLqElapsedDays;
+
+// Max eligible LCs a learner could earn TILL DATE (not the whole future month)
+// for one module in one milestone, derived from elapsed days since start.
+function getLqModuleMaxLcs(msId, moduleCode, userId) {
     const cfg = getMilestonePrereqConfig(msId);
-    if (moduleCode === 'dip') return cfg.targetDips * getLqPerDayMaxLc(msId, moduleCode);
-    if (moduleCode === 'pod') return cfg.targetPod * getLqPerDayMaxLc(msId, moduleCode);
-    if (moduleCode === 'immerse') return cfg.targetImmerse * getLqPerDayMaxLc(msId, moduleCode);
+    const perDay = getLqPerDayMaxLc(msId, moduleCode);
+
+    // If learner has already completed this milestone in the past, all days were eligible
+    const highest = (userId && userMilestoneState && userMilestoneState[userId]?.highestUnlocked) || 1;
+    const isPastMilestone = Number(msId) < Number(highest);
+
+    if (moduleCode === 'dip') {
+        const targetDays = cfg.targetDips || 21;
+        const elapsed = isPastMilestone ? targetDays : getLqElapsedDays(userId, msId, 'dip');
+        const eligibleDays = Math.min(targetDays, Math.max(1, elapsed));
+        return eligibleDays * perDay;
+    }
+    if (moduleCode === 'pod') {
+        const targetDays = cfg.targetPod || 21;
+        const elapsed = isPastMilestone ? targetDays : getLqElapsedDays(userId, msId, 'pod');
+        const eligibleDays = Math.min(targetDays, Math.max(1, elapsed));
+        return eligibleDays * perDay;
+    }
+    if (moduleCode === 'immerse') {
+        const targetDays = cfg.targetImmerse || 10;
+        const elapsed = isPastMilestone ? targetDays : getLqElapsedDays(userId, msId, 'immerse');
+        const eligibleDays = Math.min(targetDays, Math.max(1, elapsed));
+        return eligibleDays * perDay;
+    }
     if (moduleCode === 'projects') {
         const projects = customProjectsDB[msId] || customProjectsDB[String(msId)] || [];
         if (projects.length > 0) return projects.reduce((sum, p) => sum + (Number(p.pts) || 0), 0);
@@ -293,11 +366,10 @@ function getLqModuleMaxLcs(msId, moduleCode) {
 }
 window.getLqModuleMaxLcs = getLqModuleMaxLcs;
 
-// Earned/max LC totals (and the matched raw submissions, for insight
-// generation) for the selected milestone + module filter combination.
+// Earned/eligible max LC totals for the selected milestone + module filter combination
 function computeLqStats(userId, msId, moduleFilter) {
     const enabledMods = getEnabledModulesForMilestone(msId);
-    const lcModules = enabledMods.filter(m => getLqModuleMaxLcs(msId, m) > 0);
+    const lcModules = enabledMods.filter(m => getLqModuleMaxLcs(msId, m, userId) > 0);
     const targetModules = (moduleFilter === 'all' || !moduleFilter) ? lcModules : [moduleFilter];
 
     const userSubs = getUserSubmissionsByUserId(userId).filter(s => String(s.milestoneId || 1) === String(msId));
@@ -306,26 +378,25 @@ function computeLqStats(userId, msId, moduleFilter) {
     targetModules.forEach(mod => {
         const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === normalizeLevelUpType(mod));
         earned += modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-        max += getLqModuleMaxLcs(msId, mod);
+        max += getLqModuleMaxLcs(msId, mod, userId);
         matchedSubs = matchedSubs.concat(modSubs);
     });
 
-    const pct = max > 0 ? Math.min(100, Math.round((earned / max) * 100)) : 0;
+    if (max <= 0) max = 33; // Safeguard so denominator is never 0
+    const pct = Math.min(100, Math.round((earned / max) * 100));
     const zone = pct >= 80 ? 'strong' : (pct >= 50 ? 'average' : 'weak');
 
     return { earned, max, pct, zone, subs: matchedSubs, modules: targetModules };
 }
 window.computeLqStats = computeLqStats;
 
-// Rule-based (non-LLM) coaching copy — reflects pace (submission count vs
-// target), accuracy (average rubric matchPercentage), and timeliness
-// (on-time vs late submissions), plus a zone-appropriate nudge.
-function generateLqInsights(stats, msId, cfg) {
-    const { subs, zone } = stats;
+// Rule-based performance coaching insights
+function generateLqInsights(stats, msId, cfg, user) {
+    const { subs, zone, earned, max } = stats;
     if (!subs || subs.length === 0) {
         return {
-            overview: 'No check-ins recorded yet for this selection. Complete your first cMPLi Dip or POD check-in to start building your Learnability Quotient.',
-            focus: ['Get Started']
+            overview: 'No check-ins recorded yet for this active pathway. Complete your daily cMPLi Dip or cMPLi POD check-in to start establishing your Learnability Quotient score.',
+            focus: ['Start Check-ins', 'Daily Routine']
         };
     }
 
@@ -336,142 +407,222 @@ function generateLqInsights(stats, msId, cfg) {
     const dipSubs = subs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === 'dip');
 
     const bits = [];
-    if (podSubs.length > 0) bits.push(`consistent cMPLi POD listening across ${podSubs.length} episode${podSubs.length === 1 ? '' : 's'}`);
-    if (dipSubs.length > 0) bits.push(`Dip reflections averaging ${avgMatch}% rubric match`);
-    if (onTimeRate >= 90) bits.push(`a strong ${onTimeRate}% on-time submission rate`);
-    else if (onTimeRate < 70) bits.push(`${100 - onTimeRate}% of submissions landing after the on-time window`);
+    if (podSubs.length > 0) bits.push(`active cMPLi POD listening across ${podSubs.length} session${podSubs.length === 1 ? '' : 's'}`);
+    if (dipSubs.length > 0) bits.push(`cMPLi Dip reflections averaging ${avgMatch}% rubric alignment`);
+    if (onTimeRate >= 90) bits.push(`an excellent ${onTimeRate}% on-time submission rate`);
+    else if (onTimeRate < 70) bits.push(`${100 - onTimeRate}% of submissions arriving after the regular window`);
 
-    let overview = bits.length ? `You're showing ${bits.join('; ')}.` : 'Keep building your submission history to unlock deeper insights.';
-    if (zone === 'strong') overview += ' You are in the Strong zone — maintain this pace to stay future-ready.';
-    else if (zone === 'average') overview += ' Submit consistently and push rubric depth higher to move from Yellow to Strong Green.';
-    else overview += ' Increase submission frequency and land within the on-time window to move out of the Weak zone.';
+    let overview = bits.length ? `Showing ${bits.join('; ')}.` : 'Continue your daily submissions to reveal deeper coaching metrics.';
+    if (zone === 'strong') overview += ' Currently tracking in the Strong Zone — exceptional discipline and future readiness.';
+    else if (zone === 'average') overview += ' Currently tracking in the Growing Zone — keep submitted check-ins on-time to cross into the Strong Zone.';
+    else overview += ' Currently in the Weak Zone — increase your daily submission cadence to gain positive momentum.';
 
     const focus = [];
-    if (avgMatch < 80) focus.push('Reflection Depth & Rubric Alignment');
-    if (onTimeRate < 90) focus.push('Timely Submissions');
-    if (dipSubs.length > 0 && podSubs.length < dipSubs.length * 0.8) focus.push('Active Listening (cMPLi POD)');
-    if (focus.length === 0) focus.push('Maintain Consistency');
+    if (avgMatch < 80) focus.push('Reflection Depth & Rubric Match');
+    if (onTimeRate < 90) focus.push('On-Time Submissions (Before 5 PM)');
+    if (dipSubs.length > 0 && podSubs.length < dipSubs.length * 0.8) focus.push('Daily Audio Quiz (cMPLi POD)');
+    if (focus.length === 0) focus.push('Maintain High Momentum');
 
     return { overview, focus };
 }
 window.generateLqInsights = generateLqInsights;
 
-function renderLqMilestonePills() {
-    const el = document.getElementById('lqMilestoneFilters');
+// Renders Milestone Filter buttons — strictly gates customer view to unlocked milestones
+function renderLqMilestonePills(prefix = 'lq') {
+    const el = document.getElementById(`${prefix}MilestoneFilters`);
     if (!el || typeof milestoneConfig === 'undefined') return;
-    el.innerHTML = milestoneConfig.map(ms => {
-        const active = ms.id === lqSelectedMilestone;
-        return `<button onclick="selectLqMilestone(${ms.id})" class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'}">Milestone ${ms.id}</button>`;
+
+    const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
+    const highest = (user && userMilestoneState && userMilestoneState[user._id]?.highestUnlocked) || 1;
+
+    // For student: strictly limit to milestones <= highestUnlocked.
+    // For admin: show milestones up to highestUnlocked (or all if admin in test/creator view).
+    const isGod = (typeof isTestUser === 'function' && isTestUser()) || (isAdminLogin && prefix === 'adminLq');
+    const allowedMilestones = milestoneConfig.filter(ms => isGod || ms.id <= highest);
+
+    const activeMs = (prefix === 'adminLq') ? adminLqSelectedMilestone : lqSelectedMilestone;
+
+    el.innerHTML = allowedMilestones.map(ms => {
+        const active = ms.id === activeMs;
+        const name = LQ_MILESTONE_NAMES[ms.id] || ms.name;
+        const isCurrent = ms.id === highest;
+        return `<button onclick="selectLqMilestone(${ms.id}, '${prefix}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
+            <i class="fas fa-trophy text-[10px] ${active ? 'text-amber-300' : 'text-slate-500'}"></i>
+            <span>${name}</span>
+            ${isCurrent ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50 uppercase ml-1">Current</span>' : ''}
+        </button>`;
     }).join('');
 }
 window.renderLqMilestonePills = renderLqMilestonePills;
 
-function renderLqModulePills() {
-    const el = document.getElementById('lqModuleFilters');
+// Renders Module Filter buttons for the currently selected milestone
+function renderLqModulePills(prefix = 'lq') {
+    const el = document.getElementById(`${prefix}ModuleFilters`);
     if (!el) return;
-    const enabledMods = getEnabledModulesForMilestone(lqSelectedMilestone).filter(m => getLqModuleMaxLcs(lqSelectedMilestone, m) > 0);
-    if (lqSelectedModule !== 'all' && !enabledMods.includes(lqSelectedModule)) lqSelectedModule = 'all';
+
+    const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
+    const selectedMs = (prefix === 'adminLq') ? adminLqSelectedMilestone : lqSelectedMilestone;
+    let selectedMod = (prefix === 'adminLq') ? adminLqSelectedModule : lqSelectedModule;
+
+    const enabledMods = getEnabledModulesForMilestone(selectedMs).filter(m => getLqModuleMaxLcs(selectedMs, m, user?._id) > 0);
+    if (selectedMod !== 'all' && !enabledMods.includes(selectedMod)) {
+        selectedMod = 'all';
+        if (prefix === 'adminLq') adminLqSelectedModule = 'all';
+        else lqSelectedModule = 'all';
+    }
 
     const pills = [{ code: 'all', name: 'All Modules (Combined)', icon: 'fa-layer-group' }].concat(
         enabledMods.map(code => ALL_PLATFORM_MODULES.find(m => m.code === code) || { code, name: code.toUpperCase(), icon: 'fa-cube' })
     );
+
     el.innerHTML = pills.map(p => {
-        const active = p.code === lqSelectedModule;
-        return `<button onclick="selectLqModule('${p.code}')" class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-cyan-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'}"><i class="fas ${p.icon}"></i> ${p.name}</button>`;
+        const active = p.code === selectedMod;
+        return `<button onclick="selectLqModule('${p.code}', '${prefix}')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30 ring-1 ring-cyan-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
+            <i class="fas ${p.icon} text-[11px] ${active ? 'text-white' : 'text-slate-400'}"></i>
+            <span>${p.name}</span>
+        </button>`;
     }).join('');
 }
 window.renderLqModulePills = renderLqModulePills;
 
-async function selectLqMilestone(msId) {
-    lqSelectedMilestone = Number(msId);
-    lqSelectedModule = 'all';
-    renderLqMilestonePills();
-    renderLqModulePills();
-    await refreshLearnabilityGauge();
+async function selectLqMilestone(msId, prefix = 'lq') {
+    if (prefix === 'adminLq') {
+        adminLqSelectedMilestone = Number(msId);
+        adminLqSelectedModule = 'all';
+    } else {
+        lqSelectedMilestone = Number(msId);
+        lqSelectedModule = 'all';
+    }
+    renderLqMilestonePills(prefix);
+    renderLqModulePills(prefix);
+    await refreshLearnabilityGauge(prefix);
 }
 window.selectLqMilestone = selectLqMilestone;
 
-async function selectLqModule(moduleCode) {
-    lqSelectedModule = moduleCode;
-    renderLqModulePills();
-    await refreshLearnabilityGauge();
+async function selectLqModule(moduleCode, prefix = 'lq') {
+    if (prefix === 'adminLq') {
+        adminLqSelectedModule = moduleCode;
+    } else {
+        lqSelectedModule = moduleCode;
+    }
+    renderLqModulePills(prefix);
+    await refreshLearnabilityGauge(prefix);
 }
 window.selectLqModule = selectLqModule;
 
-// Builds the static gauge SVG (3-zone arc + needle) exactly once; subsequent
-// updates only mutate the needle's transform and the center text so the
-// needle animates smoothly via CSS transition instead of snapping.
-function ensureLqGaugeSvg() {
-    const container = document.getElementById('lqGaugeVisual');
-    if (!container || document.getElementById('lqNeedle')) return;
+// Builds the high-fidelity 4K realistic speedometer SVG with background track,
+// gradients, drop shadows, tapered needle, metallic center bezel, and glowing labels.
+function ensureLqGaugeSvg(prefix = 'lq') {
+    const container = document.getElementById(`${prefix}GaugeVisual`);
+    if (!container || document.getElementById(`${prefix}Needle`)) return;
 
-    const cx = 100, cy = 100, r = 78, strokeW = 16;
+    const cx = 120, cy = 115, r = 85, strokeW = 16;
     const polar = (angleDeg) => ({
-        x: cx + r * Math.cos(angleDeg * Math.PI / 180),
-        y: cy - r * Math.sin(angleDeg * Math.PI / 180)
+        x: Number((cx + r * Math.cos(angleDeg * Math.PI / 180)).toFixed(2)),
+        y: Number((cy - r * Math.sin(angleDeg * Math.PI / 180)).toFixed(2))
     });
     const arcPath = (a1, a2) => {
         const p1 = polar(a1), p2 = polar(a2);
-        return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+        return `M ${p1.x} ${p1.y} A ${r} ${r} 0 0 1 ${p2.x} ${p2.y}`;
     };
 
-    // Zones: 0-50% Weak (red) | 50-80% Growing (amber) | 80-100% Strong (green)
+    const trackPath = arcPath(180, 0);
     const redPath = arcPath(180, 90);
     const amberPath = arcPath(90, 36);
     const greenPath = arcPath(36, 0);
 
     container.innerHTML = `
-        <svg viewBox="0 0 200 118" class="w-full max-w-xs mx-auto block">
-            <path d="${redPath}" fill="none" stroke="#ef4444" stroke-width="${strokeW}" stroke-linecap="round"/>
-            <path d="${amberPath}" fill="none" stroke="#f59e0b" stroke-width="${strokeW}" stroke-linecap="round"/>
-            <path d="${greenPath}" fill="none" stroke="#10b981" stroke-width="${strokeW}" stroke-linecap="round"/>
-            <g id="lqNeedle" style="transform-origin: ${cx}px ${cy}px; transform: rotate(0deg); transition: transform 1.1s cubic-bezier(0.34, 1.3, 0.4, 1);">
-                <line x1="${cx}" y1="${cy}" x2="${cx - (r - 24)}" y2="${cy}" stroke="#e2e8f0" stroke-width="4" stroke-linecap="round"/>
-                <circle cx="${cx}" cy="${cy}" r="7" fill="#e2e8f0" stroke="#1e293b" stroke-width="2"/>
-            </g>
-            <text x="18" y="113" font-size="9" font-weight="700" fill="#94a3b8">Weak</text>
-            <text x="163" y="113" font-size="9" font-weight="700" fill="#94a3b8">Strong</text>
-        </svg>
-        <div class="absolute inset-x-0 top-[54%] flex flex-col items-center pointer-events-none">
-            <span id="lqEarnedNumber" class="text-3xl md:text-4xl font-black text-white font-mono leading-none">0</span>
-            <span id="lqMaxLabel" class="text-[11px] text-slate-400 font-semibold mt-1">of 0 LCs</span>
+        <div class="relative w-full max-w-[300px] mx-auto select-none">
+            <svg viewBox="0 0 240 142" class="w-full h-auto block filter drop-shadow-xl">
+                <defs>
+                    <linearGradient id="${prefix}GradTrack" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#1e293b" stop-opacity="0.8"/>
+                        <stop offset="100%" stop-color="#334155" stop-opacity="0.8"/>
+                    </linearGradient>
+                    <linearGradient id="${prefix}GradRed" x1="0%" y1="0%" x2="50%" y2="100%">
+                        <stop offset="0%" stop-color="#ea580c"/>
+                        <stop offset="100%" stop-color="#ef4444"/>
+                    </linearGradient>
+                    <linearGradient id="${prefix}GradAmber" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#f59e0b"/>
+                        <stop offset="100%" stop-color="#fbbf24"/>
+                    </linearGradient>
+                    <linearGradient id="${prefix}GradGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#10b981"/>
+                        <stop offset="100%" stop-color="#06b6d4"/>
+                    </linearGradient>
+                    <filter id="${prefix}NeedleShadow" x="-20%" y="-20%" width="150%" height="150%">
+                        <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.6"/>
+                    </filter>
+                </defs>
+
+                <!-- Background Track for Depth -->
+                <path d="${trackPath}" fill="none" stroke="url(#${prefix}GradTrack)" stroke-width="${strokeW + 2}" stroke-linecap="round"/>
+
+                <!-- 3 Colored Zones: Red (0-50%), Amber (50-80%), Green (80-100%) -->
+                <path d="${redPath}" fill="none" stroke="url(#${prefix}GradRed)" stroke-width="${strokeW}" stroke-linecap="round"/>
+                <path d="${amberPath}" fill="none" stroke="url(#${prefix}GradAmber)" stroke-width="${strokeW}"/>
+                <path d="${greenPath}" fill="none" stroke="url(#${prefix}GradGreen)" stroke-width="${strokeW}" stroke-linecap="round"/>
+
+                <!-- 3D Tapered Needle (rotates around cx, cy) -->
+                <g id="${prefix}Needle" style="transform-origin: ${cx}px ${cy}px; transform: rotate(0deg); transition: transform 1.15s cubic-bezier(0.34, 1.3, 0.4, 1);" filter="url(#${prefix}NeedleShadow)">
+                    <polygon points="${cx},${cy - 3.5} ${cx},${cy + 3.5} ${cx - 68},${cy}" fill="#f8fafc"/>
+                    <line x1="${cx}" y1="${cy}" x2="${cx - 68}" y2="${cy}" stroke="#6366f1" stroke-width="1.5"/>
+                    <circle cx="${cx}" cy="${cy}" r="11" fill="#0f172a" stroke="#475569" stroke-width="2"/>
+                    <circle cx="${cx}" cy="${cy}" r="5" fill="#38bdf8"/>
+                    <circle cx="${cx}" cy="${cy}" r="2" fill="#ffffff"/>
+                </g>
+
+                <!-- Baseline Indicators with Status Dots -->
+                <circle cx="26" cy="132" r="3" fill="#ef4444"/>
+                <text x="33" y="135" font-size="10" font-weight="800" fill="#fca5a5" font-family="system-ui, sans-serif">Weak</text>
+
+                <text x="178" y="135" font-size="10" font-weight="800" fill="#6ee7b7" font-family="system-ui, sans-serif">Strong</text>
+                <circle cx="216" cy="132" r="3" fill="#10b981"/>
+            </svg>
+
+            <!-- Center Score Digits (No percentages shown per product requirement) -->
+            <div class="absolute inset-x-0 top-[48%] flex flex-col items-center pointer-events-none text-center">
+                <span id="${prefix}EarnedNumber" class="text-4xl md:text-5xl font-black text-white font-mono leading-none tracking-tight drop-shadow-lg">0</span>
+                <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-400 font-bold uppercase tracking-wider mt-1 font-mono">of 0 LCs (Till Date)</span>
+            </div>
         </div>
     `;
 }
 window.ensureLqGaugeSvg = ensureLqGaugeSvg;
 
-function updateLqNeedle(pct) {
-    const needle = document.getElementById('lqNeedle');
+function updateLqNeedle(pct, prefix = 'lq') {
+    const needle = document.getElementById(`${prefix}Needle`);
     if (!needle) return;
     const deg = Math.max(0, Math.min(180, (Number(pct) || 0) / 100 * 180));
     needle.style.transform = `rotate(${deg}deg)`;
 }
 
-function updateLqCenterNumbers(earned, max) {
-    const earnedEl = document.getElementById('lqEarnedNumber');
-    const maxEl = document.getElementById('lqMaxLabel');
+function updateLqCenterNumbers(earned, max, prefix = 'lq') {
+    const earnedEl = document.getElementById(`${prefix}EarnedNumber`);
+    const maxEl = document.getElementById(`${prefix}MaxLabel`);
     if (earnedEl) earnedEl.textContent = earned;
-    if (maxEl) maxEl.textContent = `of ${max} LCs`;
+    if (maxEl) maxEl.textContent = `of ${max} LCs (Till Date)`;
 }
 
-function updateLqZoneBadge(zone) {
-    const el = document.getElementById('lqZoneBadge');
+function updateLqZoneBadge(zone, prefix = 'lq') {
+    const el = document.getElementById(`${prefix}ZoneBadge`);
     if (!el) return;
     const map = {
-        weak: { label: 'Weak Zone', cls: 'badge-pill badge-red' },
-        average: { label: 'Growing Zone', cls: 'badge-pill badge-amber' },
-        strong: { label: 'Strong Zone', cls: 'badge-pill badge-emerald' }
+        weak: { label: 'Weak Zone (Needs Momentum)', cls: 'badge-pill badge-red' },
+        average: { label: 'Growing Zone (On Track)', cls: 'badge-pill badge-amber' },
+        strong: { label: 'Strong Zone (Future-Ready)', cls: 'badge-pill badge-emerald' }
     };
     const m = map[zone] || map.weak;
     el.className = m.cls;
     el.innerHTML = `<i class="fas fa-bolt mr-1"></i> ${m.label}`;
 }
 
-function updateLqInsights(insights) {
-    const overviewEl = document.getElementById('lqInsightsOverview');
+function updateLqInsights(insights, prefix = 'lq') {
+    const overviewEl = document.getElementById(`${prefix}InsightsOverview`);
     if (overviewEl) overviewEl.textContent = insights.overview;
 
-    const focusEl = document.getElementById('lqFocusAreas');
+    const focusEl = document.getElementById(`${prefix}FocusAreas`);
     if (focusEl) {
         focusEl.innerHTML = (insights.focus || []).map(f =>
             `<span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/40">${f}</span>`
@@ -479,30 +630,44 @@ function updateLqInsights(insights) {
     }
 }
 
-async function refreshLearnabilityGauge(userOverride) {
-    const user = userOverride || currentUser;
-    if (!user || !lqSelectedMilestone) return;
+async function refreshLearnabilityGauge(prefix = 'lq') {
+    const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
+    const msId = (prefix === 'adminLq') ? adminLqSelectedMilestone : lqSelectedMilestone;
+    const modFilter = (prefix === 'adminLq') ? adminLqSelectedModule : lqSelectedModule;
 
-    ensureLqGaugeSvg();
-    const cfg = getMilestonePrereqConfig(lqSelectedMilestone);
-    const stats = computeLqStats(user._id || user, lqSelectedMilestone, lqSelectedModule);
+    if (!user || !msId) return;
 
-    updateLqNeedle(stats.pct);
-    updateLqCenterNumbers(stats.earned, stats.max);
-    updateLqZoneBadge(stats.zone);
-    updateLqInsights(generateLqInsights(stats, lqSelectedMilestone, cfg));
+    ensureLqGaugeSvg(prefix);
+    const cfg = getMilestonePrereqConfig(msId);
+    const stats = computeLqStats(user._id || user, msId, modFilter);
+
+    updateLqNeedle(stats.pct, prefix);
+    updateLqCenterNumbers(stats.earned, stats.max, prefix);
+    updateLqZoneBadge(stats.zone, prefix);
+    updateLqInsights(generateLqInsights(stats, msId, cfg, user), prefix);
 }
 window.refreshLearnabilityGauge = refreshLearnabilityGauge;
 
-function initLearnabilityGauge(displayUser) {
-    if (!currentUser) return;
-    if (lqSelectedMilestone === null) {
-        const uState = (userMilestoneState && userMilestoneState[displayUser._id || currentUser._id]) || { highestUnlocked: 1 };
-        lqSelectedMilestone = uState.highestUnlocked || 1;
+function initLearnabilityGauge(displayUser, mode = 'student') {
+    if (!displayUser) return;
+    const prefix = (mode === 'admin' || mode === 'adminLq') ? 'adminLq' : 'lq';
+
+    const uState = (userMilestoneState && userMilestoneState[displayUser._id]) || { highestUnlocked: 1 };
+    const highest = uState.highestUnlocked || 1;
+
+    if (prefix === 'adminLq') {
+        adminLqActiveUser = displayUser;
+        adminLqSelectedMilestone = highest;
+        adminLqSelectedModule = 'all';
+    } else {
+        lqActiveUser = displayUser;
+        lqSelectedMilestone = highest;
+        lqSelectedModule = 'all';
     }
-    renderLqMilestonePills();
-    renderLqModulePills();
-    refreshLearnabilityGauge(displayUser);
+
+    renderLqMilestonePills(prefix);
+    renderLqModulePills(prefix);
+    refreshLearnabilityGauge(prefix);
 }
 window.initLearnabilityGauge = initLearnabilityGauge;
 
