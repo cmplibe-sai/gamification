@@ -9949,7 +9949,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             }
         } catch(e) {}
     }
-    if (!isLateSubmission && matchPercentage >= 50 && Number(lcReward) <= lateRewardLc && Number(lcReward) < maxOnTimeLc) {
+    if (!isLateSubmission && matchPercentage >= 50 && Number(lcReward) <= lateRewardLc && (Number(lcReward) < 17 || matchPercentage > 90)) {
         isLateSubmission = true;
     }
 
@@ -10028,7 +10028,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         } else if (isPod) {
             const podQPool = (dayCfg && Array.isArray(dayCfg.questions) && dayCfg.questions.length > 0) 
                 ? dayCfg.questions 
-                : (typeof defaultPodQuestionsPool !== 'undefined' && Array.isArray(defaultPodQuestionsPool) ? defaultPodQuestionsPool.slice(0, 3) : []);
+                : (typeof getPodQuestionsPool === 'function' ? getPodQuestionsPool().slice(0, 3) : ((typeof window !== 'undefined' && Array.isArray(window.defaultPodQuestionsPool)) ? window.defaultPodQuestionsPool.slice(0, 3) : []));
             if (podQPool.length > 0) {
                 responses = podQPool.map((pq, pIdx) => ({
                     title: pq.title || pq.question || `Comprehension Question ${pIdx + 1}`,
@@ -10087,8 +10087,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
                 if (isMcq) {
                     const hasRealOptions = (opts) => {
-                        if (!Array.isArray(opts) || opts.length === 0) return false;
-                        return opts.some(opt => opt && typeof opt === 'string' && !/^option\s*[a-d0-9]$/i.test(opt.trim()));
+                        if (!Array.isArray(opts) || opts.length < 2) return false;
+                        return opts.every(opt => opt && typeof opt === 'string' && !/^option\s*[a-d0-9]$/i.test(opt.trim()));
                     };
 
                     let opts = hasRealOptions(q.options) ? [...q.options] : null;
@@ -10098,6 +10098,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     if (!opts) {
                         const candidatePool = [
                             ...(Array.isArray(dayCfg?.questions) ? dayCfg.questions : []),
+                            ...(typeof getPodQuestionsPool === 'function' ? getPodQuestionsPool() : []),
+                            ...(typeof window !== 'undefined' && Array.isArray(window.defaultPodQuestionsPool) ? window.defaultPodQuestionsPool : []),
                             ...(typeof defaultPodQuestionsPool !== 'undefined' && Array.isArray(defaultPodQuestionsPool) ? defaultPodQuestionsPool : [])
                         ];
                         const cleanT = (qTitle || '').toLowerCase().trim();
@@ -10169,9 +10171,12 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     if (userSel === -1 && q.selectedOption !== undefined) {
                         userSel = q.selectedOption;
                     }
-                    if (userSel === -1) userSel = correctSel;
 
                     const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
+                    if (userSel === -1 && isCorrect) {
+                        userSel = correctSel;
+                    }
+
                     const ptsEarned = (q.pts !== undefined) ? q.pts : (isCorrect ? 11 : 0);
 
                     // If real options exist, render real option cards
@@ -10352,7 +10357,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const isEvaluating = (sub.status === 'evaluating');
     const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (lcReward === 0 || matchPercentage < 50)));
     const isLateSubmissionMode = Boolean(isLateSubmission && !isMismatch && matchPercentage >= 50);
-    const isLegacyLow = (!isEvaluating && !isMismatch && !isLateSubmissionMode && (matchPercentage < 50 || (Number(lcReward) === 3 && matchPercentage < 50))); // Legacy 3 LCs tier
+    const isLegacyLow = (!isEvaluating && !isMismatch && !isLateSubmissionMode && matchPercentage < 50); // Legacy <50% 3 LCs tier
     const isPartial  = (!isEvaluating && !isMismatch && !isLateSubmissionMode && !isLegacyLow && matchPercentage <= 80); // 17 LCs tier
     const isGood     = (!isEvaluating && !isMismatch && !isLateSubmissionMode && !isLegacyLow && !isPartial && matchPercentage <= 90); // 23 LCs tier
     const attemptNum = sub.attemptsCount || sub.attemptNumber || 1;

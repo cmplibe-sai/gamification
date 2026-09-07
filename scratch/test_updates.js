@@ -474,6 +474,39 @@ assert.ok(podHtml.includes('Tackle them in the first 90 minutes of the morning')
 assert.ok(!podHtml.includes('>Option A<') && !podHtml.includes('>Option B<'), 'Must NOT render dummy Option A/Option B strings');
 console.log('✅ POD Check-in real options/answers recovery test passed!');
 
+// 8.3 Mixed dummy options array (e.g. ['Real answer', 'Option B', 'Option C', 'Option D']) must not leak dummy labels
+const podMixedSub = {
+    id: 'sub_pod_mixed',
+    userId: 'usr_chandra_349',
+    userEmail: 'chandrasai349@gmail.com',
+    userName: 'Chandra',
+    type: 'pod',
+    moduleType: 'pod',
+    milestoneId: 1,
+    day: 2,
+    dateKey: '2026-08-30',
+    submittedAt: '2026-08-30T12:15:01.992Z',
+    lcReward: 11,
+    status: 'completed',
+    responses: [
+        {
+            question: "Custom untested question without pool match",
+            answer: "My actual unique reflection answer",
+            type: "mcq",
+            options: ['My actual unique reflection answer', 'Option B', 'Option C', 'Option D'],
+            selectedOption: 0,
+            correctOption: 0,
+            isCorrect: true
+        }
+    ]
+};
+renderSubmissionDetailModal(podMixedSub, 'usr_chandra_349', '2', 'pod');
+const mixedHtml = document.body.lastInsertedHtml;
+assert.ok(!mixedHtml.includes('>Option B<') && !mixedHtml.includes('>Option C<'), 'Mixed dummy options must not leak dummy labels');
+assert.ok(mixedHtml.includes('Learner Submitted Answer'), 'Must render clean Learner Submitted Answer card');
+assert.ok(mixedHtml.includes('My actual unique reflection answer'), 'Must display actual submitted text');
+console.log('✅ Airtight mixed dummy options guard test passed!');
+
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
 }
 

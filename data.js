@@ -3608,6 +3608,7 @@ window.milestoneConfig = milestoneConfig;var defaultPodQuestionsPool = [
         pts: 11
     }
 ];
+if (typeof window !== 'undefined') window.defaultPodQuestionsPool = defaultPodQuestionsPool;
 
 var projects = [
     { 
