@@ -52,30 +52,43 @@ global.apiFetch = async () => ({ json: async () => ({ success: true }) });
 eval(appCode);
 global.apiFetch = async () => ({ json: async () => ({ success: true }) });
 
-console.log('--- Testing 1: Per-Module Start Dates ---');
-// Set DIP start date to 2026-09-01
-localStorageData['userMilestoneJoinDates'] = JSON.stringify({
-    'usr_cust_123_MS1': '2026-09-01'
-});
-assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'dip'), '2026-09-01', 'DIP should fallback to milestone join date');
+async function runTests() {
+    console.log('--- Testing 1: Per-Module Start Dates ---');
+    // Set DIP start date to 2026-09-01
+    localStorageData['userMilestoneJoinDates'] = JSON.stringify({
+        'usr_cust_123_MS1': '2026-09-01'
+    });
+    assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'dip'), '2026-09-01', 'DIP should fallback to milestone join date');
 
-// Set POD start date to 2026-09-15 (Day 1 starts on 15 Sept)
-setUserModuleStartDate('usr_cust_123', 1, 'pod', '2026-09-15');
-assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'pod'), '2026-09-15', 'POD should start on 2026-09-15');
+    // Set POD start date to 2026-09-15 (Day 1 starts on 15 Sept)
+    await setUserModuleStartDate('usr_cust_123', 1, 'pod', '2026-09-15');
+    assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'pod'), '2026-09-15', 'POD should start on 2026-09-15');
 
-// Set Immerse start date to 2026-09-07
-setUserModuleStartDate('usr_cust_123', 1, 'immerse', '2026-09-07');
-assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'immerse'), '2026-09-07', 'Immerse should start on 2026-09-07');
+    // Set Immerse start date to 2026-09-07
+    await setUserModuleStartDate('usr_cust_123', 1, 'immerse', '2026-09-07');
+    assert.strictEqual(getUserModuleStartDate('usr_cust_123', 1, 'immerse'), '2026-09-07', 'Immerse should start on 2026-09-07');
 
-// Verify session dates for POD (Mon-Sat) vs Immerse (MWF)
-const podStart = new Date('2026-09-15T00:00:00');
-const podDay1 = getMilestoneSessionDate(podStart, 1, 'pod');
-assert.strictEqual(getLocalDateKey(podDay1), '2026-09-15', 'POD Day 1 date must match start date');
+    // Verify session dates for POD (Mon-Sat) vs Immerse (MWF)
+    const podStart = new Date('2026-09-15T00:00:00');
+    const podDay1 = getMilestoneSessionDate(podStart, 1, 'pod');
+    assert.strictEqual(getLocalDateKey(podDay1), '2026-09-15', 'POD Day 1 date must match start date');
 
-const immerseStart = new Date('2026-09-07T00:00:00');
-const immerseDay1 = getMilestoneSessionDate(immerseStart, 1, 'immerse');
-assert.strictEqual(getLocalDateKey(immerseDay1), '2026-09-07', 'Immerse Day 1 date must match start date');
-console.log('✅ Per-Module Start Dates test passed!');
+    const immerseStart = new Date('2026-09-07T00:00:00');
+    const immerseDay1 = getMilestoneSessionDate(immerseStart, 1, 'immerse');
+    assert.strictEqual(getLocalDateKey(immerseDay1), '2026-09-07', 'Immerse Day 1 date must match start date');
+
+    // Test auto-stamping on module activation toggle
+    global.adminRealtimeUsers = [
+        { _id: 'usr_new_student', name: 'Alice New', email: 'alice@example.com' }
+    ];
+    // Ensure usr_new_student has no start date for residency
+    assert.strictEqual(getUserModuleStartDate('usr_new_student', 1, 'residency'), null);
+    // Creator toggles residency ON for milestone 1
+    await toggleMilestoneModuleAccess(1, 'residency');
+    // Check that usr_new_student now automatically has Day 1 stamped!
+    assert.strictEqual(getUserModuleStartDate('usr_new_student', 1, 'residency'), getLocalDateKey(new Date()));
+    console.log('✅ Module toggle auto-stamping Day 1 test passed!');
+    console.log('✅ Per-Module Start Dates test passed!');
 
 console.log('--- Testing 2: Review Modal Customer View Layout & Factors ---');
 const testSub = {
@@ -156,4 +169,9 @@ assert.ok(creatorHtml.includes('Reviewing as Creator'), 'Creator review mode ind
 console.log('✅ Creator View Modal test passed!');
 
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
-process.exit(0);
+}
+
+runTests().catch(err => {
+    console.error('❌ Test failed:', err);
+    process.exit(1);
+});

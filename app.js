@@ -4898,7 +4898,8 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     try { saved = JSON.parse(localStorage.getItem('customMilestoneModuleAccess')) || {}; } catch(e) {}
 
     let current = getEnabledModulesForMilestone(msId);
-    if (current.includes(moduleCode)) {
+    const wasEnabled = current.includes(moduleCode);
+    if (wasEnabled) {
         if (current.length === 1) {
             alert('At least one module must remain active in this milestone.');
             return;
@@ -4911,6 +4912,51 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
 
     // 1. Save locally immediately
     try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(saved)); } catch(e) {}
+
+    // 1b. If module was newly turned ON, auto-stamp activation date and set Day 1 for cohort learners
+    if (!wasEnabled) {
+        const todayKey = getLocalDateKey(new Date());
+        const normalizedMod = normalizeLevelUpType(moduleCode);
+
+        // Record module activation date
+        let actDates = {};
+        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+        actDates[`${key}_${normalizedMod}`] = todayKey;
+        try { localStorage.setItem('moduleActivationDates', JSON.stringify(actDates)); } catch(e) {}
+
+        // Auto-stamp Day 1 for all cohort users who do not have an explicit start date for this module yet
+        const allUsers = (typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0)
+            ? adminRealtimeUsers
+            : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) ? actualUsers : ((typeof window !== 'undefined' && Array.isArray(window.adminRealtimeUsers)) ? window.adminRealtimeUsers : []));
+
+        let modDates = {};
+        try { modDates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
+        let datesChanged = false;
+
+        allUsers.forEach(u => {
+            if (!u || !u._id) return;
+            const k1 = `${u._id}_MS${key}_${normalizedMod}`;
+            if (!modDates[k1]) {
+                modDates[k1] = todayKey;
+                if (u.email) modDates[`${u.email.toLowerCase().trim()}_MS${key}_${normalizedMod}`] = todayKey;
+                datesChanged = true;
+            }
+        });
+
+        if (datesChanged) {
+            try { localStorage.setItem('userModuleStartDates', JSON.stringify(modDates)); } catch(e) {}
+            apiFetch('/api/user-module-start-date', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    milestoneId: key,
+                    moduleName: normalizedMod,
+                    startDate: todayKey,
+                    allDates: modDates
+                })
+            }).catch(() => {});
+        }
+    }
 
     // 2. Update UI toggle buttons immediately
     const subNavEl = document.getElementById('adminMilestoneSubNav');
@@ -7828,6 +7874,19 @@ function getUserModuleStartDate(userId, msId, moduleName) {
     }
 
     if (!foundDate) {
+        // Check if there is an activation date for this module in this milestone
+        let actDates = {};
+        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+        const actDate = actDates[`${msId}_${mod}`];
+        if (actDate) {
+            foundDate = actDate;
+            dates[k1] = foundDate;
+            if (k3) dates[k3] = foundDate;
+            try { localStorage.setItem('userModuleStartDates', JSON.stringify(dates)); } catch(e) {}
+        }
+    }
+
+    if (!foundDate) {
         // Fallback for 'dip' is the milestone join date
         if (mod === 'dip') {
             foundDate = getUserMilestoneJoinDate(userId, msId);
@@ -9371,7 +9430,14 @@ function switchMilestoneTab(moduleName, btnElement) {
     }
 
     const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
-    const userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null) || (normalizedMod === 'dip' ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null) || todayKey;
+    let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
+    if (!userJoinDateStr) {
+        // Auto-lock Day 1 on first view so it never slides forward day-by-day if browsing without submitting!
+        userJoinDateStr = (normalizedMod === 'dip' ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null) || todayKey;
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
+        }
+    }
     let milestoneStartDate = new Date(userJoinDateStr + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
@@ -9970,6 +10036,14 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         ${isEvaluating ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating Video' : (immerseFullyVerified ? `<i class="fas fa-check-circle mr-1"></i> Fully Verified (+${immerseBasePts} LCs)` : `<i class="fas fa-check mr-1"></i> Video Attempt (+${lcReward} LCs)`)}
                     </span>
                 </div>
+                ${(dayCfg.mainQuestion || sub.mainQuestion || (sub.responses && sub.responses.find(r => r.title && !r.title.toLowerCase().includes('record') && r.title.length > 5)?.title)) ? `
+                    <div class="p-3 bg-purple-950/40 rounded-xl border border-purple-800/40 text-xs shadow-inner space-y-1">
+                        <span class="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fas fa-question-circle text-purple-400"></i> Today's Main Question
+                        </span>
+                        <p class="text-white font-semibold text-xs leading-relaxed font-sans">${(dayCfg.mainQuestion || sub.mainQuestion || (sub.responses && sub.responses.find(r => r.title && !r.title.toLowerCase().includes('record') && r.title.length > 5)?.title)).trim()}</p>
+                    </div>
+                ` : ''}
                 <div class="text-xs text-slate-200 border-slate-800/90 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
                     ${aiRemarksText}
                 </div>
