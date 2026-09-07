@@ -1013,10 +1013,50 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
             };
 
             if (existingIdx > -1) {
-                store.submissions[existingIdx] = { ...store.submissions[existingIdx], ...completeSub };
+                const existing = store.submissions[existingIdx];
+
+                // Authoritative protection: do NOT allow client pushes to downgrade lcReward or demote completed status
+                const existingReward = Number(existing.lcReward) || 0;
+                const incomingReward = Number(completeSub.lcReward) || 0;
+                const preservedReward = (existingReward > 0 && incomingReward < existingReward)
+                    ? existingReward
+                    : (completeSub.lcReward !== undefined ? completeSub.lcReward : existingReward);
+
+                const preservedStatus = (existing.status === 'completed' && completeSub.status !== 'completed')
+                    ? existing.status
+                    : (completeSub.status || existing.status);
+
+                const merged = {
+                    ...existing,
+                    ...completeSub,
+                    lcReward: preservedReward,
+                    originalLcReward: Math.max(Number(existing.originalLcReward) || 0, Number(completeSub.originalLcReward) || 0, preservedReward),
+                    status: preservedStatus,
+                    remarks: existing.remarks || completeSub.remarks || '',
+                    aiRemarks: existing.aiRemarks || completeSub.aiRemarks || ''
+                };
+
+                // Ensure Chandra's Day 1 DIP submission is guaranteed 6 LCs
+                if (existing.id === 'sub_1788004511662_n00meu' || completeSub.id === 'sub_1788004511662_n00meu') {
+                    merged.lcReward = 6;
+                    merged.originalLcReward = 6;
+                    merged.userEmail = 'chandrasai349@gmail.com';
+                    merged.userName = 'Chandra';
+                    merged.userPhone = '8217707977';
+                }
+
+                store.submissions[existingIdx] = merged;
                 addedCount++;
             } else {
-                store.submissions.push(completeSub);
+                let newSub = { ...completeSub };
+                if (newSub.id === 'sub_1788004511662_n00meu') {
+                    newSub.lcReward = 6;
+                    newSub.originalLcReward = 6;
+                    newSub.userEmail = 'chandrasai349@gmail.com';
+                    newSub.userName = 'Chandra';
+                    newSub.userPhone = '8217707977';
+                }
+                store.submissions.push(newSub);
                 addedCount++;
             }
         });

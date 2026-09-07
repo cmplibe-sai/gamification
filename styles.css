@@ -345,6 +345,12 @@ button:active {
     border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
+.badge-slate {
+    background: rgba(100, 116, 139, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(100, 116, 139, 0.35);
+}
+
 /* Buttons */
 .btn-primary {
     background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
