@@ -1036,27 +1036,10 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
                     aiRemarks: existing.aiRemarks || completeSub.aiRemarks || ''
                 };
 
-                // Ensure Chandra's Day 1 DIP submission is guaranteed 6 LCs
-                if (existing.id === 'sub_1788004511662_n00meu' || completeSub.id === 'sub_1788004511662_n00meu') {
-                    merged.lcReward = 6;
-                    merged.originalLcReward = 6;
-                    merged.userEmail = 'chandrasai349@gmail.com';
-                    merged.userName = 'Chandra';
-                    merged.userPhone = '8217707977';
-                }
-
                 store.submissions[existingIdx] = merged;
                 addedCount++;
             } else {
-                let newSub = { ...completeSub };
-                if (newSub.id === 'sub_1788004511662_n00meu') {
-                    newSub.lcReward = 6;
-                    newSub.originalLcReward = 6;
-                    newSub.userEmail = 'chandrasai349@gmail.com';
-                    newSub.userName = 'Chandra';
-                    newSub.userPhone = '8217707977';
-                }
-                store.submissions.push(newSub);
+                store.submissions.push(completeSub);
                 addedCount++;
             }
         });

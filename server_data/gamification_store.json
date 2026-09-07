@@ -22,7 +22,10 @@
       "lcReward": 33,
       "status": "completed",
       "submittedAt": "2026-08-27T12:54:19.767Z",
-      "updatedAt": "2026-08-27T12:54:19.767Z"
+      "updatedAt": "2026-08-27T12:54:19.767Z",
+      "originalLcReward": 40,
+      "remarks": "",
+      "aiRemarks": ""
     },
     {
       "id": "sub_1787999238340_tsdemm",
@@ -244,7 +247,9 @@
       "status": "completed",
       "submittedAt": "2026-08-29T11:55:10.806Z",
       "updatedAt": "2026-08-30T05:51:34.700Z",
-      "originalLcReward": 6
+      "originalLcReward": 6,
+      "remarks": "",
+      "aiRemarks": ""
     },
     {
       "id": "sub_1788068835587_vawqxp",
@@ -1202,7 +1207,7 @@
       }
     }
   },
-  "submissionsRevision": 1788799954448,
-  "lastUpdated": 1788761215883,
+  "submissionsRevision": 1788801897152,
+  "lastUpdated": 1788801897152,
   "configsRevision": 1788760981048
 }
