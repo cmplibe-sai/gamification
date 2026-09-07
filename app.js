@@ -1051,6 +1051,7 @@ window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
 var tempLoginId = '';
 var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || [];
 var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
+var customMilestonePrereqs = JSON.parse(localStorage.getItem('customMilestonePrereqs')) || {};
 var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
 var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
 // allAdminMangos declared above
@@ -1101,7 +1102,7 @@ async function syncGlobalServerData() {
             return;
         }
 
-        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess } = response.data;
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
 
@@ -1246,6 +1247,36 @@ async function syncGlobalServerData() {
             try { localModDates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
             const merged = { ...localModDates, ...serverModuleStartDates };
             try { localStorage.setItem('userModuleStartDates', JSON.stringify(merged)); } catch(e) {}
+        }
+
+        // 4c. MILESTONE CREDENTIAL PREREQUISITES SYNC (Creator-configured completion targets)
+        if (serverPrereqs && typeof serverPrereqs === 'object') {
+            if (JSON.stringify(customMilestonePrereqs) !== JSON.stringify(serverPrereqs)) {
+                customMilestonePrereqs = serverPrereqs;
+                try { localStorage.setItem('customMilestonePrereqs', JSON.stringify(customMilestonePrereqs)); } catch(e) {}
+                if (activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
+                    if (typeof renderAdminPrereqsView === 'function') renderAdminPrereqsView();
+                }
+            }
+        }
+
+        // 4d. CREDENTIAL APPROVALS SYNC (admin-approved certificates, cross-device/cross-admin)
+        if (serverCertApprovals && typeof serverCertApprovals === 'object') {
+            mockApprovedCertificates = { ...mockApprovedCertificates, ...serverCertApprovals };
+            try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
+        }
+
+        // 4e. USER MILESTONE STATE SYNC (highestUnlocked / per-milestone "Start Now" flags)
+        // Merge server into local per-user; the CURRENT user's own local entry wins on
+        // conflicts so an optimistic "Start Now" click isn't clobbered before it round-trips.
+        if (serverUserMilestoneStates && typeof serverUserMilestoneStates === 'object') {
+            Object.keys(serverUserMilestoneStates).forEach(uid => {
+                const isSelf = currentUser && String(uid) === String(currentUser._id);
+                userMilestoneState[uid] = isSelf
+                    ? { ...serverUserMilestoneStates[uid], ...(userMilestoneState[uid] || {}) }
+                    : { ...(userMilestoneState[uid] || {}), ...serverUserMilestoneStates[uid] };
+            });
+            try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
         }
 
         // 5. LEVEL-UP ACCESS CONFIG SYNC (Real-time cross-browser sync)
@@ -4887,6 +4918,315 @@ function getEnabledModulesForMilestone(msId) {
     return ['dip', 'pod'];
 }
 
+// ==============================================================
+// CREATOR-CONFIGURABLE CREDENTIAL PREREQUISITES
+// (server-synced via /api/milestone-prereqs, cached in localStorage
+//  as customMilestonePrereqs; falls back to these platform defaults
+//  when a Creator has not customized a milestone yet)
+// ==============================================================
+var DEFAULT_MILESTONE_PREREQS = {
+    "1": { targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false },
+    "2": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
+    "3": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
+    "4": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false }
+};
+window.DEFAULT_MILESTONE_PREREQS = DEFAULT_MILESTONE_PREREQS;
+
+function getMilestonePrereqConfig(msId) {
+    const key = String(msId || 1);
+    const defaults = DEFAULT_MILESTONE_PREREQS[key] || DEFAULT_MILESTONE_PREREQS["1"];
+    const custom = (typeof customMilestonePrereqs !== 'undefined' && customMilestonePrereqs[key]) ? customMilestonePrereqs[key] : {};
+    return { ...defaults, ...custom };
+}
+window.getMilestonePrereqConfig = getMilestonePrereqConfig;
+
+async function saveMilestonePrereqConfig(msId, patch) {
+    const key = String(msId || 1);
+    if (typeof customMilestonePrereqs === 'undefined' || !customMilestonePrereqs) customMilestonePrereqs = {};
+    customMilestonePrereqs[key] = { ...getMilestonePrereqConfig(key), ...patch };
+    try { localStorage.setItem('customMilestonePrereqs', JSON.stringify(customMilestonePrereqs)); } catch(e) {}
+    try {
+        await apiFetch('/api/milestone-prereqs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ milestoneId: key, config: customMilestonePrereqs[key] })
+        });
+    } catch(e) { console.warn('Failed to sync milestone prereqs to server:', e); }
+    return customMilestonePrereqs[key];
+}
+window.saveMilestonePrereqConfig = saveMilestonePrereqConfig;
+
+// ==============================================================
+// SERVER-SYNCED PERSISTENCE HELPERS — user milestone state & credential approvals
+// ==============================================================
+async function persistUserMilestoneState(userId, patch) {
+    if (!userId || !patch) return;
+    if (!userMilestoneState[userId]) userMilestoneState[userId] = {};
+    userMilestoneState[userId] = { ...userMilestoneState[userId], ...patch };
+    try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+    try {
+        await apiFetch('/api/user-milestone-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, state: patch })
+        });
+    } catch(e) { console.warn('Failed to sync user milestone state to server:', e); }
+}
+window.persistUserMilestoneState = persistUserMilestoneState;
+
+async function persistCertificateApproval(userId, msId, approved, credentialId) {
+    const key = `${userId}_MS${msId}`;
+    mockApprovedCertificates[key] = approved ? { approved: true, credentialId: credentialId || null, issuedAt: new Date().toISOString() } : false;
+    try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
+    try {
+        await apiFetch('/api/certificate-approvals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, approved, credentialId })
+        });
+    } catch(e) { console.warn('Failed to sync certificate approval to server:', e); }
+}
+window.persistCertificateApproval = persistCertificateApproval;
+
+function isCertificateApproved(userId, msId) {
+    const record = mockApprovedCertificates[`${userId}_MS${msId}`];
+    return record === true || (record && typeof record === 'object' && record.approved === true);
+}
+window.isCertificateApproved = isCertificateApproved;
+
+function getCertificateId(userId, msId) {
+    const record = mockApprovedCertificates[`${userId}_MS${msId}`];
+    if (record && typeof record === 'object' && record.credentialId) return record.credentialId;
+    const user = (currentUser && String(currentUser._id) === String(userId)) ? currentUser : null;
+    const suffix = (user && user.fanId ? String(user.fanId) : String(userId)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-8) || '00000000';
+    return `CMPLI-MS${msId}-${suffix}`;
+}
+
+// Admin "Approve" click in the Completion Grid Matrix — issues the credential
+// for that learner+milestone and, since this action only appears when the
+// Creator has configured admin-approval (not auto-unlock) as the gate,
+// advances the learner's highestUnlocked so Milestone N+1 becomes available.
+async function adminApproveCredential(userId, msId) {
+    const credentialId = getCertificateId(userId, msId);
+    await persistCertificateApproval(userId, msId, true, credentialId);
+
+    const nextId = Number(msId) + 1;
+    if (!userMilestoneState[userId]) userMilestoneState[userId] = { highestUnlocked: 1 };
+    const newHighest = Math.max(userMilestoneState[userId].highestUnlocked || 1, nextId);
+    userMilestoneState[userId].highestUnlocked = newHighest;
+    try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+    await persistUserMilestoneState(userId, { highestUnlocked: newHighest });
+
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.adminApproveCredential = adminApproveCredential;
+window.getCertificateId = getCertificateId;
+
+// ==============================================================
+// CLAIM CREDENTIAL MODAL — dynamically evaluates the Creator's
+// configured prerequisites for the active milestone and shows either
+// a "Prerequisites Incomplete" progress card or a "Credential
+// Authenticated" card with PDF download + milestone advancement.
+// ==============================================================
+function openClaimCredentialModal() {
+    const modal = document.getElementById('claimCredentialModal');
+    const content = document.getElementById('claimCredentialContent');
+    if (!modal || !content || !currentUser) return;
+
+    if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {}).then(() => {
+        if (!modal.classList.contains('hidden')) renderClaimCredentialContent();
+    });
+
+    renderClaimCredentialContent();
+    modal.classList.remove('hidden');
+
+    function renderClaimCredentialContent() {
+        const msId = activeMilestoneId || 1;
+        const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
+        const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+        const cfg = getMilestonePrereqConfig(msId);
+
+        const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId));
+        const dipCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'dip').length;
+        const podCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'pod').length;
+        const immerseCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'immerse').length;
+        const totalEarnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+
+        const meetsDips = dipCompleted >= cfg.targetDips;
+        const meetsPod = podCompleted >= cfg.targetPod;
+        const meetsImmerse = !(cfg.targetImmerse > 0) || immerseCompleted >= cfg.targetImmerse;
+        const meetsLcs = totalEarnedLcs >= cfg.minLCs;
+        const meetsAllPrereqs = meetsDips && meetsPod && meetsImmerse && meetsLcs;
+
+        const isAdminApproved = isCertificateApproved(currentUser._id, msId);
+        const isCredentialIssued = meetsAllPrereqs && (cfg.autoUnlockNext || isAdminApproved);
+
+        if (isCredentialIssued) {
+            if (cfg.autoUnlockNext && !isAdminApproved) {
+                persistCertificateApproval(currentUser._id, msId, true, getCertificateId(currentUser._id, msId));
+            }
+            const credentialId = getCertificateId(currentUser._id, msId);
+            const nextMs = milestoneConfig.find(m => m.id === msId + 1);
+
+            content.innerHTML = `
+                <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/50 shadow-lg text-3xl mb-3 animate-bounce">
+                    <i class="fas fa-award text-amber-300"></i>
+                </div>
+                <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-bold">Verified &amp; Authenticated</span>
+                <h3 class="text-2xl font-extrabold text-white font-heading mt-2">Congratulations, ${currentUser.name || 'Learner'}!</h3>
+                <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have fulfilled every completion prerequisite for <b>Milestone ${msId}: ${cleanName}</b>.</p>
+
+                <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2.5 mt-4">
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">${credentialId}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Recipient Name:</span><span class="text-white font-bold">${currentUser.name || 'Learner'}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi Dip Check-ins:</span><span class="text-emerald-400 font-mono font-bold">${dipCompleted} / ${cfg.targetDips} Days</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi POD Audio &amp; Quiz:</span><span class="text-emerald-400 font-mono font-bold">${podCompleted} / ${cfg.targetPod} Days</span></div>
+                    ${cfg.targetImmerse > 0 ? `<div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi Immerse:</span><span class="text-emerald-400 font-mono font-bold">${immerseCompleted} / ${cfg.targetImmerse} Sessions</span></div>` : ''}
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Total LCs Earned:</span><span class="text-amber-400 font-mono font-bold">${totalEarnedLcs} / ${cfg.minLCs} LCs</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued &amp; Authenticated</span></div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button onclick="downloadCredentialPDF(${msId}, '${credentialId}')" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg">
+                        <i class="fas fa-download mr-1.5"></i> Download Credential Certificate
+                    </button>
+                    <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="btn-secondary py-3 px-4 text-xs font-bold">Close</button>
+                </div>
+                ${nextMs ? `
+                <button onclick="unlockAndProceedToNextMilestone(${msId})" class="btn-primary w-full py-3 text-xs bg-gradient-to-r from-indigo-600 to-cyan-600 border-indigo-500 font-bold shadow-lg mt-1">
+                    <i class="fas fa-unlock mr-1.5"></i> Unlock &amp; Proceed to Milestone ${msId + 1}
+                </button>` : `
+                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-bold text-xs mt-1"><i class="fas fa-trophy mr-1"></i> Final Milestone Complete!</div>`}
+            `;
+            if (typeof triggerCredentialConfetti === 'function') triggerCredentialConfetti();
+        } else {
+            const pendingAdminReview = meetsAllPrereqs && !cfg.autoUnlockNext && !isAdminApproved;
+            const rows = [
+                { label: 'cMPLi Dip Check-ins', icon: 'fa-sun text-amber-400', have: dipCompleted, need: cfg.targetDips, ok: meetsDips, barColor: 'bg-amber-500' },
+                { label: 'cMPLi POD Audio & Quiz', icon: 'fa-podcast text-indigo-400', have: podCompleted, need: cfg.targetPod, ok: meetsPod, barColor: 'bg-indigo-500' }
+            ];
+            if (cfg.targetImmerse > 0) rows.push({ label: 'cMPLi Immerse Sessions', icon: 'fa-water text-cyan-400', have: immerseCompleted, need: cfg.targetImmerse, ok: meetsImmerse, barColor: 'bg-cyan-500' });
+
+            content.innerHTML = `
+                <div class="w-16 h-16 ${pendingAdminReview ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' : 'bg-amber-500/20 text-amber-400 border-amber-500/40'} rounded-full flex items-center justify-center mx-auto border text-2xl mb-3">
+                    <i class="fas ${pendingAdminReview ? 'fa-hourglass-half fa-spin' : 'fa-exclamation-triangle'}"></i>
+                </div>
+                <span class="badge-pill ${pendingAdminReview ? 'badge-indigo' : 'badge-amber'} uppercase tracking-wider text-[10px] font-bold">${pendingAdminReview ? 'Pending Admin Review' : 'Prerequisites Incomplete'}</span>
+                <h3 class="text-xl font-extrabold text-white font-heading mt-2">${pendingAdminReview ? 'Credential Awaiting Approval' : 'Cannot Claim Credential Yet'}</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">${pendingAdminReview ? 'You have met every requirement — the Creator reviews and approves each credential before it is issued. Check back shortly.' : 'You must fulfill all milestone completion prerequisites before claiming your official credential.'}</p>
+
+                <div class="glass p-5 rounded-2xl border border-slate-800 text-left space-y-3.5 mt-4">
+                    <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/60 pb-1.5">Milestone ${msId} Completion Requirements</h5>
+                    <div class="space-y-2.5 text-xs">
+                        ${rows.map(r => `
+                            <div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-slate-300"><i class="fas ${r.icon} mr-1.5"></i> ${r.label}:</span>
+                                    <span class="font-mono font-bold ${r.ok ? 'text-emerald-400' : 'text-amber-400'}">${r.have} / ${r.need} Days ${r.ok ? '<i class="fas fa-check-circle ml-1"></i>' : ''}</span>
+                                </div>
+                                <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
+                                    <div class="${r.barColor} h-full rounded-full" style="width:${Math.min(100, Math.round((r.have / Math.max(1, r.need)) * 100))}%;"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                        <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                            <span class="text-slate-300"><i class="fas fa-coins text-amber-400 mr-1.5"></i> Minimum LCs Target:</span>
+                            <span class="font-mono font-bold ${meetsLcs ? 'text-emerald-400' : 'text-slate-400'}">${totalEarnedLcs} / ${cfg.minLCs} LCs</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="flex-1 btn-primary py-2.5 text-xs font-bold">
+                        <i class="fas fa-arrow-left mr-1.5"></i> Return &amp; Continue Journey
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+window.openClaimCredentialModal = openClaimCredentialModal;
+
+async function unlockAndProceedToNextMilestone(msId) {
+    if (!currentUser) return;
+    const nextId = Number(msId) + 1;
+    if (!userMilestoneState[currentUser._id]) userMilestoneState[currentUser._id] = { highestUnlocked: 1 };
+    const newHighest = Math.max(userMilestoneState[currentUser._id].highestUnlocked || 1, nextId);
+    userMilestoneState[currentUser._id].highestUnlocked = newHighest;
+    try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+    await persistUserMilestoneState(currentUser._id, { highestUnlocked: newHighest });
+
+    document.getElementById('claimCredentialModal')?.classList.add('hidden');
+    if (typeof closeMilestoneView === 'function') closeMilestoneView();
+    if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
+    if (typeof openMilestone === 'function') openMilestone(nextId);
+}
+window.unlockAndProceedToNextMilestone = unlockAndProceedToNextMilestone;
+
+function downloadCredentialPDF(msId, credentialId) {
+    try {
+        const jspdfNs = window.jspdf;
+        if (!jspdfNs || !jspdfNs.jsPDF) { alert('Certificate PDF library failed to load. Please check your connection and try again.'); return; }
+        const ms = milestoneConfig.find(m => m.id === Number(msId)) || {};
+        const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+        const doc = new jspdfNs.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+        const w = doc.internal.pageSize.getWidth();
+        const h = doc.internal.pageSize.getHeight();
+
+        doc.setFillColor(8, 11, 22);
+        doc.rect(0, 0, w, h, 'F');
+        doc.setDrawColor(99, 102, 241);
+        doc.setLineWidth(3);
+        doc.rect(24, 24, w - 48, h - 48);
+
+        doc.setTextColor(148, 163, 184);
+        doc.setFontSize(12);
+        doc.text('cMPLi Be -- Gamified Learning & Milestone Platform', w / 2, 90, { align: 'center' });
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(30);
+        doc.text('Certificate of Completion', w / 2, 140, { align: 'center' });
+
+        doc.setTextColor(203, 213, 225);
+        doc.setFontSize(13);
+        doc.text('This certifies that', w / 2, 180, { align: 'center' });
+
+        doc.setTextColor(99, 179, 237);
+        doc.setFontSize(26);
+        doc.text(currentUser ? (currentUser.name || 'Learner') : 'Learner', w / 2, 218, { align: 'center' });
+
+        doc.setTextColor(203, 213, 225);
+        doc.setFontSize(13);
+        doc.text('has successfully completed all prerequisites for', w / 2, 250, { align: 'center' });
+
+        doc.setTextColor(251, 191, 36);
+        doc.setFontSize(18);
+        doc.text(`Milestone ${msId}: ${cleanName}`, w / 2, 280, { align: 'center' });
+
+        doc.setTextColor(148, 163, 184);
+        doc.setFontSize(10);
+        doc.text(`Credential ID: ${credentialId}`, w / 2, h - 70, { align: 'center' });
+        doc.text(`Issued on: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`, w / 2, h - 54, { align: 'center' });
+
+        doc.save(`cMPLiBe_Credential_MS${msId}_${credentialId}.pdf`);
+    } catch (e) {
+        console.error('PDF generation failed:', e);
+        alert('Could not generate the certificate PDF. Please try again.');
+    }
+}
+window.downloadCredentialPDF = downloadCredentialPDF;
+
+function triggerCredentialConfetti() {
+    if (typeof window.confetti !== 'function') return;
+    const end = Date.now() + 1800;
+    (function frame() {
+        window.confetti({ particleCount: 4, angle: 60, spread: 65, origin: { x: 0 }, colors: ['#6366f1', '#22d3ee', '#fbbf24', '#34d399'] });
+        window.confetti({ particleCount: 4, angle: 120, spread: 65, origin: { x: 1 }, colors: ['#6366f1', '#22d3ee', '#fbbf24', '#34d399'] });
+        if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+}
+window.triggerCredentialConfetti = triggerCredentialConfetti;
+
 // Confirmation lock variables — same pattern as toggleLevelUpAccess
 var lastModuleToggleTime = 0;
 var _moduleConfirmInterval = null;
@@ -5057,42 +5397,120 @@ function selectAdminConfigDate() {
 }
 
 function switchAdminMilestoneTab(tabName) {
-    const btnCheckins = document.getElementById('btnTabCheckins');
-    const btnCompletion = document.getElementById('btnTabCompletion');
-    const viewCheckins = document.getElementById('adminCheckinsConfigView');
-    const viewCompletion = document.getElementById('adminCompletionView');
-    
+    const btns = {
+        checkins: document.getElementById('btnTabCheckins'),
+        completion: document.getElementById('btnTabCompletion'),
+        prereqs: document.getElementById('btnTabPrereqs')
+    };
+    const views = {
+        checkins: document.getElementById('adminCheckinsConfigView'),
+        completion: document.getElementById('adminCompletionView'),
+        prereqs: document.getElementById('adminPrereqsView')
+    };
+    const activeClass = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
+    const inactiveClass = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+
+    Object.keys(btns).forEach(key => {
+        if (btns[key]) btns[key].className = (key === tabName) ? activeClass : inactiveClass;
+        if (views[key]) {
+            const isActive = key === tabName;
+            views[key].classList.toggle('hidden', !isActive);
+            views[key].style.display = isActive ? 'block' : 'none';
+        }
+    });
+
     if (tabName === 'checkins') {
-        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-        if (viewCheckins) {
-            viewCheckins.classList.remove('hidden');
-            viewCheckins.style.display = 'block';
-        }
-        if (viewCompletion) {
-            viewCompletion.classList.add('hidden');
-            viewCompletion.style.display = 'none';
-        }
-        
         const todayKey = activeAdminDateKey || getLocalDateKey(new Date());
         activeAdminDateKey = todayKey;
-        renderAdminCheckinsList(); 
+        renderAdminCheckinsList();
         loadAdminCheckinEditor(todayKey);
+    } else if (tabName === 'prereqs') {
+        renderAdminPrereqsView();
     } else {
-        if (btnCompletion) btnCompletion.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-        if (btnCheckins) btnCheckins.className = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
-        if (viewCompletion) {
-            viewCompletion.classList.remove('hidden');
-            viewCompletion.style.display = 'block';
-        }
-        if (viewCheckins) {
-            viewCheckins.classList.add('hidden');
-            viewCheckins.style.display = 'none';
-        }
-        renderAdminCohortSubmissions(); 
+        renderAdminCohortSubmissions();
     }
 }
 window.switchAdminMilestoneTab = switchAdminMilestoneTab;
+
+// ==============================================================
+// ADMIN PANEL — CREATOR-CONFIGURABLE CREDENTIAL PREREQUISITES
+// ==============================================================
+function renderAdminPrereqsView() {
+    const view = document.getElementById('adminPrereqsView');
+    if (!view) return;
+
+    const msId = activeAdminMilestoneId || 1;
+    const cfg = getMilestonePrereqConfig(msId);
+    const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
+    const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+
+    view.innerHTML = `
+        <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
+            <div>
+                <h4 class="text-sm font-bold text-white font-heading">Milestone ${msId}: ${cleanName} — Credential Prerequisites</h4>
+                <p class="text-xs text-slate-400 mt-1">These targets drive the learner's "Claim my Credential" screen, the entry rules modal, and the Completion Grid's approval math. Changes apply immediately to every learner in this milestone — anyone already past a target keeps their progress, and anyone below it simply sees the new target.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi Dip Check-ins (days)</label>
+                    <input type="number" min="0" id="prereqTargetDips" value="${cfg.targetDips}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi POD Audio & Quiz (days)</label>
+                    <input type="number" min="0" id="prereqTargetPod" value="${cfg.targetPod}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi Immerse Sessions (0 = not required)</label>
+                    <input type="number" min="0" id="prereqTargetImmerse" value="${cfg.targetImmerse}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Minimum Required LCs</label>
+                    <input type="number" min="0" id="prereqMinLCs" value="${cfg.minLCs}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-xs font-bold text-white">Milestone ${msId + 1} Unlock Gate</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Auto-unlock issues the credential and advances the learner the instant they meet every target above. Admin approval requires you to review and click "Approve" in the Completion Grid Matrix first.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input type="checkbox" id="prereqAutoUnlock" class="sr-only peer" ${cfg.autoUnlockNext ? 'checked' : ''}>
+                    <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:bg-emerald-600 transition-all"></div>
+                    <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-all peer-checked:translate-x-5"></div>
+                </label>
+            </div>
+
+            <div id="prereqSaveStatus" class="hidden text-xs font-bold text-emerald-400"><i class="fas fa-check-circle mr-1"></i> Saved &amp; synced to all learners.</div>
+
+            <button onclick="saveAdminPrereqsForm()" class="btn-primary w-full py-3 text-sm">
+                <i class="fas fa-save mr-1.5"></i> Save Prerequisites for Milestone ${msId}
+            </button>
+        </div>
+    `;
+}
+window.renderAdminPrereqsView = renderAdminPrereqsView;
+
+async function saveAdminPrereqsForm() {
+    const msId = activeAdminMilestoneId || 1;
+    const patch = {
+        targetDips: Math.max(0, Number(document.getElementById('prereqTargetDips')?.value) || 0),
+        targetPod: Math.max(0, Number(document.getElementById('prereqTargetPod')?.value) || 0),
+        targetImmerse: Math.max(0, Number(document.getElementById('prereqTargetImmerse')?.value) || 0),
+        minLCs: Math.max(0, Number(document.getElementById('prereqMinLCs')?.value) || 0),
+        autoUnlockNext: !!document.getElementById('prereqAutoUnlock')?.checked
+    };
+    await saveMilestonePrereqConfig(msId, patch);
+
+    const statusEl = document.getElementById('prereqSaveStatus');
+    if (statusEl) {
+        statusEl.classList.remove('hidden');
+        setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    }
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.saveAdminPrereqsForm = saveAdminPrereqsForm;
 
 function switchAdminModuleTab(mod) {
     activeAdminModule = mod;
@@ -5309,10 +5727,11 @@ function renderAdminCohortSubmissions() {
         const earnedLcs = calculatedLcs;
 
         const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule) && String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1));
-        const effectiveMax = (activeAdminModule === 'immerse') ? ((activeAdminMilestoneId || 1) === 1 ? 9 : 12) : ((activeAdminMilestoneId || 1) === 1 ? 21 : 30);
+        const prereqCfg = getMilestonePrereqConfig(activeAdminMilestoneId || 1);
+        const effectiveMax = Math.max(1, (activeAdminModule === 'immerse') ? prereqCfg.targetImmerse : (activeAdminModule === 'pod' ? prereqCfg.targetPod : prereqCfg.targetDips));
         let completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
-        let isApproved = mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`] === true;
-        const isPending = completionPct >= 90 && !isApproved; 
+        let isApproved = isCertificateApproved(user._id, activeAdminMilestoneId || 1);
+        const isPending = completionPct >= 90 && !isApproved;
         
         if (isPending) totalPending++;
         if (filterStatus === 'pending' && !isPending) return;
@@ -5390,7 +5809,7 @@ function renderAdminCohortSubmissions() {
         const subs = getUserSubmissionsByUserId(user);
         
         let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
-            : (user.isPending ? `<button onclick="alert('Cert Approved!')" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
+            : (user.isPending ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
             
         const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null;
         let displayModDate = 'Set Day 1';
@@ -11084,32 +11503,41 @@ async function openMilestone(id) {
         try { await syncGlobalServerData(); } catch(e) {}
     }
     activeMilestoneId = Number(id);
-    const ms = milestoneConfig.find(m => m.id === activeMilestoneId) || milestoneConfig[0];
-    
+
     if (!currentUser) return;
     if (!userMilestoneState[currentUser._id]) {
-        userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [] };
+        userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [], started: {} };
     }
+    if (!userMilestoneState[currentUser._id].started) userMilestoneState[currentUser._id].started = {};
 
     const testMode = (typeof isTestUser === 'function') && isTestUser();
     if (testMode) {
         userMilestoneState[currentUser._id].highestUnlocked = 4;
     }
-    
+
     const uStart = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser._id, activeMilestoneId) : getLocalDateKey(new Date());
     userMilestoneState[currentUser._id].startDate = uStart;
     try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
 
-    if (!userMilestoneState[currentUser._id].viewedTerms) {
-        userMilestoneState[currentUser._id].viewedTerms = [];
+    // Every milestone entry (not just the first-ever login) must pass through the
+    // rules/prerequisites warning modal and an explicit "Start Now" before the
+    // daily modules become visible. Test accounts bypass this for faster QA.
+    const alreadyStarted = !!userMilestoneState[currentUser._id].started[activeMilestoneId];
+    if (!alreadyStarted && !testMode) {
+        openMilestoneEntryModal(activeMilestoneId);
+        return;
     }
-    
-    if (activeMilestoneId === 1 && !userMilestoneState[currentUser._id].viewedTerms.includes(activeMilestoneId) && !testMode) {
-        if (typeof openTermsModal === 'function') openTermsModal();
-        userMilestoneState[currentUser._id].viewedTerms.push(activeMilestoneId);
-        try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
-    }
-    
+
+    renderMilestoneModulesUI(activeMilestoneId);
+}
+window.openMilestone = openMilestone;
+
+// Renders the module sub-nav + first tab for a milestone the learner has
+// already acknowledged/started. Split out from openMilestone so the entry
+// warning modal's "Start Now" button can invoke it after the fact.
+function renderMilestoneModulesUI(msId) {
+    const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
+
     document.getElementById('milestoneGridContainer')?.classList.add('hidden');
     document.getElementById('btnBackToGrid')?.classList.remove('hidden');
     document.getElementById('milestoneDetailContainer')?.classList.remove('hidden');
@@ -11123,7 +11551,7 @@ async function openMilestone(id) {
     if (descEl) descEl.innerText = ms.desc;
 
     // Render Enabled Modules Sub-Nav based on Creator Toggles
-    const enabledMods = getEnabledModulesForMilestone(activeMilestoneId);
+    const enabledMods = getEnabledModulesForMilestone(msId);
     const subNav = document.getElementById('milestoneSubNav');
     if (subNav) {
         subNav.innerHTML = enabledMods.map((modCode, i) => {
@@ -11140,7 +11568,87 @@ async function openMilestone(id) {
         switchMilestoneTab(firstMod);
     }
 }
-window.openMilestone = openMilestone;
+window.renderMilestoneModulesUI = renderMilestoneModulesUI;
+
+// ==============================================================
+// MILESTONE ENTRY WARNING MODAL — rules, reset policy, and the
+// Creator's configured prerequisites, gated behind "Start Now".
+// Reuses the existing #termsModal/#termsContent shell.
+// ==============================================================
+function openMilestoneEntryModal(msId) {
+    const modal = document.getElementById('termsModal');
+    const content = document.getElementById('termsContent');
+    if (!modal || !content) { renderMilestoneModulesUI(msId); return; }
+
+    const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
+    const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
+    const cfg = getMilestonePrereqConfig(msId);
+    const enabledMods = getEnabledModulesForMilestone(msId);
+    const modNames = enabledMods.map(code => (ALL_PLATFORM_MODULES.find(m => m.code === code) || { name: code.toUpperCase() }).name);
+
+    content.innerHTML = `
+        <div>
+            <h4 class="text-white font-bold text-sm mb-1">Milestone ${msId}: ${cleanName}</h4>
+            <p class="text-slate-400 text-xs leading-relaxed">${ms.desc || ''}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+            ${modNames.map(n => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900/80 border border-slate-800 text-slate-300">${n}</span>`).join('')}
+        </div>
+        <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider"><i class="fas fa-certificate text-indigo-400 mr-1"></i> Credential Prerequisites</h5>
+            <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li>Complete <b>${cfg.targetDips} cMPLi Dip</b> daily check-ins.</li>
+                <li>Complete <b>${cfg.targetPod} cMPLi POD</b> audio episodes &amp; quizzes.</li>
+                ${cfg.targetImmerse > 0 ? `<li>Complete <b>${cfg.targetImmerse} cMPLi Immerse</b> sessions.</li>` : ''}
+                <li>Earn at least <b>${cfg.minLCs} LCs</b> in this milestone.</li>
+                <li>${cfg.autoUnlockNext ? 'The next milestone unlocks automatically once your credential is claimed.' : 'The Creator reviews and approves every credential before the next milestone unlocks.'}</li>
+            </ul>
+        </div>
+        <div class="bg-red-950/30 p-4 rounded-xl border border-red-500/30 space-y-2">
+            <h5 class="text-[11px] font-bold text-red-300 uppercase tracking-wider"><i class="fas fa-triangle-exclamation mr-1"></i> Reset &amp; Late Submission Policy</h5>
+            <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li>Each check-in must be submitted within its active daily window. A missed day permanently forfeits that day's LCs and cannot be redone later.</li>
+                <li>Submitting after the on-time window but before the late-submission cutoff still counts toward your day count, but awards a reduced LC amount.</li>
+                <li>Prerequisite progress is tracked per milestone — it does not carry over between milestones.</li>
+            </ul>
+        </div>
+    `;
+
+    const alreadyStarted = !!(currentUser && userMilestoneState[currentUser._id] && userMilestoneState[currentUser._id].started && userMilestoneState[currentUser._id].started[msId]);
+    const startBtn = document.getElementById('termsAgreeBtn');
+    if (startBtn) {
+        if (alreadyStarted) {
+            startBtn.textContent = 'Close';
+            startBtn.setAttribute('onclick', "document.getElementById('termsModal').classList.add('hidden')");
+        } else {
+            startBtn.textContent = 'Start Now';
+            startBtn.setAttribute('onclick', `acknowledgeMilestoneRulesAndStart(${msId})`);
+        }
+    }
+
+    modal.classList.remove('hidden');
+}
+window.openMilestoneEntryModal = openMilestoneEntryModal;
+
+// On-demand "Rules" button — shows the same rules/prerequisites content for
+// whichever milestone is currently active, without forcing "Start Now" again.
+function openTermsModal() {
+    openMilestoneEntryModal(activeMilestoneId || 1);
+}
+window.openTermsModal = openTermsModal;
+
+async function acknowledgeMilestoneRulesAndStart(msId) {
+    if (!currentUser) return;
+    if (!userMilestoneState[currentUser._id]) userMilestoneState[currentUser._id] = { highestUnlocked: 1, viewedTerms: [], started: {} };
+    if (!userMilestoneState[currentUser._id].started) userMilestoneState[currentUser._id].started = {};
+    userMilestoneState[currentUser._id].started[msId] = new Date().toISOString();
+    try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+    persistUserMilestoneState(currentUser._id, { started: userMilestoneState[currentUser._id].started });
+
+    document.getElementById('termsModal')?.classList.add('hidden');
+    renderMilestoneModulesUI(msId);
+}
+window.acknowledgeMilestoneRulesAndStart = acknowledgeMilestoneRulesAndStart;
 
 function closeMilestoneView() {
     activeMilestoneId = null;

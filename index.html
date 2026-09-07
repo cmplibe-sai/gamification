@@ -382,10 +382,11 @@
                     <!-- Module Sub Nav (All 6 Modules) -->
                     <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="adminMilestoneSubNav"></div>
 
-                    <!-- 50:50 View Switcher -->
-                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-md">
+                    <!-- View Switcher -->
+                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-lg">
                         <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins & Quiz Setup</button>
                         <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Completion Grid Matrix</button>
+                        <button id="btnTabPrereqs" onclick="switchAdminMilestoneTab('prereqs')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Credential Prerequisites</button>
                     </div>
 
                     <!-- VIEW 1: Checkins / POD Quiz Configurator -->
@@ -428,6 +429,9 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- VIEW 3: Creator-Configurable Credential Prerequisites -->
+                    <div id="adminPrereqsView" class="hidden"></div>
                 </div>
             </section>
 
@@ -491,7 +495,7 @@
             </div>
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs text-slate-300 leading-relaxed" id="termsContent"></div>
             <div class="p-6 border-t border-slate-800 bg-slate-900/60 rounded-b-3xl">
-                <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="btn-primary w-full py-3 text-sm">I Understand & Agree</button>
+                <button id="termsAgreeBtn" onclick="document.getElementById('termsModal').classList.add('hidden')" class="btn-primary w-full py-3 text-sm">I Understand & Agree</button>
             </div>
         </div>
     </div>
@@ -531,12 +535,16 @@
         </div>
     </div>
 
+    <!-- Credential Certificate PDF + Celebration Confetti -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
+
     <!-- Scripts (Cache Busted to Force Instant Live Reload) -->
-    <script src="data.js?v=2.8.6"></script>
-    <script src="timeline.js?v=2.8.6"></script>
-    <script src="courses.js?v=2.8.6"></script>
-    <script src="api.js?v=2.8.6"></script>
-    <script src="app.js?v=2.8.6"></script>
+    <script src="data.js?v=2.8.7"></script>
+    <script src="timeline.js?v=2.8.7"></script>
+    <script src="courses.js?v=2.8.7"></script>
+    <script src="api.js?v=2.8.7"></script>
+    <script src="app.js?v=2.8.7"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">

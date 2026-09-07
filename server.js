@@ -619,6 +619,192 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 
 
 // ==============================================================
+// DEDICATED MILESTONE CREDENTIAL PREREQUISITES DATABASE ENGINE
+// (Creator-configurable: target Dips/POD/Immerse counts, min LCs,
+//  and whether the next milestone auto-unlocks or needs admin approval)
+// ==============================================================
+const MILESTONE_PREREQS_FILE = path.join(DATA_DIR, 'milestone_prereqs.json');
+
+const DEFAULT_MILESTONE_PREREQS = {
+    "1": { targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false },
+    "2": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
+    "3": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
+    "4": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false }
+};
+
+function getMilestonePrereqsFromDb() {
+    try {
+        if (fs.existsSync(MILESTONE_PREREQS_FILE)) {
+            const raw = fs.readFileSync(MILESTONE_PREREQS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return { ...DEFAULT_MILESTONE_PREREQS, ...parsed };
+        }
+    } catch (e) {
+        console.warn('Error reading milestone_prereqs.json:', e);
+    }
+    return { ...DEFAULT_MILESTONE_PREREQS, ...(store.customMilestonePrereqs || {}) };
+}
+
+function saveMilestonePrereqsToDb(configs) {
+    try {
+        const obj = (configs && typeof configs === 'object') ? configs : {};
+        fs.writeFileSync(MILESTONE_PREREQS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.customMilestonePrereqs = obj;
+        saveStore();
+        console.log(`[Milestone Prereqs DB] Saved to ${MILESTONE_PREREQS_FILE}`);
+        return obj;
+    } catch (e) {
+        console.error('Error writing milestone_prereqs.json:', e);
+        return store.customMilestonePrereqs || {};
+    }
+}
+
+app.get(['/api/milestone-prereqs', '/gamification/api/milestone-prereqs'], (req, res) => {
+    const data = getMilestonePrereqsFromDb();
+    res.json({ success: true, data });
+});
+
+// POST — { milestoneId, config } for a single milestone, or { allConfigs } for a bulk merge
+app.post(['/api/milestone-prereqs', '/gamification/api/milestone-prereqs'], (req, res) => {
+    try {
+        const { milestoneId, config, allConfigs } = req.body;
+        const current = getMilestonePrereqsFromDb();
+
+        if (allConfigs && typeof allConfigs === 'object') {
+            for (const msId of Object.keys(allConfigs)) {
+                current[String(msId)] = { ...(current[String(msId)] || {}), ...allConfigs[msId] };
+            }
+        } else if (milestoneId && config && typeof config === 'object') {
+            current[String(milestoneId)] = { ...(current[String(milestoneId)] || {}), ...config };
+        }
+
+        const saved = saveMilestonePrereqsToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==============================================================
+// DEDICATED CREDENTIAL APPROVALS DATABASE ENGINE
+// (server-synced replacement for the old localStorage-only
+//  mockApprovedCertificates map, keyed "<userId>_MS<milestoneId>")
+// ==============================================================
+const CERTIFICATE_APPROVALS_FILE = path.join(DATA_DIR, 'certificate_approvals.json');
+
+function getCertificateApprovalsFromDb() {
+    try {
+        if (fs.existsSync(CERTIFICATE_APPROVALS_FILE)) {
+            const raw = fs.readFileSync(CERTIFICATE_APPROVALS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch (e) {
+        console.warn('Error reading certificate_approvals.json:', e);
+    }
+    return store.mockApprovedCertificates || {};
+}
+
+function saveCertificateApprovalsToDb(approvals) {
+    try {
+        const obj = (approvals && typeof approvals === 'object') ? approvals : {};
+        fs.writeFileSync(CERTIFICATE_APPROVALS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.mockApprovedCertificates = obj;
+        saveStore();
+        console.log(`[Certificate Approvals DB] Saved to ${CERTIFICATE_APPROVALS_FILE}`);
+        return obj;
+    } catch (e) {
+        console.error('Error writing certificate_approvals.json:', e);
+        return store.mockApprovedCertificates || {};
+    }
+}
+
+app.get(['/api/certificate-approvals', '/gamification/api/certificate-approvals'], (req, res) => {
+    const data = getCertificateApprovalsFromDb();
+    res.json({ success: true, data });
+});
+
+// POST — { key, approved, credentialId, issuedAt } for one user+milestone, or { allApprovals } for bulk merge
+app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals'], (req, res) => {
+    try {
+        const { key, approved, credentialId, issuedAt, allApprovals } = req.body;
+        const current = getCertificateApprovalsFromDb();
+
+        if (allApprovals && typeof allApprovals === 'object') {
+            Object.assign(current, allApprovals);
+        } else if (key) {
+            current[String(key)] = approved === false ? false : { approved: true, credentialId: credentialId || null, issuedAt: issuedAt || new Date().toISOString() };
+        }
+
+        const saved = saveCertificateApprovalsToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==============================================================
+// DEDICATED USER MILESTONE STATE DATABASE ENGINE
+// (per-user highestUnlocked, "Start Now" acknowledgement per
+//  milestone, and viewed-rules tracking — server-synced so it's
+//  consistent across devices/admins)
+// ==============================================================
+const USER_MILESTONE_STATE_FILE = path.join(DATA_DIR, 'user_milestone_state.json');
+
+function getUserMilestoneStateFromDb() {
+    try {
+        if (fs.existsSync(USER_MILESTONE_STATE_FILE)) {
+            const raw = fs.readFileSync(USER_MILESTONE_STATE_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch (e) {
+        console.warn('Error reading user_milestone_state.json:', e);
+    }
+    return store.userMilestoneState || {};
+}
+
+function saveUserMilestoneStateToDb(states) {
+    try {
+        const obj = (states && typeof states === 'object') ? states : {};
+        fs.writeFileSync(USER_MILESTONE_STATE_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.userMilestoneState = obj;
+        saveStore();
+        console.log(`[User Milestone State DB] Saved to ${USER_MILESTONE_STATE_FILE}`);
+        return obj;
+    } catch (e) {
+        console.error('Error writing user_milestone_state.json:', e);
+        return store.userMilestoneState || {};
+    }
+}
+
+app.get(['/api/user-milestone-state', '/gamification/api/user-milestone-state'], (req, res) => {
+    const data = getUserMilestoneStateFromDb();
+    res.json({ success: true, data });
+});
+
+// POST — { userId, state } to merge one user's state, or { allStates } for a bulk merge
+app.post(['/api/user-milestone-state', '/gamification/api/user-milestone-state'], (req, res) => {
+    try {
+        const { userId, state, allStates } = req.body;
+        const current = getUserMilestoneStateFromDb();
+
+        if (allStates && typeof allStates === 'object') {
+            for (const uid of Object.keys(allStates)) {
+                current[String(uid)] = { ...(current[String(uid)] || {}), ...allStates[uid] };
+            }
+        } else if (userId && state && typeof state === 'object') {
+            current[String(userId)] = { ...(current[String(userId)] || {}), ...state };
+        }
+
+        const saved = saveUserMilestoneStateToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==============================================================
 // DEDICATED USER JOIN DATES DATABASE ENGINE
 // ==============================================================
 const USER_JOIN_DATES_FILE = path.join(DATA_DIR, 'user_join_dates.json');
@@ -768,7 +954,10 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             joinDates: getUserJoinDatesFromDb(),
             userModuleStartDates: getUserModuleStartDatesFromDb(),
             levelUpAccess: liveLevelUpAccess,
-            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" }
+            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" },
+            milestonePrereqs: getMilestonePrereqsFromDb(),
+            certificateApprovals: getCertificateApprovalsFromDb(),
+            userMilestoneStates: getUserMilestoneStateFromDb()
         }
     });
 });
