@@ -406,6 +406,74 @@ await submitCheckinForm(1, 'dip', '2026-09-07', 33, 3, '17:00');
 assert.ok(document.body.lastInsertedHtml.includes('evaluatingCheckinModal'), 'submitCheckinForm must open evaluatingCheckinModal modal without throwing ReferenceError');
 console.log('✅ submitCheckinForm test passed!');
 
+// Test 8: DIP Late Submission Window vs Low Match & POD Option Recovery
+console.log('--- Testing 8: DIP Late Window vs Low Match & POD Option Recovery ---');
+// 8.1 DIP Late submission with 97% match and 3 LCs
+const lateDipSub = {
+    id: 'sub_dip_late_chandra',
+    userId: 'usr_chandra_349',
+    userEmail: 'chandrasai349@gmail.com',
+    userName: 'Chandra',
+    type: 'dip',
+    moduleType: 'dip',
+    milestoneId: 1,
+    day: 8,
+    dateKey: '2026-09-07',
+    submittedAt: '2026-09-07T18:01:55+05:30', // 6:01 PM (after 5 PM)
+    lcReward: 3,
+    matchPercentage: 97,
+    status: 'completed',
+    isLate: true,
+    title: "#cd514: Tissot's D2C Tick-Tock",
+    aiRemarks: "✅ [AI Verified & Approved — 3 LCs Awarded]\nRubric Match: 97% | Credited: +3 LCs | Status: Fully Verified\nExcellent reflection! Learner's voice response was clearly articulated."
+};
+
+global.isAdminLogin = true;
+global.currentUser = { _id: 'usr_admin', email: 'creator@cmplibe.com', role: 'creator', isAdmin: true };
+renderSubmissionDetailModal(lateDipSub, 'usr_chandra_349', '8', 'dip');
+const lateDipHtml = document.body.lastInsertedHtml;
+
+assert.ok(lateDipHtml.includes('Late Window (+3 LCs)'), 'Must show Late Window (+3 LCs) badge instead of Low Match (+3 LCs)');
+assert.ok(!lateDipHtml.includes('LOW MATCH (+3 LCs)'), 'Must NOT show LOW MATCH (+3 LCs) for a 97% match');
+assert.ok(lateDipHtml.includes('(Passed — Late Submission Window)'), 'Attempt label must show Passed — Late Submission Window');
+assert.ok(lateDipHtml.includes('Late Submission Window Notice'), 'Late window notice banner must be rendered');
+console.log('✅ DIP Late Submission Window 97% match test passed!');
+
+// 8.2 POD Check-in without stored options must recover options or render actual answer without Option A/B/C/D
+const podLegacySub = {
+    id: 'sub_pod_chandra',
+    userId: 'usr_chandra_349',
+    userEmail: 'chandrasai349@gmail.com',
+    userName: 'Chandra',
+    type: 'pod',
+    moduleType: 'pod',
+    milestoneId: 1,
+    day: 1,
+    dateKey: '2026-08-29',
+    submittedAt: '2026-08-29T12:15:01.992Z',
+    lcReward: 33,
+    status: 'completed',
+    responses: [
+        {
+            question: "What is the recommended approach to high-friction tasks?",
+            answer: "Tackle them in the first 90 minutes of the morning",
+            type: "mcq",
+            selectedOption: 0,
+            correctOption: 0,
+            isCorrect: true
+        }
+    ]
+};
+
+global.isAdminLogin = false;
+global.currentUser = { _id: 'usr_chandra_349', email: 'chandrasai349@gmail.com', role: 'learner' };
+renderSubmissionDetailModal(podLegacySub, 'usr_chandra_349', '1', 'pod');
+const podHtml = document.body.lastInsertedHtml;
+
+assert.ok(podHtml.includes('Tackle them in the first 90 minutes of the morning'), 'Must render real answer/option text');
+assert.ok(!podHtml.includes('>Option A<') && !podHtml.includes('>Option B<'), 'Must NOT render dummy Option A/Option B strings');
+console.log('✅ POD Check-in real options/answers recovery test passed!');
+
 console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!');
 }
 

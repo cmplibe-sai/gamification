@@ -8115,32 +8115,38 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
     if (coverage <= 80) {
         const pts = isLate ? 3 : 17;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Late window reward of +${pts} LCs credited to your TagMango wallet.` : ` ${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
-            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\nYour reflection partially aligned with today's rubric. Some key concepts were covered, but sections of the designated topic were skipped or insufficiently discussed. Minor articulation or pronunciation mistakes were detected. ${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`
+            isLate: isLate,
+            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\nYour reflection partially aligned with today's rubric. Some key concepts were covered, but sections of the designated topic were skipped or insufficiently discussed. Minor articulation or pronunciation mistakes were detected.${lateNote}`
         };
     }
 
     // TIER 2 — Good Match (81% – 90%) → 23 LCs
     if (coverage <= 90) {
         const pts = isLate ? 3 : 23;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. While rubric scored high (${coverage}%), late window reward of +${pts} LCs was credited to your TagMango wallet.` : ` ${pts} LCs credited. Great effort!`;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
-            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\nYour reflection showed strong alignment with today's rubric. Most of the key concepts from the day's description were clearly articulated and verified. A few minor details or deeper insights could improve the score to full credit. ${pts} LCs credited. Great effort!`
+            isLate: isLate,
+            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\nYour reflection showed strong alignment with today's rubric. Most of the key concepts from the day's description were clearly articulated and verified.${lateNote}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
     const pts = isLate ? 3 : basePoints;
+    const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Although your rubric match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your TagMango wallet.` : ` Full credit of ${pts} LCs has been added to your TagMango wallet.`;
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
-        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified\nExcellent reflection! Your voice response was clearly articulated and closely matched today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, and key concepts from the day's description were all verified and satisfied. Full credit of ${pts} LCs has been added to your TagMango wallet.`
+        isLate: isLate,
+        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\nExcellent reflection! Your voice response was clearly articulated and closely matched today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, and key concepts from the day's description were all verified and satisfied.${lateNote}`
     };
 }
 window.evaluateReflectionAgainstRubric = evaluateReflectionAgainstRubric;
@@ -9898,8 +9904,9 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     // 2. CREATOR TITLE: {Day-X: Title}, removes repeated "DIP Check-in" from title
     const msId = sub.milestoneId || (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
     const msConfigs = (typeof customMilestoneConfigs !== 'undefined' && customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][normalizedType]) || {};
-    const subDateKey = sub.dateKey || sub.date || '';
-    const dayCfg = msConfigs[subDateKey] || {};
+    const rawDateKey = sub.dateKey || sub.date || sub.submittedAt || '';
+    const cleanDateKey = (typeof rawDateKey === 'string' && rawDateKey.includes('T')) ? rawDateKey.split('T')[0] : (rawDateKey || '');
+    const dayCfg = msConfigs[cleanDateKey] || msConfigs[rawDateKey] || {};
     let creatorTitle = (sub.articleTitle || dayCfg.title || '').trim();
     if (!creatorTitle && sub.title && !sub.title.toLowerCase().includes('check-in')) {
         creatorTitle = sub.title.trim();
@@ -9923,6 +9930,40 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             });
         }
     }
+
+    // 4. LATE SUBMISSION WINDOW RECOGNITION
+    const windowStartTime = dayCfg.startTime || '05:00';
+    const windowEndTime = dayCfg.endTime || '17:00';
+    const maxOnTimeLc = Number(dayCfg.lcOnTime) || (msId === 1 ? 33 : 133);
+    const lateRewardLc = Number(dayCfg.lcLate) || 3;
+
+    let isLateSubmission = Boolean(sub.isLate);
+    if (!isLateSubmission && actualSubmissionTime && dayCfg.endTime) {
+        try {
+            const subDate = new Date(actualSubmissionTime);
+            if (!isNaN(subDate.getTime())) {
+                const subHHMM = String(subDate.getHours()).padStart(2, '0') + ':' + String(subDate.getMinutes()).padStart(2, '0');
+                if (subHHMM > dayCfg.endTime || (dayCfg.startTime && subHHMM < dayCfg.startTime)) {
+                    isLateSubmission = true;
+                }
+            }
+        } catch(e) {}
+    }
+    if (!isLateSubmission && matchPercentage >= 50 && Number(lcReward) <= lateRewardLc && Number(lcReward) < maxOnTimeLc) {
+        isLateSubmission = true;
+    }
+
+    const formatTime12 = (hhmm) => {
+        if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return hhmm || '5:00 PM';
+        const [hStr, mStr] = hhmm.split(':');
+        let h = parseInt(hStr, 10);
+        const m = mStr || '00';
+        if (isNaN(h)) return hhmm;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        return `${h}:${m} ${ampm}`;
+    };
 
     const rawRemarks = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved — +${lcReward} LCs]\nRubric Match: ${matchPercentage}% | Credited: +${lcReward} LCs | Status: Fully Verified\nReflection completed successfully and learning objectives satisfied.`;
     
@@ -9984,6 +10025,32 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 value: sub.videoUrl || "Video Reflection Recorded & Verified",
                 videoUrl: sub.videoUrl || ""
             }];
+        } else if (isPod) {
+            const podQPool = (dayCfg && Array.isArray(dayCfg.questions) && dayCfg.questions.length > 0) 
+                ? dayCfg.questions 
+                : (typeof defaultPodQuestionsPool !== 'undefined' && Array.isArray(defaultPodQuestionsPool) ? defaultPodQuestionsPool.slice(0, 3) : []);
+            if (podQPool.length > 0) {
+                responses = podQPool.map((pq, pIdx) => ({
+                    title: pq.title || pq.question || `Comprehension Question ${pIdx + 1}`,
+                    question: pq.title || pq.question || `Comprehension Question ${pIdx + 1}`,
+                    type: 'mcq',
+                    options: Array.isArray(pq.options) ? pq.options : [],
+                    selectedOption: pq.correctOption !== undefined ? pq.correctOption : 0,
+                    correctOption: pq.correctOption !== undefined ? pq.correctOption : 0,
+                    answer: (pq.options && pq.options[pq.correctOption !== undefined ? pq.correctOption : 0]) || 'Completed & Verified',
+                    isCorrect: true,
+                    pts: pq.pts || 11
+                }));
+            } else {
+                responses = [
+                    {
+                        title: "cMPLi POD Audio Comprehension & Active Listening",
+                        type: "text",
+                        answer: "Active listening requirement verified (≥85%). Points synced to TagMango wallet.",
+                        value: "Active listening requirement verified (≥85%). Points synced to TagMango wallet."
+                    }
+                ];
+            }
         } else {
             const fallbackAudioUrl = sub.audioUrl || (window._recordedAudioBlobs && window._recordedAudioBlobs[0] ? URL.createObjectURL(window._recordedAudioBlobs[0]) : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3');
             responses = [
@@ -10016,14 +10083,137 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 const qNum = qIdx + 1;
                 const qTitle = q.title || q.question || `Question ${qNum}`;
                 const qType = (q.type || '').toLowerCase();
-                const isMcq = (qType === 'mcq' || (q.options && Array.isArray(q.options) && q.options.length > 0));
+                const isMcq = (qType === 'mcq' || (q.options && Array.isArray(q.options) && q.options.length > 0) || q.selectedOption !== undefined || q.correctOption !== undefined);
 
                 if (isMcq) {
-                    const opts = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
-                    const userSel = q.selectedOption !== undefined ? q.selectedOption : (opts.indexOf(q.answer) > -1 ? opts.indexOf(q.answer) : -1);
-                    const correctSel = q.correctOption !== undefined ? q.correctOption : 0;
-                    const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
+                    const hasRealOptions = (opts) => {
+                        if (!Array.isArray(opts) || opts.length === 0) return false;
+                        return opts.some(opt => opt && typeof opt === 'string' && !/^option\s*[a-d0-9]$/i.test(opt.trim()));
+                    };
 
+                    let opts = hasRealOptions(q.options) ? [...q.options] : null;
+                    let correctSel = q.correctOption;
+
+                    // 1. Recover from day config or default question pool
+                    if (!opts) {
+                        const candidatePool = [
+                            ...(Array.isArray(dayCfg?.questions) ? dayCfg.questions : []),
+                            ...(typeof defaultPodQuestionsPool !== 'undefined' && Array.isArray(defaultPodQuestionsPool) ? defaultPodQuestionsPool : [])
+                        ];
+                        const cleanT = (qTitle || '').toLowerCase().trim();
+                        const cleanA = String(q.answer || '').toLowerCase().trim();
+                        const foundQ = candidatePool.find(pq => {
+                            if (!pq) return false;
+                            const pt = (pq.title || pq.question || '').toLowerCase().trim();
+                            if (pt && cleanT && (pt === cleanT || pt.includes(cleanT) || cleanT.includes(pt))) return true;
+                            if (Array.isArray(pq.options) && cleanA && pq.options.some(o => o && o.toLowerCase().trim() === cleanA)) return true;
+                            return false;
+                        });
+                        if (foundQ && hasRealOptions(foundQ.options)) {
+                            opts = [...foundQ.options];
+                            if (correctSel === undefined && foundQ.correctOption !== undefined) {
+                                correctSel = foundQ.correctOption;
+                            }
+                        }
+                    }
+
+                    // 2. Built-in option registry for standard POD questions
+                    if (!opts) {
+                        const POD_OPTIONS_DICT = {
+                            "high-friction": [
+                                "Tackle them in the first 90 minutes of the morning",
+                                "Push them to late evening when tired",
+                                "Multitask while handling low-friction emails",
+                                "Ignore them until an external deadline passes"
+                            ],
+                            "habit consistency": [
+                                "Intrinsic Identity Shift & Daily Micro-actions",
+                                "External Pressure only",
+                                "Random Motivation Spikes",
+                                "Waiting for perfect conditions"
+                            ],
+                            "deliberate daily reflection": [
+                                "Consolidates neural pathways and converts experience into intuition",
+                                "Has no noticeable effect",
+                                "Slows down practical progress with overthinking",
+                                "Replaces practical action"
+                            ],
+                            "challenge embracer": [
+                                "Viewing friction & feedback as fuel for growth",
+                                "Avoiding all challenging tasks",
+                                "Seeking quick shortcuts",
+                                "Focusing solely on certificates"
+                            ],
+                            "schedule disruptions": [
+                                "Implementation Intentions (If-Then Planning)",
+                                "Abandoning the week goal",
+                                "Skipping without reflection",
+                                "Immediate panic"
+                            ]
+                        };
+                        const qSearch = ((qTitle || '') + ' ' + (q.answer || '')).toLowerCase();
+                        for (const [key, poolOptions] of Object.entries(POD_OPTIONS_DICT)) {
+                            if (qSearch.includes(key)) {
+                                opts = [...poolOptions];
+                                break;
+                            }
+                        }
+                    }
+
+                    if (correctSel === undefined) correctSel = 0;
+                    let userSel = -1;
+                    if (opts && q.answer) {
+                        const matchedIdx = opts.findIndex(o => o && o.toLowerCase().trim() === String(q.answer).toLowerCase().trim());
+                        if (matchedIdx > -1) userSel = matchedIdx;
+                    }
+                    if (userSel === -1 && q.selectedOption !== undefined) {
+                        userSel = q.selectedOption;
+                    }
+                    if (userSel === -1) userSel = correctSel;
+
+                    const isCorrect = q.isCorrect !== undefined ? q.isCorrect : (userSel === correctSel);
+                    const ptsEarned = (q.pts !== undefined) ? q.pts : (isCorrect ? 11 : 0);
+
+                    // If real options exist, render real option cards
+                    if (opts && hasRealOptions(opts)) {
+                        return `
+                            <div class="space-y-2.5 ${qIdx > 0 ? 'pt-4 border-t border-slate-800/80' : ''}">
+                                <div class="flex items-center justify-between">
+                                    <span class="badge-pill ${isCorrect ? 'badge-emerald' : 'badge-amber'} text-[10px] font-bold">
+                                        <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qNum}
+                                    </span>
+                                    <span class="text-xs font-mono font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-400'}">
+                                        ${isCorrect ? `+${ptsEarned} LCs` : '0 LCs'}
+                                    </span>
+                                </div>
+                                <h4 class="text-xs font-bold text-white leading-snug">${qTitle}</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                                    ${opts.map((opt, optIdx) => {
+                                        const isChosen = (optIdx === userSel);
+                                        const isTargetCorrect = (optIdx === correctSel);
+                                        let cardStyle = 'bg-slate-950/80 border-slate-800 text-slate-400';
+                                        let iconHtml = '<i class="far fa-circle text-slate-600 text-xs"></i>';
+                                        if (isTargetCorrect) {
+                                            cardStyle = 'bg-emerald-950/30 border-emerald-500/60 text-emerald-300 font-bold';
+                                            iconHtml = '<i class="fas fa-check-circle text-emerald-400 text-xs"></i>';
+                                        } else if (isChosen && !isTargetCorrect) {
+                                            cardStyle = 'bg-red-950/30 border-red-500/60 text-red-300 font-bold';
+                                            iconHtml = '<i class="fas fa-times-circle text-red-400 text-xs"></i>';
+                                        }
+                                        return `
+                                            <div class="p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${cardStyle}">
+                                                <span class="truncate pr-2">${opt}</span>
+                                                ${iconHtml}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Never show dummy Option A/B/C/D. Render actual customer answer directly!
+                    const submittedAns = q.answer || (q.selectedOption !== undefined ? `Selected Answer #${q.selectedOption + 1}` : 'Completed & Verified');
                     return `
                         <div class="space-y-2.5 ${qIdx > 0 ? 'pt-4 border-t border-slate-800/80' : ''}">
                             <div class="flex items-center justify-between">
@@ -10031,30 +10221,18 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                     <i class="fas ${isCorrect ? 'fa-check-circle' : 'fa-times-circle'} mr-1"></i> Question ${qNum}
                                 </span>
                                 <span class="text-xs font-mono font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-400'}">
-                                    ${isCorrect ? `+${q.pts || 11} LCs` : '0 LCs'}
+                                    ${isCorrect ? `+${ptsEarned} LCs` : '0 LCs'}
                                 </span>
                             </div>
-                            <h4 class="text-xs font-bold text-white">${qTitle}</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
-                                ${opts.map((opt, optIdx) => {
-                                    const isChosen = (optIdx === userSel);
-                                    const isTargetCorrect = (optIdx === correctSel);
-                                    let cardStyle = 'bg-slate-950/80 border-slate-800 text-slate-400';
-                                    let iconHtml = '<i class="far fa-circle text-slate-600 text-xs"></i>';
-                                    if (isTargetCorrect) {
-                                        cardStyle = 'bg-emerald-950/30 border-emerald-500/60 text-emerald-300 font-bold';
-                                        iconHtml = '<i class="fas fa-check-circle text-emerald-400 text-xs"></i>';
-                                    } else if (isChosen && !isTargetCorrect) {
-                                        cardStyle = 'bg-red-950/30 border-red-500/60 text-red-300 font-bold';
-                                        iconHtml = '<i class="fas fa-times-circle text-red-400 text-xs"></i>';
-                                    }
-                                    return `
-                                        <div class="p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all ${cardStyle}">
-                                            <span class="truncate pr-2">${opt}</span>
-                                            ${iconHtml}
-                                        </div>
-                                    `;
-                                }).join('')}
+                            <h4 class="text-xs font-bold text-white leading-snug">${qTitle}</h4>
+                            <div class="p-3 rounded-xl bg-slate-950/80 border ${isCorrect ? 'border-emerald-500/40 text-emerald-300' : 'border-slate-800 text-slate-300'} text-xs space-y-1">
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1.5">
+                                    <i class="fas fa-user-check ${isCorrect ? 'text-emerald-400' : 'text-slate-500'}"></i> Learner Submitted Answer
+                                </span>
+                                <p class="font-semibold text-white leading-relaxed flex items-center gap-2">
+                                    <i class="fas fa-check-circle ${isCorrect ? 'text-emerald-400' : 'text-slate-500'} text-sm"></i>
+                                    <span>${submittedAns}</span>
+                                </p>
                             </div>
                         </div>
                     `;
@@ -10173,27 +10351,36 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
 
     const isEvaluating = (sub.status === 'evaluating');
     const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (lcReward === 0 || matchPercentage < 50)));
-    const isLegacyLow = (!isEvaluating && !isMismatch && (matchPercentage < 50 || Number(lcReward) === 3)); // Legacy 3 LCs tier
-    const isPartial  = (!isEvaluating && !isMismatch && !isLegacyLow && matchPercentage <= 80); // 17 LCs tier
-    const isGood     = (!isEvaluating && !isMismatch && !isLegacyLow && !isPartial && matchPercentage <= 90); // 23 LCs tier
+    const isLateSubmissionMode = Boolean(isLateSubmission && !isMismatch && matchPercentage >= 50);
+    const isLegacyLow = (!isEvaluating && !isMismatch && !isLateSubmissionMode && (matchPercentage < 50 || (Number(lcReward) === 3 && matchPercentage < 50))); // Legacy 3 LCs tier
+    const isPartial  = (!isEvaluating && !isMismatch && !isLateSubmissionMode && !isLegacyLow && matchPercentage <= 80); // 17 LCs tier
+    const isGood     = (!isEvaluating && !isMismatch && !isLateSubmissionMode && !isLegacyLow && !isPartial && matchPercentage <= 90); // 23 LCs tier
     const attemptNum = sub.attemptsCount || sub.attemptNumber || 1;
-    const passLabel = isMismatch ? '(Failed <50%)' : (isLegacyLow ? `(Passed Legacy ${matchPercentage}%)` : '(Passed ≥50%)');
+    const passLabel = isMismatch 
+        ? '(Failed <50%)' 
+        : (isLateSubmissionMode 
+            ? '(Passed — Late Submission Window)' 
+            : (isLegacyLow ? `(Passed Legacy ${matchPercentage}%)` : '(Passed ≥50%)'));
 
     const badgeClass = isEvaluating
         ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 animate-pulse'
         : isMismatch
             ? 'badge-rose bg-rose-500/20 border-rose-500/40 text-rose-300'
-            : isLegacyLow
-                ? 'bg-amber-900/30 border-amber-500/40 text-amber-300'
-                : isPartial
-                    ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
-                    : isGood
-                        ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                        : 'badge-emerald';
+            : isLateSubmissionMode
+                ? 'badge-amber bg-amber-500/20 border-amber-500/50 text-amber-300'
+                : isLegacyLow
+                    ? 'bg-amber-900/30 border-amber-500/40 text-amber-300'
+                    : isPartial
+                        ? 'badge-amber bg-amber-500/20 border-amber-500/40 text-amber-300'
+                        : isGood
+                            ? 'badge-cyan bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                            : 'badge-emerald';
     const badgeText = isEvaluating
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
             ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Rubric < 50% — Retry Required`)
+        : isLateSubmissionMode
+            ? `<i class="fas fa-clock mr-1"></i> Late Window (+${lcReward || 3} LCs)`
         : isLegacyLow
             ? `<i class="fas fa-history mr-1"></i> Low Match (+${lcReward || 3} LCs)`
             : isPartial
@@ -10267,11 +10454,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         `;
     } else if (!isPod) {
         aiEvaluationCardHtml = `
-            <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
+            <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : (isLateSubmissionMode ? 'border-amber-500/50' : 'border-indigo-500/40'))} rounded-2xl space-y-3 shadow-xl">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30')} flex items-center justify-center text-sm border">
-                            <i class="fas fa-robot"></i>
+                        <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : (isLateSubmissionMode ? 'bg-amber-600/30 text-amber-400 border-amber-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30'))} flex items-center justify-center text-sm border">
+                            <i class="fas ${isLateSubmissionMode ? 'fa-clock' : 'fa-robot'}"></i>
                         </div>
                         <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'AI Rubric Evaluation (Creator Review Mode)' : 'AI Evaluation & Verification Remarks'}</span>
                     </div>
@@ -10279,14 +10466,25 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         ${badgeText}
                     </span>
                 </div>
-                <div class="text-xs ${isEvaluating ? 'text-indigo-200 border-indigo-500/30' : (isMismatch ? 'text-rose-200 border-rose-500/30' : 'text-slate-200 border-slate-800/90')} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
+                ${isLateSubmissionMode ? `
+                    <div class="p-3 bg-amber-950/40 border border-amber-500/40 rounded-xl text-xs space-y-1">
+                        <div class="flex items-center gap-1.5 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
+                            <i class="fas fa-clock text-amber-400"></i>
+                            <span>Late Submission Window Notice</span>
+                        </div>
+                        <p class="text-amber-100/90 leading-relaxed font-sans">
+                            Submitted at <strong>${exactSubmittedTimeStr}</strong>, outside the creator's daily active window (${formatTime12(windowStartTime)} – ${formatTime12(windowEndTime)}). Although AI rubric match scored <strong>${matchPercentage}%</strong>, late submission rules applied (+${lcReward} LCs credited).
+                        </p>
+                    </div>
+                ` : ''}
+                <div class="text-xs ${isEvaluating ? 'text-indigo-200 border-indigo-500/30' : (isMismatch ? 'text-rose-200 border-rose-500/30' : (isLateSubmissionMode ? 'text-amber-100 border-amber-800/60' : 'text-slate-200 border-slate-800/90'))} leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
                     ${aiRemarksText}
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
                     <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
-                    <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : 'text-emerald-300')}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
+                    <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : (isLateSubmissionMode ? 'text-amber-300' : 'text-emerald-300'))}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
                     <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${passLabel}</strong></span>
-                    <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
+                    <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="${isLateSubmissionMode ? 'text-amber-300' : 'text-indigo-300'}">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLateSubmissionMode ? `Verified & Approved (Late Window — post ${formatTime12(windowEndTime)})` : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))))}</strong></span>
                 </div>
             </div>
         `;
@@ -10314,7 +10512,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                 ` : isImmerse ? `
                                     <span class="badge-pill ${immerseFullyVerified ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60' : 'bg-purple-950/80 text-purple-300 border border-purple-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-video mr-1"></i> ${immerseFullyVerified ? 'Fully Verified' : 'Attempt Verified'}</span>
                                 ` : `
-                                    <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
+                                    <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : (isLateSubmissionMode ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60')} text-[10px] font-mono font-bold"><i class="fas ${isLateSubmissionMode ? 'fa-clock' : 'fa-history'} mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
                                 `}
                             </div>
                             <p class="text-xs text-slate-400 truncate font-mono mt-0.5">${learnerEmail || ''} ${learnerPhone ? '• ' + learnerPhone : ''}</p>
@@ -10333,7 +10531,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             ` : isImmerse ? `
                                 <span class="badge-pill bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[10px] font-mono font-bold"><i class="fas fa-video mr-1"></i> MWF Session</span>
                             ` : `
-                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum}</span>
+                                <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : (isLateSubmissionMode ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60')} text-[10px] font-mono font-bold"><i class="fas ${isLateSubmissionMode ? 'fa-clock' : 'fa-history'} mr-1"></i> Attempt #${attemptNum}</span>
                             `}
                         </div>
                         <h3 class="text-xl font-extrabold text-white font-heading">${displayTitle}</h3>

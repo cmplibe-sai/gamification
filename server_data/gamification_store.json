@@ -77,7 +77,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Viewing friction & feedback as fuel for growth",
+            "Avoiding all challenging tasks",
+            "Seeking quick shortcuts",
+            "Focusing solely on certificates"
+          ]
         },
         {
           "question": "What is the core driver of long-term habit consistency discussed in today's podcast?",
@@ -85,7 +91,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Intrinsic Identity Shift & Daily Micro-actions",
+            "External Pressure only",
+            "Random Motivation Spikes",
+            "Waiting for perfect conditions"
+          ]
         },
         {
           "question": "What is the recommended approach to high-friction tasks?",
@@ -93,7 +105,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Tackle them in the first 90 minutes of the morning",
+            "Push them to late evening when tired",
+            "Multitask while handling low-friction emails",
+            "Ignore them until an external deadline passes"
+          ]
         }
       ],
       "summary": "",
@@ -400,7 +418,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Tackle them in the first 90 minutes of the morning",
+            "Push them to late evening when tired",
+            "Multitask while handling low-friction emails",
+            "Ignore them until an external deadline passes"
+          ]
         },
         {
           "question": "What is the core driver of long-term habit consistency discussed in today's podcast?",
@@ -408,7 +432,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Intrinsic Identity Shift & Daily Micro-actions",
+            "External Pressure only",
+            "Random Motivation Spikes",
+            "Waiting for perfect conditions"
+          ]
         },
         {
           "question": "How does deliberate daily reflection impact skill acquisition?",
@@ -416,7 +446,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Consolidates neural pathways and converts experience into intuition",
+            "Has no noticeable effect",
+            "Slows down practical progress with overthinking",
+            "Replaces practical action"
+          ]
         }
       ],
       "summary": "",
@@ -445,7 +481,13 @@
           "type": "mcq",
           "selectedOption": 0,
           "correctOption": 0,
-          "isCorrect": true
+          "isCorrect": true,
+          "options": [
+            "Intrinsic Identity Shift & Daily Micro-actions",
+            "External Pressure only",
+            "Random Motivation Spikes",
+            "Waiting for perfect conditions"
+          ]
         },
         {
           "question": "How does deliberate daily reflection impact skill acquisition?",
@@ -453,7 +495,13 @@
           "type": "mcq",
           "selectedOption": 1,
           "correctOption": 0,
-          "isCorrect": false
+          "isCorrect": false,
+          "options": [
+            "Consolidates neural pathways and converts experience into intuition",
+            "Has no noticeable effect",
+            "Slows down practical progress with overthinking",
+            "Replaces practical action"
+          ]
         },
         {
           "question": "What primary method was recommended for handling unexpected daily schedule disruptions?",
@@ -461,7 +509,13 @@
           "type": "mcq",
           "selectedOption": 3,
           "correctOption": 0,
-          "isCorrect": false
+          "isCorrect": false,
+          "options": [
+            "Implementation Intentions (If-Then Planning)",
+            "Abandoning the week goal",
+            "Skipping without reflection",
+            "Immediate panic"
+          ]
         }
       ],
       "summary": "",

@@ -953,47 +953,49 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
     if (coverage <= 80) {
         const pts = isLate ? 3 : 17;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Late window reward of +${pts} LCs credited to your TagMango wallet.` : ` ${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
-            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
+            isLate: isLate,
+            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
                 `Your reflection partially aligned with today's rubric. Some key concepts were ` +
                 `covered, but sections of the designated topic were skipped or insufficiently ` +
-                `discussed. Minor articulation or pronunciation mistakes were detected. ` +
-                `${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`
+                `discussed. Minor articulation or pronunciation mistakes were detected.${lateNote}`
         };
     }
 
     // TIER 2 — Good Match (81% – 90%) → 23 LCs
     if (coverage <= 90) {
         const pts = isLate ? 3 : 23;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. While rubric scored high (${coverage}%), late window reward of +${pts} LCs was credited to your TagMango wallet.` : ` ${pts} LCs credited. Great effort!`;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
-            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
+            isLate: isLate,
+            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
                 `Your reflection showed strong alignment with today's rubric. Most of the key ` +
-                `concepts from the day's description were clearly articulated and verified. ` +
-                `A few minor details or deeper insights could improve the score to full credit. ` +
-                `${pts} LCs credited. Great effort!`
+                `concepts from the day's description were clearly articulated and verified.${lateNote}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
     const pts = isLate ? 3 : basePoints;
+    const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Although your rubric match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your TagMango wallet.` : ` Full credit of ${pts} LCs has been added to your TagMango wallet.`;
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
-        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
-            `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified\n` +
+        isLate: isLate,
+        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+            `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
             `Excellent reflection! Your voice response was clearly articulated and closely matched ` +
             `today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, ` +
-            `and key concepts from the day's description were all verified and satisfied. ` +
-            `Full credit of ${pts} LCs has been added to your TagMango wallet.`
+            `and key concepts from the day's description were all verified and satisfied.${lateNote}`
     };
 }
 function calculateTextSimilarity(referenceArticle, studentResponse) {
