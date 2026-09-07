@@ -5216,7 +5216,47 @@ function downloadCredentialPDF(msId, credentialId) {
 }
 window.downloadCredentialPDF = downloadCredentialPDF;
 
+function playCredentialChime() {
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const ctx = new AudioContextClass();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+        // Harmonious chord notes: C5 (523.25Hz), E5 (659.25Hz), G5 (783.99Hz), C6 (1046.50Hz)
+        const notes = [
+            { freq: 523.25, time: 0.00, dur: 0.7 },
+            { freq: 659.25, time: 0.10, dur: 0.7 },
+            { freq: 783.99, time: 0.20, dur: 0.8 },
+            { freq: 1046.50, time: 0.32, dur: 1.1 }
+        ];
+        notes.forEach(n => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle'; // Rich, warm, bell-like chime
+            osc.frequency.setValueAtTime(n.freq, ctx.currentTime + n.time);
+
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime + n.time);
+            gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + n.time + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + n.time + n.dur);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(ctx.currentTime + n.time);
+            osc.stop(ctx.currentTime + n.time + n.dur + 0.05);
+        });
+    } catch (e) {
+        console.warn('[Credential Chime] AudioContext error:', e);
+    }
+}
+window.playCredentialChime = playCredentialChime;
+
 function triggerCredentialConfetti() {
+    if (typeof playCredentialChime === 'function') {
+        playCredentialChime();
+    }
     if (typeof window.confetti !== 'function') return;
     const end = Date.now() + 1800;
     (function frame() {
