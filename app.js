@@ -4925,12 +4925,15 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
         try { localStorage.setItem('moduleActivationDates', JSON.stringify(actDates)); } catch(e) {}
 
         // Auto-stamp Day 1 for all cohort users who do not have an explicit start date for this module yet
-        const allUsers = (typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0)
-            ? adminRealtimeUsers
-            : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) ? actualUsers : ((typeof window !== 'undefined' && Array.isArray(window.adminRealtimeUsers)) ? window.adminRealtimeUsers : []));
+        const allUsers = (typeof window !== 'undefined' && Array.isArray(window.adminRealtimeUsers) && window.adminRealtimeUsers.length > 0)
+            ? window.adminRealtimeUsers
+            : ((typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0)
+                ? adminRealtimeUsers
+                : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) && actualUsers.length > 0) ? actualUsers : []));
 
         let modDates = {};
         try { modDates = JSON.parse(localStorage.getItem('userModuleStartDates')) || {}; } catch(e) {}
+        let deltaDates = {};
         let datesChanged = false;
 
         allUsers.forEach(u => {
@@ -4938,7 +4941,12 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
             const k1 = `${u._id}_MS${key}_${normalizedMod}`;
             if (!modDates[k1]) {
                 modDates[k1] = todayKey;
-                if (u.email) modDates[`${u.email.toLowerCase().trim()}_MS${key}_${normalizedMod}`] = todayKey;
+                deltaDates[k1] = todayKey;
+                if (u.email) {
+                    const kEmail = `${u.email.toLowerCase().trim()}_MS${key}_${normalizedMod}`;
+                    modDates[kEmail] = todayKey;
+                    deltaDates[kEmail] = todayKey;
+                }
                 datesChanged = true;
             }
         });
@@ -4952,7 +4960,7 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
                     milestoneId: key,
                     moduleName: normalizedMod,
                     startDate: todayKey,
-                    allDates: modDates
+                    allDates: deltaDates
                 })
             }).catch(() => {});
         }
@@ -7874,19 +7882,6 @@ function getUserModuleStartDate(userId, msId, moduleName) {
     }
 
     if (!foundDate) {
-        // Check if there is an activation date for this module in this milestone
-        let actDates = {};
-        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
-        const actDate = actDates[`${msId}_${mod}`];
-        if (actDate) {
-            foundDate = actDate;
-            dates[k1] = foundDate;
-            if (k3) dates[k3] = foundDate;
-            try { localStorage.setItem('userModuleStartDates', JSON.stringify(dates)); } catch(e) {}
-        }
-    }
-
-    if (!foundDate) {
         // Fallback for 'dip' is the milestone join date
         if (mod === 'dip') {
             foundDate = getUserMilestoneJoinDate(userId, msId);
@@ -7906,9 +7901,13 @@ async function setUserModuleStartDate(userId, msId, moduleName, startDate) {
     
     const k1 = `${userId}_MS${msId}_${mod}`;
     dates[k1] = dateKey;
+    const delta = { [k1]: dateKey };
+
     let userEmail = (currentUser && currentUser.email) ? currentUser.email.toLowerCase().trim() : '';
     if (userEmail) {
-        dates[`${userEmail}_MS${msId}_${mod}`] = dateKey;
+        const kEmail = `${userEmail}_MS${msId}_${mod}`;
+        dates[kEmail] = dateKey;
+        delta[kEmail] = dateKey;
     }
     try { localStorage.setItem('userModuleStartDates', JSON.stringify(dates)); } catch(e) {}
 
@@ -7921,7 +7920,7 @@ async function setUserModuleStartDate(userId, msId, moduleName, startDate) {
             milestoneId: msId,
             moduleName: mod,
             startDate: dateKey,
-            allDates: dates
+            allDates: delta
         })
     }).catch(e => console.error('Module start date sync error:', e));
 }
@@ -8416,7 +8415,10 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
             }
         }
     } else {
-        // MON-SAT SCHEDULE (Skip Sunday)
+        // MON-SAT SCHEDULE (Skip Sunday): Advance past Sunday if start date is Sunday
+        while (cardDate.getDay() === 0) {
+            cardDate.setDate(cardDate.getDate() + 1);
+        }
         let daysAdded = 0;
         let targetOffset = (Number(dayNum) || 1) - 1;
         while (daysAdded < targetOffset) {
@@ -9681,7 +9683,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             !userId || String(userId) !== String(window.currentUser._id) || 
             (sub && sub.userEmail && window.currentUser.email && sub.userEmail.toLowerCase().trim() !== window.currentUser.email.toLowerCase().trim())
         )) ||
-        (document.getElementById('adminTab') && !document.getElementById('adminTab').classList.contains('hidden'))
+        (document.getElementById('adminTab') && document.getElementById('adminTab').classList && !document.getElementById('adminTab').classList.contains('hidden'))
     );
 
     // Resolve Learner details for Creator View
@@ -10020,6 +10022,16 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const immerseFullyVerified = Boolean(immerseF1Earned && immerseF2Earned);
 
     // AI EVALUATION CARD HTML
+    let detectedMainQ = (dayCfg.mainQuestion || sub.mainQuestion || '').trim();
+    if (!detectedMainQ && Array.isArray(responses) && responses.length > 0) {
+        const textQ = responses.find(r => r && r.title && (r.type || '').toLowerCase() !== 'video' && (r.type || '').toLowerCase() !== 'audio' && r.title.length > 3);
+        if (textQ && textQ.title) {
+            detectedMainQ = textQ.title.trim();
+        } else if (responses[0] && responses[0].title) {
+            detectedMainQ = responses[0].title.trim();
+        }
+    }
+
     let aiEvaluationCardHtml = '';
     if (isImmerse) {
         aiEvaluationCardHtml = `
@@ -10036,12 +10048,12 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         ${isEvaluating ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating Video' : (immerseFullyVerified ? `<i class="fas fa-check-circle mr-1"></i> Fully Verified (+${immerseBasePts} LCs)` : `<i class="fas fa-check mr-1"></i> Video Attempt (+${lcReward} LCs)`)}
                     </span>
                 </div>
-                ${(dayCfg.mainQuestion || sub.mainQuestion || (sub.responses && sub.responses.find(r => r.title && !r.title.toLowerCase().includes('record') && r.title.length > 5)?.title)) ? `
+                ${detectedMainQ ? `
                     <div class="p-3 bg-purple-950/40 rounded-xl border border-purple-800/40 text-xs shadow-inner space-y-1">
                         <span class="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
                             <i class="fas fa-question-circle text-purple-400"></i> Today's Main Question
                         </span>
-                        <p class="text-white font-semibold text-xs leading-relaxed font-sans">${(dayCfg.mainQuestion || sub.mainQuestion || (sub.responses && sub.responses.find(r => r.title && !r.title.toLowerCase().includes('record') && r.title.length > 5)?.title)).trim()}</p>
+                        <p class="text-white font-semibold text-xs leading-relaxed font-sans">${detectedMainQ}</p>
                     </div>
                 ` : ''}
                 <div class="text-xs text-slate-200 border-slate-800/90 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">

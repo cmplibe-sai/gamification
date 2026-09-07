@@ -22,7 +22,7 @@ global.window = global;
 global.fetch = async () => ({ ok: true, json: async () => ({ success: true }) });
 global.window.addEventListener = () => {};
 global.document = {
-    getElementById: (id) => null,
+    getElementById: (id) => ({ innerHTML: '', querySelectorAll: () => [], classList: { contains: (c) => (c === 'hidden'), add: () => {}, remove: () => {} }, remove: () => {} }),
     querySelectorAll: () => [],
     addEventListener: () => {},
     body: {
@@ -77,17 +77,58 @@ async function runTests() {
     const immerseDay1 = getMilestoneSessionDate(immerseStart, 1, 'immerse');
     assert.strictEqual(getLocalDateKey(immerseDay1), '2026-09-07', 'Immerse Day 1 date must match start date');
 
+    // Cadence check: POD starting on Sunday must snap forward to Monday
+    const sundayDate = new Date('2026-09-13T00:00:00'); // 2026-09-13 is a Sunday
+    assert.strictEqual(sundayDate.getDay(), 0, 'Must be Sunday');
+    const podDay1FromSunday = getMilestoneSessionDate(sundayDate, 1, 'pod');
+    assert.strictEqual(podDay1FromSunday.getDay(), 1, 'POD starting on Sunday must advance to Monday');
+    assert.strictEqual(getLocalDateKey(podDay1FromSunday), '2026-09-14', 'Sunday start must become Monday 2026-09-14');
+    console.log('✅ Sunday cadence snap test passed!');
+
     // Test auto-stamping on module activation toggle
     global.adminRealtimeUsers = [
         { _id: 'usr_new_student', name: 'Alice New', email: 'alice@example.com' }
     ];
+    const fetchPayloads = {};
+    global.fetch = async (url, opts) => {
+        if (opts && opts.body) {
+            try { fetchPayloads[url] = JSON.parse(opts.body); } catch(e) {}
+        }
+        return { ok: true, json: async () => ({ success: true }) };
+    };
+
     // Ensure usr_new_student has no start date for residency
     assert.strictEqual(getUserModuleStartDate('usr_new_student', 1, 'residency'), null);
     // Creator toggles residency ON for milestone 1
     await toggleMilestoneModuleAccess(1, 'residency');
     // Check that usr_new_student now automatically has Day 1 stamped!
     assert.strictEqual(getUserModuleStartDate('usr_new_student', 1, 'residency'), getLocalDateKey(new Date()));
-    console.log('✅ Module toggle auto-stamping Day 1 test passed!');
+    // Check that only delta dates were sent to server (not the entire localStorage)
+    const userModPayload = Object.entries(fetchPayloads).find(([url]) => url.includes('/api/user-module-start-date'))?.[1];
+    assert.ok(userModPayload && userModPayload.allDates, 'Payload must contain allDates delta');
+    assert.ok(!userModPayload.allDates['usr_cust_123_MS1_pod'], 'Must not shotgun-merge unrelated keys from other modules');
+    console.log('✅ Module toggle auto-stamping Day 1 & delta payload test passed!');
+
+    // Test Late Joiner: User who was NOT present during toggle
+    const lateStudentId = 'usr_late_joiner_999';
+    assert.strictEqual(getUserModuleStartDate(lateStudentId, 1, 'residency'), null, 'Late student must NOT be backdated by moduleActivationDates');
+    // Late student opens the tab for the first time
+    const lateUserObj = { _id: lateStudentId, email: 'late@example.com', role: 'learner' };
+    global.currentUser = lateUserObj;
+    currentUser = lateUserObj;
+    localStorageData['currentUser'] = JSON.stringify(lateUserObj);
+    global.activeMilestoneId = 1;
+    activeMilestoneId = 1;
+    let joins = {};
+    try { joins = JSON.parse(localStorageData['userMilestoneJoinDates']) || {}; } catch(e) {}
+    joins[`${lateStudentId}_MS1`] = getLocalDateKey(new Date());
+    localStorageData['userMilestoneJoinDates'] = JSON.stringify(joins);
+
+    switchMilestoneTab('residency');
+    // Late student's Day 1 must lock to today, not the ancient activation date!
+    assert.strictEqual(getUserModuleStartDate(lateStudentId, 1, 'residency'), getLocalDateKey(new Date()), 'Late student Day 1 must lock to current date');
+    console.log('✅ Late Joiner start date protection test passed!');
+
     console.log('✅ Per-Module Start Dates test passed!');
 
 console.log('--- Testing 2: Review Modal Customer View Layout & Factors ---');
@@ -155,6 +196,33 @@ assert.ok(renderedHtml.includes('We chose eventual consistency over strict seria
 assert.ok(renderedHtml.includes('student_video.webm'), 'Question 2 video URL must be rendered in video player');
 assert.ok(renderedHtml.includes('Download Video'), 'Video download button must be present');
 console.log('✅ Customer View Modal test passed!');
+
+// Test Legacy sub with "answers" and question containing the word "record"
+const legacySub = {
+    id: 'sub_legacy',
+    userId: 'usr_cust_123',
+    type: 'immerse',
+    moduleType: 'immerse',
+    milestoneId: 1,
+    day: 5,
+    dateKey: '2026-09-09',
+    lcReward: 33,
+    answers: [
+        {
+            title: 'How do you record and audit your distributed telemetry logs?',
+            type: 'text',
+            answer: 'Using OpenTelemetry collectors and partitioned ClickHouse tables.'
+        },
+        {
+            title: 'Upload your video summary',
+            type: 'video',
+            videoUrl: 'https://example.com/uploads/summary.mp4'
+        }
+    ]
+};
+renderSubmissionDetailModal(legacySub, 'usr_cust_123', 'Day 5', 'immerse');
+assert.ok(document.body.lastInsertedHtml.includes('How do you record and audit your distributed telemetry logs?'), 'Must find main question even if it contains the word record');
+console.log('✅ Legacy submission and "record" question title test passed!');
 
 console.log('--- Testing 3: Review Modal Creator View ---');
 global.isAdminLogin = true;
