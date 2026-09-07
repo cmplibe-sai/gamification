@@ -1562,11 +1562,10 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         const finalStatus = 'completed';
         const finalRemarks = `✅ [cMPLi Immerse Video Verified — ${finalLcReward} / ${basePoints} LCs Awarded]\n` +
             `• Factor 1 (70% Video Attempt): +${factor1Earned ? completionPoints : 0} LCs (${factor1Earned ? 'Verified' : 'Missing video'})\n` +
-            `• Factor 2 (30% Relatability): +${factor2Earned ? relatabilityPoints : 0} LCs (${wordCount} words spoken; ${factor2Earned ? 'Relatability Verified' : 'Min 10 words answering main question/context required'})\n` +
+            `• Factor 2 (30% Relatability): +${factor2Earned ? relatabilityPoints : 0} LCs (${wordCount} words spoken; ${factor2Earned ? 'Relatability Verified' : 'Min 10 words answering main question required'})\n` +
             (sessionTitle ? `• Session Title: "${sessionTitle}"\n` : '') +
             `• Main Question: "${mainQuestion}"\n` +
-            (sessionDescription ? `• Session Context/Description: "${sessionDescription.slice(0, 180)}${sessionDescription.length > 180 ? '...' : ''}"\n` : '') +
-            (videoTranscript ? `• Video Speech Transcript: "${videoTranscript.slice(0, 300)}${videoTranscript.length > 300 ? '...' : ''}"` : 'Video submission recorded.');
+            `• Status: ${factor1Earned && factor2Earned ? 'Fully Verified' : (factor1Earned ? 'Video Attempt Recorded' : 'Incomplete')}`;
 
         const topVideoUrl = (Array.isArray(subAnswers) && (subAnswers.find(a => a.videoUrl)?.videoUrl || subAnswers.find(a => a.type === 'video' && a.value)?.value)) || sub.videoUrl || '';
 

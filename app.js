@@ -8078,6 +8078,29 @@ var _videoChunks = [];
 
 async function startVideoRecording(idx) {
     try {
+        // 1. Stop any active recorder or stream before restarting
+        if (_videoRecorder && _videoRecorder.state !== 'inactive') {
+            try { _videoRecorder.stop(); } catch(e) {}
+        }
+        if (_videoStream) {
+            try { _videoStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+            _videoStream = null;
+        }
+
+        // 2. Hide and reset any previously recorded video preview so only the live camera is visible
+        const previewEl = document.getElementById(`video_preview_${idx}`);
+        if (previewEl) {
+            try { previewEl.pause(); } catch(e) {}
+            previewEl.src = '';
+            previewEl.classList.add('hidden');
+        }
+
+        // 3. Clear buffers for this index so stale video is never submitted
+        if (window._recordedVideoData) delete window._recordedVideoData[idx];
+        if (window._recordedVideoBlobs) delete window._recordedVideoBlobs[idx];
+        const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
+        if (hiddenData) hiddenData.value = '';
+
         _videoChunks = [];
         _videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         const liveVideo = document.getElementById(`video_live_${idx}`);
@@ -8096,12 +8119,20 @@ async function startVideoRecording(idx) {
             const blob = new Blob(_videoChunks, { type: 'video/webm' });
             const blobUrl = URL.createObjectURL(blob);
             window._recordedVideoData = window._recordedVideoData || {};
+            window._recordedVideoBlobs = window._recordedVideoBlobs || {};
+            window._recordedVideoBlobs[idx] = blob;
 
+            // Hide live camera feed and release tracks
             if (liveVideo) {
                 liveVideo.classList.add('hidden');
                 liveVideo.srcObject = null;
             }
-            const previewEl = document.getElementById(`video_preview_${idx}`);
+            if (_videoStream) {
+                _videoStream.getTracks().forEach(track => track.stop());
+                _videoStream = null;
+            }
+
+            // Reveal single recorded preview element
             if (previewEl) {
                 previewEl.src = blobUrl;
                 previewEl.classList.remove('hidden');
@@ -8112,34 +8143,30 @@ async function startVideoRecording(idx) {
             reader.onloadend = () => {
                 const base64Data = reader.result;
                 window._recordedVideoData[idx] = base64Data;
-                const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
                 if (hiddenData) hiddenData.value = base64Data;
             };
 
             const recStatus = document.getElementById(`video_rec_status_${idx}`);
-            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! Preview ready below.</span>';
-
-
+            if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video Recorded! You can re-record or submit below.</span>';
 
             const startBtn = document.getElementById(`btn_start_video_${idx}`);
             const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
-            if (startBtn) startBtn.classList.remove('hidden');
+            const rerecordBtn = document.getElementById(`btn_rerecord_video_${idx}`);
+            if (startBtn) startBtn.classList.add('hidden');
             if (stopBtn) stopBtn.classList.add('hidden');
-
-            if (_videoStream) {
-                _videoStream.getTracks().forEach(track => track.stop());
-                _videoStream = null;
-            }
+            if (rerecordBtn) rerecordBtn.classList.remove('hidden');
         };
 
         _videoRecorder.start();
         const startBtn = document.getElementById(`btn_start_video_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
+        const rerecordBtn = document.getElementById(`btn_rerecord_video_${idx}`);
         if (startBtn) startBtn.classList.add('hidden');
+        if (rerecordBtn) rerecordBtn.classList.add('hidden');
         if (stopBtn) stopBtn.classList.remove('hidden');
 
         const recStatus = document.getElementById(`video_rec_status_${idx}`);
-        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-video mr-1"></i> Recording Video... Look into camera</span>';
+        if (recStatus) recStatus.innerHTML = '<span class="text-red-400 font-bold animate-pulse"><i class="fas fa-video mr-1"></i> Recording Video... Look into camera. Click Stop when done.</span>';
     } catch(err) {
         console.error('Camera error:', err);
         alert('Could not access camera/microphone. Please allow camera permissions in your browser.');
@@ -8157,6 +8184,20 @@ window.stopVideoRecording = stopVideoRecording;
 function handleVideoFileSelect(input, idx) {
     const file = input.files[0];
     if (!file) return;
+
+    if (_videoRecorder && _videoRecorder.state !== 'inactive') {
+        try { _videoRecorder.stop(); } catch(e) {}
+    }
+    if (_videoStream) {
+        try { _videoStream.getTracks().forEach(track => track.stop()); } catch(e) {}
+        _videoStream = null;
+    }
+    const liveVideo = document.getElementById(`video_live_${idx}`);
+    if (liveVideo) {
+        liveVideo.classList.add('hidden');
+        liveVideo.srcObject = null;
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         const dataUrl = e.target.result;
@@ -8165,10 +8206,19 @@ function handleVideoFileSelect(input, idx) {
             previewEl.src = dataUrl;
             previewEl.classList.remove('hidden');
         }
+        window._recordedVideoData = window._recordedVideoData || {};
+        window._recordedVideoData[idx] = dataUrl;
         const hiddenData = document.getElementById(`checkin_video_data_${idx}`);
         if (hiddenData) hiddenData.value = dataUrl;
         const recStatus = document.getElementById(`video_rec_status_${idx}`);
         if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Video File Ready: ${file.name}</span>`;
+
+        const startBtn = document.getElementById(`btn_start_video_${idx}`);
+        const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
+        const rerecordBtn = document.getElementById(`btn_rerecord_video_${idx}`);
+        if (startBtn) startBtn.classList.add('hidden');
+        if (stopBtn) stopBtn.classList.add('hidden');
+        if (rerecordBtn) rerecordBtn.classList.remove('hidden');
     };
     reader.readAsDataURL(file);
 }
@@ -8285,9 +8335,10 @@ function openSubmissionModal(dayNum, moduleName) {
                                 <i class="fas ${isImmerse ? 'fa-video text-purple-400' : 'fa-sun text-amber-400'} mr-1"></i> cMPLi ${(moduleName || 'dip').toUpperCase()}
                             </span>
                             <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-bold">Day ${dayNum}</span>
+                            <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${displayDate}</span>
                             ${isImmerse ? '<span class="badge-pill bg-purple-950 text-purple-300 border border-purple-800/40 text-[10px] font-bold">MWF Schedule</span>' : ''}
                         </div>
-                        <h3 class="text-2xl font-extrabold text-white font-heading">${(isImmerse && dayConfig.title) ? dayConfig.title : ms.name}</h3>
+                        <h3 class="text-2xl font-extrabold text-white font-heading">${dayConfig.title ? `Day-${dayNum}: ${dayConfig.title}` : `Day-${dayNum}: ${ms.name}`}</h3>
                         
                         <p class="text-xs text-slate-400 mt-0.5">
                             ${ms.name} • Date: <strong class="text-slate-200">${displayDate}</strong>
@@ -8309,7 +8360,7 @@ function openSubmissionModal(dayNum, moduleName) {
                             <h6 class="text-xs font-bold text-white uppercase tracking-wider">2-Factor Immerse Reward Rule</h6>
                             <p class="text-[11px] text-slate-300">
                                 <strong>Factor 1:</strong> 70% of on-time LCs awarded for video submission attempt.<br/>
-                                <strong>Factor 2:</strong> 30% of on-time LCs awarded for speaking min. 10 words answering the Main Question & Session Context.
+                                <strong>Factor 2:</strong> 30% of on-time LCs awarded for speaking min. 10 words answering the Main Question.
                             </p>
                         </div>
                     </div>
@@ -8318,18 +8369,6 @@ function openSubmissionModal(dayNum, moduleName) {
                         <span class="badge-pill badge-emerald text-xs font-bold">30% Relatability</span>
                     </div>
                 </div>
-
-                ${dayConfig.description ? `
-                <!-- SESSION CONTEXT & DESCRIPTION HIGHLIGHT -->
-                <div class="p-4 bg-slate-950/70 rounded-2xl border border-purple-500/30 space-y-1.5 shadow-inner">
-                    <div class="flex items-center gap-2">
-                        <span class="badge-pill bg-purple-900/40 text-purple-300 text-[10px] font-bold uppercase tracking-wider">
-                            <i class="fas fa-align-left mr-1"></i> Session Context & Description
-                        </span>
-                    </div>
-                    <p class="text-xs text-slate-300 leading-relaxed font-normal whitespace-pre-line">${dayConfig.description}</p>
-                </div>
-                ` : ''}
 
                 <!-- ONE MAIN QUESTION HIGHLIGHT -->
                 ${dayConfig.mainQuestion ? `
@@ -8340,7 +8379,7 @@ function openSubmissionModal(dayNum, moduleName) {
                         </span>
                     </div>
                     <h4 class="text-sm font-bold text-white leading-relaxed font-heading">${dayConfig.mainQuestion}</h4>
-                    <p class="text-[11px] text-slate-400">Record a video response addressing this question in relation to the session context above to earn the full 33 LCs.</p>
+                    <p class="text-[11px] text-slate-400">Record a video response answering this question to earn full on-time LCs.</p>
                 </div>
                 ` : ''}
 
@@ -8425,6 +8464,9 @@ function openSubmissionModal(dayNum, moduleName) {
                                             <button type="button" id="btn_stop_video_${idx}" onclick="stopVideoRecording(${idx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
                                                 <i class="fas fa-stop"></i> Stop Recording
                                             </button>
+                                            <button type="button" id="btn_rerecord_video_${idx}" onclick="startVideoRecording(${idx})" class="hidden btn-secondary py-2 px-3 text-xs font-bold text-amber-400 border-amber-500/40 bg-amber-950/30 flex items-center gap-1.5">
+                                                <i class="fas fa-redo"></i> Re-record Video
+                                            </button>
                                             <span class="text-xs text-slate-500 font-bold">OR</span>
                                             <label class="btn-secondary py-2 px-3 text-xs font-bold text-slate-300 cursor-pointer flex items-center gap-1.5">
                                                 <i class="fas fa-upload"></i> Upload Video File
@@ -8432,8 +8474,8 @@ function openSubmissionModal(dayNum, moduleName) {
                                             </label>
                                         </div>
                                         <div id="video_rec_status_${idx}" class="text-xs text-slate-400">Click "Open Camera & Record" or upload your video file.</div>
-                                        <video id="video_live_${idx}" autoplay muted class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700"></video>
-                                        <video id="video_preview_${idx}" controls class="hidden w-full max-h-48 rounded-xl bg-black border border-slate-700 mt-2"></video>
+                                        <video id="video_live_${idx}" autoplay muted playsinline class="hidden w-full max-h-56 rounded-xl bg-black border border-slate-700"></video>
+                                        <video id="video_preview_${idx}" controls playsinline class="hidden w-full max-h-56 rounded-xl bg-black border border-slate-700 mt-2"></video>
                                         <input type="hidden" id="checkin_video_data_${idx}" value="" />
                                     </div>
                                 </div>
@@ -9552,7 +9594,9 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             .replace(/Great effort!/gi, "Learner demonstrated strong conceptual alignment.");
     }
 
-    const remarkLines = customizedRemarks.split('\n').filter(l => l.trim());
+    const remarkLines = customizedRemarks.split('\n')
+        .filter(l => l.trim())
+        .filter(l => !l.toLowerCase().includes('session context/description:') && !l.toLowerCase().includes('video speech transcript:'));
     const aiRemarksText = remarkLines.map((line, i) => {
         if (i === 0) return `<strong class="block text-sm mb-1.5">${line}</strong>`;
         if (i === 1) return `<span class="block font-mono text-[10px] text-slate-400 mb-2 tracking-wide">${line}</span>`;
@@ -9562,22 +9606,46 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     // FIX FOR OLD SUBMISSIONS: If answers/responses is empty or missing, synthesize so old check-in files/details are visible!
     let responses = sub.responses || sub.answers || [];
     if (!Array.isArray(responses) || responses.length === 0) {
-        const fallbackAudioUrl = sub.audioUrl || (window._recordedAudioBlobs && window._recordedAudioBlobs[0] ? URL.createObjectURL(window._recordedAudioBlobs[0]) : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3');
-        responses = [
-            {
-                title: "What key insight or reflection did you gain today?",
-                type: "text",
-                answer: sub.transcription || sub.text || sub.reflection || "Daily reflection insights completed and verified against learning objectives.",
-                value: sub.transcription || sub.text || sub.reflection || "Daily reflection insights completed and verified against learning objectives."
-            },
-            {
-                title: "Upload Audio Reflection / Voice Note (3-4 mins)",
-                type: "audio",
-                answer: "Audio Voice Reflection Recorded & Verified",
-                value: "Audio Voice Reflection Recorded & Verified",
-                audioUrl: fallbackAudioUrl
-            }
-        ];
+        if (isImmerse) {
+            responses = [{
+                title: dayCfg.mainQuestion || sub.mainQuestion || "Today's Main Reflection Question",
+                type: "video",
+                answer: "Video Reflection Recorded & Verified",
+                value: sub.videoUrl || "Video Reflection Recorded & Verified",
+                videoUrl: sub.videoUrl || ""
+            }];
+        } else {
+            const fallbackAudioUrl = sub.audioUrl || (window._recordedAudioBlobs && window._recordedAudioBlobs[0] ? URL.createObjectURL(window._recordedAudioBlobs[0]) : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3');
+            responses = [
+                {
+                    title: "What key insight or reflection did you gain today?",
+                    type: "text",
+                    answer: sub.transcription || sub.text || sub.reflection || "Daily reflection insights completed and verified against learning objectives.",
+                    value: sub.transcription || sub.text || sub.reflection || "Daily reflection insights completed and verified against learning objectives."
+                },
+                {
+                    title: "Upload Audio Reflection / Voice Note (3-4 mins)",
+                    type: "audio",
+                    answer: "Audio Voice Reflection Recorded & Verified",
+                    value: "Audio Voice Reflection Recorded & Verified",
+                    audioUrl: fallbackAudioUrl
+                }
+            ];
+        }
+    } else if (isImmerse) {
+        // Filter strictly to video responses for Immerse so no audio box is ever rendered
+        const videoResponses = responses.filter(r => (r.type === 'video') || (r.videoUrl) || (r.title && r.title.toLowerCase().includes('video')));
+        if (videoResponses.length > 0) {
+            responses = videoResponses;
+        } else {
+            responses = [{
+                title: dayCfg.mainQuestion || sub.mainQuestion || "Today's Main Reflection Question",
+                type: "video",
+                answer: "Video Reflection Recorded & Verified",
+                value: sub.videoUrl || "Video Reflection Recorded & Verified",
+                videoUrl: sub.videoUrl || ""
+            }];
+        }
     }
 
     let bodyHtml = '';
@@ -9653,7 +9721,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[i]) {
                         try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[i]); } catch(e) {}
                     }
-                    if (!exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
+                    if (!isImmerse && !exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
                         // Reliable audio player fallback for old submissions so audio can always be played & downloaded
                         exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
                     }
@@ -9671,8 +9739,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         exactVideoSrc = window._recordedVideoData[0];
                     }
 
-                    let isAudio = (qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc);
-                    let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc) || (isImmerse && i === 0);
+                    let isAudio = !isImmerse && ((qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc));
+                    let isVideo = isImmerse || (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
 
                     let mediaTitle = isAudio 
                         ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
@@ -9703,7 +9771,6 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             </div>
                         `;
                     } else if (isVideo) {
-                        const transcriptText = (r.transcription || sub.transcription || '').trim();
                         contentHtml = `
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
@@ -9721,14 +9788,6 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                 ` : `
                                     <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Video Response Completed'}</p>
                                 `}
-                                ${transcriptText ? `
-                                    <div class="p-3 bg-purple-950/25 rounded-xl border border-purple-500/30 mt-2 space-y-1">
-                                        <span class="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                                            <i class="fas fa-closed-captioning"></i> AssemblyAI Video Speech Transcript:
-                                        </span>
-                                        <p class="text-xs text-slate-200 leading-relaxed italic font-serif">"${transcriptText}"</p>
-                                    </div>
-                                ` : ''}
                             </div>
                         `;
                     } else {
@@ -9847,25 +9906,11 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
 
-                <!-- AI EVALUATION REMARKS & RUBRIC CARD -->
-                ${isImmerse ? `
-                ${(dayCfg.mainQuestion || sub.mainQuestion || dayCfg.description || sub.sessionDescription || sub.description) ? `
-                <div class="p-4 bg-slate-950/70 border border-purple-500/30 rounded-2xl space-y-2.5 shadow-sm">
-                    ${(dayCfg.mainQuestion || sub.mainQuestion) ? `
-                        <div>
-                            <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider block mb-0.5"><i class="fas fa-question-circle mr-1"></i> The Main Reflection Question</span>
-                            <p class="text-xs font-bold text-white leading-relaxed">${dayCfg.mainQuestion || sub.mainQuestion}</p>
-                        </div>
-                    ` : ''}
-                    ${(dayCfg.description || sub.sessionDescription || sub.description) ? `
-                        <div class="pt-2 border-t border-slate-800/80">
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5"><i class="fas fa-align-left mr-1"></i> Session Context / Description</span>
-                            <p class="text-xs text-slate-300 leading-relaxed font-normal whitespace-pre-line">${dayCfg.description || sub.sessionDescription || sub.description}</p>
-                        </div>
-                    ` : ''}
-                </div>
-                ` : ''}
+                <!-- QUESTION & AUDIO/VIDEO RESPONSES (ON TOP) -->
+                ${bodyHtml}
 
+                <!-- AI EVALUATION CARD -->
+                ${isImmerse ? `
                 <!-- IMMERSE 2-FACTOR VIDEO EVALUATION CARD -->
                 <div class="p-5 bg-gradient-to-br from-purple-950/60 via-slate-900 to-purple-950/30 border ${isEvaluating ? 'border-purple-500/40 animate-pulse' : 'border-purple-500/40'} rounded-2xl space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
@@ -9912,9 +9957,6 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
                 ` : '')}
-
-                <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
-                ${bodyHtml}
 
                 <div class="pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
                     ${isCreatorView ? `
