@@ -938,6 +938,96 @@ function calculateTextSimilarity(referenceArticle, studentResponse) {
     return evaluateReflectionAgainstRubric(referenceArticle, studentResponse).matchPercentage;
 }
 
+// -------------------------------------------------------------
+// cMPLi IMMERSE: RELATABILITY EVALUATION ENGINE
+// Checks student video transcript against the creator's Main Question.
+// At beginning of journey, min 10 words spoken awards the 30% relatability LCs.
+// -------------------------------------------------------------
+// cMPLi IMMERSE: RELATABILITY EVALUATION (MAIN QUESTION + DESCRIPTION)
+// -------------------------------------------------------------
+function evaluateImmerseRelatability(mainQuestion, description, transcript, wordCount) {
+    // Backward compatibility if called as (mainQuestion, transcript, wordCount)
+    if (typeof transcript === 'number' && typeof wordCount === 'undefined') {
+        wordCount = transcript;
+        transcript = description;
+        description = '';
+    }
+
+    if (!transcript || wordCount < 10) {
+        return {
+            isRelated: false,
+            similarityScore: 0,
+            matchedKeywords: 0,
+            totalKeywords: 0,
+            reason: 'Minimum 10 words required to evaluate relatability.'
+        };
+    }
+    
+    const cleanPrompt = (mainQuestion || '').toLowerCase();
+    const cleanDesc = (description || '').toLowerCase();
+    const cleanTranscript = (transcript || '').toLowerCase();
+
+    // Extract significant keywords from main question AND session description
+    const stopWords = new Set([
+        'what', 'which', 'where', 'when', 'today', 'your', 'with', 'about', 'from', 'this', 
+        'that', 'have', 'been', 'would', 'could', 'should', 'will', 'then', 'there', 'their', 
+        'them', 'these', 'those', 'explain', 'describe', 'share', 'reflection', 'question', 
+        'answer', 'session', 'video', 'check', 'module', 'reflect', 'please', 'into',
+        'also', 'more', 'some', 'such', 'only', 'other', 'were', 'does', 'done', 'doing'
+    ]);
+
+    const combinedPrompt = `${cleanPrompt} ${cleanDesc}`;
+    const promptWords = combinedPrompt
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 3 && !stopWords.has(w));
+    
+    const uniquePromptWords = Array.from(new Set(promptWords));
+
+    let matchedCount = 0;
+    uniquePromptWords.forEach(pw => {
+        if (cleanTranscript.includes(pw)) matchedCount++;
+    });
+
+    const promptCoverage = uniquePromptWords.length > 0 ? (matchedCount / uniquePromptWords.length) : 1;
+    // Genuine relatability rule: must have at least 10 words AND matched keywords from prompt/description
+    const isRelated = (wordCount >= 10) && (uniquePromptWords.length === 0 || matchedCount >= 1 || promptCoverage >= 0.15);
+    const scorePct = isRelated ? Math.min(100, Math.max(30, Math.round(promptCoverage * 100))) : 0;
+
+    return {
+        isRelated: isRelated,
+        similarityScore: scorePct,
+        matchedKeywords: matchedCount,
+        totalKeywords: uniquePromptWords.length
+    };
+}
+
+// -------------------------------------------------------------
+// CENTRAL FAN ID RESOLVER (CROSS-MODULE CONSISTENCY)
+// -------------------------------------------------------------
+function resolveTargetFanId(sub) {
+    let targetFanId = sub.fanId;
+    const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+    if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
+        return '68fb27f707ccf937418d41c6';
+    } else if (normalizedEmail === 'engineersai02@gmail.com') {
+        return '68a805cf8c448ccc00abc23f';
+    } else if (normalizedEmail === 'engineersai.y@gmail.com') {
+        return '68d390062f70f039556c0364';
+    }
+    if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+        const matched = backendActualUsers.find(u =>
+            (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
+            (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
+            (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
+        );
+        if (matched && matched._id) {
+            targetFanId = matched._id;
+        }
+    }
+    return targetFanId;
+}
+
 
 // ==============================================================
 // TAGMANGO REAL-TIME WALLET POINTS ASSIGNMENT ENGINE
@@ -1309,25 +1399,32 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         if (Array.isArray(subAnswers)) {
             // Limit to max 3 questions
             const cappedAnswers = subAnswers.slice(0, 3);
-            cappedAnswers.forEach(ans => {
+            cappedAnswers.forEach((ans, ansIdx) => {
                 let isCorrect = false;
                 let pts = 11;
 
-                // Look up matching question prompt in creator's pool
-                const matchedQ = questionPool.find(q => q.title && ans.question && q.title.trim().toLowerCase() === ans.question.trim().toLowerCase());
+                // Look up matching question prompt in creator's pool (exact or normalized)
+                let matchedQ = questionPool.find(q => q.title && ans.question && q.title.trim().toLowerCase() === ans.question.trim().toLowerCase());
+                if (!matchedQ && ans.question) {
+                    const normAns = ans.question.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    matchedQ = questionPool.find(q => (q.title || '').toLowerCase().replace(/[^a-z0-9]/g, '') === normAns);
+                }
+                if (!matchedQ && questionPool[ansIdx]) {
+                    matchedQ = questionPool[ansIdx];
+                }
+
                 if (matchedQ) {
                     pts = matchedQ.pts || 11;
                     const trueCorrectOptionIdx = (matchedQ.correctOption !== undefined && matchedQ.correctOption >= 0) ? matchedQ.correctOption : 0;
                     const trueCorrectText = (matchedQ.options && matchedQ.options[trueCorrectOptionIdx]) || '';
                     if (ans.answer && trueCorrectText && ans.answer.trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
                         isCorrect = true;
-                    } else if (ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption && ans.options && ans.options[ans.selectedOption] && ans.options[ans.selectedOption].trim().toLowerCase() === trueCorrectText.trim().toLowerCase()) {
+                    } else if (ans.selectedOption !== undefined && ans.selectedOption === trueCorrectOptionIdx) {
                         isCorrect = true;
                     }
                 } else {
-                    // Fallback verification: check option index consistency
-                    isCorrect = Boolean(ans.isCorrect && ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption);
-                    pts = ans.pts || 11;
+                    isCorrect = false;
+                    pts = 0;
                 }
 
                 if (isCorrect) calculatedLcReward += pts;
@@ -1336,7 +1433,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
                     ...ans,
                     isCorrect: isCorrect,
                     pts: isCorrect ? pts : 0,
-                    maxPts: pts
+                    maxPts: pts || 11
                 });
             });
         }
@@ -1366,24 +1463,8 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             saveStore();
         }
 
-        let targetFanId = sub.fanId;
+        const targetFanId = resolveTargetFanId(sub);
         const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
-        if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
-            targetFanId = '68fb27f707ccf937418d41c6';
-        } else if (normalizedEmail === 'engineersai02@gmail.com') {
-            targetFanId = '68a805cf8c448ccc00abc23f';
-        } else if (normalizedEmail === 'engineersai.y@gmail.com') {
-            targetFanId = '68d390062f70f039556c0364';
-        } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
-            const matched = backendActualUsers.find(u =>
-                (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
-                (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
-                (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
-            );
-            if (matched && matched._id) {
-                targetFanId = matched._id;
-            }
-        }
 
         const pointDescription = `[Quiz Verified] Milestone-${msId} Day-${dayNum} POD Check-in`;
         if (finalLcReward > 0 && targetFanId && /^[0-9a-fA-F]{24}$/.test(targetFanId)) {
@@ -1401,7 +1482,148 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     }
 
     // -------------------------------------------------------------
-    // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION (DIP & IMMERSE)
+    // cMPLi IMMERSE MODULE: 2-FACTOR VIDEO EVALUATION (70% ATTEMPT / 30% RELATABILITY)
+    // -------------------------------------------------------------
+    if (String(sub.moduleType || sub.type || modType || '').toLowerCase() === 'immerse') {
+        const allConfigs = getMilestoneConfigsFromDb();
+        const immerseDayCfg = (allConfigs[msId] && allConfigs[msId]['immerse'] && allConfigs[msId]['immerse'][sub.date || sub.dateKey]) || {};
+        const mainQuestion = (immerseDayCfg.mainQuestion || sub.mainQuestion || immerseDayCfg.title || 'Main Reflection Question').trim();
+        const sessionDescription = (immerseDayCfg.description || sub.sessionDescription || sub.description || '').trim();
+        const sessionTitle = (immerseDayCfg.title || sub.sessionTitle || sub.title || '').trim();
+
+        // 1. Transcribe any video/audio answers via AssemblyAI
+        if (ASSEMBLYAI_API_KEY && Array.isArray(subAnswers)) {
+            const transcriptionPromises = subAnswers.map(async (a, idx) => {
+                const mediaUrl = a.videoUrl || a.audioUrl || ((a.type === 'video' || a.type === 'audio') ? (a.value || '') : '');
+                if (!mediaUrl || (!mediaUrl.startsWith('/') && !mediaUrl.includes('/uploads/') && !mediaUrl.startsWith('http'))) return;
+                if (a.transcription && a.transcription.trim().length > 10) return;
+
+                console.log(`[AssemblyAI Immerse] Transcribing Q${idx+1} video/media: ${mediaUrl}`);
+                const transcript = await transcribeAudioWithAssemblyAI(mediaUrl);
+                if (transcript && transcript.trim().length > 0) {
+                    a.transcription = transcript.trim();
+                    console.log(`[AssemblyAI Immerse] Q${idx+1} transcript (${transcript.split(/\s+/).length} words): "${transcript.slice(0, 100)}..."`);
+                }
+            });
+            await Promise.allSettled(transcriptionPromises);
+        }
+
+        // 2. Extract combined video transcript and word count (strictly genuine speech transcripts)
+        let videoTranscript = '';
+        if (Array.isArray(subAnswers)) {
+            subAnswers.forEach(a => {
+                if (a.transcription && typeof a.transcription === 'string') {
+                    videoTranscript += ' ' + a.transcription.trim();
+                }
+            });
+        }
+        if (sub.transcription && typeof sub.transcription === 'string') {
+            videoTranscript += ' ' + sub.transcription.trim();
+        }
+        videoTranscript = videoTranscript.trim();
+
+        const words = videoTranscript.split(/\s+/).filter(w => w.length > 0);
+        const wordCount = words.length;
+
+        const hasVideo = Array.isArray(subAnswers) && subAnswers.some(a => {
+            const u = a.videoUrl || ((a.type === 'video') ? (a.value || '') : '');
+            if (!u || typeof u !== 'string') return false;
+            if (u.includes('/uploads/')) {
+                const filename = path.basename(u.split('?')[0]);
+                const localPath = path.join(UPLOADS_DIR, filename);
+                return fs.existsSync(localPath);
+            }
+            return (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('data:video') || u.startsWith('blob:'));
+        });
+
+        // 3. 2-Factor Scoring Calculation (70% Attempt / 30% Relatability)
+        const basePoints = Number(immerseDayCfg.lcOnTime) || Number(sub.lcReward) || 33;
+        const completionPoints = Math.round(basePoints * 0.70); // 70% (23 LCs)
+        const relatabilityPoints = basePoints - completionPoints; // 30% (10 LCs)
+
+        let finalLcReward = 0;
+        let factor1Earned = false;
+        let factor2Earned = false;
+
+        // Factor 1: 70% of on-time LCs for completion / video attempt (strictly gated on actual video file/recording)
+        const hasValidVideoAttempt = Boolean(hasVideo);
+        if (hasValidVideoAttempt) {
+            finalLcReward += completionPoints;
+            factor1Earned = true;
+        }
+
+        // Factor 2: 30% based on relatability to main question + session description (min 10 words spoken)
+        const relatabilityResult = evaluateImmerseRelatability(mainQuestion, sessionDescription, videoTranscript, wordCount);
+        if (relatabilityResult.isRelated && wordCount >= 10) {
+            finalLcReward += relatabilityPoints;
+            factor2Earned = true;
+        }
+
+        const finalStatus = 'completed';
+        const finalRemarks = `✅ [cMPLi Immerse Video Verified — ${finalLcReward} / ${basePoints} LCs Awarded]\n` +
+            `• Factor 1 (70% Video Attempt): +${factor1Earned ? completionPoints : 0} LCs (${factor1Earned ? 'Verified' : 'Missing video'})\n` +
+            `• Factor 2 (30% Relatability): +${factor2Earned ? relatabilityPoints : 0} LCs (${wordCount} words spoken; ${factor2Earned ? 'Relatability Verified' : 'Min 10 words answering main question/context required'})\n` +
+            (sessionTitle ? `• Session Title: "${sessionTitle}"\n` : '') +
+            `• Main Question: "${mainQuestion}"\n` +
+            (sessionDescription ? `• Session Context/Description: "${sessionDescription.slice(0, 180)}${sessionDescription.length > 180 ? '...' : ''}"\n` : '') +
+            (videoTranscript ? `• Video Speech Transcript: "${videoTranscript.slice(0, 300)}${videoTranscript.length > 300 ? '...' : ''}"` : 'Video submission recorded.');
+
+        const topVideoUrl = (Array.isArray(subAnswers) && (subAnswers.find(a => a.videoUrl)?.videoUrl || subAnswers.find(a => a.type === 'video' && a.value)?.value)) || sub.videoUrl || '';
+
+        const idx = (store.submissions || []).findIndex(s => s.id === subId);
+        if (idx !== -1) {
+            store.submissions[idx] = {
+                ...store.submissions[idx],
+                status: finalStatus,
+                lcReward: finalLcReward,
+                basePoints: basePoints,
+                completionPoints: completionPoints,
+                relatabilityPoints: relatabilityPoints,
+                factor1Points: completionPoints,
+                factor2Points: relatabilityPoints,
+                factor1Earned: factor1Earned,
+                factor2Earned: factor2Earned,
+                matchPercentage: (factor1Earned && factor2Earned) ? 100 : (factor1Earned ? 70 : (factor2Earned ? 30 : 0)),
+                similarityScore: relatabilityResult.similarityScore || ((factor1Earned && factor2Earned) ? 100 : (factor1Earned ? 70 : 0)),
+                mainQuestion: mainQuestion,
+                sessionDescription: sessionDescription,
+                description: sessionDescription,
+                sessionTitle: sessionTitle,
+                title: sessionTitle || store.submissions[idx].title,
+                aiRemarks: finalRemarks,
+                remarks: finalRemarks,
+                transcription: videoTranscript,
+                videoUrl: topVideoUrl || store.submissions[idx].videoUrl || '',
+                answers: subAnswers,
+                submittedAt: store.submissions[idx].submittedAt || sub.submittedAt || new Date().toISOString(),
+                evaluatedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            store.submissionsRevision = Date.now();
+            saveStore();
+        }
+
+        // Direct TagMango Wallet Sync
+        const targetFanId = resolveTargetFanId(sub);
+        const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
+
+        const pointDescription = `[Video Verified] Milestone-${msId} Day-${dayNum} Immerse Check-in`;
+        if (finalLcReward > 0 && targetFanId && /^[0-9a-fA-F]{24}$/.test(targetFanId)) {
+            console.log(`[Assigning TagMango Points for Immerse] FanId: ${targetFanId} (${normalizedEmail}), Points: ${finalLcReward}, Desc: "${pointDescription}"`);
+            try {
+                const tmRes = await assignTagMangoPoints(targetFanId, finalLcReward, pointDescription, 'levelup-challenge');
+                console.log(`[TagMango Immerse Result for ${targetFanId}]:`, tmRes);
+            } catch(tmErr) {
+                console.warn(`[TagMango Immerse Assignment Warning for ${targetFanId}]:`, tmErr.message);
+            }
+        } else {
+            console.log(`[TagMango Skipped for Immerse] Points: ${finalLcReward}, FanId: ${targetFanId}`);
+        }
+        return;
+    }
+
+    // -------------------------------------------------------------
+    // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION (DIP)
     // -------------------------------------------------------------
     const allConfigs = getMilestoneConfigsFromDb();
     const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
@@ -1490,27 +1712,8 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     // -------------------------------------------------------------
     // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
     // -------------------------------------------------------------
-    let targetFanId = sub.fanId;
+    const targetFanId = resolveTargetFanId(sub) || '68a805cf8c448ccc00abc23f';
     const normalizedEmail = (sub.userEmail || '').toLowerCase().trim();
-
-    if (normalizedEmail === 'y.saidigitalexpert@gmail.com') {
-        targetFanId = '68fb27f707ccf937418d41c6';
-    } else if (normalizedEmail === 'engineersai02@gmail.com') {
-        targetFanId = '68a805cf8c448ccc00abc23f';
-    } else if (normalizedEmail === 'engineersai.y@gmail.com') {
-        targetFanId = '68d390062f70f039556c0364';
-    } else if (!targetFanId || !/^[0-9a-fA-F]{24}$/.test(targetFanId)) {
-        const matched = backendActualUsers.find(u =>
-            (u.email && u.email.toLowerCase().trim() === normalizedEmail) ||
-            (u.phone && sub.userPhone && String(u.phone).replace(/\D/g, '').endsWith(String(sub.userPhone).replace(/\D/g, ''))) ||
-            (u.name && sub.userName && u.name.toLowerCase().trim() === sub.userName.toLowerCase().trim())
-        );
-        if (matched && matched._id) {
-            targetFanId = matched._id;
-        } else {
-            targetFanId = '68a805cf8c448ccc00abc23f';
-        }
-    }
 
     const pointDescription = `[AI Approved] Milestone-${msId} Day-${dayNum} ${modType} Check-in`;
 

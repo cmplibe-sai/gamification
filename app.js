@@ -5095,6 +5095,11 @@ function renderAdminCheckinsList() {
                 <button onclick="selectAdminConfigDate()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold">Load</button>
             </div>
             <p class="text-[10px] text-slate-500 mt-2">These configs apply strictly to <b>cMPLi ${activeAdminModule}</b>.</p>
+            ${activeAdminModule === 'immerse' ? `
+                <button onclick="generateMilestoneImmerseDates()" class="mt-2.5 w-full py-2 px-3 bg-purple-900/40 hover:bg-purple-900/60 text-purple-300 rounded-xl border border-purple-500/30 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                    <i class="fas fa-calendar-alt"></i> Generate Mon-Wed-Fri Schedule
+                </button>
+            ` : ''}
         </div>
         <div class="space-y-1 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
     `;
@@ -5179,7 +5184,9 @@ function renderAdminCohortSubmissions() {
         });
         const earnedLcs = calculatedLcs;
 
-        let completionPct = (activeAdminMilestoneId || 1) === 1 ? Math.round(((subs.filter(s => s.type === 'dip' && Number(s.day) <= 21).length) / 21) * 100) : 100;
+        const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule) && String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1));
+        const effectiveMax = (activeAdminModule === 'immerse') ? ((activeAdminMilestoneId || 1) === 1 ? 9 : 12) : ((activeAdminMilestoneId || 1) === 1 ? 21 : 30);
+        let completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
         let isApproved = mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`] === true;
         const isPending = completionPct >= 90 && !isApproved; 
         
@@ -5216,8 +5223,11 @@ function renderAdminCohortSubmissions() {
         projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []);
         maxDays = projectHeaders.length; 
     } else if (activeAdminMilestoneId === 2 || activeAdminMilestoneId === 3) {
-        if (activeAdminModule === 'dip' || activeAdminModule === 'immerse' || activeAdminModule === 'pod') maxDays = 30;
+        if (activeAdminModule === 'dip' || activeAdminModule === 'pod') maxDays = 30;
+        if (activeAdminModule === 'immerse') maxDays = 12;
         if (activeAdminModule === 'ios') maxDays = 15; 
+    } else if (activeAdminModule === 'immerse') {
+        maxDays = 9;
     }
     
     let theadHtml = `
@@ -5763,18 +5773,21 @@ function loadAdminCheckinEditor(dateKey) {
     
     const savedConfig = moduleConfig || {
         title: '',
+        mainQuestion: '',
         articleText: '',
         description: '',
         lcOnTime: activeAdminMilestoneId === 1 ? 33 : 133,
-        lcLate: 3,
+        lcLate: (activeAdminModule === 'immerse') ? 0 : 3,
         startTime: '05:00',
-        endTime: '17:00',
+        endTime: (activeAdminModule === 'immerse') ? '23:59' : '17:00',
         audioUrl: '',
         audioTitle: 'cMPLi POD Morning Insights',
         questions: (activeAdminModule === 'pod') ? [
             { title: "What is the #1 driver of long-term habit consistency?", type: "mcq", options: ["Intrinsic Identity Shift & Daily Micro-actions", "External Pressure only", "Random Motivation Spikes", "Waiting for perfect conditions"], correctOption: 0, pts: 11 },
             { title: "What primary method was recommended for handling unexpected schedule disruptions?", type: "mcq", options: ["If-Then Implementation Intentions", "Abandoning the week goal", "Skipping without reflection", "Immediate panic"], correctOption: 0, pts: 11 },
             { title: "Which mindset separates a Challenge Embracer from a passive student?", type: "mcq", options: ["Viewing friction & feedback as fuel for growth", "Avoiding all challenging tasks", "Seeking quick shortcuts", "Focusing solely on certificates"], correctOption: 0, pts: 11 }
+        ] : (activeAdminModule === 'immerse') ? [
+            { title: "Record your video reflection answering today's main question.", type: "video" }
         ] : [
             { title: 'Key Reflection Question 1', type: 'text' },
             { title: 'Upload Proof of Work / Audio Voice Note (3-4 mins)', type: 'audio' }
@@ -5895,7 +5908,134 @@ function loadAdminCheckinEditor(dateKey) {
         return;
     }
 
-    // --- CASE B: DIP & IMMERSE (STANDARD CHECK-IN EDITOR) ---
+    // --- CASE C: cMPLi IMMERSE MODULE (VIDEO CHECK-IN + ONE MAIN QUESTION + ON-TIME LCS ONLY) ---
+    if (activeAdminModule === 'immerse') {
+        const immerseQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions) && savedConfig.questions.length > 0)
+            ? savedConfig.questions
+            : [{ title: savedConfig.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }];
+
+        editor.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="badge-pill bg-purple-600/30 text-purple-300 text-[10px] font-bold uppercase"><i class="fas fa-video mr-1"></i> cMPLi IMMERSE Setup</span>
+                        <span class="badge-pill bg-slate-800 text-slate-300 text-[10px]">Mon-Wed-Fri Schedule</span>
+                    </div>
+                    <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                    <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
+                    <p class="text-xs mt-1.5 text-slate-400">Set up daily video check-in. Students answer the One Main Question via live camera or video upload.</p>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    ${isEditable ? `<button onclick="duplicateAdminCheckinConfig('${dateKey}')" class="btn-secondary py-2 px-3 text-xs"><i class="fas fa-copy mr-1"></i> Duplicate</button>` : ''}
+                    <button id="btnSaveConfig" onclick="saveAdminImmerseCheckinConfig('${dateKey}')" class="btn-primary py-2 px-4 text-xs bg-purple-600 hover:bg-purple-500">
+                        <i class="fas fa-save mr-1.5"></i> Save Immerse Setup
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2-Factor Scoring & Evaluation Rules Banner -->
+            <div class="glass-card p-4 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center text-lg border border-purple-500/40 shrink-0 shadow-inner">
+                        <i class="fas fa-award"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-xs font-bold text-white uppercase tracking-wider">2-Factor Reward Breakdown</h6>
+                        <p class="text-[11px] text-slate-300">
+                            <strong>Factor 1 (70% Completion):</strong> Awarded upon submitting the video reflection attempt.<br/>
+                            <strong>Factor 2 (30% Relatability):</strong> Awarded by AI checking alignment with the Main Question (min 10 words spoken).
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="badge-pill bg-purple-900/50 text-purple-300 border border-purple-600/40 text-xs font-bold">70% Attempt</span>
+                    <span class="badge-pill badge-emerald text-xs font-bold">30% Relatability</span>
+                </div>
+            </div>
+
+            <!-- Rewards & Interval Window (On-Time LCs Only) -->
+            <div class="glass-card p-5 border-slate-800 mb-6 space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-clock text-purple-400"></i> Rewards & Interval Window (On-Time Only)
+                    </h5>
+                    <span class="text-[10px] text-purple-400 font-semibold">No Late LCs for Immerse</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">LC Reward (On Time Only)</label>
+                        <input type="number" id="configLcOnTime" value="${savedConfig.lcOnTime || 33}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-mono font-bold" ${disableAttr} />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Interval Window Start</label>
+                        <input type="time" id="configStartTime" value="${savedConfig.startTime || '05:00'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-mono" ${disableAttr} />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">Interval Window End</label>
+                        <input type="time" id="configEndTime" value="${savedConfig.endTime || '23:59'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-mono" ${disableAttr} />
+                    </div>
+                </div>
+            </div>
+
+            <!-- ONE MAIN QUESTION, TITLE & DESCRIPTION (CORE IMMERSE PROMPT & CONTEXT) -->
+            <div class="glass-card p-5 border-purple-500/30 mb-6 space-y-4 bg-slate-950/70 rounded-2xl">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <div>
+                        <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-question-circle text-purple-400"></i> Session Title, Description & Main Reflection Question
+                        </h5>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Learners answer the main question in relation to this session context. AI models evaluate relatability against both the main question and description.</p>
+                    </div>
+                    <span class="badge-pill bg-purple-950 text-purple-300 border border-purple-800/40 text-[10px] font-bold shrink-0">Required for 30% Relatability</span>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">Check-in Session Title</label>
+                    <input type="text" id="configDayTitle" value="${savedConfig.title || ''}" placeholder="e.g. Day 1: Foundational Immersion & Systems Thinking" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-bold" ${disableAttr} />
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">Session Context / Description</label>
+                    <p class="text-[11px] text-slate-400 mb-1.5">Provide context, background scenario, key frameworks, or instructions for this session. The AI model checks if the student's answer relates to this description.</p>
+                    <textarea id="configDayDescription" rows="3" placeholder="Enter session background, reference concepts, or context here (e.g. In this session, we explored mental models, leverage points, and first-principles reasoning. When learners answer the prompt, their reflection will be scored on how well it connects to these concepts)..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:border-purple-500 leading-relaxed custom-scrollbar font-normal" ${disableAttr}>${savedConfig.description || ''}</textarea>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">The One Main Question <span class="text-rose-400">*</span></label>
+                    <p class="text-[11px] text-slate-400 mb-1.5">Students will record their video reflection answering this core prompt. Speech transcription is evaluated against this question and the session description.</p>
+                    <textarea id="configMainQuestion" rows="3" placeholder="Enter the main reflection question / topic prompt here (e.g. Explain how you applied the mental model of second-order thinking to your current project and what roadblocks you resolved)..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:border-purple-500 leading-relaxed custom-scrollbar font-medium" ${disableAttr}>${savedConfig.mainQuestion || savedConfig.title || ''}</textarea>
+                </div>
+            </div>
+
+            <!-- CUSTOM QUESTIONS (VIDEO, AUDIO, TEXT, DOC) -->
+            <div class="glass-card p-5 border-slate-800 space-y-4">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <div>
+                        <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-list-check text-purple-400"></i> Check-in Form Questions
+                        </h5>
+                        <p class="text-[11px] text-slate-400">Add custom questions (Video file, Audio file, Text box, Document upload).</p>
+                    </div>
+                    ${isEditable ? `<button type="button" onclick="addAdminQuestionField()" class="btn-secondary py-1.5 px-3 text-xs text-purple-300 border-purple-500/30"><i class="fas fa-plus mr-1"></i> Add Question</button>` : ''}
+                </div>
+                <div id="adminQuestionsContainer" class="space-y-3">
+                    ${immerseQuestions.map(q => `
+                        <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
+                            <i class="fas fa-grip-vertical text-slate-500 ${isEditable ? 'cursor-move' : ''}"></i>
+                            <input type="text" value="${q.title}" placeholder="Enter question prompt..." class="flex-1 bg-transparent border-none outline-none text-xs text-white font-medium focus:ring-1 ring-purple-500 rounded px-2 py-1" ${disableAttr}>
+                            <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-purple-500" ${disableAttr}>
+                                <option value="video" ${q.type === 'video' ? 'selected' : ''}>Video File (.mp4 / Camera)</option>
+                                <option value="text" ${q.type === 'text' ? 'selected' : ''}>Text Box</option>
+                                <option value="audio" ${q.type === 'audio' ? 'selected' : ''}>Audio File (.mp3 / Voice)</option>
+                                <option value="doc" ${q.type === 'doc' ? 'selected' : ''}>Document (.pdf, .doc)</option>
+                            </select>
+                            ${isEditable ? `<button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-300 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // --- CASE B: cMPLi DIP MODULE (STANDARD CHECK-IN EDITOR) ---
     editor.innerHTML = `
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
             <div>
@@ -6047,7 +6187,137 @@ function saveAdminCheckinConfig(dateKey) {
         }, 1500);
     }
 }
+window.saveAdminCheckinConfig = saveAdminCheckinConfig;
 
+// -------------------------------------------------------------
+// cMPLi IMMERSE: SAVE ADMIN CONFIGURATION TO BACKEND & LOCAL STORAGE
+// -------------------------------------------------------------
+function saveAdminImmerseCheckinConfig(dateKey) {
+    if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
+    if (!customMilestoneConfigs[activeAdminMilestoneId]['immerse']) customMilestoneConfigs[activeAdminMilestoneId]['immerse'] = {};
+
+    const mainQuestion = document.getElementById('configMainQuestion')?.value.trim() || '';
+    const dayTitle = document.getElementById('configDayTitle')?.value.trim() || mainQuestion || 'cMPLi Immerse Reflection';
+    const dayDescription = document.getElementById('configDayDescription')?.value.trim() || '';
+    const lcOnTime = parseInt(document.getElementById('configLcOnTime')?.value, 10) || 33;
+    const startTime = document.getElementById('configStartTime')?.value || '05:00';
+    const endTime = document.getElementById('configEndTime')?.value || '23:59';
+
+    const questions = [];
+    const questionRows = document.querySelectorAll('#adminQuestionsContainer .group');
+    questionRows.forEach(row => {
+        const titleInput = row.querySelector('input[type="text"]');
+        const typeSelect = row.querySelector('select');
+        if (titleInput && typeSelect && titleInput.value.trim() !== '') {
+            questions.push({ title: titleInput.value.trim(), type: typeSelect.value });
+        }
+    });
+
+    if (questions.length === 0) {
+        questions.push({
+            title: mainQuestion || "Record your video reflection answering today's main question.",
+            type: "video"
+        });
+    }
+
+    const dayConfig = {
+        date: dateKey,
+        title: dayTitle,
+        description: dayDescription,
+        mainQuestion: mainQuestion,
+        articleText: dayDescription || mainQuestion,
+        lcOnTime: lcOnTime,
+        lcLate: 0, // Ontime LCs only
+        startTime: startTime,
+        endTime: endTime,
+        questions: questions
+    };
+
+    customMilestoneConfigs[activeAdminMilestoneId]['immerse'][dateKey] = dayConfig;
+    try {
+        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    } catch(e) {
+        console.warn('localStorage save warning:', e);
+    }
+
+    apiFetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: activeAdminMilestoneId,
+            moduleName: 'immerse',
+            dateKey: dateKey,
+            config: dayConfig,
+            allConfigs: customMilestoneConfigs
+        })
+    }).then(r => r.json()).then(data => {
+        console.log('✅ Immerse Milestone configs synced to server:', data);
+    }).catch(e => console.error('Server sync error for Immerse:', e));
+
+    renderAdminCheckinsList();
+
+    const btn = document.getElementById('btnSaveConfig');
+    if (btn) {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved Immerse Day!`;
+        btn.classList.replace('bg-purple-600', 'bg-emerald-600');
+        setTimeout(() => {
+            btn.innerHTML = oldHtml;
+            btn.classList.replace('bg-emerald-600', 'bg-purple-600');
+        }, 2000);
+    }
+}
+window.saveAdminImmerseCheckinConfig = saveAdminImmerseCheckinConfig;
+
+function generateMilestoneImmerseDates() {
+    const msId = activeAdminMilestoneId || 1;
+    if (!customMilestoneConfigs[msId]) customMilestoneConfigs[msId] = {};
+    if (!customMilestoneConfigs[msId]['immerse']) customMilestoneConfigs[msId]['immerse'] = {};
+
+    const startDateStr = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[msId]) || getLocalDateKey(new Date());
+    let startDate = new Date(startDateStr + 'T00:00:00');
+    if (isNaN(startDate.getTime())) startDate = new Date();
+    startDate.setHours(0,0,0,0);
+
+    const totalSessions = (msId === 1) ? 9 : 12;
+    for (let d = 1; d <= totalSessions; d++) {
+        const dObj = getMilestoneSessionDate(startDate, d, 'immerse');
+        const dKey = getLocalDateKey(dObj);
+        if (!customMilestoneConfigs[msId]['immerse'][dKey]) {
+            customMilestoneConfigs[msId]['immerse'][dKey] = {
+                date: dKey,
+                title: `Session ${d}: Video Reflection`,
+                description: `Context and background topics for Session ${d}. Learners reflect on implementation milestones, mental models, challenges faced, and lessons learned.`,
+                mainQuestion: `Explain your core implementation insights for Session ${d} and the architectural roadblocks you solved.`,
+                lcOnTime: 33,
+                lcLate: 0,
+                startTime: '05:00',
+                endTime: '23:59',
+                questions: [
+                    { title: `Record your video reflection answering Session ${d}'s main question.`, type: 'video' }
+                ]
+            };
+        }
+    }
+
+    try {
+        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+    } catch(e) {}
+
+    apiFetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            milestoneId: msId,
+            moduleName: 'immerse',
+            allConfigs: customMilestoneConfigs
+        })
+    }).catch(() => {});
+
+    renderAdminCheckinsList();
+    if (activeAdminDateKey) loadAdminCheckinEditor(activeAdminDateKey);
+}
+window.generateMilestoneImmerseDates = generateMilestoneImmerseDates;
 
 function duplicateAdminCheckinConfig(sourceDateKey) {
     const sourceConfig = (customMilestoneConfigs[activeAdminMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule])
@@ -6060,7 +6330,13 @@ function duplicateAdminCheckinConfig(sourceDateKey) {
     }
     
     let nextDate = new Date(sourceDateKey);
-    nextDate.setDate(nextDate.getDate() + 1);
+    if (activeAdminModule === 'immerse') {
+        do {
+            nextDate.setDate(nextDate.getDate() + 1);
+        } while (nextDate.getDay() !== 1 && nextDate.getDay() !== 3 && nextDate.getDay() !== 5);
+    } else {
+        nextDate.setDate(nextDate.getDate() + 1);
+    }
     let defaultTarget = getLocalDateKey(nextDate);
 
     const targetStr = prompt(`Duplicate config to which Date?\n(Format: YYYY-MM-DD)`, defaultTarget);
@@ -7902,6 +8178,38 @@ window.handleVideoFileSelect = handleVideoFileSelect;
 // ==============================================================
 // 3. DYNAMIC CHECK-IN SUBMISSION MODAL
 // ==============================================================
+function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
+    const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
+    let cardDate = new Date(milestoneStartDate.getTime());
+    if (isImmerse) {
+        // MON-WED-FRI SCHEDULE: Advance to first Mon(1), Wed(3), or Fri(5)
+        while (cardDate.getDay() !== 1 && cardDate.getDay() !== 3 && cardDate.getDay() !== 5) {
+            cardDate.setDate(cardDate.getDate() + 1);
+        }
+        let daysAdded = 0;
+        let targetOffset = (Number(dayNum) || 1) - 1;
+        while (daysAdded < targetOffset) {
+            cardDate.setDate(cardDate.getDate() + 1);
+            const dow = cardDate.getDay();
+            if (dow === 1 || dow === 3 || dow === 5) {
+                daysAdded++;
+            }
+        }
+    } else {
+        // MON-SAT SCHEDULE (Skip Sunday)
+        let daysAdded = 0;
+        let targetOffset = (Number(dayNum) || 1) - 1;
+        while (daysAdded < targetOffset) {
+            cardDate.setDate(cardDate.getDate() + 1);
+            if (cardDate.getDay() !== 0) {
+                daysAdded++;
+            }
+        }
+    }
+    return cardDate;
+}
+window.getMilestoneSessionDate = getMilestoneSessionDate;
+
 function openSubmissionModal(dayNum, moduleName) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
@@ -7914,16 +8222,10 @@ function openSubmissionModal(dayNum, moduleName) {
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
 
-    // Calculate Mon-Sat card date
-    let cardDate = new Date(milestoneStartDate.getTime());
-    let daysAdded = 0;
-    let targetOffset = (Number(dayNum) || 1) - 1;
-    while (daysAdded < targetOffset) {
-        cardDate.setDate(cardDate.getDate() + 1);
-        if (cardDate.getDay() !== 0) {
-            daysAdded++;
-        }
-    }
+    const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
+
+    // Calculate session card date (MWF for Immerse; Mon-Sat for DIP)
+    const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
     const cardDateKey = getLocalDateKey(cardDate);
     const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -7934,29 +8236,38 @@ function openSubmissionModal(dayNum, moduleName) {
     const savedDayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName] && (customMilestoneConfigs[msId][moduleName][cardDateKey] || customMilestoneConfigs[msId][moduleName][todayKey])) || {};
     const dayConfig = {
         title: savedDayCfg.title || '',
+        mainQuestion: savedDayCfg.mainQuestion || savedDayCfg.title || '',
         articleText: savedDayCfg.articleText || savedDayCfg.description || '',
         description: savedDayCfg.description || '',
         lcOnTime: savedDayCfg.lcOnTime || (msId === 1 ? 33 : 133),
-        lcLate: savedDayCfg.lcLate || 3,
+        lcLate: isImmerse ? 0 : (savedDayCfg.lcLate || 3),
         startTime: savedDayCfg.startTime || '05:00',
-        endTime: savedDayCfg.endTime || '17:00',
-        questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : [
-            { title: "What key insight or reflection did you gain today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
-        ]
+        endTime: savedDayCfg.endTime || (isImmerse ? '23:59' : '17:00'),
+        questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : (
+            isImmerse ? [
+                { title: savedDayCfg.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }
+            ] : [
+                { title: "What key insight or reflection did you gain today?", type: "text" },
+                { title: "Upload Audio Reflection / Voice Note (3-4 mins)", type: "audio" }
+            ]
+        )
     };
 
     const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
         ? dayConfig.questions
-        : [
-            { title: "What did you learn today?", type: "text" },
-            { title: "Upload Audio Reflection / Voice Note", type: "audio" }
-        ];
+        : (
+            isImmerse ? [
+                { title: dayConfig.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }
+            ] : [
+                { title: "What did you learn today?", type: "text" },
+                { title: "Upload Audio Reflection / Voice Note", type: "audio" }
+            ]
+        );
 
     const lcOnTime = Number(dayConfig.lcOnTime) || (msId === 1 ? 33 : 133);
-    const lcLate = Number(dayConfig.lcLate) || 3;
+    const lcLate = isImmerse ? 0 : (Number(dayConfig.lcLate) || 3);
     const startTime = dayConfig.startTime || '05:00';
-    const endTime = dayConfig.endTime || '17:00';
+    const endTime = dayConfig.endTime || (isImmerse ? '23:59' : '17:00');
     const isTest = (typeof isTestUser === 'function') && isTestUser();
 
     const oldModal = document.getElementById('submissionModalDynamic');
@@ -7970,13 +8281,16 @@ function openSubmissionModal(dayNum, moduleName) {
                 <div class="flex justify-between items-start border-b border-slate-800 pb-4">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="badge-pill badge-indigo text-[10px] font-bold uppercase"><i class="fas fa-sun text-amber-400 mr-1"></i> cMPLi ${(moduleName || 'dip').toUpperCase()}</span>
+                            <span class="badge-pill ${isImmerse ? 'bg-purple-600/30 text-purple-300' : 'badge-indigo'} text-[10px] font-bold uppercase">
+                                <i class="fas ${isImmerse ? 'fa-video text-purple-400' : 'fa-sun text-amber-400'} mr-1"></i> cMPLi ${(moduleName || 'dip').toUpperCase()}
+                            </span>
                             <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-bold">Day ${dayNum}</span>
+                            ${isImmerse ? '<span class="badge-pill bg-purple-950 text-purple-300 border border-purple-800/40 text-[10px] font-bold">MWF Schedule</span>' : ''}
                         </div>
-                        <h3 class="text-2xl font-extrabold text-white font-heading">${ms.name}</h3>
+                        <h3 class="text-2xl font-extrabold text-white font-heading">${(isImmerse && dayConfig.title) ? dayConfig.title : ms.name}</h3>
                         
                         <p class="text-xs text-slate-400 mt-0.5">
-                            Date: <strong class="text-slate-200">${displayDate}${(dayConfig.title || dayConfig.description) ? ` - ${dayConfig.title || dayConfig.description}` : ''}</strong>
+                            ${ms.name} • Date: <strong class="text-slate-200">${displayDate}</strong>
                         </p>
                     </div>
                     <button onclick="document.getElementById('submissionModalDynamic')?.remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
@@ -7984,7 +8298,65 @@ function openSubmissionModal(dayNum, moduleName) {
                     </button>
                 </div>
 
-                <!-- Reward and Window Bar -->
+                ${isImmerse ? `
+                <!-- 2-FACTOR SCORING RULES BANNER FOR IMMERSE -->
+                <div class="glass-card p-4 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center text-lg border border-purple-500/40 shrink-0 shadow-inner">
+                            <i class="fas fa-award"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-xs font-bold text-white uppercase tracking-wider">2-Factor Immerse Reward Rule</h6>
+                            <p class="text-[11px] text-slate-300">
+                                <strong>Factor 1:</strong> 70% of on-time LCs awarded for video submission attempt.<br/>
+                                <strong>Factor 2:</strong> 30% of on-time LCs awarded for speaking min. 10 words answering the Main Question & Session Context.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="badge-pill bg-purple-900/50 text-purple-300 border border-purple-600/40 text-xs font-bold">70% Attempt</span>
+                        <span class="badge-pill badge-emerald text-xs font-bold">30% Relatability</span>
+                    </div>
+                </div>
+
+                ${dayConfig.description ? `
+                <!-- SESSION CONTEXT & DESCRIPTION HIGHLIGHT -->
+                <div class="p-4 bg-slate-950/70 rounded-2xl border border-purple-500/30 space-y-1.5 shadow-inner">
+                    <div class="flex items-center gap-2">
+                        <span class="badge-pill bg-purple-900/40 text-purple-300 text-[10px] font-bold uppercase tracking-wider">
+                            <i class="fas fa-align-left mr-1"></i> Session Context & Description
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed font-normal whitespace-pre-line">${dayConfig.description}</p>
+                </div>
+                ` : ''}
+
+                <!-- ONE MAIN QUESTION HIGHLIGHT -->
+                ${dayConfig.mainQuestion ? `
+                <div class="p-4 bg-purple-950/30 rounded-2xl border border-purple-500/40 space-y-1.5 shadow-inner">
+                    <div class="flex items-center gap-2">
+                        <span class="badge-pill bg-purple-600/30 text-purple-300 text-[10px] font-bold uppercase tracking-wider">
+                            <i class="fas fa-question-circle mr-1"></i> Today's Main Reflection Question
+                        </span>
+                    </div>
+                    <h4 class="text-sm font-bold text-white leading-relaxed font-heading">${dayConfig.mainQuestion}</h4>
+                    <p class="text-[11px] text-slate-400">Record a video response addressing this question in relation to the session context above to earn the full 33 LCs.</p>
+                </div>
+                ` : ''}
+
+                <!-- Reward and Window Bar (On-Time Only for Immerse) -->
+                <div class="grid grid-cols-2 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
+                    <div>
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">On-Time Reward (Only)</span>
+                        <span class="font-mono font-bold text-emerald-400">+${lcOnTime} LCs Max</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Window</span>
+                        <span class="font-mono font-bold text-slate-300">${startTime} - ${endTime}</span>
+                    </div>
+                </div>
+                ` : `
+                <!-- Reward and Window Bar for DIP -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
                     <div>
                         <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">On-Time Reward</span>
@@ -7999,6 +8371,7 @@ function openSubmissionModal(dayNum, moduleName) {
                         <span class="font-mono font-bold text-slate-300">${startTime} - ${endTime}</span>
                     </div>
                 </div>
+                `}
 
                 <!-- Questions Form -->
                 <form id="activeCheckinForm" onsubmit="event.preventDefault(); submitCheckinForm(${dayNum}, '${moduleName}', '${cardDateKey}', ${lcOnTime}, ${lcLate}, '${endTime}')" class="space-y-5">
@@ -8099,8 +8472,8 @@ function openSubmissionModal(dayNum, moduleName) {
                             <button type="button" onclick="document.getElementById('submissionModalDynamic')?.remove()" class="btn-secondary py-2.5 px-4 text-xs font-bold flex-1 sm:flex-initial">
                                 Cancel
                             </button>
-                            <button type="submit" id="btnSubmitCheckinForm" class="btn-primary py-2.5 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 flex-1 sm:flex-initial">
-                                <i class="fas fa-paper-plane mr-1.5"></i> Submit Check-in
+                            <button type="submit" id="btnSubmitCheckinForm" class="btn-primary py-2.5 px-6 text-xs font-bold ${isImmerse ? 'bg-purple-600 hover:bg-purple-500' : 'bg-emerald-600 hover:bg-emerald-500'} flex-1 sm:flex-initial">
+                                <i class="fas ${isImmerse ? 'fa-video' : 'fa-paper-plane'} mr-1.5"></i> ${isImmerse ? 'Submit Video Reflection' : 'Submit Check-in'}
                             </button>
                         </div>
                     </div>
@@ -8227,7 +8600,14 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
     `;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    const stages = [
+    const isImmerseEval = (window._lastCheckinPayload && String(window._lastCheckinPayload.type || window._lastCheckinPayload.moduleType || '').toLowerCase() === 'immerse');
+    const stages = isImmerseEval ? [
+        { pct: 15, stage: "Stage 1 of 5", timeRem: "~15s remaining", text: "Stage 1/5: Uploading Video Reflection to Media Vault...", msg: "Encrypting video recording payload and syncing with server vault...", icon: "fa-upload" },
+        { pct: 38, stage: "Stage 2 of 5", timeRem: "~11s remaining", text: "Stage 2/5: AssemblyAI Transcribing Video Speech...", msg: "Converting spoken video reflection to text using neural speech model...", icon: "fa-microphone-lines" },
+        { pct: 65, stage: "Stage 3 of 5", timeRem: "~7s remaining", text: "Stage 3/5: Measuring Relatability to Main Question...", msg: "Checking conceptual alignment and articulation against today's main question...", icon: "fa-brain" },
+        { pct: 88, stage: "Stage 4 of 5", timeRem: "~3s remaining", text: "Stage 4/5: Calculating 2-Factor LC Score...", msg: "Verifying 70% video attempt award and checking 30% relatability threshold (min 10 words)...", icon: "fa-award" },
+        { pct: 100, stage: "Stage 5 of 5", timeRem: "Finalizing", text: "Stage 5/5: Awaiting Seal & Wallet Credit...", msg: "Applying evaluator verification and syncing TagMango wallet...", icon: "fa-check-circle" }
+    ] : [
         { pct: 15, stage: "Stage 1 of 5", timeRem: "~15s remaining", text: "Stage 1/5: Uploading Audio to Analysis Vault...", msg: "Encrypting audio stream and syncing payload with server vault...", icon: "fa-upload" },
         { pct: 38, stage: "Stage 2 of 5", timeRem: "~11s remaining", text: "Stage 2/5: AssemblyAI Transcribing Audio Speech...", msg: "Converting spoken voice notes to text using neural speech model...", icon: "fa-microphone-lines" },
         { pct: 65, stage: "Stage 3 of 5", timeRem: "~7s remaining", text: "Stage 3/5: Comparing Spoken Insights with Day Rubric...", msg: "Measuring conceptual overlap against today's configured lecture description...", icon: "fa-brain" },
@@ -8262,6 +8642,27 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
         window._evalCallback = () => {
             if (typeof onDoneCallback === 'function') onDoneCallback(finalData);
         };
+
+        if (isImmerseEval) {
+            // IMMERSE 2-FACTOR VERIFICATION MODAL
+            if (glow) glow.className = "absolute inset-0 rounded-full bg-purple-500/40 animate-pulse";
+            if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-purple-950 to-purple-700 text-purple-300 rounded-full flex items-center justify-center text-4xl border-2 border-purple-400 shadow-2xl shadow-purple-500/50";
+            if (robotIcon) robotIcon.className = "fas fa-video text-purple-300 scale-110";
+
+            if (title) title.innerHTML = '<span class="text-purple-400 font-extrabold">Video Reflection Verified!</span>';
+            if (subtitle) subtitle.innerHTML = `2-Factor Evaluation Completed — <strong>+${pts} LCs</strong> credited to your wallet.`;
+
+            if (stageText) stageText.innerHTML = `<i class="fas fa-check-circle text-purple-400 mr-1"></i> Verified (+${pts} LCs Earned)`;
+            if (statusBox) statusBox.className = "p-3.5 bg-purple-950/60 rounded-xl border border-purple-500/50 flex items-start gap-2.5 text-purple-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
+            if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-purple-300 block">AI Evaluation Feedback:</strong>${rawRemarks.replace(/\n/g, '<br/>')}</div>`;
+
+            if (btn) {
+                btn.disabled = false;
+                btn.className = "w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-sm transition-all shadow-xl shadow-purple-600/30 cursor-pointer animate-pulse";
+                btn.innerHTML = '<i class="fas fa-check-double mr-2"></i> Done & View Completed Video Check-in';
+            }
+            return;
+        }
 
         if (isMismatch) {
             // Below 50% threshold or Mismatch (0 LCs)
@@ -8517,29 +8918,50 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             const previewEl = document.getElementById(`video_preview_${idx}`);
             const fileInp = document.getElementById(`checkin_input_${idx}`);
             videoUrl = recData || (previewEl?.src && !previewEl.src.includes('about:') ? previewEl.src : '') || (fileInp?.files?.[0]?.name || '');
-            val = videoUrl ? 'Video Reflection Recorded & Verified' : 'Video Reflection submitted';
+
+            // Upload base64 video to server disk to get clean static URL for AssemblyAI
+            if (videoUrl && videoUrl.startsWith('data:')) {
+                try {
+                    const upRes = await apiFetch('/api/upload-media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dataUrl: videoUrl, prefix: `video_q${idx + 1}` })
+                    }).then(r => r.json());
+                    if (upRes && upRes.success && upRes.url) {
+                        videoUrl = upRes.url;
+                        if (previewEl) previewEl.src = upRes.url;
+                    }
+                } catch(e) {
+                    console.warn('Video upload error:', e);
+                }
+            }
+
+            val = videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (videoBlob ? URL.createObjectURL(videoBlob) : '') || 'Video Reflection submitted';
         } else {
             const inp = document.getElementById(`checkin_input_${idx}`);
             val = inp ? inp.value.trim() : '';
         }
 
+        const exactVideoVal = (qType === 'video') ? (videoUrl || (window._recordedVideoData && window._recordedVideoData[idx]) || (videoBlob ? URL.createObjectURL(videoBlob) : '')) : '';
+
         answers.push({
             title: qTitle,
             question: qTitle,
-            answer: val || 'Completed',
-            value: val || 'Completed',
+            answer: exactVideoVal ? 'Video Reflection Recorded & Verified' : (val || 'Completed'),
+            value: exactVideoVal || val || 'Completed',
             type: qType,
             audioUrl: audioUrl,
-            videoUrl: videoUrl,
+            videoUrl: videoUrl || exactVideoVal,
             transcription: (window._liveTranscripts && window._liveTranscripts[idx]) || ''
         });
     }
 
-    // Check on-time vs late
+    // Check on-time vs late (Immerse uses ontime LCs only)
+    const isImmerseMod = String(moduleName || '').toLowerCase() === 'immerse';
     const now = new Date();
     const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    const isLate = endTime ? (currentHHMM > endTime) : false;
-    const basePoints = isLate ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
+    const isLate = (!isImmerseMod && endTime) ? (currentHHMM > endTime) : false;
+    const basePoints = (isLate && !isImmerseMod) ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
 
     const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
     const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
@@ -8563,6 +8985,12 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         lcReward: basePoints,
         originalLcReward: basePoints,
         isLate: isLate,
+        title: dayConfig.title || '',
+        sessionTitle: dayConfig.title || '',
+        description: dayConfig.description || '',
+        sessionDescription: dayConfig.description || '',
+        mainQuestion: dayConfig.mainQuestion || '',
+        videoUrl: (answers.find(a => a.videoUrl)?.videoUrl) || videoUrl || '',
         answers: answers,
         responses: answers
     };
@@ -8797,20 +9225,13 @@ function switchMilestoneTab(moduleName, btnElement) {
     const allUserSubs = getUserSubmissionsByUserId(currentUser);
     const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId || 1));
 
-    let totalSessions = (activeMilestoneId === 1) ? 21 : 30;
+    const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
+    let totalSessions = isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30);
     let cardsHtml = '';
 
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        // MON-SAT SCHEDULE CALCULATION (Skip Sundays)
-        let cardDate = new Date(milestoneStartDate.getTime());
-        let daysAdded = 0;
-        let targetOffset = dayNum - 1;
-        while (daysAdded < targetOffset) {
-            cardDate.setDate(cardDate.getDate() + 1);
-            if (cardDate.getDay() !== 0) { // Skip Sunday
-                daysAdded++;
-            }
-        }
+        // Compute session date (MWF for Immerse; Mon-Sat for DIP/POD)
+        const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
         const cardDateKey = getLocalDateKey(cardDate);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
@@ -8823,7 +9244,7 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeAdminMilestoneId || activeMilestoneId]?.[moduleName]) || {};
         const dayCfg = msConfigs[cardDateKey] || msConfigs[todayKey] || {};
-        const dayTitle = dayCfg.title || (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : ''));
+        const dayTitle = dayCfg.title || (isImmerse ? (dayCfg.mainQuestion || `Session ${dayNum}: Video Reflection`) : (dayNum === 1 ? 'Foundations & Mindset' : (dayNum === 2 ? 'Execution Strategy' : '')));
 
         const isToday = (cardDateKey === todayKey);
         const isPast = (cardDateKey < todayKey);
@@ -8850,6 +9271,8 @@ function switchMilestoneTab(moduleName, btnElement) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
                 actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
+            } else if (isImmerse) {
+                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
             } else {
                 actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
             }
@@ -8858,6 +9281,8 @@ function switchMilestoneTab(moduleName, btnElement) {
                 statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold">Past (Bypass Available)</span>';
                 if (moduleName === 'pod') {
                     actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                } else if (isImmerse) {
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
                 } else {
                     actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
                 }
@@ -8870,6 +9295,8 @@ function switchMilestoneTab(moduleName, btnElement) {
                 statusBadge = '<span class="badge-pill badge-indigo text-[10px] font-bold">Future (Bypass Available)</span>';
                 if (moduleName === 'pod') {
                     actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                } else if (isImmerse) {
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
                 } else {
                     actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
                 }
@@ -8882,7 +9309,7 @@ function switchMilestoneTab(moduleName, btnElement) {
         cardsHtml += `
             <div class="glass-card p-4 rounded-xl border-slate-800 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold">
+                    <div class="w-10 h-10 rounded-lg ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? (isImmerse ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30') : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold">
                         <span class="text-[10px] uppercase tracking-tighter">Day</span>
                         <span class="text-xs font-mono font-black">${dayNum}</span>
                     </div>
@@ -8890,11 +9317,11 @@ function switchMilestoneTab(moduleName, btnElement) {
                         <div class="flex items-center gap-2">
                             <div class="flex items-center gap-1.5 flex-wrap">
                                 <h4 class="text-xs font-bold text-white">${displayDate}</h4>
-                                ${dayTitle ? `<span class="text-xs font-bold text-indigo-300 font-heading truncate max-w-[180px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
+                                ${dayTitle ? `<span class="text-xs font-bold ${isImmerse ? 'text-purple-300' : 'text-indigo-300'} font-heading truncate max-w-[180px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
                             </div>
                             ${statusBadge}
                         </div>
-                        <span class="text-[10px] ${isCompleted ? 'text-emerald-400 font-bold' : 'text-slate-400'} font-mono">${isCompleted && sub && sub.lcReward !== undefined ? `+${sub.lcReward} LCs Earned` : '+33 LCs Available'}</span>
+                        <span class="text-[10px] ${isCompleted ? 'text-emerald-400 font-bold' : 'text-slate-400'} font-mono">${isCompleted && sub && sub.lcReward !== undefined ? `+${sub.lcReward} LCs Earned` : (isImmerse ? '+33 LCs Available (70% Attempt / 30% Relatability)' : '+33 LCs Available')}</span>
                     </div>
                 </div>
                 <div>${actionBtn}</div>
@@ -8948,29 +9375,36 @@ function viewSubmissionById(subId, userId, dayLabel, moduleType) {
 }
 window.viewSubmissionById = viewSubmissionById;
 
-function viewMySubmission(dayNumber, moduleName) {
+function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleName) {
     if (!currentUser) return alert('Please login first.');
+    let targetUserId = currentUser._id;
+    let dayNumber = dayNumberOrUserId;
+    let moduleName = moduleNameOrDay;
+    if (maybeModuleName !== undefined) {
+        targetUserId = dayNumberOrUserId;
+        dayNumber = moduleNameOrDay;
+        moduleName = maybeModuleName;
+    }
     const msId = activeMilestoneId || 1;
-    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser._id) : [];
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(targetUserId) : [];
     let sub = subs.find(s => String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
     if (!sub) {
         try {
             const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            sub = allSubs.find(s => ((String(s.userId) === String(currentUser._id)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
+            sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.day) === String(dayNumber));
         } catch(e) {}
     }
     if (!sub) {
         return alert("No check-in submission recorded for this day yet.");
     }
-    renderSubmissionDetailModal(sub, currentUser._id, dayNumber, moduleName);
+    renderSubmissionDetailModal(sub, targetUserId, dayNumber, moduleName);
 }
-
 window.viewMySubmission = viewMySubmission;
 
 async function downloadSubmissionMedia(type, mediaUrl, filename) {
     try {
         let finalUrl = mediaUrl;
-        if (!finalUrl || finalUrl === 'Completed' || finalUrl.includes('googleapis.com')) {
+        if (!finalUrl || finalUrl === 'Completed') {
             finalUrl = (type === 'video') 
                 ? 'https://vjs.zencdn.net/v/oceans.mp4' 
                 : 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
@@ -9005,14 +9439,12 @@ async function downloadSubmissionMedia(type, mediaUrl, filename) {
 }
 window.downloadSubmissionMedia = downloadSubmissionMedia;
 
-
-
-
 function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     if (!sub) return alert("No submission data found for this selection.");
 
     const normalizedType = normalizeLevelUpType(type || sub.type || 'dip');
     const isPod = normalizedType === 'pod';
+    const isImmerse = normalizedType === 'immerse';
     const lcReward = (sub.lcReward !== undefined && sub.lcReward !== null) ? sub.lcReward : 33;
     const actualDay = sub.day || sub.sessionDay || dayLabel || 1;
     const matchPercentage = (sub.matchPercentage !== undefined && sub.matchPercentage !== null) ? sub.matchPercentage : (sub.similarityScore || 95);
@@ -9211,19 +9643,36 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     const isValidMedia = (url) => Boolean(url && typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http') || url.startsWith('/')) && !url.includes('sample_audio') && !url.includes('sample_video'));
                     
                     let exactAudioSrc = isValidMedia(r.audioUrl) ? r.audioUrl : (isValidMedia(r.value) && (r.value.startsWith('data:audio') || r.value.includes('/uploads/')) ? r.value : '');
-                    let exactVideoSrc = isValidMedia(r.videoUrl) ? r.videoUrl : (isValidMedia(r.value) && (r.value.startsWith('data:video') || r.value.includes('/uploads/')) ? r.value : '');
+                    let exactVideoSrc = isValidMedia(r.videoUrl) ? r.videoUrl :
+                        (isValidMedia(r.url) ? r.url :
+                        (isValidMedia(r.mediaUrl) ? r.mediaUrl :
+                        (isValidMedia(r.value) && (r.value.startsWith('data:video') || r.value.startsWith('blob:') || r.value.includes('/uploads/') || r.value.endsWith('.webm') || r.value.endsWith('.mp4')) ? r.value :
+                        (isValidMedia(sub.videoUrl) ? sub.videoUrl : ''))));
                     
                     // Fallback to active recording blobs in memory
                     if (!exactAudioSrc && window._recordedAudioBlobs && window._recordedAudioBlobs[i]) {
-                        exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[i]);
+                        try { exactAudioSrc = URL.createObjectURL(window._recordedAudioBlobs[i]); } catch(e) {}
                     }
                     if (!exactAudioSrc && (qType === 'audio' || qTitle.toLowerCase().includes('audio') || qTitle.toLowerCase().includes('voice'))) {
                         // Reliable audio player fallback for old submissions so audio can always be played & downloaded
                         exactAudioSrc = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
                     }
 
+                    if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[i]) {
+                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[i]); } catch(e) {}
+                    }
+                    if (!exactVideoSrc && window._recordedVideoBlobs && window._recordedVideoBlobs[0]) {
+                        try { exactVideoSrc = URL.createObjectURL(window._recordedVideoBlobs[0]); } catch(e) {}
+                    }
+                    if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[i]) {
+                        exactVideoSrc = window._recordedVideoData[i];
+                    }
+                    if (!exactVideoSrc && window._recordedVideoData && window._recordedVideoData[0]) {
+                        exactVideoSrc = window._recordedVideoData[0];
+                    }
+
                     let isAudio = (qType === 'audio') || qTitle.toLowerCase().includes('audio') || Boolean(exactAudioSrc);
-                    let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc);
+                    let isVideo = (qType === 'video') || qTitle.toLowerCase().includes('video') || Boolean(exactVideoSrc) || (isImmerse && i === 0);
 
                     let mediaTitle = isAudio 
                         ? (isCreatorView ? "Learner Voice Note (Recorded):" : "Audio Voice Reflection (Recorded):")
@@ -9254,23 +9703,32 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             </div>
                         `;
                     } else if (isVideo) {
+                        const transcriptText = (r.transcription || sub.transcription || '').trim();
                         contentHtml = `
                             <div class="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
                                 <div class="flex items-center justify-between">
                                     <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                        <i class="fas fa-video text-indigo-400"></i> ${mediaTitle}
+                                        <i class="fas fa-video ${isImmerse ? 'text-purple-400' : 'text-indigo-400'}"></i> ${mediaTitle}
                                     </span>
                                     ${exactVideoSrc ? `
-                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 bg-indigo-600/20 px-3 py-1.5 rounded-lg border border-indigo-500/30 transition-all hover:bg-indigo-600/30">
+                                        <button type="button" onclick="downloadSubmissionMedia('video', '${exactVideoSrc}', 'Video_Day${actualDay}_Q${i+1}.webm')" class="text-xs font-bold ${isImmerse ? 'text-purple-400 hover:text-purple-300 bg-purple-600/20 border-purple-500/30 hover:bg-purple-600/30' : 'text-indigo-400 hover:text-indigo-300 bg-indigo-600/20 border-indigo-500/30 hover:bg-indigo-600/30'} flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all">
                                             <i class="fas fa-download"></i> ${downloadTitle}
                                         </button>
                                     ` : '<span class="text-[10px] text-slate-500 italic">Video reflection submitted</span>'}
                                 </div>
                                 ${exactVideoSrc ? `
-                                    <video controls class="w-full max-h-56 rounded-xl bg-black border border-slate-800 mt-1" src="${exactVideoSrc}"></video>
+                                    <video controls class="w-full max-h-60 rounded-xl bg-black border border-slate-800 mt-1" src="${exactVideoSrc}"></video>
                                 ` : `
                                     <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 font-mono">${r.value || r.answer || 'Video Response Completed'}</p>
                                 `}
+                                ${transcriptText ? `
+                                    <div class="p-3 bg-purple-950/25 rounded-xl border border-purple-500/30 mt-2 space-y-1">
+                                        <span class="text-[10px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                                            <i class="fas fa-closed-captioning"></i> AssemblyAI Video Speech Transcript:
+                                        </span>
+                                        <p class="text-xs text-slate-200 leading-relaxed italic font-serif">"${transcriptText}"</p>
+                                    </div>
+                                ` : ''}
                             </div>
                         `;
                     } else {
@@ -9312,16 +9770,24 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
             ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Rubric < 50% — Retry Required`)
-            : isLegacyLow
-                ? `<i class="fas fa-history mr-1"></i> Low Match (+${lcReward || 3} LCs)`
-                : isPartial
-                    ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
-                    : isGood
-                        ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
-                        : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
+        : isLegacyLow
+            ? `<i class="fas fa-history mr-1"></i> Low Match (+${lcReward || 3} LCs)`
+            : isPartial
+                ? '<i class="fas fa-exclamation-triangle mr-1"></i> Partial Match (17 LCs)'
+                : isGood
+                    ? '<i class="fas fa-check mr-1"></i> Good Match (23 LCs)'
+                    : '<i class="fas fa-check-circle mr-1"></i> Fully Verified';
 
     const modalId = 'submissionDetailReviewModal';
     document.getElementById(modalId)?.remove();
+
+    // Dynamic Immerse 2-Factor Scoring Values (Milestone-aware, no hardcoded 33/23/10)
+    const immerseBasePts = Number(sub.basePoints) || Number(dayCfg.lcOnTime) || (msId === 1 ? 33 : 133);
+    const immerseF1Pts = (sub.factor1Points !== undefined && sub.factor1Points !== null) ? Number(sub.factor1Points) : ((sub.completionPoints !== undefined) ? Number(sub.completionPoints) : Math.round(immerseBasePts * 0.70));
+    const immerseF2Pts = (sub.factor2Points !== undefined && sub.factor2Points !== null) ? Number(sub.factor2Points) : ((sub.relatabilityPoints !== undefined) ? Number(sub.relatabilityPoints) : (immerseBasePts - immerseF1Pts));
+    const immerseF1Earned = (sub.factor1Earned !== undefined) ? Boolean(sub.factor1Earned) : (lcReward >= immerseF1Pts);
+    const immerseF2Earned = (sub.factor2Earned !== undefined) ? Boolean(sub.factor2Earned) : (lcReward >= immerseBasePts);
+    const immerseFullyVerified = Boolean(immerseF1Earned && immerseF2Earned);
 
     const fullModalHtml = `
         <div id="${modalId}" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animation-fade-in">
@@ -9330,7 +9796,6 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <i class="fas fa-times"></i>
                 </button>
 
-                <!-- CREATOR-SPECIFIC LEARNER PROFILE HEADER -->
                 <!-- CREATOR-SPECIFIC LEARNER PROFILE HEADER -->
                 ${isCreatorView ? `
                     <div class="flex items-center gap-3 p-3.5 bg-indigo-950/70 border border-indigo-500/40 rounded-2xl shadow-inner">
@@ -9343,6 +9808,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                                 <span class="badge-pill bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold uppercase">Learner Review</span>
                                 ${isPod ? `
                                     <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>
+                                ` : isImmerse ? `
+                                    <span class="badge-pill ${immerseFullyVerified ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60' : 'bg-purple-950/80 text-purple-300 border border-purple-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-video mr-1"></i> ${immerseFullyVerified ? 'Fully Verified' : 'Attempt Verified'}</span>
                                 ` : `
                                     <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum} ${passLabel}</span>
                                 `}
@@ -9356,10 +9823,12 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                 <div class="flex items-center justify-between border-b border-slate-800 pb-4">
                     <div>
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="badge-pill ${isPod ? 'badge-indigo' : 'badge-amber'} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
+                            <span class="badge-pill ${isPod ? 'badge-indigo' : (isImmerse ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'badge-amber')} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
                             <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${formattedDatePill}</span>
                             ${isPod ? `
                                 <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>
+                            ` : isImmerse ? `
+                                <span class="badge-pill bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[10px] font-mono font-bold"><i class="fas fa-video mr-1"></i> MWF Session</span>
                             ` : `
                                 <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'} text-[10px] font-mono font-bold"><i class="fas fa-history mr-1"></i> Attempt #${attemptNum}</span>
                             `}
@@ -9378,8 +9847,48 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 </div>
 
-                <!-- AI EVALUATION REMARKS & RUBRIC CARD (DIP ONLY) -->
-                ${!isPod ? `
+                <!-- AI EVALUATION REMARKS & RUBRIC CARD -->
+                ${isImmerse ? `
+                ${(dayCfg.mainQuestion || sub.mainQuestion || dayCfg.description || sub.sessionDescription || sub.description) ? `
+                <div class="p-4 bg-slate-950/70 border border-purple-500/30 rounded-2xl space-y-2.5 shadow-sm">
+                    ${(dayCfg.mainQuestion || sub.mainQuestion) ? `
+                        <div>
+                            <span class="text-[10px] font-bold text-purple-400 uppercase tracking-wider block mb-0.5"><i class="fas fa-question-circle mr-1"></i> The Main Reflection Question</span>
+                            <p class="text-xs font-bold text-white leading-relaxed">${dayCfg.mainQuestion || sub.mainQuestion}</p>
+                        </div>
+                    ` : ''}
+                    ${(dayCfg.description || sub.sessionDescription || sub.description) ? `
+                        <div class="pt-2 border-t border-slate-800/80">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5"><i class="fas fa-align-left mr-1"></i> Session Context / Description</span>
+                            <p class="text-xs text-slate-300 leading-relaxed font-normal whitespace-pre-line">${dayCfg.description || sub.sessionDescription || sub.description}</p>
+                        </div>
+                    ` : ''}
+                </div>
+                ` : ''}
+
+                <!-- IMMERSE 2-FACTOR VIDEO EVALUATION CARD -->
+                <div class="p-5 bg-gradient-to-br from-purple-950/60 via-slate-900 to-purple-950/30 border ${isEvaluating ? 'border-purple-500/40 animate-pulse' : 'border-purple-500/40'} rounded-2xl space-y-3 shadow-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-400 border border-purple-500/30 flex items-center justify-center text-sm">
+                                <i class="fas fa-award"></i>
+                            </div>
+                            <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'cMPLi Immerse Video Evaluation (Creator Review Mode)' : 'cMPLi Immerse 2-Factor Video Evaluation'}</span>
+                        </div>
+                        <span class="badge-pill ${isEvaluating ? 'bg-purple-900/40 text-purple-300 border border-purple-500/40' : (immerseFullyVerified ? 'badge-emerald' : 'bg-purple-900/50 text-purple-300 border border-purple-600/40')} text-[11px] font-bold">
+                            ${isEvaluating ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating Video' : (immerseFullyVerified ? `<i class="fas fa-check-circle mr-1"></i> Fully Verified (+${immerseBasePts} LCs)` : `<i class="fas fa-check mr-1"></i> Video Attempt (+${lcReward} LCs)`)}
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-200 border-slate-800/90 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border font-sans shadow-inner">
+                        ${aiRemarksText}
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
+                        <span><i class="fas fa-video text-purple-400 mr-1"></i> Factor 1 (70% Attempt): <strong class="text-purple-300">${isEvaluating ? 'Pending' : (immerseF1Earned ? `+${immerseF1Pts} LCs (Verified)` : '0 LCs (Missing video)')}</strong></span>
+                        <span><i class="fas fa-brain text-cyan-400 mr-1"></i> Factor 2 (30% Relatability): <strong class="${immerseF2Earned ? 'text-emerald-300' : 'text-slate-500'}">${isEvaluating ? 'Pending' : (immerseF2Earned ? `+${immerseF2Pts} LCs (Verified)` : '0 LCs (Under 10 words or off-topic)')}</strong></span>
+                        <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Total Credited: <strong class="text-emerald-300">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</strong></span>
+                    </div>
+                </div>
+                ` : (!isPod ? `
                 <div class="p-5 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border ${isEvaluating ? 'border-indigo-500/40' : (isMismatch ? 'border-rose-500/40' : 'border-indigo-500/40')} rounded-2xl space-y-3 shadow-xl">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
@@ -9402,7 +9911,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="text-indigo-300">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved')))}</strong></span>
                     </div>
                 </div>
-                ` : ''}
+                ` : '')}
 
                 <!-- QUESTION & AUDIO/VIDEO RESPONSES -->
                 ${bodyHtml}
