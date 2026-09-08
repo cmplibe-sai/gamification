@@ -414,7 +414,7 @@ function generateLqInsights(stats, msId, cfg, user) {
     const { subs, zone, earned, max, pct } = stats;
     if (!subs || subs.length === 0) {
         return {
-            overview: 'No check-ins recorded yet for this active pathway. Complete your daily cMPLi Dip or cMPLi POD check-in to start establishing your Learnability Quotient score.',
+            overview: 'No check-ins recorded yet for this active pathway. Complete your daily cMPLi Dip or cMPLi POD check-in to start establishing your learnAgiliti Quotient® score.',
             focus: ['Start Check-ins', 'Daily Routine']
         };
     }
@@ -446,7 +446,7 @@ function generateLqInsights(stats, msId, cfg, user) {
 }
 window.generateLqInsights = generateLqInsights;
 
-// Renders Milestone Filter buttons — strictly gates customer view to unlocked milestones
+// Renders Milestone Filter buttons — strictly gates both customer and creator view to completed/unlocked milestones
 function renderLqMilestonePills(prefix = 'lq') {
     const el = document.getElementById(`${prefix}MilestoneFilters`);
     if (!el || typeof milestoneConfig === 'undefined') return;
@@ -454,10 +454,19 @@ function renderLqMilestonePills(prefix = 'lq') {
     const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
     const highest = (user && userMilestoneState && userMilestoneState[user._id]?.highestUnlocked) || 1;
 
-    // For student: strictly limit to milestones <= highestUnlocked.
-    // For admin: show milestones up to highestUnlocked (or all if admin in test/creator view).
-    const isGod = (typeof isTestUser === 'function' && isTestUser()) || (prefix === 'adminLq');
-    const allowedMilestones = milestoneConfig.filter(ms => isGod || ms.id <= highest);
+    // Both student and creator views strictly show only milestones the learner has completed/unlocked
+    const allowedMilestones = milestoneConfig.filter(ms => ms.id <= highest);
+
+    // Safeguard active milestone if selected milestone is beyond learner's highest unlocked
+    if (prefix === 'adminLq') {
+        if (!adminLqSelectedMilestone || adminLqSelectedMilestone > highest) {
+            adminLqSelectedMilestone = highest;
+        }
+    } else {
+        if (!lqSelectedMilestone || lqSelectedMilestone > highest) {
+            lqSelectedMilestone = highest;
+        }
+    }
 
     const activeMs = (prefix === 'adminLq') ? adminLqSelectedMilestone : lqSelectedMilestone;
 
@@ -1174,6 +1183,205 @@ function changeLcChartTimeframe(timeframe) {
     renderLcGrowthChart(currentLcGrowthUser || currentUser, timeframe, true);
 }
 window.changeLcChartTimeframe = changeLcChartTimeframe;
+
+// --- CREATOR HUB LC GROWTH VELOCITY ENGINE ---
+var adminLcGrowthChartInstance = null;
+var currentAdminLcGrowthUser = null;
+var currentAdminLcGrowthTimeframe = '30d';
+var _lastRenderedAdminChartSig = null;
+var _adminChartJsRetryCount = 0;
+
+function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
+    if (userIdentifier) currentAdminLcGrowthUser = userIdentifier;
+    if (timeframe) currentAdminLcGrowthTimeframe = timeframe;
+
+    const user = currentAdminLcGrowthUser;
+    if (!user) return;
+
+    const targetUserId = (typeof user === 'object' && user) ? (user._id || user.id) : user;
+
+    const canvas = document.getElementById('adminLcGrowthChart');
+    if (!canvas) return;
+
+    if (typeof Chart === 'undefined') {
+        if (_adminChartJsRetryCount < 10) {
+            _adminChartJsRetryCount++;
+            setTimeout(() => renderAdminLcGrowthChart(user, currentAdminLcGrowthTimeframe, forceRender), 300);
+            return;
+        }
+        return;
+    }
+    _adminChartJsRetryCount = 0;
+
+    canvas.style.display = 'block';
+
+    // Trigger async TagMango ledger fetch with in-flight and backoff deduplication
+    if (targetUserId) {
+        const cleanId = String(targetUserId);
+        const cached = userTagMangoLedgerCache[cleanId];
+        const isFreshOrBackedOff = cached && (!cached.failed || (Date.now() - cached.timestamp < 30000));
+        if (!isFreshOrBackedOff && !userTagMangoLedgerInFlight[cleanId]) {
+            fetchTagMangoLedger(cleanId).then(entries => {
+                if (entries && entries.length > 0) {
+                    renderAdminLcGrowthChart(user, currentAdminLcGrowthTimeframe, true);
+                }
+            });
+        }
+    }
+
+    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
+    const days = timeframeMap[currentAdminLcGrowthTimeframe] || 30;
+
+    const data = buildCumulativeLcTimeline(user, days);
+
+    // Update Creator KPI badges
+    const totalEl = document.getElementById('adminLcKpiTotalCumulative');
+    const gainedEl = document.getElementById('adminLcKpiGainedInPeriod');
+    const avgEl = document.getElementById('adminLcKpiDailyAverage');
+    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
+
+    // Synchronize select dropdown value if exists
+    const selectEl = document.getElementById('adminLcTimeframeFilter');
+    if (selectEl && selectEl.value !== currentAdminLcGrowthTimeframe) {
+        selectEl.value = currentAdminLcGrowthTimeframe;
+    }
+
+    const currentSig = `${targetUserId}_${currentAdminLcGrowthTimeframe}_${data.totalCumulative}_${data.gainedInPeriod}_${data.hasLedger ? 'ledger' : 'local'}`;
+    if (!forceRender && _lastRenderedAdminChartSig === currentSig && adminLcGrowthChartInstance) {
+        return;
+    }
+    _lastRenderedAdminChartSig = currentSig;
+
+    if (adminLcGrowthChartInstance) {
+        try { adminLcGrowthChartInstance.destroy(); } catch (e) {}
+        adminLcGrowthChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const canvasHeight = canvas.clientHeight || canvas.height || 280;
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');   // Radiant Cyan
+    gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)'); // Deep Indigo
+    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.0)');      // Transparent Slate
+
+    let pointRadius = 4;
+    let pointHoverRadius = 7;
+    if (days > 30) {
+        pointRadius = days > 90 ? 0 : 2;
+        pointHoverRadius = 6;
+    }
+
+    adminLcGrowthChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Cumulative LCs',
+                data: data.cumulativeData,
+                borderColor: '#22d3ee', // Cyan-400
+                borderWidth: 3,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.35,
+                pointRadius: pointRadius,
+                pointHoverRadius: pointHoverRadius,
+                pointBackgroundColor: '#06b6d4',
+                pointBorderColor: '#0f172a',
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#38bdf8',
+                pointHoverBorderColor: '#ffffff',
+                pointHoverBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#f8fafc',
+                    titleFont: { size: 12, weight: 'bold', family: 'system-ui, sans-serif' },
+                    bodyColor: '#38bdf8',
+                    bodyFont: { size: 12, weight: 'bold', family: 'monospace' },
+                    borderColor: 'rgba(56, 189, 248, 0.4)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: (tooltipItems) => {
+                            const idx = tooltipItems[0].dataIndex;
+                            const fullDate = data.dateKeys[idx];
+                            return `${tooltipItems[0].label} (${fullDate})`;
+                        },
+                        label: (context) => {
+                            const idx = context.dataIndex;
+                            const cum = data.cumulativeData[idx];
+                            const daily = data.dailyData[idx];
+                            const lines = [`📈 Cumulative: ${cum} LCs`];
+                            if (daily > 0) {
+                                lines.push(`⚡ Earned: +${daily} LCs`);
+                            } else if (daily < 0) {
+                                lines.push(`🔻 Adjustment: ${daily} LCs`);
+                            } else {
+                                lines.push(`💤 No check-ins on this date`);
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10, weight: '600', family: 'system-ui, sans-serif' },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: days > 60 ? 8 : (days > 14 ? 10 : 7)
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        borderDash: [4, 4]
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10, weight: 'bold', family: 'monospace' },
+                        callback: (val) => `${val} LCs`,
+                        maxTicksLimit: 6
+                    }
+                }
+            }
+        }
+    });
+}
+window.renderAdminLcGrowthChart = renderAdminLcGrowthChart;
+
+function changeAdminLcChartTimeframe(timeframe) {
+    currentAdminLcGrowthTimeframe = timeframe;
+    renderAdminLcGrowthChart(currentAdminLcGrowthUser, timeframe, true);
+}
+window.changeAdminLcChartTimeframe = changeAdminLcChartTimeframe;
+
 
 
 // =========================================================================
@@ -1938,9 +2146,14 @@ async function displayAdminLearnerDataById(userId) {
         renderTimelineGrid(learner.email, 'adminCompletionGrid');
     }
 
-    // 5. Render Learnability Quotient & Future Readiness Speedometer Gauge for this learner
+    // 5. Render learnAgiliti Quotient® Speedometer Gauge for this learner
     if (typeof initLearnabilityGauge === 'function') {
         initLearnabilityGauge(learner, 'adminLq');
+    }
+
+    // 6. Render Cumulative LC Growth Velocity Chart for this learner in Creator Hub
+    if (typeof renderAdminLcGrowthChart === 'function') {
+        renderAdminLcGrowthChart(learner);
     }
 }
 window.displayAdminLearnerDataById = displayAdminLearnerDataById;
