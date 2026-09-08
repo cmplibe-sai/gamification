@@ -6770,7 +6770,14 @@ function switchAdminModuleTab(mod) {
     
     const isCheckinsActive = !document.getElementById('adminCheckinsConfigView')?.classList.contains('hidden');
     if (isCheckinsActive) {
+        // Ensure date input reflects active date and editor loads immediately for this module
+        const dateInput = document.getElementById('adminConfigDateInput');
+        const currentDateVal = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
+        activeAdminDateKey = currentDateVal;
         renderAdminCheckinsList();
+        if (mod !== 'projects' && typeof loadAdminCheckinEditor === 'function') {
+            loadAdminCheckinEditor(activeAdminDateKey);
+        }
     } else {
         renderAdminCohortSubmissions();
     }
@@ -6863,7 +6870,7 @@ function closeAdminMilestoneView() {
 mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 
 // --- Shared Exclusive Day Resolution Helper ---
-function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions) {
+function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msId) {
     const daySubMap = {};
     if (!Array.isArray(subs) || subs.length === 0) return daySubMap;
 
@@ -6874,10 +6881,15 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions) {
     }
     startDateObj.setHours(0, 0, 0, 0);
 
-    // Precompute dateKeys for all days 1..totalSessions
+    // Precompute dateKeys for all days 1..totalSessions taking creator scheduling into account
     const dayDateKeys = {};
+    const effectiveMsId = msId || (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
     for (let d = 1; d <= totalSessions; d++) {
-        dayDateKeys[d] = getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName));
+        if (typeof getResolvedMilestoneDateKey === 'function') {
+            dayDateKeys[d] = getResolvedMilestoneDateKey(effectiveMsId, moduleName, startDateObj, d).cardDateKey;
+        } else {
+            dayDateKeys[d] = getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName));
+        }
     }
 
     // Sort submissions to break ties on collision:
@@ -10642,6 +10654,104 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
 }
 window.getMilestoneSessionDate = getMilestoneSessionDate;
 
+// Resolves session date: creator-configured manual/rescheduled dates take precedence over default MWF/Mon-Sat math
+function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum) {
+    const normMod = normalizeLevelUpType(moduleName || 'dip');
+    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && (customMilestoneConfigs[msId][normMod] || customMilestoneConfigs[msId][moduleName])) || {};
+    
+    // Extract dates explicitly configured by creator
+    const configuredKeys = Object.keys(msConfigs).filter(k => {
+        const c = msConfigs[k];
+        return c && (
+            (c.title && c.title.trim()) ||
+            (c.mainQuestion && c.mainQuestion.trim()) ||
+            (c.audioUrl && c.audioUrl.trim()) ||
+            (Array.isArray(c.questions) && c.questions.length > 0)
+        );
+    }).sort();
+
+    const targetIdx = (Number(dayNum) || 1) - 1;
+    if (configuredKeys[targetIdx]) {
+        const dateKey = configuredKeys[targetIdx];
+        const dateObj = new Date(dateKey + 'T00:00:00');
+        return {
+            cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName),
+            cardDateKey: dateKey,
+            isCreatorScheduled: true
+        };
+    }
+
+    const defaultDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
+    return {
+        cardDate: defaultDate,
+        cardDateKey: getLocalDateKey(defaultDate),
+        isCreatorScheduled: false
+    };
+}
+window.getResolvedMilestoneDateKey = getResolvedMilestoneDateKey;
+
+// Checks if learner has successfully submitted/completed cMPLi Dip for a date
+function hasUserCompletedDipForDate(user, msId, dateKey) {
+    if (!user) return false;
+    const allSubs = getUserSubmissionsByUserId(user);
+    const dipSubs = allSubs.filter(s => {
+        const type = normalizeLevelUpType(s.type || s.moduleType);
+        const sMsId = String(s.milestoneId || 1);
+        return type === 'dip' && sMsId === String(msId || 1);
+    });
+
+    return dipSubs.some(sub => {
+        const sDate = sub.dateKey || (sub.date ? String(sub.date).split('T')[0] : (sub.timestamp ? getLocalDateKey(new Date(sub.timestamp)) : null));
+        const matchesDate = !dateKey || sDate === dateKey;
+        const isEvaluating = sub.status === 'evaluating';
+        const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
+        const isDone = !isMismatch && (sub.status === 'completed' || isEvaluating || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
+        return matchesDate && isDone;
+    });
+}
+window.hasUserCompletedDipForDate = hasUserCompletedDipForDate;
+
+function showImmerseDipPrereqModal(dateKey) {
+    const modalId = 'immersePrereqModal';
+    document.getElementById(modalId)?.remove();
+
+    const displayDate = dateKey ? new Date(dateKey + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today';
+
+    const modalHtml = `
+        <div id="${modalId}" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div class="glass-card max-w-md w-full p-6 sm:p-8 border border-amber-500/40 text-center space-y-5 rounded-2xl sm:rounded-3xl shadow-2xl relative bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950">
+                <div class="w-16 h-16 bg-amber-500/15 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/40 text-2xl shadow-inner animate-pulse">
+                    <i class="fas fa-lock text-amber-400"></i>
+                </div>
+                <div>
+                    <span class="badge-pill badge-amber text-[10px] font-extrabold uppercase tracking-widest mb-1.5">Sequential Learning Rule</span>
+                    <h3 class="text-lg sm:text-xl font-extrabold text-white font-heading">Complete cMPLi Dip First</h3>
+                    <p class="text-xs text-amber-300/90 font-mono font-bold mt-1 uppercase tracking-wider">${displayDate}</p>
+                    <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+                        To maintain high-velocity reflection habits, <strong>cMPLi Immerse video reflection</strong> requires submitting your daily <strong>cMPLi Dip</strong> check-in first.
+                    </p>
+                </div>
+                <div class="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl text-left flex items-start gap-3">
+                    <i class="fas fa-info-circle text-indigo-400 text-sm mt-0.5 shrink-0"></i>
+                    <p class="text-[11px] text-slate-300 leading-normal">
+                        You can complete cMPLi Dip and cMPLi POD in any order. Once cMPLi Dip is submitted, cMPLi Immerse will unlock immediately.
+                    </p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2 pt-1">
+                    <button type="button" onclick="document.getElementById('${modalId}')?.remove(); switchMilestoneTab('dip');" class="w-full btn-primary py-2.5 px-4 text-xs font-bold shadow-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-heading cursor-pointer">
+                        <i class="fas fa-sun mr-1.5"></i> Go to cMPLi Dip Check-in
+                    </button>
+                    <button type="button" onclick="document.getElementById('${modalId}')?.remove()" class="w-full sm:w-auto btn-secondary py-2.5 px-4 text-xs font-bold text-slate-300 cursor-pointer">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+window.showImmerseDipPrereqModal = showImmerseDipPrereqModal;
+
 function showCheckinSetupInProgressModal(moduleName, dateDisplayStr) {
     const modalId = 'checkinSetupModal';
     document.getElementById(modalId)?.remove();
@@ -10652,20 +10762,45 @@ function showCheckinSetupInProgressModal(moduleName, dateDisplayStr) {
 
     const modalHtml = `
         <div id="${modalId}" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-            <div class="glass-card max-w-md w-full p-8 border border-amber-500/40 text-center space-y-5 rounded-2xl shadow-2xl relative bg-gradient-to-b from-slate-900 to-slate-950">
-                <div class="w-16 h-16 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center mx-auto border border-amber-500/30 text-3xl shadow-inner animate-pulse">
-                    <i class="fas fa-hourglass-half fa-spin text-amber-400"></i>
+            <div class="glass-card max-w-md w-full p-6 sm:p-8 border border-amber-500/40 text-center space-y-5 rounded-2xl sm:rounded-3xl shadow-2xl relative bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950">
+                <!-- Sand Hourglass Jar with Infinite Falling Sand Animation -->
+                <div class="w-20 h-24 mx-auto mb-1 relative flex items-center justify-center">
+                    <svg class="w-16 h-20 hourglass-glow" viewBox="0 0 64 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Frame Top & Bottom Plates -->
+                        <path d="M12 6 H52 M12 74 H52" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>
+                        <!-- Glass Contours -->
+                        <path d="M16 8 C16 30 30 38 32 40 C34 38 48 30 48 8 Z" fill="rgba(245, 158, 11, 0.08)" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round"/>
+                        <path d="M16 72 C16 50 30 42 32 40 C34 42 48 50 48 72 Z" fill="rgba(245, 158, 11, 0.08)" stroke="#f59e0b" stroke-width="2.5" stroke-linejoin="round"/>
+                        <!-- Top Chamber Sand Reservoir -->
+                        <path d="M20 20 Q32 26 44 20 C42 28 36 36 32 39 C28 36 22 28 20 20 Z" fill="#fbbf24" opacity="0.9"/>
+                        <!-- Continuous Falling Sand Stream -->
+                        <line class="sand-stream-anim" x1="32" y1="38" x2="32" y2="68" stroke="#fef08a" stroke-width="2.5" stroke-dasharray="4 3" stroke-linecap="round"/>
+                        <!-- Bottom Sand Mound Accumulation -->
+                        <path d="M18 71 Q32 59 46 71 Z" fill="#f59e0b"/>
+                        <!-- Falling Sand Particles -->
+                        <circle class="sand-grain-1" cx="32" cy="44" r="1.5" fill="#fffbeb"/>
+                        <circle class="sand-grain-2" cx="32" cy="53" r="1.2" fill="#fffbeb"/>
+                        <circle class="sand-grain-3" cx="32" cy="62" r="1.4" fill="#fffbeb"/>
+                    </svg>
                 </div>
                 <div>
-                    <h3 class="text-xl font-extrabold text-white font-heading">Check-in Setup in Progress</h3>
-                    <p class="text-xs text-amber-300/90 font-mono font-semibold mt-1 uppercase tracking-wider">${modLabel} • ${dateDisplayStr || 'Scheduled Session'}</p>
+                    <span class="badge-pill badge-amber text-[10px] font-extrabold uppercase tracking-widest mb-1.5">Setup In Progress</span>
+                    <h3 class="text-lg sm:text-xl font-extrabold text-white font-heading">Check-in Setup in Progress</h3>
+                    <p class="text-xs text-amber-300/90 font-mono font-bold mt-1 uppercase tracking-wider">${modLabel} • ${dateDisplayStr || 'Scheduled Session'}</p>
                 </div>
-                <p class="text-slate-300 text-xs leading-relaxed bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 font-sans shadow-inner">
-                    Check-in: creator is configuring the setup. Please wait for a few moments and check later.
-                </p>
-                <button type="button" onclick="document.getElementById('${modalId}')?.remove()" class="w-full btn-primary py-3 px-4 text-xs font-bold shadow-lg bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-heading tracking-wide cursor-pointer transition-all">
-                    <i class="fas fa-check-circle mr-1.5"></i> Got It, I'll Check Back Soon
-                </button>
+                <div class="p-4 bg-slate-950/80 rounded-2xl border border-amber-500/20 shadow-inner">
+                    <p class="text-slate-200 text-xs sm:text-sm leading-relaxed font-sans font-medium">
+                        The creator is setting up the configuration. Please visit in a few seconds or a few minutes later.
+                    </p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2 pt-1">
+                    <button type="button" onclick="location.reload()" class="w-full btn-primary py-2.5 px-4 text-xs font-bold shadow-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-heading tracking-wide cursor-pointer transition-all">
+                        <i class="fas fa-sync-alt mr-1.5"></i> Refresh & Check Again
+                    </button>
+                    <button type="button" onclick="document.getElementById('${modalId}')?.remove()" class="w-full sm:w-auto btn-secondary py-2.5 px-4 text-xs font-bold text-slate-300 cursor-pointer">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     `;
@@ -10696,10 +10831,22 @@ function openSubmissionModal(dayNum, moduleName) {
     const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
     const isTestMode = (typeof isTestUser === 'function') && isTestUser();
 
-    // Calculate session card date (MWF for Immerse; Mon-Sat for DIP)
-    const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
-    const cardDateKey = getLocalDateKey(cardDate);
+    // Resolve date taking creator manual scheduling into account
+    const resolved = (typeof getResolvedMilestoneDateKey === 'function')
+        ? getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum)
+        : { cardDate: getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName), cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)) };
+    const cardDate = resolved.cardDate;
+    const cardDateKey = resolved.cardDateKey;
     const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // Prerequisite: cMPLi Immerse requires cMPLi Dip completed first
+    if (isImmerse && !isTestMode) {
+        const hasDip = hasUserCompletedDipForDate(currentUser, msId, cardDateKey) || hasUserCompletedDipForDate(currentUser, msId, todayKey);
+        if (!hasDip) {
+            showImmerseDipPrereqModal(cardDateKey);
+            return;
+        }
+    }
 
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && customMilestoneConfigs[msId][moduleName]) 
         ? customMilestoneConfigs[msId][moduleName] 
@@ -11730,7 +11877,7 @@ function retryLastCheckinSubmission() {
 window.retryLastCheckinSubmission = retryLastCheckinSubmission;
 
 // Calculates continuous active streak and total completed check-ins for a specific module
-function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName) {
+function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName, msId) {
     const todayKey = getLocalDateKey(new Date());
     let completedCount = 0;
     
@@ -11756,12 +11903,15 @@ function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, mod
         return isPod || (!isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0));
     };
 
-    // 2. Determine reference day for streak
+    // 2. Determine reference day for streak with creator rescheduled dates
     let latestScheduledDay = 0;
     let todayScheduledDay = 0;
+    const effectiveMsId = msId || (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
-        const cardDateKey = getLocalDateKey(cardDate);
+        const resolved = (typeof getResolvedMilestoneDateKey === 'function')
+            ? getResolvedMilestoneDateKey(effectiveMsId, moduleName, milestoneStartDate, dayNum)
+            : { cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)) };
+        const cardDateKey = resolved.cardDateKey;
         if (cardDateKey <= todayKey) {
             latestScheduledDay = dayNum;
         }
@@ -11869,13 +12019,17 @@ function switchMilestoneTab(moduleName, btnElement) {
     let totalSessions = isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30);
     let cardsHtml = '';
 
-    // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card
-    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions);
+    // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card taking creator rescheduling into account
+    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions, activeMilestoneId);
 
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        // Compute session date (MWF for Immerse; Mon-Sat for DIP/POD)
-        const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
-        const cardDateKey = getLocalDateKey(cardDate);
+        // Resolve date with creator manual scheduling/rescheduling support
+        const resolved = (typeof getResolvedMilestoneDateKey === 'function')
+            ? getResolvedMilestoneDateKey(activeMilestoneId, moduleName, milestoneStartDate, dayNum)
+            : { cardDate: getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName), cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)), isCreatorScheduled: false };
+        const cardDate = resolved.cardDate;
+        const cardDateKey = resolved.cardDateKey;
+        const isCreatorScheduled = resolved.isCreatorScheduled;
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
         // EXCLUSIVE RESOLUTION: matching submission from daySubMap
@@ -11915,7 +12069,12 @@ function switchMilestoneTab(moduleName, btnElement) {
             if (moduleName === 'pod') {
                 actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 shrink-0 whitespace-nowrap"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
             } else if (isImmerse) {
-                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 shrink-0 whitespace-nowrap"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
+                const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                if (!hasDip && !isTestMode) {
+                    actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
+                } else {
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 shrink-0 whitespace-nowrap"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
+                }
             } else {
                 actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 shrink-0 whitespace-nowrap"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
             }
@@ -11925,7 +12084,12 @@ function switchMilestoneTab(moduleName, btnElement) {
                 if (moduleName === 'pod') {
                     actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                    if (!hasDip && !isTestMode) {
+                        actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
+                    } else {
+                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    }
                 } else {
                     actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
@@ -11939,7 +12103,12 @@ function switchMilestoneTab(moduleName, btnElement) {
                 if (moduleName === 'pod') {
                     actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                    if (!hasDip && !isTestMode) {
+                        actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
+                    } else {
+                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    }
                 } else {
                     actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
@@ -11959,6 +12128,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="text-xs font-bold text-white shrink-0">${displayDate}</h4>
+                            ${isCreatorScheduled ? '<span class="badge-pill bg-indigo-950/60 text-indigo-300 border border-indigo-700/50 text-[9px] font-bold py-0.5 px-1.5 shrink-0"><i class="fas fa-calendar-check mr-1 text-indigo-400"></i> Creator Scheduled</span>' : ''}
                             ${dayTitle ? `<span class="text-xs font-bold ${isImmerse ? 'text-purple-300' : 'text-indigo-300'} font-heading truncate max-w-[110px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
                         </div>
                         <div class="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
@@ -11973,7 +12143,7 @@ function switchMilestoneTab(moduleName, btnElement) {
     }
 
     // Calculate module-specific streak and progress banner
-    const { completedCount, currentStreak } = calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName);
+    const { completedCount, currentStreak } = calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName, activeMilestoneId);
     const pctComplete = Math.min(100, Math.round((completedCount / (totalSessions || 1)) * 100));
     const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normalizedMod)) || { name: (moduleName || '').toUpperCase(), icon: 'fa-cube text-slate-400' };
 

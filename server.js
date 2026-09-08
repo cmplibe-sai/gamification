@@ -1596,6 +1596,27 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const modType = String(sub.moduleType || sub.type || 'dip').toUpperCase();
 
         // -------------------------------------------------------------
+        // SERVER-SIDE PREREQUISITE GUARD FOR cMPLi IMMERSE
+        // (Customer must complete cMPLi Dip before submitting Immerse)
+        // -------------------------------------------------------------
+        if (modType === 'IMMERSE') {
+            const subDate = sub.date || sub.dateKey;
+            const hasCompletedDip = store.submissions.some(s =>
+                (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase().trim() === sub.userEmail.toLowerCase().trim())) &&
+                String(s.milestoneId || 1) === String(msId) &&
+                String(s.type || s.moduleType || '').toUpperCase() === 'DIP' &&
+                (s.status === 'completed' || s.status === 'evaluating' || Number(s.lcReward) > 0 || (subDate && (s.date === subDate || s.dateKey === subDate)))
+            );
+            if (!hasCompletedDip) {
+                console.log(`[Immerse Prereq Guard] Rejecting Immerse submission for ${sub.userEmail || sub.userId} - Dip not yet completed`);
+                return res.status(400).json({
+                    success: false,
+                    error: 'Prerequisite requirement: You must complete and submit your daily cMPLi Dip check-in before unlocking and submitting cMPLi Immerse.'
+                });
+            }
+        }
+
+        // -------------------------------------------------------------
         // SERVER-SIDE EVALUATION & SINGLE-ATTEMPT GUARD FOR cMPLi POD
         // -------------------------------------------------------------
         if (modType === 'POD') {

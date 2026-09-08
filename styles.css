@@ -468,3 +468,64 @@ button:active {
     }
 }
 
+/* --- Infinite Falling Sand Hourglass Animation --- */
+@keyframes sandStreamFlow {
+    0% {
+        stroke-dashoffset: 0;
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        stroke-dashoffset: -20;
+        opacity: 0.7;
+    }
+}
+
+@keyframes sandGrainDrop {
+    0% {
+        transform: translateY(-8px);
+        opacity: 0;
+    }
+    30% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(22px);
+        opacity: 0;
+    }
+}
+
+@keyframes hourglassPulseGlow {
+    0%, 100% {
+        filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+    }
+    50% {
+        filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.8));
+    }
+}
+
+.sand-stream-anim {
+    animation: sandStreamFlow 0.8s linear infinite;
+}
+
+.sand-grain-1 {
+    animation: sandGrainDrop 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.sand-grain-2 {
+    animation: sandGrainDrop 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.4s;
+}
+
+.sand-grain-3 {
+    animation: sandGrainDrop 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.8s;
+}
+
+.hourglass-glow {
+    animation: hourglassPulseGlow 3s ease-in-out infinite;
+}
+
