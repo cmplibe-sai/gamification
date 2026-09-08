@@ -146,13 +146,13 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
 
         if (!uploadUrl) return null;
 
-        // Submit transcription job (fast, auto language detection)
+        // Submit transcription job (strictly enforce English language to prevent false Indic classification)
         const transcriptRes = await fetch(`${AAI_BASE}/v2/transcript`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 audio_url: uploadUrl,
-                language_detection: true,
+                language_code: 'en',
                 punctuate: true,
                 format_text: true
             })
@@ -1024,7 +1024,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             joinDates: getUserJoinDatesFromDb(),
             userModuleStartDates: getUserModuleStartDatesFromDb(),
             levelUpAccess: liveLevelUpAccess,
-            milestoneStartDates: store.milestoneStartDates || { "1": "2026-08-29", "2": "2026-08-21", "3": "2026-11-21" },
+            milestoneStartDates: store.milestoneStartDates || {},
             milestonePrereqs: getMilestonePrereqsFromDb(),
             certificateApprovals: getCertificateApprovalsFromDb(),
             userMilestoneStates: getUserMilestoneStateFromDb()
@@ -1216,7 +1216,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // Very sparse transcript (< 4 meaningful words) — cap to near zero
     if (studentWords.length < 4) coverage = Math.min(coverage, 4);
 
-    // ── 5-TIER LC GRADING ───────────────────────────────────────────────────
+    // ── 5-TIER LC GRADING (Warm, Personalized & Constructive Feedback) ────────
 
     // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
     if (coverage < 50) {
@@ -1224,60 +1224,58 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Rubric Match Below 50% — 0 LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Required (Min. 50% Required)\n` +
-                `The submitted reflection scored ${coverage}%, which is below the minimum required 50% rubric match threshold. ` +
-                `No LCs have been awarded. Please review today's designated reading/article carefully, record a genuine voice reflection ` +
-                `discussing the key concepts and core takeaways, and re-submit your check-in.`
+            remarks: `❌ [Content Match Below 50% — 0 LCs Awarded]\n` +
+                `Match: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
+                `Why 0 LCs were awarded: The audio voice reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short/faint to verify.\n` +
+                `How to improve: Record a genuine voice reflection with a beautiful happy smile and submit! Speak clearly into your microphone about what you learned today, and you will easily cross 50%+ to earn your LCs.`
         };
     }
 
     // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
     if (coverage <= 80) {
         const pts = isLate ? 3 : 17;
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Late window reward of +${pts} LCs credited to your TagMango wallet.` : ` ${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`;
+        const deduction = 33 - pts;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Your reflection partially aligned with today's rubric. Some key concepts were ` +
-                `covered, but sections of the designated topic were skipped or insufficiently ` +
-                `discussed. Minor articulation or pronunciation mistakes were detected.${lateNote}`
+            remarks: `⚠️ [Moderate Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
+                `Why ${pts} LCs instead of 33 LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the full 33 LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
         };
     }
 
     // TIER 2 — Good Match (81% – 90%) → 23 LCs
     if (coverage <= 90) {
         const pts = isLate ? 3 : 23;
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. While rubric scored high (${coverage}%), late window reward of +${pts} LCs was credited to your TagMango wallet.` : ` ${pts} LCs credited. Great effort!`;
+        const deduction = 33 - pts;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. While your content match scored high (${coverage}%), late window policy awarded +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-                `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Your reflection showed strong alignment with today's rubric. Most of the key ` +
-                `concepts from the day's description were clearly articulated and verified.${lateNote}`
+            remarks: `✅ [Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
+                `Why ${pts} LCs instead of 33 LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full 33 LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the remaining 10 LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full 33 LCs!${lateNote}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
     const pts = isLate ? 3 : basePoints;
-    const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Although your rubric match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your TagMango wallet.` : ` Full credit of ${pts} LCs has been added to your TagMango wallet.`;
+    const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. Although your content match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ` Full credit of ${pts} LCs has been added to your wallet.`;
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
         isLate: isLate,
         remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-            `Rubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
-            `Excellent reflection! Your voice response was clearly articulated and closely matched ` +
-            `today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, ` +
-            `and key concepts from the day's description were all verified and satisfied.${lateNote}`
+            `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
+            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session. Authentic takeaways and key lessons were all thoroughly verified.${lateNote}`
     };
 }
 function calculateTextSimilarity(referenceArticle, studentResponse) {

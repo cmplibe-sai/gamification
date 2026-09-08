@@ -7066,7 +7066,11 @@ function renderAdminCohortSubmissions() {
             }
         } else {
             // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE column
-            const userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(user._id, activeAdminMilestoneId || 1) : null) || getLocalDateKey(new Date());
+            const userMsJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(user._id, activeAdminMilestoneId || 1) : null;
+            let userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null);
+            if (!userStartDateStr || (userMsJoinDate && userStartDateStr < userMsJoinDate)) {
+                userStartDateStr = userMsJoinDate || getLocalDateKey(new Date());
+            }
             let userMilestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
             if (isNaN(userMilestoneStartDate.getTime())) userMilestoneStartDate = new Date();
             userMilestoneStartDate.setHours(0,0,0,0);
@@ -8539,7 +8543,13 @@ let globalMediaBlobs = {};
 
 async function startMediaRecording(index, type) {
     try {
-        const constraints = type === 'video' ? { video: true, audio: true } : { audio: true };
+        const audioOpts = {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+        };
+        const constraints = type === 'video' ? { video: true, audio: audioOpts } : { audio: audioOpts };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
         document.getElementById(`btn_record_${index}`).classList.add('hidden');
@@ -9569,6 +9579,13 @@ async function joinMilestoneNow(msId) {
     
     try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(dates)); } catch(e) {}
     
+    // Also explicitly initialize Day 1 for all active modules in this milestone to todayKey
+    ['dip', 'pod', 'immerse'].forEach(mod => {
+        if (typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, msId, mod, todayKey);
+        }
+    });
+
     // Sync to server (send delta only to avoid clobbering other users' join dates)
     apiFetch('/api/user-join-date', {
         method: 'POST',
@@ -9755,7 +9772,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     let coverage = Math.round((matchedCount / refWordSet.size) * 100);
     if (studentWords.length < 4) coverage = Math.min(coverage, 4);
 
-    // ── 5-TIER LC GRADING ───────────────────────────────────────────────────
+    // ── 5-TIER LC GRADING (Warm, Personalized & Constructive Feedback) ────────
 
     // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
     if (coverage < 50) {
@@ -9763,59 +9780,157 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: Rubric Match Below 50% — 0 LCs Awarded]\n` +
-                `Rubric Match: ${coverage}% | Credited: +0 LCs | Status: Rejected — Re-submission Required (Min. 50% Required)\n` +
-                `The submitted reflection scored ${coverage}%, which is below the minimum required 50% rubric match threshold. ` +
-                `No LCs have been awarded. Please review today's designated reading/article carefully, record a genuine voice reflection ` +
-                `discussing the key concepts and core takeaways, and re-submit your check-in.`
+            remarks: `❌ [Content Match Below 50% — 0 LCs Awarded]\n` +
+                `Match: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
+                `Why 0 LCs were awarded: The audio voice reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short/faint to verify.\n` +
+                `How to improve: Record a genuine voice reflection with a beautiful happy smile and submit! Speak clearly into your microphone about what you learned today, and you will easily cross 50%+ to earn your LCs.`
         };
     }
 
     // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
     if (coverage <= 80) {
         const pts = isLate ? 3 : 17;
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Late window reward of +${pts} LCs credited to your TagMango wallet.` : ` ${pts} LCs credited. Aim for deeper coverage of all key concepts for a higher score.`;
+        const deduction = 33 - pts;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `⚠️ [AI Evaluation: Partial Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\nYour reflection partially aligned with today's rubric. Some key concepts were covered, but sections of the designated topic were skipped or insufficiently discussed. Minor articulation or pronunciation mistakes were detected.${lateNote}`
+            remarks: `⚠️ [Moderate Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
+                `Why ${pts} LCs instead of 33 LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the full 33 LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
         };
     }
 
     // TIER 2 — Good Match (81% – 90%) → 23 LCs
     if (coverage <= 90) {
         const pts = isLate ? 3 : 23;
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. While rubric scored high (${coverage}%), late window reward of +${pts} LCs was credited to your TagMango wallet.` : ` ${pts} LCs credited. Great effort!`;
+        const deduction = 33 - pts;
+        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. While your content match scored high (${coverage}%), late window policy awarded +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `✅ [AI Evaluation: Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\nYour reflection showed strong alignment with today's rubric. Most of the key concepts from the day's description were clearly articulated and verified.${lateNote}`
+            remarks: `✅ [Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
+                `Why ${pts} LCs instead of 33 LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full 33 LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the remaining 10 LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full 33 LCs!${lateNote}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
     const pts = isLate ? 3 : basePoints;
-    const lateNote = isLate ? `\n⏰ Note: Submitted outside the creator's active daily window. Although your rubric match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your TagMango wallet.` : ` Full credit of ${pts} LCs has been added to your TagMango wallet.`;
+    const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. Although your content match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ` Full credit of ${pts} LCs has been added to your wallet.`;
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
         isLate: isLate,
-        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\nRubric Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\nExcellent reflection! Your voice response was clearly articulated and closely matched today's rubric with high conceptual coverage. Authentic takeaways, learning objectives, and key concepts from the day's description were all verified and satisfied.${lateNote}`
+        remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
+            `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
+            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session. Authentic takeaways and key lessons were all thoroughly verified.${lateNote}`
     };
 }
 window.evaluateReflectionAgainstRubric = evaluateReflectionAgainstRubric;
 
 
+// Audio draft recovery helpers
+window.restoreAudioDraft = function(idx, draftKey) {
+    try {
+        if (!draftKey) {
+            draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+        }
+        const draftData = localStorage.getItem(draftKey);
+        if (!draftData) return;
+        window._recordedAudioData = window._recordedAudioData || {};
+        window._recordedAudioData[idx] = draftData;
+        const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+        if (hiddenData) hiddenData.value = draftData;
+        const previewEl = document.getElementById(`audio_preview_${idx}`);
+        if (previewEl) {
+            previewEl.src = draftData;
+            previewEl.classList.remove('hidden');
+        }
+        const downloadLink = document.getElementById(`audio_download_${idx}`);
+        if (downloadLink) {
+            downloadLink.href = draftData;
+            downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}_recovered.webm`;
+            downloadLink.classList.remove('hidden');
+            downloadLink.classList.add('inline-flex');
+        }
+        const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Restored from Draft! Ready to submit.</span>';
+        document.getElementById(`draft_banner_${idx}`)?.remove();
+
+        // Also initiate server upload for restored draft if it's base64
+        if (draftData.startsWith('data:')) {
+            window._audioUploadPromises = window._audioUploadPromises || {};
+            window._audioUploadPromises[idx] = apiFetch('/api/upload-media', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dataUrl: draftData, prefix: `audio_q${idx + 1}` })
+            }).then(r => r.json()).then(uploadRes => {
+                if (uploadRes && uploadRes.success && uploadRes.url) {
+                    window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                    window._recordedAudioServerUrls[idx] = uploadRes.url;
+                    if (hiddenData) hiddenData.value = uploadRes.url;
+                }
+            }).catch(e => console.warn('Draft auto-upload error:', e));
+        }
+    } catch(e) {
+        console.error('Error restoring audio draft:', e);
+    }
+};
+
+window.discardAudioDraft = function(idx, draftKey) {
+    try {
+        if (!draftKey) {
+            draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+        }
+        localStorage.removeItem(draftKey);
+        document.getElementById(`draft_banner_${idx}`)?.remove();
+        const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+        if (recStatus) recStatus.innerHTML = '<span class="text-slate-400">Draft discarded. Click "Record with Mic" to start fresh.</span>';
+    } catch(e) {}
+};
+
 async function startAudioRecording(idx) {
     try {
         _audioChunks = [];
-        _audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        _audioRecorder = new MediaRecorder(_audioStream);
+        const audioConstraints = {
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 44100
+            }
+        };
+        _audioStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+
+        // Hardware / Web Audio gain booster to guarantee audible volume on mobile devices
+        let recStream = _audioStream;
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+                const audioCtx = new AudioContextClass();
+                const source = audioCtx.createMediaStreamSource(_audioStream);
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.value = 2.0; // Boost microphone gain for mobile devices
+                const dest = audioCtx.createMediaStreamDestination();
+                source.connect(gainNode);
+                gainNode.connect(dest);
+                recStream = dest.stream;
+                window._activeAudioCtx = audioCtx;
+            }
+        } catch(audioCtxErr) {
+            console.warn('[AudioContext Gain] Web Audio boost fallback:', audioCtxErr);
+        }
+
+        _audioRecorder = new MediaRecorder(recStream);
 
         // Initialize Web Speech API for live transcription of student's speech
         window._liveTranscripts = window._liveTranscripts || {};
@@ -9844,7 +9959,23 @@ async function startAudioRecording(idx) {
         }
 
         _audioRecorder.ondataavailable = e => {
-            if (e.data.size > 0) _audioChunks.push(e.data);
+            if (e.data && e.data.size > 0) {
+                _audioChunks.push(e.data);
+                // Autosave draft every 3 seconds to localStorage so sudden power-off/refresh is never lost
+                if (_audioChunks.length % 3 === 0) {
+                    try {
+                        const tempBlob = new Blob(_audioChunks, { type: 'audio/webm' });
+                        const r = new FileReader();
+                        r.onloadend = () => {
+                            if (r.result) {
+                                const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+                                try { localStorage.setItem(draftKey, r.result); } catch(err) {}
+                            }
+                        };
+                        r.readAsDataURL(tempBlob);
+                    } catch(e) {}
+                }
+            }
         };
 
         _audioRecorder.onstop = () => {
@@ -9867,6 +9998,14 @@ async function startAudioRecording(idx) {
             const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
             if (hiddenData) hiddenData.value = blobUrl;
 
+            const downloadLink = document.getElementById(`audio_download_${idx}`);
+            if (downloadLink) {
+                downloadLink.href = blobUrl;
+                downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.webm`;
+                downloadLink.classList.remove('hidden');
+                downloadLink.classList.add('inline-flex');
+            }
+
             const recStatus = document.getElementById(`audio_rec_status_${idx}`);
             if (recStatus) recStatus.innerHTML = '<span class="text-cyan-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Securing & Uploading Voice Note...</span>';
 
@@ -9880,6 +10019,10 @@ async function startAudioRecording(idx) {
                 reader.onloadend = async () => {
                     const base64Data = reader.result;
                     window._recordedAudioData[idx] = base64Data;
+
+                    // Save complete recording to draft storage until form is successfully submitted
+                    const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+                    try { localStorage.setItem(draftKey, base64Data); } catch(err) {}
 
                     try {
                         const uploadRes = await apiFetch('/api/upload-media', {
@@ -9917,7 +10060,8 @@ async function startAudioRecording(idx) {
             }
         };
 
-        _audioRecorder.start();
+        // Pass 1000ms timeslice to receive audio chunks every second for real-time draft saving
+        _audioRecorder.start(1000);
         const startBtn = document.getElementById(`btn_start_audio_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
         if (startBtn) startBtn.classList.add('hidden');
@@ -10098,6 +10242,66 @@ function stopVideoRecording(idx) {
 }
 window.stopVideoRecording = stopVideoRecording;
 
+function handleAudioFileSelect(input, idx) {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (_audioRecorder && _audioRecorder.state !== 'inactive') {
+        try { _audioRecorder.stop(); } catch(e) {}
+    }
+    if (_audioStream) {
+        try { _audioStream.getTracks().forEach(track => track.stop()); } catch(e) {}
+        _audioStream = null;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const dataUrl = e.target.result;
+        const previewEl = document.getElementById(`audio_preview_${idx}`);
+        if (previewEl) {
+            previewEl.src = dataUrl;
+            previewEl.classList.remove('hidden');
+        }
+        window._recordedAudioData = window._recordedAudioData || {};
+        window._recordedAudioData[idx] = dataUrl;
+        const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
+        if (hiddenData) hiddenData.value = dataUrl;
+
+        const downloadLink = document.getElementById(`audio_download_${idx}`);
+        if (downloadLink) {
+            downloadLink.href = dataUrl;
+            downloadLink.download = file.name || `audio_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.mp3`;
+            downloadLink.classList.remove('hidden');
+            downloadLink.classList.add('inline-flex');
+        }
+
+        const recStatus = document.getElementById(`audio_rec_status_${idx}`);
+        if (recStatus) recStatus.innerHTML = `<span class="text-cyan-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Uploading ${file.name}...</span>`;
+
+        // Automatically upload audio file to server
+        window._audioUploadPromises = window._audioUploadPromises || {};
+        window._audioUploadPromises[idx] = apiFetch('/api/upload-media', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl: dataUrl, prefix: `audio_q${idx + 1}` })
+        }).then(r => r.json()).then(uploadRes => {
+            if (uploadRes && uploadRes.success && uploadRes.url) {
+                window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
+                window._recordedAudioServerUrls[idx] = uploadRes.url;
+                if (hiddenData) hiddenData.value = uploadRes.url;
+                if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio File Ready: ${file.name}</span>`;
+            } else {
+                if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio File Ready: ${file.name}</span>`;
+            }
+        }).catch(err => {
+            console.warn('Audio file upload err:', err);
+            if (recStatus) recStatus.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio File Ready: ${file.name}</span>`;
+        });
+    };
+    reader.readAsDataURL(file);
+}
+window.handleAudioFileSelect = handleAudioFileSelect;
+
 function handleVideoFileSelect(input, idx) {
     const file = input.files[0];
     if (!file) return;
@@ -10218,7 +10422,15 @@ function openSubmissionModal(dayNum, moduleName) {
     const ms = milestoneConfig.find(m => m.id === msId) || { name: `Milestone ${msId}` };
     const todayKey = getLocalDateKey(new Date());
 
-    const userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, msId, moduleName) : null) || ((typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : todayKey);
+    window._activeCheckinMod = moduleName || 'dip';
+    window._activeCheckinDay = dayNum || 1;
+    window._activeCheckinMsId = msId;
+
+    const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : null;
+    let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, msId, moduleName) : null);
+    if (!userJoinDateStr || (milestoneJoinDate && userJoinDateStr < milestoneJoinDate)) {
+        userJoinDateStr = milestoneJoinDate || todayKey;
+    }
     let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
     milestoneStartDate.setHours(0,0,0,0);
@@ -10395,6 +10607,18 @@ function openSubmissionModal(dayNum, moduleName) {
                                     
                                     <!-- In-Built Voice Recorder (Mic) -->
                                     <div class="p-4 bg-slate-900 rounded-xl border border-slate-700/70 space-y-3">
+                                        <!-- Autosave Draft Recovery Banner if available -->
+                                        <div id="draft_banner_${idx}" class="hidden p-3 rounded-xl bg-indigo-950/80 border border-indigo-500/50 text-xs text-indigo-200 flex items-center justify-between gap-2 shadow-sm">
+                                            <div class="flex items-center gap-2">
+                                                <i class="fas fa-history text-indigo-400 text-sm"></i>
+                                                <span><strong>Unsaved Audio Draft Found!</strong> Restore previous voice recording?</span>
+                                            </div>
+                                            <div class="flex items-center gap-2 shrink-0">
+                                                <button type="button" onclick="restoreAudioDraft(${idx})" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-[11px] transition-colors shadow">Restore</button>
+                                                <button type="button" onclick="discardAudioDraft(${idx})" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] transition-colors">Discard</button>
+                                            </div>
+                                        </div>
+
                                         <div class="flex flex-wrap items-center gap-3">
                                             <button type="button" id="btn_start_audio_${idx}" onclick="startAudioRecording(${idx})" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 flex items-center gap-2">
                                                 <i class="fas fa-microphone"></i> Record with Mic
@@ -10408,7 +10632,12 @@ function openSubmissionModal(dayNum, moduleName) {
                                                 <input type="file" accept="audio/*,.mp3,.m4a,.wav" id="checkin_input_${idx}" onchange="handleAudioFileSelect(this, ${idx})" class="hidden" />
                                             </label>
                                         </div>
-                                        <div id="audio_rec_status_${idx}" class="text-xs text-slate-400">Click "Record with Mic" or upload your audio file.</div>
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div id="audio_rec_status_${idx}" class="text-xs text-slate-400">Click "Record with Mic" or upload your audio file.</div>
+                                            <a id="audio_download_${idx}" href="#" download="my_reflection_audio.webm" class="hidden text-xs text-indigo-400 hover:text-indigo-300 font-semibold items-center gap-1 transition-colors">
+                                                <i class="fas fa-download"></i> Download Audio
+                                            </a>
+                                        </div>
                                         <audio id="audio_preview_${idx}" controls class="hidden w-full h-8 rounded-lg mt-2"></audio>
                                         <input type="hidden" id="checkin_audio_data_${idx}" value="" />
                                     </div>
@@ -10492,6 +10721,22 @@ function openSubmissionModal(dayNum, moduleName) {
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Auto-detect unsaved audio drafts from localStorage for each audio question
+    try {
+        const uId = (currentUser && currentUser._id) || 'usr';
+        questions.forEach((q, idx) => {
+            const qType = (q.type || 'text').toLowerCase();
+            if (qType === 'audio' || qType === 'voice' || qType === 'audio/voice') {
+                const draftKey = `audio_draft_${uId}_${msId}_${moduleName}_${dayNum}_q${idx}`;
+                const saved = localStorage.getItem(draftKey);
+                if (saved) {
+                    const banner = document.getElementById(`draft_banner_${idx}`);
+                    if (banner) banner.classList.remove('hidden');
+                }
+            }
+        });
+    } catch(e) {}
 }
 window.openSubmissionModal = openSubmissionModal;
 
@@ -11014,6 +11259,14 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
         // Close submission input form
         document.getElementById('submissionModalDynamic')?.remove();
 
+        // Clear autosaved audio drafts on submission
+        try {
+            const uId = (currentUser && currentUser._id) || 'usr';
+            for (let i = 0; i < 10; i++) {
+                localStorage.removeItem(`audio_draft_${uId}_${msId}_${moduleName}_${dayNum}_q${i}`);
+            }
+        } catch(e) {}
+
         const doneHandler = (finalData) => {
             const pts = Number(finalData?.lcReward) || 0;
             const matchScore = Number(finalData?.matchPercentage) || 0;
@@ -11240,10 +11493,12 @@ function switchMilestoneTab(moduleName, btnElement) {
     }
 
     const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
+    const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
-    if (!userJoinDateStr) {
-        // Auto-lock Day 1 on first view so it never slides forward day-by-day if browsing without submitting!
-        userJoinDateStr = (normalizedMod === 'dip' ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null) || todayKey;
+    
+    // Auto-align Day 1: if module start date is missing OR precedes milestone join date, align with join date or todayKey
+    if (!userJoinDateStr || (milestoneJoinDate && userJoinDateStr < milestoneJoinDate)) {
+        userJoinDateStr = milestoneJoinDate || todayKey;
         if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
             setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
         }
