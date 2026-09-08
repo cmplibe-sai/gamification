@@ -812,18 +812,17 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
 
     if (hasLedger) {
         const seenLedgerIds = new Set();
-        const seenCheckinEvents = new Set();
 
         entries.forEach(entry => {
             if (!entry) return;
 
-            // Deduplicate exact transaction ID if present
+            // Deduplicate exact transaction ID if present (TagMango's authoritative unique ID)
             if (entry._id) {
                 if (seenLedgerIds.has(entry._id)) return;
                 seenLedgerIds.add(entry._id);
             }
 
-            // CRITICAL FIX: Allow negative scores (admin adjustments, refunds, corrections)
+            // Allow negative scores (admin adjustments, refunds, corrections)
             // Only skip undefined, null, NaN, or zero scores.
             const score = Number(entry.score);
             if (isNaN(score) || score === 0) return;
@@ -832,17 +831,6 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
             if (!rawDate) return;
             const dateKey = getLocalDateKey(new Date(rawDate));
             if (!dateKey) return;
-
-            // Deduplicate accidental duplicate credit transactions for same milestone checkin
-            const desc = (entry.description || '').trim();
-            const checkinMatch = desc.match(/Milestone-(\d+)\s+Day-(\d+)\s+(\w+)\s+Check-in/i);
-            if (checkinMatch && score > 0) {
-                const eventKey = `${dateKey}_ms${checkinMatch[1]}_d${checkinMatch[2]}_${checkinMatch[3].toLowerCase()}_${score}`;
-                if (seenCheckinEvents.has(eventKey)) {
-                    return; // Drop duplicate credit of identical score on same day
-                }
-                seenCheckinEvents.add(eventKey);
-            }
 
             dailyLcs[dateKey] = (dailyLcs[dateKey] || 0) + score;
         });

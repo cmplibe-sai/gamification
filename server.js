@@ -1454,8 +1454,15 @@ async function assignTagMangoPoints(fanId, score, description, type = 'levelup-c
         });
         const resData = await res.json();
         console.log(`[TagMango Wallet API] Successfully credited ${score} LCs to ${fanId} ("${description}") [Type: ${type}]:`, resData?.message || resData);
-        if (serverLedgerCache && serverLedgerCache.has(String(fanId))) {
+        if (serverLedgerCache) {
             serverLedgerCache.delete(String(fanId));
+            if (typeof findActualUserFast === 'function') {
+                const u = findActualUserFast(fanId);
+                if (u) {
+                    if (u._id) serverLedgerCache.delete(String(u._id));
+                    if (u.email) serverLedgerCache.delete(String(u.email).toLowerCase().trim());
+                }
+            }
         }
         return resData;
     } catch (err) {
