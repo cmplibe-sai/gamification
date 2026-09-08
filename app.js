@@ -735,25 +735,63 @@ var currentLcGrowthTimeframe = '30d';
 var currentLcGrowthUser = null;
 var _chartJsRetryCount = 0;
 var _lastRenderedChartSig = null;
-var userTagMangoLedgerCache = {}; // userId -> Array of ledger transactions
+var userTagMangoLedgerCache = {}; // userId -> { timestamp, entries, failed }
+var userTagMangoLedgerInFlight = {}; // userId -> Promise (eliminates duplicate simultaneous fetches)
 
 async function fetchTagMangoLedger(userId) {
     if (!userId) return [];
-    if (userTagMangoLedgerCache[userId] && Array.isArray(userTagMangoLedgerCache[userId])) {
-        return userTagMangoLedgerCache[userId];
-    }
-    try {
-        const response = await apiFetch(`/api/tagmango/ledger/${encodeURIComponent(userId)}`);
-        if (response.ok) {
-            const data = await response.json();
-            const entries = (data && data.result && Array.isArray(data.result.data)) ? data.result.data : [];
-            userTagMangoLedgerCache[userId] = entries;
-            return entries;
+    const cleanId = String(userId);
+
+    // 1. Return cached entries if fresh (< 60s)
+    const cached = userTagMangoLedgerCache[cleanId];
+    if (cached) {
+        if (!cached.failed && Array.isArray(cached.entries)) {
+            return cached.entries;
         }
-    } catch (err) {
-        console.warn('TagMango points ledger fetch notice:', err);
+        // If failed recently (< 30s), back off to prevent hammering API
+        if (cached.failed && (Date.now() - cached.timestamp < 30000)) {
+            return [];
+        }
     }
-    return [];
+
+    // 2. Reuse in-flight promise if a request for this user is already underway
+    if (userTagMangoLedgerInFlight[cleanId]) {
+        return userTagMangoLedgerInFlight[cleanId];
+    }
+
+    userTagMangoLedgerInFlight[cleanId] = (async () => {
+        try {
+            const response = await apiFetch(`/api/tagmango/ledger/${encodeURIComponent(cleanId)}`);
+            if (response.ok) {
+                const data = await response.json();
+                const entries = (data && data.result && Array.isArray(data.result.data)) ? data.result.data : [];
+                userTagMangoLedgerCache[cleanId] = {
+                    timestamp: Date.now(),
+                    entries: entries,
+                    failed: false
+                };
+                return entries;
+            } else {
+                userTagMangoLedgerCache[cleanId] = {
+                    timestamp: Date.now(),
+                    entries: [],
+                    failed: true
+                };
+            }
+        } catch (err) {
+            console.warn('TagMango points ledger fetch notice:', err);
+            userTagMangoLedgerCache[cleanId] = {
+                timestamp: Date.now(),
+                entries: [],
+                failed: true
+            };
+        } finally {
+            delete userTagMangoLedgerInFlight[cleanId];
+        }
+        return [];
+    })();
+
+    return userTagMangoLedgerInFlight[cleanId];
 }
 window.fetchTagMangoLedger = fetchTagMangoLedger;
 
@@ -765,27 +803,53 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
     const dailyLcs = {};
 
     // 1. Ingest TagMango Ledger Entries (Authoritative source for lifetime wallet points)
+    const cachedObj = userId ? userTagMangoLedgerCache[String(userId)] : null;
     const entries = (ledgerEntries && Array.isArray(ledgerEntries)) 
         ? ledgerEntries 
-        : (userId && userTagMangoLedgerCache[userId] ? userTagMangoLedgerCache[userId] : null);
+        : ((cachedObj && !cachedObj.failed && Array.isArray(cachedObj.entries)) ? cachedObj.entries : null);
 
     const hasLedger = Boolean(entries && entries.length > 0);
 
     if (hasLedger) {
+        const seenLedgerIds = new Set();
+        const seenCheckinEvents = new Set();
+
         entries.forEach(entry => {
-            if (!entry || !entry.score) return;
-            const score = Number(entry.score) || 0;
-            if (score <= 0) return;
+            if (!entry) return;
+
+            // Deduplicate exact transaction ID if present
+            if (entry._id) {
+                if (seenLedgerIds.has(entry._id)) return;
+                seenLedgerIds.add(entry._id);
+            }
+
+            // CRITICAL FIX: Allow negative scores (admin adjustments, refunds, corrections)
+            // Only skip undefined, null, NaN, or zero scores.
+            const score = Number(entry.score);
+            if (isNaN(score) || score === 0) return;
+
             const rawDate = entry.date || entry.createdAt;
             if (!rawDate) return;
             const dateKey = getLocalDateKey(new Date(rawDate));
             if (!dateKey) return;
+
+            // Deduplicate accidental duplicate credit transactions for same milestone checkin
+            const desc = (entry.description || '').trim();
+            const checkinMatch = desc.match(/Milestone-(\d+)\s+Day-(\d+)\s+(\w+)\s+Check-in/i);
+            if (checkinMatch && score > 0) {
+                const eventKey = `${dateKey}_ms${checkinMatch[1]}_d${checkinMatch[2]}_${checkinMatch[3].toLowerCase()}_${score}`;
+                if (seenCheckinEvents.has(eventKey)) {
+                    return; // Drop duplicate credit of identical score on same day
+                }
+                seenCheckinEvents.add(eventKey);
+            }
+
             dailyLcs[dateKey] = (dailyLcs[dateKey] || 0) + score;
         });
     }
 
     // 2. Ingest Local Submissions with Claude-recommended deduplication
-    // (Grouping by dateKey + normalized module, resolving to highest reward / completed)
+    // (Grouping by dateKey + normalized module, resolving to completed > higher reward > most recent)
     const rawSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
     const bestSubsByDateMod = {};
 
@@ -803,7 +867,7 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
         if (!existing) {
             bestSubsByDateMod[groupKey] = s;
         } else {
-            // Collision resolution tie-break: completed > higher lcReward > latest
+            // Collision resolution 3-level tie-break: completed > higher lcReward > most recent timestamp
             const sCompleted = s.status === 'completed';
             const exCompleted = existing.status === 'completed';
             if (sCompleted && !exCompleted) {
@@ -813,6 +877,12 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
                 const exRew = Number(existing.lcReward) || 0;
                 if (sRew > exRew) {
                     bestSubsByDateMod[groupKey] = s;
+                } else if (sRew === exRew) {
+                    const sTime = new Date(s.submittedAt || s.createdAt || 0).getTime();
+                    const exTime = new Date(existing.submittedAt || existing.createdAt || 0).getTime();
+                    if (sTime > exTime) {
+                        bestSubsByDateMod[groupKey] = s;
+                    }
                 }
             }
         }
@@ -859,7 +929,7 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
         labels.push(label);
     }
 
-    // Baseline: sum of all LCs strictly before start of this timeframe window
+    // Baseline: sum of all LCs strictly before start of this timeframe window (including netted negative adjustments)
     const windowStartKey = dateKeys[0];
     let baselineCumulative = 0;
     Object.keys(dailyLcs).forEach(k => {
@@ -945,13 +1015,18 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
     const fallbackEl = document.getElementById('lcChartFallback');
     if (fallbackEl) fallbackEl.remove();
 
-    // Trigger async TagMango ledger fetch if not yet cached
-    if (targetUserId && !userTagMangoLedgerCache[targetUserId]) {
-        fetchTagMangoLedger(targetUserId).then(entries => {
-            if (entries && entries.length > 0) {
-                renderLcGrowthChart(user, currentLcGrowthTimeframe, true);
-            }
-        });
+    // Trigger async TagMango ledger fetch with in-flight and backoff deduplication
+    if (targetUserId) {
+        const cleanId = String(targetUserId);
+        const cached = userTagMangoLedgerCache[cleanId];
+        const isFreshOrBackedOff = cached && (!cached.failed || (Date.now() - cached.timestamp < 30000));
+        if (!isFreshOrBackedOff && !userTagMangoLedgerInFlight[cleanId]) {
+            fetchTagMangoLedger(cleanId).then(entries => {
+                if (entries && entries.length > 0) {
+                    renderLcGrowthChart(user, currentLcGrowthTimeframe, true);
+                }
+            });
+        }
     }
 
     const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
@@ -959,12 +1034,12 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
 
     const data = buildCumulativeLcTimeline(user, days);
 
-    // Update KPI badges
+    // Update KPI badges (properly handles negative gainedInPeriod)
     const totalEl = document.getElementById('lcKpiTotalCumulative');
     const gainedEl = document.getElementById('lcKpiGainedInPeriod');
     const avgEl = document.getElementById('lcKpiDailyAverage');
     if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
-    if (gainedEl) gainedEl.textContent = `+${data.gainedInPeriod} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
     if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
 
     // Synchronize select dropdown value if exists
@@ -1063,7 +1138,9 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
                             const daily = data.dailyData[idx];
                             const lines = [`📈 Cumulative: ${cum} LCs`];
                             if (daily > 0) {
-                                lines.push(`⚡ Earned Today: +${daily} LCs`);
+                                lines.push(`⚡ Earned: +${daily} LCs`);
+                            } else if (daily < 0) {
+                                lines.push(`🔻 Adjustment: ${daily} LCs`);
                             } else {
                                 lines.push(`💤 No check-ins on this date`);
                             }

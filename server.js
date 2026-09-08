@@ -1454,6 +1454,9 @@ async function assignTagMangoPoints(fanId, score, description, type = 'levelup-c
         });
         const resData = await res.json();
         console.log(`[TagMango Wallet API] Successfully credited ${score} LCs to ${fanId} ("${description}") [Type: ${type}]:`, resData?.message || resData);
+        if (serverLedgerCache && serverLedgerCache.has(String(fanId))) {
+            serverLedgerCache.delete(String(fanId));
+        }
         return resData;
     } catch (err) {
         console.error(`[TagMango Wallet API Error] Failed to credit points to ${fanId}:`, err.message);
