@@ -604,10 +604,10 @@ function ensureLqGaugeSvg(prefix = 'lq') {
                 </g>
             </svg>
 
-            <!-- Center Score Digits: Prominent total number on top, exact customer totals below, zero bottom clutter -->
+            <!-- Center Score Digits: Prominent total number on top, exact customer totals below for creator only -->
             <div class="flex flex-col items-center text-center mt-1 select-none">
                 <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0 LCs</span>
-                <span id="${prefix}MaxLabel" class="text-xs md:text-sm text-slate-300 font-bold font-mono tracking-wide mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">0 / 0 LCs (0%)</span>
+                <span id="${prefix}MaxLabel" class="${prefix === 'adminLq' ? 'block' : 'hidden'} text-xs md:text-sm text-slate-300 font-bold font-mono tracking-wide mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]" style="${prefix === 'adminLq' ? '' : 'display: none;'}">0 / 0 LCs (0%)</span>
             </div>
         </div>
     `;
@@ -648,10 +648,16 @@ function updateLqCenterNumbers(earned, max, pct, prefix = 'lq') {
     const maxEl = document.getElementById(`${prefix}MaxLabel`);
     if (earnedEl) earnedEl.textContent = `${earned} LCs`;
     if (maxEl) {
-        if (max <= 0) {
-            maxEl.textContent = `0 / 0 LCs (0%)`;
+        if (prefix === 'adminLq') {
+            maxEl.style.display = 'block';
+            if (max <= 0) {
+                maxEl.textContent = `0 / 0 LCs (0%)`;
+            } else {
+                maxEl.textContent = `${earned} / ${max} LCs (${pct}%)`;
+            }
         } else {
-            maxEl.textContent = `${earned} / ${max} LCs (${pct}%)`;
+            maxEl.style.display = 'none';
+            maxEl.textContent = '';
         }
     }
 }
@@ -1093,12 +1099,14 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
             animation: {
                 duration: 750,
                 easing: 'easeOutQuart'
             },
             interaction: {
-                mode: 'index',
+                mode: 'nearest',
+                axis: 'x',
                 intersect: false
             },
             plugins: {
@@ -1106,6 +1114,9 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
                     display: false
                 },
                 tooltip: {
+                    enabled: true,
+                    position: 'nearest',
+                    yAlign: 'bottom',
                     backgroundColor: 'rgba(15, 23, 42, 0.95)',
                     titleColor: '#f8fafc',
                     titleFont: { size: 12, weight: 'bold', family: 'system-ui, sans-serif' },
@@ -1168,6 +1179,20 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
             }
         }
     });
+
+    // Mobile touch interaction: hold to inspect, release to instantly clear tooltip so graph remains visible
+    if (canvas && !canvas._touchDismissAttached) {
+        const dismissTooltip = () => {
+            if (lcGrowthChartInstance && lcGrowthChartInstance.tooltip) {
+                lcGrowthChartInstance.tooltip.setActiveElements([], { x: 0, y: 0 });
+                lcGrowthChartInstance.setActiveElements([]);
+                lcGrowthChartInstance.update('none');
+            }
+        };
+        canvas.addEventListener('touchend', dismissTooltip, { passive: true });
+        canvas.addEventListener('touchcancel', dismissTooltip, { passive: true });
+        canvas._touchDismissAttached = true;
+    }
 }
 window.renderLcGrowthChart = renderLcGrowthChart;
 
@@ -1311,12 +1336,14 @@ function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
             animation: {
                 duration: 750,
                 easing: 'easeOutQuart'
             },
             interaction: {
-                mode: 'index',
+                mode: 'nearest',
+                axis: 'x',
                 intersect: false
             },
             plugins: {
@@ -1324,6 +1351,9 @@ function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false
                     display: false
                 },
                 tooltip: {
+                    enabled: true,
+                    position: 'nearest',
+                    yAlign: 'bottom',
                     backgroundColor: 'rgba(15, 23, 42, 0.95)',
                     titleColor: '#f8fafc',
                     titleFont: { size: 12, weight: 'bold', family: 'system-ui, sans-serif' },
@@ -1386,6 +1416,20 @@ function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false
             }
         }
     });
+
+    // Mobile touch interaction for admin chart: hold to inspect, release to instantly clear tooltip
+    if (canvas && !canvas._touchDismissAttached) {
+        const dismissTooltip = () => {
+            if (adminLcGrowthChartInstance && adminLcGrowthChartInstance.tooltip) {
+                adminLcGrowthChartInstance.tooltip.setActiveElements([], { x: 0, y: 0 });
+                adminLcGrowthChartInstance.setActiveElements([]);
+                adminLcGrowthChartInstance.update('none');
+            }
+        };
+        canvas.addEventListener('touchend', dismissTooltip, { passive: true });
+        canvas.addEventListener('touchcancel', dismissTooltip, { passive: true });
+        canvas._touchDismissAttached = true;
+    }
 }
 window.renderAdminLcGrowthChart = renderAdminLcGrowthChart;
 
@@ -11685,6 +11729,70 @@ function retryLastCheckinSubmission() {
 }
 window.retryLastCheckinSubmission = retryLastCheckinSubmission;
 
+// Calculates continuous active streak and total completed check-ins for a specific module
+function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName) {
+    const todayKey = getLocalDateKey(new Date());
+    let completedCount = 0;
+    
+    // 1. Count completed sessions
+    for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
+        const sub = daySubMap[dayNum];
+        const isPod = (normalizeLevelUpType(moduleName) === 'pod');
+        const isEvaluating = !isPod && sub && sub.status === 'evaluating';
+        const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
+        const isCompleted = sub && (isPod || (!isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0)));
+        if (isCompleted) {
+            completedCount++;
+        }
+    }
+
+    // Helper to check if dayNum is completed
+    const isDayCompleted = (dNum) => {
+        const sub = daySubMap[dNum];
+        if (!sub) return false;
+        const isPod = (normalizeLevelUpType(moduleName) === 'pod');
+        const isEvaluating = !isPod && sub.status === 'evaluating';
+        const isMismatch = !isPod && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
+        return isPod || (!isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0));
+    };
+
+    // 2. Determine reference day for streak
+    let latestScheduledDay = 0;
+    let todayScheduledDay = 0;
+    for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
+        const cardDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
+        const cardDateKey = getLocalDateKey(cardDate);
+        if (cardDateKey <= todayKey) {
+            latestScheduledDay = dayNum;
+        }
+        if (cardDateKey === todayKey) {
+            todayScheduledDay = dayNum;
+        }
+    }
+
+    if (latestScheduledDay === 0) {
+        return { completedCount, currentStreak: 0 };
+    }
+
+    let startDay = latestScheduledDay;
+    // If today has a session scheduled and it's not yet completed, don't penalize active streak; count backwards from yesterday!
+    if (todayScheduledDay > 0 && !isDayCompleted(todayScheduledDay)) {
+        startDay = todayScheduledDay - 1;
+    }
+
+    let currentStreak = 0;
+    for (let d = startDay; d >= 1; d--) {
+        if (isDayCompleted(d)) {
+            currentStreak++;
+        } else {
+            break;
+        }
+    }
+
+    return { completedCount, currentStreak };
+}
+window.calculateModuleStreak = calculateModuleStreak;
+
 function switchMilestoneTab(moduleName, btnElement) {
     if (btnElement) {
         document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
@@ -11864,7 +11972,42 @@ function switchMilestoneTab(moduleName, btnElement) {
         `;
     }
 
-    container.innerHTML = cardsHtml;
+    // Calculate module-specific streak and progress banner
+    const { completedCount, currentStreak } = calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName);
+    const pctComplete = Math.min(100, Math.round((completedCount / (totalSessions || 1)) * 100));
+    const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normalizedMod)) || { name: (moduleName || '').toUpperCase(), icon: 'fa-cube text-slate-400' };
+
+    const streakBannerHtml = `
+        <div class="glass-card p-4 sm:p-5 mb-5 border-slate-800 bg-gradient-to-r from-slate-900/95 via-indigo-950/30 to-slate-900/95 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-2xl ${currentStreak > 0 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800/80 text-slate-400 border border-slate-700/60'} flex items-center justify-center text-2xl shrink-0">
+                    <i class="fas fa-fire ${currentStreak > 0 ? 'flame-pulse text-amber-400' : 'text-slate-500'}"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-black uppercase tracking-wider text-indigo-300 font-heading"><i class="fas ${modObj.icon} mr-1"></i> ${modObj.name}</span>
+                        <span class="badge-pill ${currentStreak > 0 ? 'badge-amber flame-pulse' : 'bg-slate-800 text-slate-400'} text-[11px] font-bold">
+                            <i class="fas fa-fire mr-1"></i> ${currentStreak}-Day Streak
+                        </span>
+                    </div>
+                    <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">
+                        ${completedCount} of ${totalSessions} check-ins completed in Milestone ${activeMilestoneId || 1}
+                    </h3>
+                </div>
+            </div>
+            <div class="w-full sm:w-48 shrink-0">
+                <div class="flex justify-between text-[10px] font-mono font-bold text-slate-400 mb-1.5">
+                    <span class="uppercase tracking-wider">Progress</span>
+                    <span class="text-indigo-300 font-extrabold">${pctComplete}%</span>
+                </div>
+                <div class="w-full bg-slate-800/90 rounded-full h-2.5 overflow-hidden border border-slate-700/60 p-0.5">
+                    <div class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500" style="width: ${pctComplete}%"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = streakBannerHtml + cardsHtml;
 }
 window.switchMilestoneTab = switchMilestoneTab;
 
