@@ -454,8 +454,10 @@ function renderLqMilestonePills(prefix = 'lq') {
     const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
     const highest = (user && userMilestoneState && userMilestoneState[user._id]?.highestUnlocked) || 1;
 
-    // Both student and creator views strictly show only milestones the learner has completed/unlocked
-    const allowedMilestones = milestoneConfig.filter(ms => ms.id <= highest);
+    // QA Test Accounts on their own customer profile retain preview access to all milestones;
+    // Creator Hub strictly gates milestones to what the candidate has actually unlocked/completed.
+    const isGod = (prefix === 'lq') && (typeof isTestUser === 'function' && isTestUser());
+    const allowedMilestones = milestoneConfig.filter(ms => isGod || ms.id <= highest);
 
     // Safeguard active milestone if selected milestone is beyond learner's highest unlocked
     if (prefix === 'adminLq') {
@@ -463,7 +465,7 @@ function renderLqMilestonePills(prefix = 'lq') {
             adminLqSelectedMilestone = highest;
         }
     } else {
-        if (!lqSelectedMilestone || lqSelectedMilestone > highest) {
+        if (!lqSelectedMilestone || (!isGod && lqSelectedMilestone > highest)) {
             lqSelectedMilestone = highest;
         }
     }
@@ -977,7 +979,24 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
     const canvas = document.getElementById('lcGrowthChart');
     if (!canvas) return;
 
-    // Claude Recommendation 2: Capped Chart.js loader retry (max 10 attempts = ~3s) with fallback UI
+    // Ingest and calculate timeline data and update KPI badges immediately
+    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
+    const days = timeframeMap[currentLcGrowthTimeframe] || 30;
+    const data = buildCumulativeLcTimeline(user, days);
+
+    const totalEl = document.getElementById('lcKpiTotalCumulative');
+    const gainedEl = document.getElementById('lcKpiGainedInPeriod');
+    const avgEl = document.getElementById('lcKpiDailyAverage');
+    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
+
+    const selectEl = document.getElementById('lcTimeframeFilter');
+    if (selectEl && selectEl.value !== currentLcGrowthTimeframe) {
+        selectEl.value = currentLcGrowthTimeframe;
+    }
+
+    // Capped Chart.js loader retry (max 10 attempts = ~3s) with fallback UI
     if (typeof Chart === 'undefined') {
         if (_chartJsRetryCount < 10) {
             _chartJsRetryCount++;
@@ -1024,25 +1043,6 @@ function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
                 }
             });
         }
-    }
-
-    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
-    const days = timeframeMap[currentLcGrowthTimeframe] || 30;
-
-    const data = buildCumulativeLcTimeline(user, days);
-
-    // Update KPI badges (properly handles negative gainedInPeriod)
-    const totalEl = document.getElementById('lcKpiTotalCumulative');
-    const gainedEl = document.getElementById('lcKpiGainedInPeriod');
-    const avgEl = document.getElementById('lcKpiDailyAverage');
-    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
-    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
-    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
-
-    // Synchronize select dropdown value if exists
-    const selectEl = document.getElementById('lcTimeframeFilter');
-    if (selectEl && selectEl.value !== currentLcGrowthTimeframe) {
-        selectEl.value = currentLcGrowthTimeframe;
     }
 
     // Claude Re-render Granularity: Skip re-creating canvas if data signature has not changed
@@ -1203,17 +1203,56 @@ function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false
     const canvas = document.getElementById('adminLcGrowthChart');
     if (!canvas) return;
 
+    // Ingest and calculate timeline data and update KPI badges immediately
+    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
+    const days = timeframeMap[currentAdminLcGrowthTimeframe] || 30;
+    const data = buildCumulativeLcTimeline(user, days);
+
+    const totalEl = document.getElementById('adminLcKpiTotalCumulative');
+    const gainedEl = document.getElementById('adminLcKpiGainedInPeriod');
+    const avgEl = document.getElementById('adminLcKpiDailyAverage');
+    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
+
+    const selectEl = document.getElementById('adminLcTimeframeFilter');
+    if (selectEl && selectEl.value !== currentAdminLcGrowthTimeframe) {
+        selectEl.value = currentAdminLcGrowthTimeframe;
+    }
+
     if (typeof Chart === 'undefined') {
         if (_adminChartJsRetryCount < 10) {
             _adminChartJsRetryCount++;
             setTimeout(() => renderAdminLcGrowthChart(user, currentAdminLcGrowthTimeframe, forceRender), 300);
             return;
         }
+        // Fallback UI when Chart.js CDN cannot be loaded
+        const container = canvas.parentElement;
+        if (container) {
+            canvas.style.display = 'none';
+            let fallbackEl = document.getElementById('adminLcChartFallback');
+            if (!fallbackEl) {
+                fallbackEl = document.createElement('div');
+                fallbackEl.id = 'adminLcChartFallback';
+                fallbackEl.className = 'flex flex-col items-center justify-center h-full text-slate-400 text-xs py-10';
+                fallbackEl.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-2">
+                        <i class="fas fa-chart-line text-base"></i>
+                    </div>
+                    <p class="font-semibold text-slate-300">Chart Visualization Unavailable</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Unable to load the chart rendering engine. Please check your network connection.</p>
+                `;
+                container.appendChild(fallbackEl);
+            }
+        }
         return;
     }
     _adminChartJsRetryCount = 0;
 
+    // Ensure canvas is visible if fallback was previously displayed
     canvas.style.display = 'block';
+    const fallbackEl = document.getElementById('adminLcChartFallback');
+    if (fallbackEl) fallbackEl.remove();
 
     // Trigger async TagMango ledger fetch with in-flight and backoff deduplication
     if (targetUserId) {
@@ -1227,25 +1266,6 @@ function renderAdminLcGrowthChart(userIdentifier, timeframe, forceRender = false
                 }
             });
         }
-    }
-
-    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
-    const days = timeframeMap[currentAdminLcGrowthTimeframe] || 30;
-
-    const data = buildCumulativeLcTimeline(user, days);
-
-    // Update Creator KPI badges
-    const totalEl = document.getElementById('adminLcKpiTotalCumulative');
-    const gainedEl = document.getElementById('adminLcKpiGainedInPeriod');
-    const avgEl = document.getElementById('adminLcKpiDailyAverage');
-    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
-    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
-    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
-
-    // Synchronize select dropdown value if exists
-    const selectEl = document.getElementById('adminLcTimeframeFilter');
-    if (selectEl && selectEl.value !== currentAdminLcGrowthTimeframe) {
-        selectEl.value = currentAdminLcGrowthTimeframe;
     }
 
     const currentSig = `${targetUserId}_${currentAdminLcGrowthTimeframe}_${data.totalCumulative}_${data.gainedInPeriod}_${data.hasLedger ? 'ledger' : 'local'}`;
