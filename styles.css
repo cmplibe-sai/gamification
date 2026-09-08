@@ -288,6 +288,8 @@ button:active {
     color: #94a3b8;
     transition: all 0.2s ease;
     border: 1px solid transparent;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav-tab-btn:hover {
@@ -457,8 +459,12 @@ button:active {
     }
 
     .nav-tab-btn {
-        padding: 0.375rem 0.625rem;
+        padding: 0.35rem 0.5rem;
         font-size: 0.75rem;
+        min-width: 34px;
+        justify-content: center;
+        white-space: nowrap;
+        gap: 0.25rem;
     }
 }
 

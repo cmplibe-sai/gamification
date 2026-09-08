@@ -15,7 +15,7 @@
     
     <!-- Tailwind CSS (for layout utilities) & Custom Minimalist Design System -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles.css?v=2.9.2">
+    <link rel="stylesheet" href="styles.css?v=2.9.3">
 </head>
 <body class="min-h-screen custom-scrollbar">
 
@@ -62,45 +62,45 @@
         
         <!-- Navigation Header -->
         <nav class="fixed top-0 w-full z-50 glass border-b border-slate-800/90">
-            <div class="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
+            <div class="max-w-7xl mx-auto px-2 sm:px-4 md:px-8 h-16 md:h-20 flex items-center justify-between gap-1 sm:gap-2">
                 
                 <!-- Brand Logo -->
-                <div class="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
-                    <img src="assets/logo.png" alt="cMPLi Be" class="h-7 sm:h-8 md:h-9 w-auto object-contain">
+                <div class="flex items-center gap-1.5 sm:gap-3 cursor-pointer shrink-0" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
+                    <img src="assets/logo.png" alt="cMPLi Be" class="h-6 sm:h-8 md:h-9 max-w-[80px] sm:max-w-[120px] md:max-w-none w-auto object-contain object-left">
                     <span class="hidden sm:inline-block text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">Arena</span>
                 </div>
                 
                 <!-- Learner Navigation Tabs -->
-                <div id="learnerNav" class="hidden flex items-center gap-1 sm:gap-1.5 md:gap-3">
-                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden sm:inline">Home</span></button>
-                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span>Level-Up<span class="hidden md:inline"> (4 Milestones)</span></span></button>
-                    <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span><span class="hidden lg:inline"> Leaderboard</span></button>
+                <div id="learnerNav" class="hidden flex items-center gap-1 sm:gap-1.5 md:gap-3 overflow-x-auto no-scrollbar shrink-0">
+                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active" title="Home"><i class="fas fa-home"></i> <span class="hidden sm:inline">Home</span></button>
+                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn" title="Level-Up"><i class="fas fa-layer-group"></i> <span class="hidden sm:inline">Level-Up</span><span class="hidden md:inline"> (4 Milestones)</span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span><span class="hidden lg:inline"> Leaderboard</span></button>
                     
                     <!-- LC Currency Pill -->
-                    <div class="bg-slate-900/90 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-amber-500/30 flex items-center gap-1 sm:gap-2 ml-1 sm:ml-2 shadow-inner shadow-black shrink-0">
-                        <i class="fas fa-coins text-amber-400 text-xs"></i>
+                    <div class="bg-slate-900/90 px-1.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-amber-500/30 flex items-center gap-1 sm:gap-2 ml-0.5 sm:ml-2 shadow-inner shadow-black shrink-0">
+                        <i class="fas fa-coins text-amber-400 text-[11px] sm:text-xs"></i>
                         <span id="userPoints" class="text-amber-400 font-extrabold text-xs sm:text-sm">0</span>
-                        <span class="text-[9px] sm:text-[10px] text-slate-400 uppercase font-bold">LCs</span>
+                        <span class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold">LCs</span>
                     </div>
 
                     <!-- Logout -->
-                    <button onclick="logout()" class="ml-1 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
+                    <button onclick="logout()" class="ml-0.5 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
                     </button>
                 </div>
 
                 <!-- Admin Navigation Tabs -->
-                <div id="adminNav" class="hidden flex items-center gap-1 sm:gap-2 md:gap-3">
-                    <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active"><i class="fas fa-chart-line"></i> <span class="hidden sm:inline">Overview</span></button>
-                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span>Level-Up<span class="hidden md:inline"> Command</span></span></button>
-                    <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span></button>
+                <div id="adminNav" class="hidden flex items-center gap-1 sm:gap-2 md:gap-3 overflow-x-auto no-scrollbar shrink-0">
+                    <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active" title="Overview"><i class="fas fa-chart-line"></i> <span class="hidden sm:inline">Overview</span></button>
+                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn" title="Level-Up Command"><i class="fas fa-sliders-h"></i> <span class="hidden sm:inline">Command</span><span class="hidden md:inline"> Center</span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span></button>
                     
-                    <div class="bg-emerald-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-1 sm:ml-2 shrink-0">
-                        <i class="fas fa-shield-alt"></i> <span class="hidden md:inline">Creator Hub</span>
+                    <div class="bg-emerald-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-0.5 sm:ml-2 shrink-0">
+                        <i class="fas fa-shield-alt text-[11px] sm:text-xs"></i> <span class="hidden md:inline">Creator Hub</span>
                     </div>
 
                     <!-- Logout -->
-                    <button onclick="logout()" class="ml-1 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
+                    <button onclick="logout()" class="ml-0.5 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
                     </button>
                 </div>
@@ -736,7 +736,7 @@
     <script src="timeline.js?v=2.9.1"></script>
     <script src="courses.js?v=2.9.1"></script>
     <script src="api.js?v=2.9.5"></script>
-    <script src="app.js?v=2.9.10"></script>
+    <script src="app.js?v=2.9.11"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
