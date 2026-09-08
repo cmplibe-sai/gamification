@@ -427,7 +427,7 @@ function generateLqInsights(stats, msId, cfg, user) {
 
     const bits = [];
     if (podSubs.length > 0) bits.push(`active cMPLi POD listening across ${podSubs.length} session${podSubs.length === 1 ? '' : 's'}`);
-    if (dipSubs.length > 0) bits.push(`cMPLi Dip reflections averaging ${avgMatch}% rubric alignment`);
+    if (dipSubs.length > 0) bits.push(`cMPLi Dip reflections averaging ${avgMatch}% conceptual match`);
     if (onTimeRate >= 90) bits.push(`an excellent ${onTimeRate}% on-time submission rate`);
     else if (onTimeRate < 70) bits.push(`${100 - onTimeRate}% of submissions arriving after the regular window`);
 
@@ -437,7 +437,7 @@ function generateLqInsights(stats, msId, cfg, user) {
     else overview += ` Currently in the Weak Zone (${pct}%) — increase your daily submission cadence to gain positive momentum.`;
 
     const focus = [];
-    if (avgMatch < 80) focus.push('Reflection Depth & Rubric Match');
+    if (avgMatch < 80) focus.push('Reflection Depth & Match Percentage');
     if (onTimeRate < 90) focus.push('On-Time Submissions (Before 5 PM)');
     if (dipSubs.length > 0 && podSubs.length < dipSubs.length * 0.8) focus.push('Daily Audio Quiz (cMPLi POD)');
     if (focus.length === 0) focus.push('Maintain High Momentum');
@@ -602,19 +602,12 @@ function ensureLqGaugeSvg(prefix = 'lq') {
                     <circle id="${prefix}NeedlePin" cx="${cx}" cy="${cy}" r="5" fill="#ef4444"/>
                     <circle cx="${cx}" cy="${cy}" r="1.5" fill="#ffffff"/>
                 </g>
-
-                <!-- Baseline Indicators with Status Dots -->
-                <circle cx="26" cy="138" r="3.5" fill="#ef4444"/>
-                <text x="33" y="141" font-size="10" font-weight="800" fill="#fca5a5" font-family="system-ui, sans-serif">Weak</text>
-
-                <text x="176" y="141" font-size="10" font-weight="800" fill="#6ee7b7" font-family="system-ui, sans-serif">Strong</text>
-                <circle cx="216" cy="138" r="3.5" fill="#10b981"/>
             </svg>
 
-            <!-- Center Score Digits (Positioned cleanly below the gauge pivot: ZERO collision with needle or arc at any angle) -->
+            <!-- Center Score Digits: Prominent total number on top, exact customer totals below, zero bottom clutter -->
             <div class="flex flex-col items-center text-center mt-1 select-none">
-                <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0</span>
-                <span id="${prefix}MaxLabel" class="text-[10px] md:text-[11px] text-slate-300 font-bold font-mono tracking-wide mt-1 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">of 0 LCs (Till Date) • 0%</span>
+                <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0 LCs</span>
+                <span id="${prefix}MaxLabel" class="text-xs md:text-sm text-slate-300 font-bold font-mono tracking-wide mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">0 / 0 LCs (0%)</span>
             </div>
         </div>
     `;
@@ -653,12 +646,12 @@ function updateLqNeedle(pct, zone, prefix = 'lq') {
 function updateLqCenterNumbers(earned, max, pct, prefix = 'lq') {
     const earnedEl = document.getElementById(`${prefix}EarnedNumber`);
     const maxEl = document.getElementById(`${prefix}MaxLabel`);
-    if (earnedEl) earnedEl.textContent = earned;
+    if (earnedEl) earnedEl.textContent = `${earned} LCs`;
     if (maxEl) {
         if (max <= 0) {
-            maxEl.textContent = `of 0 LCs (Milestone Not Started)`;
+            maxEl.textContent = `0 / 0 LCs (0%)`;
         } else {
-            maxEl.textContent = `of ${max} LCs (Till Date) • ${pct}%`;
+            maxEl.textContent = `${earned} / ${max} LCs (${pct}%)`;
         }
     }
 }
@@ -7095,7 +7088,7 @@ function renderAdminCohortSubmissions() {
                         rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-indigo-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-spinner fa-spin text-indigo-400 text-base"></i><span class="text-[9px] text-indigo-300 font-mono">Evaluating</span></div></td>`;
                     } else if (isSubFailed) {
                         const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • Rejected (<50% match) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''} • 0 LCs`;
-                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-rose-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-400 text-base"></i><span class="text-[9px] px-1 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-bold" title="Failed: Rubric Match < 50%">Att #${attemptNum}</span></div></td>`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-rose-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-400 text-base"></i><span class="text-[9px] px-1 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-bold" title="Failed: Match Percentage < 50%">Att #${attemptNum}</span></div></td>`;
                     } else {
                         const isPodMod = activeAdminModule === 'pod';
                         const tooltip = isPodMod
@@ -9705,38 +9698,101 @@ var _audioRecorder = null;
 var _audioChunks = [];
 
 // ==============================================================
-// RIGOROUS RUBRIC EVALUATION & TEXT SIMILARITY ENGINE
+// RIGOROUS EVALUATION & TEXT SIMILARITY ENGINE
 // 5-TIER LC GRADING SYSTEM:
 //   > 90% match  → Full LCs (configured basePoints)
-//   81% – 90%    → 23 LCs
-//   50% – 80%    → 17 LCs
-//   < 50%        → 3 LCs
-//   Totally diff  → 0 LCs (rejected, re-submit allowed)
+//   81% – 90%    → 70% LCs
+//   50% – 80%    → 50% LCs
+//   < 50%        → 0 LCs (rejected, re-submit allowed)
 // ==============================================================
+// ── PERSONALIZED CUSTOMIZABLE CHECK-IN FEEDBACK GENERATOR ───────────────
+function generatePersonalizedCheckinFeedback(coverage, options = {}) {
+    const {
+        pastCheckinsCount = 0,
+        studentText = '',
+        userName = '',
+        pts = 0,
+        fullExpected = 33,
+        isLate = false
+    } = options;
+
+    const words = (studentText || '').trim().split(/\s+/).filter(w => w.length > 0);
+    const wordCount = words.length;
+
+    // 1. Journey Progress Note based on past check-ins
+    let progressNote = '';
+    if (pastCheckinsCount === 0) {
+        progressNote = `🌟 Journey Milestone: Welcome to your very first check-in! Stepping up and completing Day 1 takes real initiative. Building this daily reflection rhythm will rapidly compound your clarity and communication skills.`;
+    } else if (pastCheckinsCount === 1) {
+        progressNote = `🌟 Progress Note: Check-in #2 completed! You are already establishing solid momentum and showing greater comfort articulating your thoughts.`;
+    } else if (pastCheckinsCount < 6) {
+        progressNote = `🌟 Progress Note: Check-in #${pastCheckinsCount + 1}! Daily consistency is kicking in. Your reflections are showing sharper conceptual grasp than earlier sessions.`;
+    } else {
+        progressNote = `🌟 Progress Note: Stellar habit with ${pastCheckinsCount} completed check-ins! Your articulation, vocabulary retention, and executive presence have visibly leveled up.`;
+    }
+
+    // 2. Vocal Delivery & Pronunciation feedback
+    let vocalFeedback = '';
+    if (wordCount < 18) {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Your voice note was concise. Speak at a steady, measured pace and pronounce each key concept clearly to ensure your message carries weight.`;
+    } else if (wordCount <= 45) {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Clear enunciation and pleasant tone! Articulating specific ideas with natural pauses gave your delivery good rhythm.`;
+    } else {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Outstanding voice projection, natural pacing, and crisp pronunciation! Your thoughtful reflection reflects deep engagement and confidence.`;
+    }
+
+    // 3. Actionable What Can Be Improved for this customer
+    let improvementTip = '';
+    if (coverage < 50) {
+        improvementTip = `💡 What Can Be Improved: Focus on sharing 2-3 specific takeaways you learned from today's session with clear pronunciation. Speak with enthusiasm directly into your microphone, and you will easily cross 50%+ on your next check-in!`;
+    } else if (coverage <= 80) {
+        const deduction = Math.max(0, fullExpected - pts);
+        improvementTip = `💡 What Can Be Improved: Good foundation! To unlock the full ${fullExpected} LCs next time (-${deduction} LCs deduction), connect today's concepts with a practical real-world example of how you apply this in your work or daily life.`;
+    } else if (coverage <= 90) {
+        const deduction = Math.max(0, fullExpected - pts);
+        improvementTip = `💡 What Can Be Improved: High quality reflection! To push past 90% and earn maximum points, weave in a closing summary that ties together the core lesson of the day.`;
+    } else {
+        improvementTip = `💡 What Can Be Improved: Exemplary delivery! Crisp diction, comprehensive coverage, and confident takeaways. Keep setting this high standard in tomorrow's check-in.`;
+    }
+
+    return { progressNote, vocalFeedback, improvementTip };
+}
+window.generatePersonalizedCheckinFeedback = generatePersonalizedCheckinFeedback;
+
 function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
-    const { basePoints = 33, isLate = false, hasAudio = false } = options;
+    const { basePoints = 33, isLate = false, hasAudio = false, pastCheckinsCount = 0, userName = '' } = options;
     const refClean = (referenceArticle || '').trim();
     const studentText = (studentResponse || '').trim();
 
     const studentWordCount = studentText.split(/\s+/).filter(w => w.length > 1).length;
     const hasTextContent = studentWordCount >= 15;
 
-    // ── No rubric configured by creator ─────────────────────────────────────
+    // ── No description configured by creator ─────────────────────────────────
     if (!refClean || refClean.length < 15) {
         if (hasAudio || studentText.length > 20) {
             const pts = isLate ? 3 : basePoints;
+            const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
+                pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
+            });
             return {
                 matchPercentage: 91,
                 lcReward: pts,
                 status: 'completed',
-                remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nRubric Match: 91% | Credited: +${pts} LCs | Status: Verified\nVoice reflection received and verified against milestone standards. No description was configured for today's check-in, so full credit is granted. Personal takeaways and daily learning clearly demonstrated.`
+                remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
+                    `Match Percentage: 91% | Credited: +${pts} LCs | Status: Verified\n` +
+                    `Voice reflection received and verified against milestone standards. Full credit is granted.\n` +
+                    `${progressNote}\n` +
+                    `${vocalFeedback}\n` +
+                    `${improvementTip}`
             };
         }
         return {
             matchPercentage: 0,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: No Content Submitted — 0 LCs Awarded]\nRubric Match: 0% | Credited: +0 LCs | Status: Rejected\nNeither audio nor text content was detected in your submission. Please record a voice reflection or complete the text answers and resubmit.`
+            remarks: `❌ [AI Evaluation: No Content Detected — 0 LCs Awarded]\n` +
+                `Match Percentage: 0% | Credited: +0 LCs | Status: Rejected\n` +
+                `Neither audio nor text content was detected in your submission. Please record a voice reflection or complete the text answers and resubmit.`
         };
     }
 
@@ -9759,8 +9815,13 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     if (refWordSet.size === 0) {
         const pts = isLate ? 3 : basePoints;
-        return { matchPercentage: 91, lcReward: pts, status: 'completed',
-            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nRubric Match: 91% | Credited: +${pts} LCs | Status: Verified\nReflection completed successfully.` };
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
+        });
+        return {
+            matchPercentage: 91, lcReward: pts, status: 'completed',
+            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nMatch Percentage: 91% | Credited: +${pts} LCs | Status: Verified\nReflection completed successfully.\n${progressNote}\n${vocalFeedback}\n${improvementTip}`
+        };
     }
 
     let matchedCount = 0;
@@ -9770,20 +9831,26 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     });
 
     let coverage = Math.round((matchedCount / refWordSet.size) * 100);
+    // Very sparse transcript (< 4 meaningful words) — cap to near zero
     if (studentWords.length < 4) coverage = Math.min(coverage, 4);
 
     // ── 5-TIER LC GRADING (Warm, Personalized & Constructive Feedback) ────────
 
     // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
     if (coverage < 50) {
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts: 0, fullExpected: Number(basePoints) || 33, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [Content Match Below 50% — 0 LCs Awarded]\n` +
-                `Match: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
+            remarks: `❌ [Match Percentage Below 50% — 0 LCs Awarded]\n` +
+                `Match Percentage: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
                 `Why 0 LCs were awarded: The audio voice reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short/faint to verify.\n` +
-                `How to improve: Record a genuine voice reflection with a beautiful happy smile and submit! Speak clearly into your microphone about what you learned today, and you will easily cross 50%+ to earn your LCs.`
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
@@ -9792,7 +9859,9 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         const fullExpected = Number(basePoints) || 33;
         const pts = isLate ? 3 : Math.round(fullExpected * 0.50);
         const deduction = Math.max(0, fullExpected - pts);
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: pts,
@@ -9800,14 +9869,18 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: isLate ?
                 `⚠️ [Late Submission — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved (Late Window)\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window (11:59 PM cutoff). While your content match reached ${coverage}%, late policy awards +${pts} LCs.\n` +
-                `How to improve: Submit within the daily on-time window tomorrow to unlock your full on-time reward!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Submitted outside the daily on-time window (11:59 PM cutoff). While your match percentage reached ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
                 :
                 `⚠️ [Moderate Match — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized briefly (-${deduction} LCs deduction).\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
@@ -9816,6 +9889,9 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         const fullExpected = Number(basePoints) || 33;
         const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
         const deduction = Math.max(0, fullExpected - pts);
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: pts,
@@ -9823,28 +9899,38 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: isLate ?
                 `✅ [Late Submission — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved (Late Window)\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window. While your content match scored a strong ${coverage}%, late policy awards +${pts} LCs.\n` +
-                `How to improve: Submit within the daily on-time window tomorrow to capture your full on-time reward!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Submitted outside the daily on-time window. While your match percentage scored a strong ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
                 :
                 `✅ [Good Match — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
-    const pts = isLate ? 3 : basePoints;
-    const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. Although your content match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ` Full credit of ${pts} LCs has been added to your wallet.`;
+    const fullExpected = Number(basePoints) || 33;
+    const pts = isLate ? 3 : fullExpected;
+    const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+        pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+    });
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
         isLate: isLate,
         remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-            `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
-            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session. Authentic takeaways and key lessons were all thoroughly verified.${lateNote}`
+            `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
+            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session.${isLate ? ' (Submitted in late window).' : ''}\n` +
+            `${progressNote}\n` +
+            `${vocalFeedback}\n` +
+            `${improvementTip}`
     };
 }
 window.evaluateReflectionAgainstRubric = evaluateReflectionAgainstRubric;
@@ -10970,7 +11056,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                 <!-- TITLE & SUBTITLE -->
                 <div>
                     <h3 id="evalModalTitle" class="text-2xl font-extrabold text-white font-heading">AI Evaluation in Progress</h3>
-                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">AssemblyAI transcribing speech & verifying takeaways against Milestone rubrics (approx. 15-20s)...</p>
+                    <p id="evalModalSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed">AssemblyAI transcribing speech & analyzing key takeaways against today's session concepts (approx. 15-20s)...</p>
                 </div>
                 
                 <!-- 5-STAGE STATUS BAR FILLING (0% -> 100% across 18 seconds) -->
@@ -11017,7 +11103,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
     ] : [
         { pct: 15, stage: "Stage 1 of 5", timeRem: "~15s remaining", text: "Stage 1/5: Uploading Audio to Analysis Vault...", msg: "Encrypting audio stream and syncing payload with server vault...", icon: "fa-upload" },
         { pct: 38, stage: "Stage 2 of 5", timeRem: "~11s remaining", text: "Stage 2/5: AssemblyAI Transcribing Audio Speech...", msg: "Converting spoken voice notes to text using neural speech model...", icon: "fa-microphone-lines" },
-        { pct: 65, stage: "Stage 3 of 5", timeRem: "~7s remaining", text: "Stage 3/5: Comparing Spoken Insights with Day Rubric...", msg: "Measuring conceptual overlap against today's configured lecture description...", icon: "fa-brain" },
+        { pct: 65, stage: "Stage 3 of 5", timeRem: "~7s remaining", text: "Stage 3/5: Analyzing Key Concepts & Insights...", msg: "Measuring conceptual overlap against today's lecture takeaways...", icon: "fa-brain" },
         { pct: 88, stage: "Stage 4 of 5", timeRem: "~3s remaining", text: "Stage 4/5: Calculating 5-Tier LC Score...", msg: "Formulating evaluator feedback and checking match thresholds...", icon: "fa-chart-pie" },
         { pct: 100, stage: "Stage 5 of 5", timeRem: "Finalizing", text: "Stage 5/5: Awaiting Seal & Verification...", msg: "Applying evaluator verification...", icon: "fa-check-circle" }
     ];
@@ -11077,10 +11163,10 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
             if (robotCircle) robotCircle.className = "relative w-20 h-20 bg-gradient-to-tr from-rose-950 to-rose-700 text-rose-300 rounded-full flex items-center justify-center text-4xl border-2 border-rose-400 shadow-2xl shadow-rose-500/50";
             if (robotIcon) robotIcon.className = "fas fa-times-circle text-rose-300 scale-110";
 
-            if (title) title.innerHTML = '<span class="text-rose-400 font-extrabold">Rubric Match Below 50% (0 LCs)</span>';
-            if (subtitle) subtitle.innerHTML = 'The submitted audio reflection scored below the minimum required 50% rubric match. <strong>0 LCs Awarded</strong>. Please re-submit with the proper reflection to earn LCs.';
+            if (title) title.innerHTML = '<span class="text-rose-400 font-extrabold">Match Percentage Below 50% (0 LCs)</span>';
+            if (subtitle) subtitle.innerHTML = 'The submitted audio reflection scored below the minimum required 50% match. <strong>0 LCs Awarded</strong>. Please re-submit with the proper reflection to earn LCs.';
 
-            if (stageText) stageText.innerHTML = `<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (${matchScore}% Rubric Match &lt; 50% Required)`;
+            if (stageText) stageText.innerHTML = `<i class="fas fa-times-circle text-rose-400 mr-1"></i> Rejected (${matchScore}% Match &lt; 50% Required)`;
             if (statusBox) statusBox.className = "p-3.5 bg-rose-950/60 rounded-xl border border-rose-500/50 flex items-start gap-2.5 text-rose-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
             if (statusMsg) statusMsg.innerHTML = `<div class="space-y-1"><strong class="text-rose-300 block">AI Evaluation Feedback:</strong>${rawRemarks.replace(/\n/g, '<br/>')}</div>`;
 
@@ -11104,7 +11190,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
             if (robotIcon) robotIcon.className = "fas fa-check-circle text-emerald-300 scale-110";
 
             if (title) title.innerHTML = '<span class="text-emerald-400 font-extrabold">Check-in Verified & Approved!</span>';
-            if (subtitle) subtitle.innerHTML = `Rubric Match: <strong>${matchScore}%</strong> — <strong>+${pts} LCs</strong> credited to your wallet.`;
+            if (subtitle) subtitle.innerHTML = `Match Percentage: <strong>${matchScore}%</strong> — <strong>+${pts} LCs</strong> credited to your wallet.`;
 
             if (stageText) stageText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Verified (${matchScore}% Match)`;
             if (statusBox) statusBox.className = "p-3.5 bg-emerald-950/60 rounded-xl border border-emerald-500/50 flex items-start gap-2.5 text-emerald-200 text-xs font-medium text-left shadow-inner max-h-40 overflow-y-auto";
@@ -11206,7 +11292,7 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
                     }
                 } else {
                     const statusMsg = document.getElementById('evalStatusMsg');
-                    if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & rubric verification (${Math.max(1, Math.round((maxWaitAttempts - waitAttempts) * 0.5))}s)...`;
+                    if (statusMsg) statusMsg.innerText = `AssemblyAI finishing transcription & verification (${Math.max(1, Math.round((maxWaitAttempts - waitAttempts) * 0.5))}s)...`;
                 }
             }, 500);
         }
@@ -11459,7 +11545,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
                         navPointsEl.innerText = curVal + pts;
                     }
                 } else if (isMismatch) {
-                    console.log('❌ Submission scored < 50% rubric match (0 LCs awarded). Card set to Retry.');
+                    console.log('❌ Submission scored < 50% match (0 LCs awarded). Card set to Retry.');
                 }
             }
 
@@ -11704,74 +11790,74 @@ function switchMilestoneTab(moduleName, btnElement) {
             statusBadge = '<span class="badge-pill bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...</span>';
             actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
         } else if (isMismatch) {
-            statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
+            statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
             actionBtn = `
-                <div class="flex items-center gap-1.5">
-                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1"><i class="fas fa-redo"></i> Retry</button>
-                    <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 text-[11px] font-bold text-slate-300 hover:text-white" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
+                <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry</button>
+                    <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 sm:px-2.5 text-[11px] font-bold text-slate-300 hover:text-white shrink-0" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
                 </div>
             `;
         } else if (isCompleted) {
-            statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold"><i class="fas fa-eye mr-1"></i> View</button>`;
+            statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold whitespace-nowrap"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isToday) {
-            statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse"><i class="fas fa-clock mr-1"></i> Open Today</span>';
+            statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
-                actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
+                actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 shrink-0 whitespace-nowrap"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
             } else if (isImmerse) {
-                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
+                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 shrink-0 whitespace-nowrap"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
             } else {
-                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
+                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 shrink-0 whitespace-nowrap"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
             }
         } else if (isPast) {
             if (isTestMode) {
-                statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold">Past (Bypass Available)</span>';
+                statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold whitespace-nowrap">Past (Bypass)</span>';
                 if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
             } else {
-                statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px]">Missed</span>';
-                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed">Locked</button>`;
+                statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px] whitespace-nowrap">Missed</span>';
+                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap">Locked</button>`;
             }
         } else if (isFuture) {
             if (isTestMode) {
-                statusBadge = '<span class="badge-pill badge-indigo text-[10px] font-bold">Future (Bypass Available)</span>';
+                statusBadge = '<span class="badge-pill badge-indigo text-[10px] font-bold whitespace-nowrap">Future (Bypass)</span>';
                 if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40"><i class="fas fa-bolt mr-1"></i> Bypass & Enter Check-in</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
             } else {
-                statusBadge = '<span class="badge-pill bg-slate-800 text-slate-500 text-[10px]">Locked</span>';
-                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed">Locked</button>`;
+                statusBadge = '<span class="badge-pill bg-slate-800 text-slate-500 text-[10px] whitespace-nowrap">Locked</span>';
+                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap">Locked</button>`;
             }
         }
 
         cardsHtml += `
-            <div class="glass-card p-4 rounded-xl border-slate-800 flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? (isImmerse ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30') : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold">
-                        <span class="text-[10px] uppercase tracking-tighter">Day</span>
+            <div class="glass-card p-3 sm:p-4 rounded-xl border border-slate-800/80 flex items-center justify-between gap-2.5 sm:gap-4 overflow-hidden">
+                <div class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0 ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? (isImmerse ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30') : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold shadow-inner">
+                        <span class="text-[9px] uppercase tracking-tighter">Day</span>
                         <span class="text-xs font-mono font-black">${dayNum}</span>
                     </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <div class="flex items-center gap-1.5 flex-wrap">
-                                <h4 class="text-xs font-bold text-white">${displayDate}</h4>
-                                ${dayTitle ? `<span class="text-xs font-bold ${isImmerse ? 'text-purple-300' : 'text-indigo-300'} font-heading truncate max-w-[180px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
-                            </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h4 class="text-xs font-bold text-white shrink-0">${displayDate}</h4>
+                            ${dayTitle ? `<span class="text-xs font-bold ${isImmerse ? 'text-purple-300' : 'text-indigo-300'} font-heading truncate max-w-[110px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
+                        </div>
+                        <div class="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
+                            <span class="text-[10px] ${isCompleted ? 'text-emerald-400 font-bold' : 'text-slate-400'} font-mono shrink-0">${isCompleted && sub && sub.lcReward !== undefined ? `+${sub.lcReward} LCs Earned` : (isImmerse ? '+33 LCs' : '+33 LCs Available')}</span>
                             ${statusBadge}
                         </div>
-                        <span class="text-[10px] ${isCompleted ? 'text-emerald-400 font-bold' : 'text-slate-400'} font-mono">${isCompleted && sub && sub.lcReward !== undefined ? `+${sub.lcReward} LCs Earned` : (isImmerse ? '+33 LCs Available (70% Attempt / 30% Relatability)' : '+33 LCs Available')}</span>
                     </div>
                 </div>
-                <div>${actionBtn}</div>
+                <div class="shrink-0 flex items-center gap-1 sm:gap-1.5">${actionBtn}</div>
             </div>
         `;
     }
@@ -12038,10 +12124,22 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         return `${h}:${m} ${ampm}`;
     };
 
-    const rawRemarks = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved — +${lcReward} LCs]\nRubric Match: ${matchPercentage}% | Credited: +${lcReward} LCs | Status: Fully Verified\nReflection completed successfully and learning objectives satisfied.`;
+    const rawRemarks = sub.aiRemarks || sub.remarks || sub.aiFeedback || `✅ [AI Verified & Approved — +${lcReward} LCs]\nMatch Percentage: ${matchPercentage}% | Credited: +${lcReward} LCs | Status: Fully Verified\nReflection completed successfully and learning objectives satisfied.`;
     
+    // Strip "rubric" and "AI valuation model" from all remarks (both Creator and Customer views)
+    let sanitizedRemarks = rawRemarks
+        .replace(/Rubric Match:/gi, 'Match Percentage:')
+        .replace(/Rubric Match/gi, 'Match Percentage')
+        .replace(/rubric match/gi, 'match percentage')
+        .replace(/Milestone rubrics/gi, 'Milestone learning standards')
+        .replace(/milestone rubrics/gi, 'milestone learning standards')
+        .replace(/rubrics/gi, 'learning standards')
+        .replace(/rubric/gi, 'key concepts')
+        .replace(/AI valuation model/gi, 'automated evaluation')
+        .replace(/valuation model/gi, 'evaluation model');
+
     // CUSTOMIZE FEEDBACK TONE FOR CREATOR VS CUSTOMER
-    let customizedRemarks = rawRemarks;
+    let customizedRemarks = sanitizedRemarks;
     if (isCreatorView) {
         customizedRemarks = customizedRemarks
             .replace(/Your voice response/gi, "Learner's voice response")
@@ -12058,8 +12156,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
             .replace(/to your wallet/gi, "to learner's wallet")
             .replace(/Please review today's article\/reading carefully, record a genuine voice reflection discussing the key concepts, and resubmit\./gi, "Content mismatch detected. Learner has been instructed to review the day's designated material and re-submit a genuine voice reflection.")
             .replace(/Please record a voice reflection or complete the text answers and resubmit\./gi, "No content detected in the learner's submission. Check-in marked as rejected.")
-            .replace(/Review the day's content and aim for a more comprehensive reflection next time\./gi, "Low rubric coverage. Learner was awarded partial credit.")
-            .replace(/Aim for deeper coverage of all key concepts for a higher score\./gi, "Partial rubric coverage. Learner was awarded partial credit.")
+            .replace(/Review the day's content and aim for a more comprehensive reflection next time\./gi, "Low conceptual coverage. Learner was awarded partial credit.")
+            .replace(/Aim for deeper coverage of all key concepts for a higher score\./gi, "Partial conceptual coverage. Learner was awarded partial credit.")
             .replace(/Great effort!/gi, "Learner demonstrated strong conceptual alignment.");
     }
 
@@ -12456,7 +12554,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     const badgeText = isEvaluating
         ? '<i class="fas fa-spinner fa-spin mr-1"></i> AI Evaluating in Background'
         : isMismatch
-            ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Rubric < 50% — Retry Required`)
+            ? (isCreatorView ? `<i class="fas fa-times-circle mr-1"></i> Rejected (${matchPercentage}% < 50%)` : `<i class="fas fa-times-circle mr-1"></i> Match < 50% — Retry Required`)
         : isLateSubmissionMode
             ? `<i class="fas fa-clock mr-1"></i> Late Window (+${lcReward || 3} LCs)`
         : isLegacyLow
@@ -12538,7 +12636,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         <div class="w-7 h-7 rounded-lg ${isEvaluating ? 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30' : (isMismatch ? 'bg-rose-600/30 text-rose-400 border-rose-500/30' : (isLateSubmissionMode ? 'bg-amber-600/30 text-amber-400 border-amber-500/30' : 'bg-indigo-600/30 text-indigo-400 border-indigo-500/30'))} flex items-center justify-center text-sm border">
                             <i class="fas ${isLateSubmissionMode ? 'fa-clock' : 'fa-robot'}"></i>
                         </div>
-                        <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'AI Rubric Evaluation (Creator Review Mode)' : 'AI Evaluation & Verification Remarks'}</span>
+                        <span class="text-xs font-bold text-white uppercase tracking-wider">${isCreatorView ? 'Check-in Insights (Creator Review Mode)' : 'Evaluation & Verification Insights'}</span>
                     </div>
                     <span class="badge-pill ${badgeClass} text-[11px] font-bold">
                         ${badgeText}
@@ -12551,7 +12649,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                             <span>Late Submission Window Notice</span>
                         </div>
                         <p class="text-amber-100/90 leading-relaxed font-sans">
-                            Submitted at <strong>${exactSubmittedTimeStr}</strong>, outside the creator's daily active window (${formatTime12(windowStartTime)} – ${formatTime12(windowEndTime)}). Although AI rubric match scored <strong>${matchPercentage}%</strong>, late submission rules applied (+${lcReward} LCs credited).
+                            Submitted at <strong>${exactSubmittedTimeStr}</strong>, outside the creator's daily active window (${formatTime12(windowStartTime)} – ${formatTime12(windowEndTime)}). Although match scored <strong>${matchPercentage}%</strong>, late submission rules applied (+${lcReward} LCs credited).
                         </p>
                     </div>
                 ` : ''}
@@ -12559,7 +12657,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     ${aiRemarksText}
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400 font-mono border-t border-slate-800/60">
-                    <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Rubric Match: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
+                    <span><i class="fas fa-bullseye text-cyan-400 mr-1"></i> Match Percentage: <strong class="text-cyan-300">${isEvaluating ? 'Evaluating...' : `${matchPercentage}%`}</strong></span>
                     <span><i class="fas fa-coins text-emerald-400 mr-1"></i> Credited: <strong class="${isEvaluating ? 'text-indigo-300' : (isMismatch ? 'text-rose-300' : (isLateSubmissionMode ? 'text-amber-300' : 'text-emerald-300'))}">${isEvaluating ? 'Pending' : `+${lcReward} LCs`}</strong></span>
                     <span><i class="fas fa-history text-amber-400 mr-1"></i> Attempt: <strong class="text-white">#${attemptNum} ${passLabel}</strong></span>
                     <span><i class="fas fa-shield-alt text-indigo-400 mr-1"></i> Status: <strong class="${isLateSubmissionMode ? 'text-amber-300' : 'text-indigo-300'}">${isEvaluating ? 'Evaluating (In Progress)' : (isMismatch ? 'Rejected (Mismatch <50%)' : (isLateSubmissionMode ? `Verified & Approved (Late Window — post ${formatTime12(windowEndTime)})` : (isLegacyLow ? 'Completed (Legacy 3 LCs)' : (isPartial ? 'Partial Approved' : 'Verified & Approved'))))}</strong></span>
@@ -13055,7 +13153,7 @@ function renderAdminMilestoneGrid() {
         <div class="col-span-1 md:col-span-2 mb-2 flex justify-between items-center">
             <div>
                 <h3 class="text-lg font-bold text-white font-heading">Level-Up Milestones & Cohort Pathways</h3>
-                <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and project rubrics.</p>
+                <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and learning objectives.</p>
             </div>
             <button onclick="openPartnerManagementModal()" class="btn-secondary py-2 px-4 text-xs">
                 <i class="fas fa-handshake text-emerald-400 mr-1.5"></i> Manage Campus Partners
@@ -13211,7 +13309,7 @@ function renderMilestoneModulesUI(msId) {
         subNav.innerHTML = enabledMods.map((modCode, i) => {
             const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-            return `<button data-module="${modCode}" onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-5 py-2.5 rounded-t-xl font-bold transition-all ${activeClass} flex items-center gap-2">
+            return `<button data-module="${modCode}" onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-t-xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all ${activeClass} flex items-center gap-1.5 sm:gap-2">
                 <i class="fas ${modObj.icon}"></i> ${modObj.name}
             </button>`;
         }).join('');

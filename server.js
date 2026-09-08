@@ -473,7 +473,7 @@ function processBuiltinAiEvaluation(submissionRecord) {
             // Finalize status
             currentSub.status = 'completed';
             currentSub.evaluatedAt = new Date().toISOString();
-            currentSub.aiFeedback = `Verified & Approved: Excellent reflection and alignment with Milestone-${currentSub.milestoneId || 1} rubrics.`;
+            currentSub.aiFeedback = `Verified & Approved: Excellent reflection and alignment with Milestone-${currentSub.milestoneId || 1} learning objectives.`;
             saveStore();
 
             console.log(`[AI Evaluation Completed] Submission ${subId} approved. Crediting TagMango Wallet...`);
@@ -1147,37 +1147,93 @@ app.get('/api/submissions', (req, res) => {
 //   < 50%        → 3 LCs
 //   Totally diff  → 0 LCs (submission rejected, re-submit allowed)
 // ==============================================================
+// ── PERSONALIZED CUSTOMIZABLE CHECK-IN FEEDBACK GENERATOR ───────────────
+function generatePersonalizedCheckinFeedback(coverage, options = {}) {
+    const {
+        pastCheckinsCount = 0,
+        studentText = '',
+        userName = '',
+        pts = 0,
+        fullExpected = 33,
+        isLate = false
+    } = options;
+
+    const words = (studentText || '').trim().split(/\s+/).filter(w => w.length > 0);
+    const wordCount = words.length;
+
+    // 1. Journey Progress Note based on past check-ins
+    let progressNote = '';
+    if (pastCheckinsCount === 0) {
+        progressNote = `🌟 Journey Milestone: Welcome to your very first check-in! Stepping up and completing Day 1 takes real initiative. Building this daily reflection rhythm will rapidly compound your clarity and communication skills.`;
+    } else if (pastCheckinsCount === 1) {
+        progressNote = `🌟 Progress Note: Check-in #2 completed! You are already establishing solid momentum and showing greater comfort articulating your thoughts.`;
+    } else if (pastCheckinsCount < 6) {
+        progressNote = `🌟 Progress Note: Check-in #${pastCheckinsCount + 1}! Daily consistency is kicking in. Your reflections are showing sharper conceptual grasp than earlier sessions.`;
+    } else {
+        progressNote = `🌟 Progress Note: Stellar habit with ${pastCheckinsCount} completed check-ins! Your articulation, vocabulary retention, and executive presence have visibly matured.`;
+    }
+
+    // 2. Vocal Delivery & Pronunciation feedback
+    let vocalFeedback = '';
+    if (wordCount < 18) {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Your voice note was concise. Speak at a steady, measured pace and pronounce each key concept clearly to ensure your message carries weight.`;
+    } else if (wordCount <= 45) {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Clear enunciation and pleasant tone! Articulating specific ideas with natural pauses gave your delivery good rhythm.`;
+    } else {
+        vocalFeedback = `🎙️ Vocal Delivery & Pronunciation: Outstanding voice projection, natural pacing, and crisp pronunciation! Your thoughtful reflection reflects deep engagement and confidence.`;
+    }
+
+    // 3. Actionable What Can Be Improved for this customer
+    let improvementTip = '';
+    if (coverage < 50) {
+        improvementTip = `💡 What Can Be Improved: Focus on sharing 2-3 specific takeaways you learned from today's session with clear pronunciation. Speak with enthusiasm directly into your microphone, and you will easily cross 50%+ on your next check-in!`;
+    } else if (coverage <= 80) {
+        const deduction = Math.max(0, fullExpected - pts);
+        improvementTip = `💡 What Can Be Improved: Good foundation! To unlock the full ${fullExpected} LCs next time (-${deduction} LCs deduction), connect today's concepts with a practical real-world example of how you apply this in your work or daily life.`;
+    } else if (coverage <= 90) {
+        const deduction = Math.max(0, fullExpected - pts);
+        improvementTip = `💡 What Can Be Improved: High quality reflection! To push past 90% and earn maximum points, weave in a closing summary that ties together the core lesson of the day.`;
+    } else {
+        improvementTip = `💡 What Can Be Improved: Exemplary delivery! Crisp diction, comprehensive coverage, and confident takeaways. Keep setting this high standard in tomorrow's check-in.`;
+    }
+
+    return { progressNote, vocalFeedback, improvementTip };
+}
+
 function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
-    const { basePoints = 33, isLate = false, hasAudio = false, transcribedByServer = false } = options;
+    const { basePoints = 33, isLate = false, hasAudio = false, transcribedByServer = false, pastCheckinsCount = 0, userName = '' } = options;
     const refClean = (referenceArticle || '').trim();
     const studentText = (studentResponse || '').trim();
 
     const studentWordCount = studentText.split(/\s+/).filter(w => w.length > 1).length;
     const hasTextContent = studentWordCount >= 15;
 
-    // ── No rubric configured by creator ─────────────────────────────────────
+    // ── No description configured by creator ─────────────────────────────────
     if (!refClean || refClean.length < 15) {
         if (hasAudio || studentText.length > 20) {
             const pts = isLate ? 3 : basePoints;
+            const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
+                pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
+            });
             return {
                 matchPercentage: 91,
                 lcReward: pts,
                 status: 'completed',
                 remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\n` +
-                    `Rubric Match: 91% | Credited: +${pts} LCs | Status: Verified\n` +
-                    `Voice reflection received and verified against milestone standards. ` +
-                    `No description was configured for today's check-in, so full credit is granted. ` +
-                    `Personal takeaways and daily learning clearly demonstrated.`
+                    `Match Percentage: 91% | Credited: +${pts} LCs | Status: Verified\n` +
+                    `Voice reflection received and verified against milestone standards. Full credit is granted.\n` +
+                    `${progressNote}\n` +
+                    `${vocalFeedback}\n` +
+                    `${improvementTip}`
             };
         }
         return {
             matchPercentage: 0,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [AI Evaluation: No Content Submitted — 0 LCs Awarded]\n` +
-                `Rubric Match: 0% | Credited: +0 LCs | Status: Rejected\n` +
-                `Neither audio nor text content was detected in your submission. ` +
-                `Please record a voice reflection or complete the text answers and resubmit.`
+            remarks: `❌ [AI Evaluation: No Content Detected — 0 LCs Awarded]\n` +
+                `Match Percentage: 0% | Credited: +0 LCs | Status: Rejected\n` +
+                `Neither audio nor text content was detected in your submission. Please record a voice reflection or complete the text answers and resubmit.`
         };
     }
 
@@ -1200,9 +1256,12 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     if (refWordSet.size === 0) {
         const pts = isLate ? 3 : basePoints;
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
+        });
         return {
             matchPercentage: 91, lcReward: pts, status: 'completed',
-            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nRubric Match: 91% | Credited: +${pts} LCs | Status: Verified\nReflection completed successfully.`
+            remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded]\nMatch Percentage: 91% | Credited: +${pts} LCs | Status: Verified\nReflection completed successfully.\n${progressNote}\n${vocalFeedback}\n${improvementTip}`
         };
     }
 
@@ -1220,14 +1279,19 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
     if (coverage < 50) {
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts: 0, fullExpected: Number(basePoints) || 33, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: 0,
             status: 'rejected_mismatch',
-            remarks: `❌ [Content Match Below 50% — 0 LCs Awarded]\n` +
-                `Match: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
+            remarks: `❌ [Match Percentage Below 50% — 0 LCs Awarded]\n` +
+                `Match Percentage: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
                 `Why 0 LCs were awarded: The audio voice reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short/faint to verify.\n` +
-                `How to improve: Record a genuine voice reflection with a beautiful happy smile and submit! Speak clearly into your microphone about what you learned today, and you will easily cross 50%+ to earn your LCs.`
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
@@ -1236,7 +1300,9 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         const fullExpected = Number(basePoints) || 33;
         const pts = isLate ? 3 : Math.round(fullExpected * 0.50);
         const deduction = Math.max(0, fullExpected - pts);
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: pts,
@@ -1244,14 +1310,18 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: isLate ?
                 `⚠️ [Late Submission — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved (Late Window)\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window (11:59 PM cutoff). While your content match reached ${coverage}%, late policy awards +${pts} LCs.\n` +
-                `How to improve: Submit within the daily on-time window tomorrow to unlock your full on-time reward!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Submitted outside the daily on-time window (11:59 PM cutoff). While your match percentage reached ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
                 :
                 `⚠️ [Moderate Match — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized briefly (-${deduction} LCs deduction).\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
@@ -1260,6 +1330,9 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         const fullExpected = Number(basePoints) || 33;
         const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
         const deduction = Math.max(0, fullExpected - pts);
+        const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+            pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+        });
         return {
             matchPercentage: coverage,
             lcReward: pts,
@@ -1267,28 +1340,38 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: isLate ?
                 `✅ [Late Submission — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved (Late Window)\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window. While your content match scored a strong ${coverage}%, late policy awards +${pts} LCs.\n` +
-                `How to improve: Submit within the daily on-time window tomorrow to capture your full on-time reward!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Submitted outside the daily on-time window. While your match percentage scored a strong ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
                 :
                 `✅ [Good Match — ${pts} LCs Awarded]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
-                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!`
+                `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `${progressNote}\n` +
+                `${vocalFeedback}\n` +
+                `${improvementTip}`
         };
     }
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
-    const pts = isLate ? 3 : basePoints;
-    const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. Although your content match scored an excellent ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ` Full credit of ${pts} LCs has been added to your wallet.`;
+    const fullExpected = Number(basePoints) || 33;
+    const pts = isLate ? 3 : fullExpected;
+    const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
+        pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
+    });
     return {
         matchPercentage: Math.min(coverage, 100),
         lcReward: pts,
         status: 'completed',
         isLate: isLate,
         remarks: `✅ [AI Verified & Approved — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-            `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
-            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session. Authentic takeaways and key lessons were all thoroughly verified.${lateNote}`
+            `Match Percentage: ${coverage}% | Credited: +${pts} LCs | Status: Fully Verified${isLate ? ' (Late Window)' : ''}\n` +
+            `Excellent reflection! Your voice response was clearly articulated and demonstrated outstanding conceptual coverage of today's session.${isLate ? ' (Submitted in late window).' : ''}\n` +
+            `${progressNote}\n` +
+            `${vocalFeedback}\n` +
+            `${improvementTip}`
     };
 }
 function calculateTextSimilarity(referenceArticle, studentResponse) {
@@ -1697,8 +1780,8 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             originalLcReward: Number(sub.lcReward) || 33,
             matchPercentage: null,
             similarityScore: null,
-            aiRemarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
-            remarks: 'AI evaluation in progress — transcribing audio and comparing against today\'s rubric...',
+            aiRemarks: 'AI evaluation in progress — transcribing audio and analyzing key takeaways against today\'s session concepts...',
+            remarks: 'AI evaluation in progress — transcribing audio and analyzing key takeaways against today\'s session concepts...',
             answers: subAnswers,
             submittedAt: sub.submittedAt || new Date().toISOString(),
             createdAt: sub.submittedAt || new Date().toISOString(),
@@ -2049,13 +2132,23 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             combinedStudentText += ' ' + (a.transcription || a.answer || a.value || a.text || '');
         });
         if (sub.transcription) combinedStudentText += ' ' + sub.transcription;
-        console.log(`[Rubric Eval] Combined text for comparison (${combinedStudentText.trim().split(/\s+/).length} words): "${combinedStudentText.trim().slice(0, 200)}"`);
+        console.log(`[Evaluation] Combined text for comparison (${combinedStudentText.trim().split(/\s+/).length} words): "${combinedStudentText.trim().slice(0, 200)}"`);
     }
+
+    const userPastSubs = (store.submissions || []).filter(s =>
+        (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase() === sub.userEmail.toLowerCase())) &&
+        s.status === 'completed' &&
+        s.id !== subId
+    );
+    const pastCheckinsCount = userPastSubs.length;
 
     const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
         basePoints: Number(sub.lcReward) || 33,
         isLate: sub.isLate || false,
-        hasAudio: hasAudioSubmission
+        hasAudio: hasAudioSubmission,
+        pastCheckinsCount: pastCheckinsCount,
+        studentText: combinedStudentText,
+        userName: sub.userName || ''
     });
 
     const finalMatchPct = evalResult.matchPercentage;
