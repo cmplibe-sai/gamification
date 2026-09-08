@@ -205,6 +205,9 @@ function updateDashboardUI() {
     if (typeof initLearnabilityGauge === 'function') {
         initLearnabilityGauge(displayUser);
     }
+    if (typeof renderLcGrowthChart === 'function') {
+        renderLcGrowthChart(displayUser);
+    }
 }
 window.updateDashboardUI = updateDashboardUI;
 
@@ -719,6 +722,254 @@ function initLearnabilityGauge(displayUser, mode = 'student') {
     refreshLearnabilityGauge(prefix);
 }
 window.initLearnabilityGauge = initLearnabilityGauge;
+
+// ==============================================================
+// CUMULATIVE LEARNING CURRENCIES (LCs) GROWTH ENGINE
+// Renders 3D-styled ambient line chart showing cumulative LC progression
+// with timeframe filters: 7d, 30d, 90d, 180d
+// ==============================================================
+var lcGrowthChartInstance = null;
+var currentLcGrowthTimeframe = '30d';
+var currentLcGrowthUser = null;
+
+function buildCumulativeLcTimeline(userIdentifier, daysBack = 30) {
+    const days = Math.max(1, Number(daysBack) || 30);
+    const userId = (typeof userIdentifier === 'object' && userIdentifier) 
+        ? (userIdentifier._id || userIdentifier.id || userIdentifier.email) 
+        : userIdentifier;
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+
+    // Sum daily LCs by YYYY-MM-DD
+    const dailyLcs = {};
+    subs.forEach(s => {
+        if (!s) return;
+        const reward = Number(s.lcReward) || 0;
+        if (reward <= 0) return;
+        const rawDate = s.dateKey || s.date || (s.submittedAt ? s.submittedAt.split('T')[0] : null);
+        if (!rawDate) return;
+        const key = String(rawDate).includes('T') ? String(rawDate).split('T')[0] : String(rawDate);
+        dailyLcs[key] = (dailyLcs[key] || 0) + reward;
+    });
+
+    // Build timeline dates: from (today - (days - 1)) up to today
+    const labels = [];
+    const dateKeys = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const key = `${yyyy}-${mm}-${dd}`;
+        dateKeys.push(key);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        labels.push(label);
+    }
+
+    // Baseline: sum of all LCs strictly before start of this timeframe window
+    const windowStartKey = dateKeys[0];
+    let baselineCumulative = 0;
+    Object.keys(dailyLcs).forEach(k => {
+        if (k < windowStartKey) {
+            baselineCumulative += dailyLcs[k];
+        }
+    });
+
+    const cumulativeData = [];
+    const dailyData = [];
+    let runningTotal = baselineCumulative;
+    let gainedInPeriod = 0;
+
+    dateKeys.forEach(k => {
+        const earnedToday = dailyLcs[k] || 0;
+        runningTotal += earnedToday;
+        gainedInPeriod += earnedToday;
+        cumulativeData.push(runningTotal);
+        dailyData.push(earnedToday);
+    });
+
+    const dailyAvg = (gainedInPeriod / days).toFixed(1);
+
+    return {
+        labels,
+        dateKeys,
+        cumulativeData,
+        dailyData,
+        baselineCumulative,
+        totalCumulative: runningTotal,
+        gainedInPeriod,
+        dailyAvg,
+        daysCount: days
+    };
+}
+window.buildCumulativeLcTimeline = buildCumulativeLcTimeline;
+
+function renderLcGrowthChart(userIdentifier, timeframe) {
+    if (userIdentifier) currentLcGrowthUser = userIdentifier;
+    if (timeframe) currentLcGrowthTimeframe = timeframe;
+
+    const user = currentLcGrowthUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+    if (!user) return;
+
+    const canvas = document.getElementById('lcGrowthChart');
+    if (!canvas) return;
+
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        setTimeout(() => renderLcGrowthChart(user, currentLcGrowthTimeframe), 300);
+        return;
+    }
+
+    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
+    const days = timeframeMap[currentLcGrowthTimeframe] || 30;
+
+    const data = buildCumulativeLcTimeline(user, days);
+
+    // Update KPI badges
+    const totalEl = document.getElementById('lcKpiTotalCumulative');
+    const gainedEl = document.getElementById('lcKpiGainedInPeriod');
+    const avgEl = document.getElementById('lcKpiDailyAverage');
+    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    if (gainedEl) gainedEl.textContent = `+${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
+
+    // Synchronize select dropdown value if exists
+    const selectEl = document.getElementById('lcTimeframeFilter');
+    if (selectEl && selectEl.value !== currentLcGrowthTimeframe) {
+        selectEl.value = currentLcGrowthTimeframe;
+    }
+
+    // Destroy previous chart instance if exists
+    if (lcGrowthChartInstance) {
+        try { lcGrowthChartInstance.destroy(); } catch (e) {}
+        lcGrowthChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    
+    // Create rich 3D ambient vertical gradient under the curve
+    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');   // Radiant Cyan
+    gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)'); // Deep Indigo
+    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.0)');      // Transparent Slate
+
+    // Determine point radius based on timeframe density
+    let pointRadius = 4;
+    let pointHoverRadius = 7;
+    if (days > 30) {
+        pointRadius = days > 90 ? 0 : 2;
+        pointHoverRadius = 6;
+    }
+
+    lcGrowthChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Cumulative LCs',
+                data: data.cumulativeData,
+                borderColor: '#22d3ee', // Cyan-400
+                borderWidth: 3,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.35,
+                pointRadius: pointRadius,
+                pointHoverRadius: pointHoverRadius,
+                pointBackgroundColor: '#06b6d4',
+                pointBorderColor: '#0f172a',
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#38bdf8',
+                pointHoverBorderColor: '#ffffff',
+                pointHoverBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#f8fafc',
+                    titleFont: { size: 12, weight: 'bold', family: 'system-ui, sans-serif' },
+                    bodyColor: '#38bdf8',
+                    bodyFont: { size: 12, weight: 'bold', family: 'monospace' },
+                    borderColor: 'rgba(56, 189, 248, 0.4)',
+                    borderWidth: 1,
+                    padding: 12,
+                    cornerRadius: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: (tooltipItems) => {
+                            const idx = tooltipItems[0].dataIndex;
+                            const fullDate = data.dateKeys[idx];
+                            return `${tooltipItems[0].label} (${fullDate})`;
+                        },
+                        label: (context) => {
+                            const idx = context.dataIndex;
+                            const cum = data.cumulativeData[idx];
+                            const daily = data.dailyData[idx];
+                            const lines = [`📈 Cumulative: ${cum} LCs`];
+                            if (daily > 0) {
+                                lines.push(`⚡ Earned Today: +${daily} LCs`);
+                            } else {
+                                lines.push(`💤 No check-ins on this date`);
+                            }
+                            return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10, weight: '600', family: 'system-ui, sans-serif' },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: days > 60 ? 8 : (days > 14 ? 10 : 7)
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        borderDash: [4, 4]
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10, weight: 'bold', family: 'monospace' },
+                        callback: (val) => `${val} LCs`,
+                        maxTicksLimit: 6
+                    }
+                }
+            }
+        }
+    });
+}
+window.renderLcGrowthChart = renderLcGrowthChart;
+
+function changeLcChartTimeframe(timeframe) {
+    currentLcGrowthTimeframe = timeframe;
+    renderLcGrowthChart(currentLcGrowthUser || currentUser, timeframe);
+}
+window.changeLcChartTimeframe = changeLcChartTimeframe;
 
 // =========================================================================
 // CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)

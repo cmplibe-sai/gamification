@@ -190,6 +190,63 @@
                     </div>
                 </div>
 
+                <!-- Cumulative Learning Currencies (LCs) Growth Timeline -->
+                <div class="glass-card p-6 md:p-8 border-slate-800">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2.5">
+                                <i class="fas fa-chart-line text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"></i> Cumulative LC Growth Velocity
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-1">Daily progression of your total earned Learning Currencies (LCs) over time.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="lcTimeframeFilter" class="text-xs font-bold text-slate-400">Timeline:</label>
+                            <select id="lcTimeframeFilter" onchange="changeLcChartTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3.5 py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d" selected>Last 30 Days</option>
+                                <option value="90d">Last 90 Days</option>
+                                <option value="180d">Last 180 Days</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Metric Highlights Banner -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Cumulative LCs</p>
+                                <p id="lcKpiTotalCumulative" class="text-xl font-extrabold text-white font-mono mt-0.5">0 LCs</p>
+                            </div>
+                            <div class="w-9 h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                                <i class="fas fa-coins text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gained in Period</p>
+                                <p id="lcKpiGainedInPeriod" class="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">+0 LCs</p>
+                            </div>
+                            <div class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                <i class="fas fa-arrow-trend-up text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Velocity / Day</p>
+                                <p id="lcKpiDailyAverage" class="text-xl font-extrabold text-cyan-300 font-mono mt-0.5">0.0 LCs/day</p>
+                            </div>
+                            <div class="w-9 h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                                <i class="fas fa-bolt text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Line Chart Canvas -->
+                    <div class="relative w-full h-[260px] md:h-[300px]">
+                        <canvas id="lcGrowthChart"></canvas>
+                    </div>
+                </div>
+
                 <!-- Submissions & Reflection Timeline -->
                 <div class="glass-card p-6 md:p-8 border-slate-800">
                     <div class="flex justify-between items-center mb-6 pb-3 border-b border-slate-800">
@@ -612,16 +669,17 @@
         </div>
     </div>
 
-    <!-- Credential Certificate PDF + Celebration Confetti -->
+    <!-- Credential Certificate PDF + Celebration Confetti + Chart.js Line Graphs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
     <!-- Scripts (Cache Busted to Force Instant Live Reload) -->
     <script src="data.js?v=2.9.1"></script>
     <script src="timeline.js?v=2.9.1"></script>
     <script src="courses.js?v=2.9.1"></script>
     <script src="api.js?v=2.9.1"></script>
-    <script src="app.js?v=2.9.3"></script>
+    <script src="app.js?v=2.9.4"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
