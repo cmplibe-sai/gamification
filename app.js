@@ -9798,10 +9798,16 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `⚠️ [Moderate Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
+            remarks: isLate ?
+                `⚠️ [Late Submission — ${pts} LCs Awarded]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window (11:59 PM cutoff). While your content match reached ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `How to improve: Submit within the daily on-time window tomorrow to unlock your full on-time reward!`
+                :
+                `⚠️ [Moderate Match — ${pts} LCs Awarded]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved\n` +
                 `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
+                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!`
         };
     }
 
@@ -9810,16 +9816,21 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         const fullExpected = Number(basePoints) || 33;
         const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
         const deduction = Math.max(0, fullExpected - pts);
-        const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. While your content match scored high (${coverage}%), late window policy awarded +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
             lcReward: pts,
             status: 'completed',
             isLate: isLate,
-            remarks: `✅ [Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
-                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
+            remarks: isLate ?
+                `✅ [Late Submission — ${pts} LCs Awarded]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved (Late Window)\n` +
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your submission was completed outside the daily on-time window. While your content match scored a strong ${coverage}%, late policy awards +${pts} LCs.\n` +
+                `How to improve: Submit within the daily on-time window tomorrow to capture your full on-time reward!`
+                :
+                `✅ [Good Match — ${pts} LCs Awarded]\n` +
+                `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved\n` +
                 `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!${lateNote}`
+                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!`
         };
     }
 
