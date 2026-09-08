@@ -36,6 +36,7 @@ window.ADMIN_EMAILS = [
 window.TagMangoAPI = {
     Gamification: {
         getCollectivePoints: (userId) => `${APP_PATH_PREFIX}/api/tagmango/points/${encodeURIComponent(userId)}`,
+        getPointsLedger: (userId) => `${APP_PATH_PREFIX}/api/tagmango/ledger/${encodeURIComponent(userId)}`,
     },
     Mangos: {
         getAll: `${APP_PATH_PREFIX}/api/tagmango/mangos`,

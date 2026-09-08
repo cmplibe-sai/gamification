@@ -370,6 +370,53 @@ app.get('/api/tagmango/points/:userId', async (req, res) => {
     }
 });
 
+// 4. Proxy: Get Full Points Ledger by User ID (Historical progression of all points earned since joining)
+const serverLedgerCache = new Map(); // userId -> { timestamp, data }
+
+app.get('/api/tagmango/ledger/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'User ID is required', result: { data: [] } });
+        }
+
+        // Cache for 60 seconds to avoid hitting TagMango rate limits during high polling
+        const cached = serverLedgerCache.get(userId);
+        if (cached && (Date.now() - cached.timestamp < 60000)) {
+            return res.json(cached.data);
+        }
+
+        let allEntries = [];
+        let page = 1;
+        let hasNext = true;
+        const maxPages = 10; // Up to 500 entries (covers entire learner tenure)
+
+        while (hasNext && page <= maxPages) {
+            const data = await fetchTagMangoServer(`/external/gamification/points/ledger/${encodeURIComponent(userId)}?page=${page}&limit=50`);
+            const pageData = (data && data.result && Array.isArray(data.result.data)) ? data.result.data : [];
+            allEntries = allEntries.concat(pageData);
+            hasNext = Boolean(data && data.result && data.result.hasNext === true && pageData.length > 0);
+            page++;
+        }
+
+        const responsePayload = {
+            success: true,
+            code: 200,
+            result: {
+                total: allEntries.length,
+                data: allEntries
+            }
+        };
+
+        serverLedgerCache.set(userId, { timestamp: Date.now(), data: responsePayload });
+        res.json(responsePayload);
+    } catch (err) {
+        console.error(`[TagMango Proxy Error /ledger/${req.params.userId}]:`, err.message);
+        res.status(502).json({ success: false, error: err.message, result: { data: [] } });
+    }
+});
+
+
 // --- SUBMISSIONS SYNC & NATIVE AI WORKER ---
 
 async function assignTagMangoPointsOnServer(userId, score, description) {
@@ -397,6 +444,9 @@ async function assignTagMangoPointsOnServer(userId, score, description) {
 
         const data = await response.json();
         console.log(`[TagMango Sync Success] Status: ${response.status}`, data);
+        if (serverLedgerCache && serverLedgerCache.has(userId)) {
+            serverLedgerCache.delete(userId);
+        }
         return data;
     } catch (err) {
         console.error('[TagMango Sync Error]', err.message);

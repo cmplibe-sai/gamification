@@ -726,30 +726,120 @@ window.initLearnabilityGauge = initLearnabilityGauge;
 // ==============================================================
 // CUMULATIVE LEARNING CURRENCIES (LCs) GROWTH ENGINE
 // Renders 3D-styled ambient line chart showing cumulative LC progression
-// with timeframe filters: 7d, 30d, 90d, 180d
+// with timeframe filters: 7d, 30d, 90d, 180d.
+// Integrates official TagMango points ledger (lifetime points history) +
+// local submission deduplication (prevents double-counting).
 // ==============================================================
 var lcGrowthChartInstance = null;
 var currentLcGrowthTimeframe = '30d';
 var currentLcGrowthUser = null;
+var _chartJsRetryCount = 0;
+var _lastRenderedChartSig = null;
+var userTagMangoLedgerCache = {}; // userId -> Array of ledger transactions
 
-function buildCumulativeLcTimeline(userIdentifier, daysBack = 30) {
+async function fetchTagMangoLedger(userId) {
+    if (!userId) return [];
+    if (userTagMangoLedgerCache[userId] && Array.isArray(userTagMangoLedgerCache[userId])) {
+        return userTagMangoLedgerCache[userId];
+    }
+    try {
+        const response = await apiFetch(`/api/tagmango/ledger/${encodeURIComponent(userId)}`);
+        if (response.ok) {
+            const data = await response.json();
+            const entries = (data && data.result && Array.isArray(data.result.data)) ? data.result.data : [];
+            userTagMangoLedgerCache[userId] = entries;
+            return entries;
+        }
+    } catch (err) {
+        console.warn('TagMango points ledger fetch notice:', err);
+    }
+    return [];
+}
+window.fetchTagMangoLedger = fetchTagMangoLedger;
+
+function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries = null) {
     const days = Math.max(1, Number(daysBack) || 30);
-    const userId = (typeof userIdentifier === 'object' && userIdentifier) 
-        ? (userIdentifier._id || userIdentifier.id || userIdentifier.email) 
-        : userIdentifier;
-    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+    const userObj = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier : null;
+    const userId = userObj ? (userObj._id || userObj.id || userObj.email) : userIdentifier;
 
-    // Sum daily LCs by YYYY-MM-DD
     const dailyLcs = {};
-    subs.forEach(s => {
+
+    // 1. Ingest TagMango Ledger Entries (Authoritative source for lifetime wallet points)
+    const entries = (ledgerEntries && Array.isArray(ledgerEntries)) 
+        ? ledgerEntries 
+        : (userId && userTagMangoLedgerCache[userId] ? userTagMangoLedgerCache[userId] : null);
+
+    const hasLedger = Boolean(entries && entries.length > 0);
+
+    if (hasLedger) {
+        entries.forEach(entry => {
+            if (!entry || !entry.score) return;
+            const score = Number(entry.score) || 0;
+            if (score <= 0) return;
+            const rawDate = entry.date || entry.createdAt;
+            if (!rawDate) return;
+            const dateKey = getLocalDateKey(new Date(rawDate));
+            if (!dateKey) return;
+            dailyLcs[dateKey] = (dailyLcs[dateKey] || 0) + score;
+        });
+    }
+
+    // 2. Ingest Local Submissions with Claude-recommended deduplication
+    // (Grouping by dateKey + normalized module, resolving to highest reward / completed)
+    const rawSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
+    const bestSubsByDateMod = {};
+
+    rawSubs.forEach(s => {
         if (!s) return;
         const reward = Number(s.lcReward) || 0;
         if (reward <= 0) return;
         const rawDate = s.dateKey || s.date || (s.submittedAt ? s.submittedAt.split('T')[0] : null);
         if (!rawDate) return;
-        const key = String(rawDate).includes('T') ? String(rawDate).split('T')[0] : String(rawDate);
-        dailyLcs[key] = (dailyLcs[key] || 0) + reward;
+        const dateKey = String(rawDate).includes('T') ? String(rawDate).split('T')[0] : String(rawDate);
+        const mod = (typeof normalizeLevelUpType === 'function') ? normalizeLevelUpType(s.type || s.moduleCode || 'dip') : (s.type || 'dip');
+        const groupKey = `${dateKey}_${mod}`;
+
+        const existing = bestSubsByDateMod[groupKey];
+        if (!existing) {
+            bestSubsByDateMod[groupKey] = s;
+        } else {
+            // Collision resolution tie-break: completed > higher lcReward > latest
+            const sCompleted = s.status === 'completed';
+            const exCompleted = existing.status === 'completed';
+            if (sCompleted && !exCompleted) {
+                bestSubsByDateMod[groupKey] = s;
+            } else if (sCompleted === exCompleted) {
+                const sRew = Number(s.lcReward) || 0;
+                const exRew = Number(existing.lcReward) || 0;
+                if (sRew > exRew) {
+                    bestSubsByDateMod[groupKey] = s;
+                }
+            }
+        }
     });
+
+    // If TagMango ledger was not available (offline/fallback), sum the deduplicated local submissions
+    if (!hasLedger) {
+        Object.values(bestSubsByDateMod).forEach(s => {
+            const reward = Number(s.lcReward) || 0;
+            if (reward <= 0) return;
+            const rawDate = s.dateKey || s.date || (s.submittedAt ? s.submittedAt.split('T')[0] : null);
+            const dateKey = String(rawDate).includes('T') ? String(rawDate).split('T')[0] : String(rawDate);
+            dailyLcs[dateKey] = (dailyLcs[dateKey] || 0) + reward;
+        });
+    } else {
+        // If TagMango ledger is available, also check if there are any fresh local submissions
+        // that have not yet synced into TagMango (e.g., today's fresh check-in)
+        Object.values(bestSubsByDateMod).forEach(s => {
+            const rawDate = s.dateKey || s.date || (s.submittedAt ? s.submittedAt.split('T')[0] : null);
+            if (!rawDate) return;
+            const dateKey = String(rawDate).includes('T') ? String(rawDate).split('T')[0] : String(rawDate);
+            if (!dailyLcs[dateKey]) {
+                const reward = Number(s.lcReward) || 0;
+                if (reward > 0) dailyLcs[dateKey] = reward;
+            }
+        });
+    }
 
     // Build timeline dates: from (today - (days - 1)) up to today
     const labels = [];
@@ -802,25 +892,66 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30) {
         totalCumulative: runningTotal,
         gainedInPeriod,
         dailyAvg,
-        daysCount: days
+        daysCount: days,
+        hasLedger
     };
 }
 window.buildCumulativeLcTimeline = buildCumulativeLcTimeline;
 
-function renderLcGrowthChart(userIdentifier, timeframe) {
+function renderLcGrowthChart(userIdentifier, timeframe, forceRender = false) {
     if (userIdentifier) currentLcGrowthUser = userIdentifier;
     if (timeframe) currentLcGrowthTimeframe = timeframe;
 
     const user = currentLcGrowthUser || (typeof currentUser !== 'undefined' ? currentUser : null);
     if (!user) return;
 
+    const targetUserId = (typeof user === 'object' && user) ? (user._id || user.id) : user;
+
     const canvas = document.getElementById('lcGrowthChart');
     if (!canvas) return;
 
-    // Check if Chart.js is available
+    // Claude Recommendation 2: Capped Chart.js loader retry (max 10 attempts = ~3s) with fallback UI
     if (typeof Chart === 'undefined') {
-        setTimeout(() => renderLcGrowthChart(user, currentLcGrowthTimeframe), 300);
+        if (_chartJsRetryCount < 10) {
+            _chartJsRetryCount++;
+            setTimeout(() => renderLcGrowthChart(user, currentLcGrowthTimeframe, forceRender), 300);
+            return;
+        }
+        // Fallback UI when Chart.js CDN cannot be loaded
+        const container = canvas.parentElement;
+        if (container) {
+            canvas.style.display = 'none';
+            let fallbackEl = document.getElementById('lcChartFallback');
+            if (!fallbackEl) {
+                fallbackEl = document.createElement('div');
+                fallbackEl.id = 'lcChartFallback';
+                fallbackEl.className = 'flex flex-col items-center justify-center h-full text-slate-400 text-xs py-10';
+                fallbackEl.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-2">
+                        <i class="fas fa-chart-line text-base"></i>
+                    </div>
+                    <p class="font-semibold text-slate-300">Chart Visualization Unavailable</p>
+                    <p class="text-[11px] text-slate-500 mt-1">Unable to load the chart rendering engine. Please check your network connection.</p>
+                `;
+                container.appendChild(fallbackEl);
+            }
+        }
         return;
+    }
+    _chartJsRetryCount = 0;
+
+    // Ensure canvas is visible if fallback was previously displayed
+    canvas.style.display = 'block';
+    const fallbackEl = document.getElementById('lcChartFallback');
+    if (fallbackEl) fallbackEl.remove();
+
+    // Trigger async TagMango ledger fetch if not yet cached
+    if (targetUserId && !userTagMangoLedgerCache[targetUserId]) {
+        fetchTagMangoLedger(targetUserId).then(entries => {
+            if (entries && entries.length > 0) {
+                renderLcGrowthChart(user, currentLcGrowthTimeframe, true);
+            }
+        });
     }
 
     const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
@@ -842,6 +973,13 @@ function renderLcGrowthChart(userIdentifier, timeframe) {
         selectEl.value = currentLcGrowthTimeframe;
     }
 
+    // Claude Re-render Granularity: Skip re-creating canvas if data signature has not changed
+    const currentSig = `${targetUserId}_${currentLcGrowthTimeframe}_${data.totalCumulative}_${data.gainedInPeriod}_${data.hasLedger ? 'ledger' : 'local'}`;
+    if (!forceRender && _lastRenderedChartSig === currentSig && lcGrowthChartInstance) {
+        return;
+    }
+    _lastRenderedChartSig = currentSig;
+
     // Destroy previous chart instance if exists
     if (lcGrowthChartInstance) {
         try { lcGrowthChartInstance.destroy(); } catch (e) {}
@@ -850,8 +988,9 @@ function renderLcGrowthChart(userIdentifier, timeframe) {
 
     const ctx = canvas.getContext('2d');
     
-    // Create rich 3D ambient vertical gradient under the curve
-    const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+    // Claude Recommendation 3: Dynamic gradient height matching container (e.g. 260px mobile, 300px desktop)
+    const canvasHeight = canvas.clientHeight || canvas.height || 280;
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
     gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');   // Radiant Cyan
     gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)'); // Deep Indigo
     gradient.addColorStop(1, 'rgba(15, 23, 42, 0.0)');      // Transparent Slate
@@ -967,9 +1106,10 @@ window.renderLcGrowthChart = renderLcGrowthChart;
 
 function changeLcChartTimeframe(timeframe) {
     currentLcGrowthTimeframe = timeframe;
-    renderLcGrowthChart(currentLcGrowthUser || currentUser, timeframe);
+    renderLcGrowthChart(currentLcGrowthUser || currentUser, timeframe, true);
 }
 window.changeLcChartTimeframe = changeLcChartTimeframe;
+
 
 // =========================================================================
 // CREATOR HUB & OVERVIEW ENGINE (SOLUTIONS, COHORTS & CUSTOMERS)
