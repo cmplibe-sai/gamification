@@ -7568,8 +7568,22 @@ function saveAdminPodCheckinConfig(dateKey) {
     const audioTitle = document.getElementById('podAudioTitle')?.value.trim() || `cMPLi POD Day Insights`;
     const audioUrl = document.getElementById('podAudioUrl')?.value.trim() || '';
 
-    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
-    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+    // Use dateKey as authoritative key (date input in list sidebar is the only way to change date)
+    const chosenDate = dateKey;
+    // Re-derive the stored dayNumber from the saved config — same logic as loadAdminCheckinEditor
+    const _existingPodCfg = (customMilestoneConfigs[activeAdminMilestoneId]?.['pod']?.[dateKey]) || {};
+    let chosenDay = Number(_existingPodCfg.dayNumber || _existingPodCfg.sessionDay || _existingPodCfg.day);
+    if (!chosenDay && _existingPodCfg.title) {
+        const _m = String(_existingPodCfg.title).match(/(?:Session|Day)\s*(\d+)/i);
+        if (_m) chosenDay = parseInt(_m[1], 10);
+    }
+    if (!chosenDay) {
+        const _startStr = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[activeAdminMilestoneId]) || getLocalDateKey(new Date());
+        let _sd = new Date(_startStr + 'T00:00:00'); if (isNaN(_sd.getTime())) _sd = new Date(); _sd.setHours(0,0,0,0);
+        const _total = (activeAdminMilestoneId === 1) ? 21 : 24;
+        for (let _d = 1; _d <= _total; _d++) { if (getLocalDateKey(getMilestoneSessionDate(_sd, _d, 'pod')) === dateKey) { chosenDay = _d; break; } }
+    }
+    if (!chosenDay) chosenDay = 1;
 
     const dayConfig = {
         date: chosenDate,
@@ -7587,9 +7601,6 @@ function saveAdminPodCheckinConfig(dateKey) {
         questions: questions
     };
 
-    if (chosenDate !== dateKey) {
-        delete customMilestoneConfigs[activeAdminMilestoneId]['pod'][dateKey];
-    }
     customMilestoneConfigs[activeAdminMilestoneId]['pod'][chosenDate] = dayConfig;
     activeAdminDateKey = chosenDate;
 
@@ -7715,26 +7726,7 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
         dayOptionsHtml += `<option value="${d}" ${Number(d) === Number(assignedDay) ? 'selected' : ''}>Day ${d}</option>`;
     }
 
-    const daySchedulerBarHtml = `
-        <div class="glass-card p-3.5 border-indigo-500/30 bg-slate-900/90 rounded-2xl mb-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md">
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-indigo-300 uppercase tracking-wider"><i class="fas fa-layer-group mr-1"></i> Session Day:</span>
-                    <select id="configDayNumber" class="bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600 focus:border-indigo-500 outline-none">
-                        ${dayOptionsHtml}
-                    </select>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-slate-300"><i class="fas fa-calendar-alt mr-1"></i> Scheduled Date:</span>
-                    <input type="date" id="configSessionDate" value="${dateKey}" class="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-600 focus:border-indigo-500 outline-none" />
-                </div>
-            </div>
-            <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <i class="fas fa-info-circle text-indigo-400"></i>
-                <span>Change date above to postpone or reschedule without swapping Day identities.</span>
-            </div>
-        </div>
-    `;
+    // daySchedulerBarHtml removed — date selection is done via the date-input in the list sidebar only
 
     const displayDateObj = new Date(dateKey + 'T00:00:00');
     const displayDate = !isNaN(displayDateObj.getTime()) ? displayDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : dateKey;
@@ -7763,8 +7755,6 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                     </button>
                 </div>
             </div>
-
-            ${daySchedulerBarHtml}
 
             <!-- Scoring & Active Listening Rules Banner -->
             <div class="glass-card p-4 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -7879,7 +7869,6 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                 </div>
             </div>
 
-            ${daySchedulerBarHtml}
 
             <!-- 2-Factor Scoring & Evaluation Rules Banner -->
             <div class="glass-card p-4 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -8001,8 +7990,6 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
             </div>
         </div>
         
-        ${daySchedulerBarHtml}
-        
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
                 <label class="block text-xs font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
@@ -8089,8 +8076,19 @@ function saveAdminCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
-    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
-    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+    // Use dateKey as authoritative key; preserve previously-resolved dayNumber
+    const chosenDate = dateKey;
+    // Re-derive dayNumber from the already-saved config at this dateKey
+    const _existingDipCfg2 = (customMilestoneConfigs[activeAdminMilestoneId]?.[activeAdminModule]?.[dateKey]) || {};
+    let chosenDay = Number(_existingDipCfg2.dayNumber || _existingDipCfg2.sessionDay || _existingDipCfg2.day);
+    if (!chosenDay && _existingDipCfg2.title) { const _m2 = String(_existingDipCfg2.title).match(/(?:Session|Day)\s*(\d+)/i); if (_m2) chosenDay = parseInt(_m2[1], 10); }
+    if (!chosenDay) {
+        const _ss2 = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[activeAdminMilestoneId]) || getLocalDateKey(new Date());
+        let _sd2 = new Date(_ss2 + 'T00:00:00'); if (isNaN(_sd2.getTime())) _sd2 = new Date(); _sd2.setHours(0,0,0,0);
+        const _tot2 = (activeAdminMilestoneId === 1) ? 21 : 24;
+        for (let _d2 = 1; _d2 <= _tot2; _d2++) { if (getLocalDateKey(getMilestoneSessionDate(_sd2, _d2, activeAdminModule)) === dateKey) { chosenDay = _d2; break; } }
+    }
+    if (!chosenDay) chosenDay = 1;
 
     const dayConfig = {
         date: chosenDate,
@@ -8117,9 +8115,6 @@ function saveAdminCheckinConfig(dateKey) {
         }
     });
 
-    if (chosenDate !== dateKey) {
-        delete customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey];
-    }
     customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][chosenDate] = dayConfig;
     activeAdminDateKey = chosenDate;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
@@ -8161,8 +8156,19 @@ function saveAdminImmerseCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId]['immerse']) customMilestoneConfigs[activeAdminMilestoneId]['immerse'] = {};
 
-    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
-    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+    // Use dateKey as authoritative key; preserve previously-resolved dayNumber
+    const chosenDate = dateKey;
+    // Re-derive dayNumber from the already-saved immerse config at this dateKey
+    const _existingImCfg2 = (customMilestoneConfigs[activeAdminMilestoneId]?.['immerse']?.[dateKey]) || {};
+    let chosenDay = Number(_existingImCfg2.dayNumber || _existingImCfg2.sessionDay || _existingImCfg2.day);
+    if (!chosenDay && _existingImCfg2.title) { const _m3 = String(_existingImCfg2.title).match(/(?:Session|Day)\s*(\d+)/i); if (_m3) chosenDay = parseInt(_m3[1], 10); }
+    if (!chosenDay) {
+        const _ss3 = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[activeAdminMilestoneId]) || getLocalDateKey(new Date());
+        let _sd3 = new Date(_ss3 + 'T00:00:00'); if (isNaN(_sd3.getTime())) _sd3 = new Date(); _sd3.setHours(0,0,0,0);
+        const _tot3 = (activeAdminMilestoneId === 1) ? 9 : 12;
+        for (let _d3 = 1; _d3 <= _tot3; _d3++) { if (getLocalDateKey(getMilestoneSessionDate(_sd3, _d3, 'immerse')) === dateKey) { chosenDay = _d3; break; } }
+    }
+    if (!chosenDay) chosenDay = 1;
 
     const mainQuestion = document.getElementById('configMainQuestion')?.value.trim() || '';
     const dayTitle = document.getElementById('configDayTitle')?.value.trim() || mainQuestion || 'cMPLi Immerse Reflection';
@@ -8205,9 +8211,6 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         questions: questions
     };
 
-    if (chosenDate !== dateKey) {
-        delete customMilestoneConfigs[activeAdminMilestoneId]['immerse'][dateKey];
-    }
     customMilestoneConfigs[activeAdminMilestoneId]['immerse'][chosenDate] = dayConfig;
     activeAdminDateKey = chosenDate;
 
@@ -10802,8 +10805,10 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
 }
 window.getMilestoneSessionDate = getMilestoneSessionDate;
 
-// Resolves session date: creator-configured manual/rescheduled dates take precedence over default MWF/Mon-Sat math
-// Day identity is bound to explicit dayNumber rather than naive chronological date sorting
+// Resolves session date for a given learner Day N:
+// The learner's milestoneStartDate anchors their Day 1 — this is NEVER overridden by creator configs.
+// Creator configs are date-keyed; we look up the config AT the learner's computed session date.
+// The dayNumber stored inside a config is only used for admin display, NOT for date resolution.
 function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum) {
     const normMod = normalizeLevelUpType(moduleName || 'dip');
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && (customMilestoneConfigs[msId][normMod] || customMilestoneConfigs[msId][moduleName])) || {};
@@ -10819,87 +10824,20 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
         )
     );
 
-    // 1. PRIMARY MATCH: Look for explicit dayNumber / sessionDay assigned to this dayNum
-    for (const k of Object.keys(msConfigs)) {
-        const c = msConfigs[k];
-        if (!c) continue;
-        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
-        if (cDay === targetDay && isConfigValid(c)) {
-            const dateKey = c.date || c.dateKey || k;
-            const dateObj = new Date(dateKey + 'T00:00:00');
-            return {
-                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
-                cardDateKey: dateKey,
-                isCreatorScheduled: true,
-                dayNumber: targetDay,
-                config: c
-            };
-        }
-    }
-
-    // 2. SECONDARY MATCH: Title explicitly matching "Session N:" or "Day N:"
-    for (const k of Object.keys(msConfigs)) {
-        const c = msConfigs[k];
-        if (!c || !c.title) continue;
-        const m = String(c.title).match(/(?:Session|Day)\s*(\d+)/i);
-        if (m && Number(m[1]) === targetDay && isConfigValid(c)) {
-            const dateKey = c.date || c.dateKey || k;
-            const dateObj = new Date(dateKey + 'T00:00:00');
-            return {
-                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
-                cardDateKey: dateKey,
-                isCreatorScheduled: true,
-                dayNumber: targetDay,
-                config: c
-            };
-        }
-    }
-
-    // 3. TERTIARY MATCH: Check if there is a config keyed at the default session date for this dayNum
+    // ALWAYS compute the learner's session date from their start date — this is the canonical date for Day N
     const defaultDate = getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName);
     const defaultDateKey = getLocalDateKey(defaultDate);
-    if (msConfigs[defaultDateKey] && isConfigValid(msConfigs[defaultDateKey])) {
-        const c = msConfigs[defaultDateKey];
-        // Only match if this config is not explicitly assigned to a DIFFERENT day
-        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
-        if (!cDay || cDay === targetDay) {
-            return {
-                cardDate: defaultDate,
-                cardDateKey: defaultDateKey,
-                isCreatorScheduled: true,
-                dayNumber: targetDay,
-                config: c
-            };
-        }
-    }
 
-    // 4. FALLBACK FOR UNASSIGNED LEGACY DATES (no explicit dayNumber)
-    const unassignedKeys = Object.keys(msConfigs).filter(k => {
-        const c = msConfigs[k];
-        if (!isConfigValid(c)) return false;
-        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
-        return !cDay;
-    }).sort();
-
-    const targetIdx = targetDay - 1;
-    if (unassignedKeys[targetIdx]) {
-        const dateKey = unassignedKeys[targetIdx];
-        const dateObj = new Date(dateKey + 'T00:00:00');
-        return {
-            cardDate: !isNaN(dateObj.getTime()) ? dateObj : defaultDate,
-            cardDateKey: dateKey,
-            isCreatorScheduled: true,
-            dayNumber: targetDay,
-            config: msConfigs[dateKey]
-        };
-    }
+    // Look up creator config AT the learner's session date (date-keyed lookup, not dayNumber-keyed)
+    const configAtDate = msConfigs[defaultDateKey];
+    const hasValidConfig = isConfigValid(configAtDate);
 
     return {
         cardDate: defaultDate,
         cardDateKey: defaultDateKey,
         isCreatorScheduled: false,
         dayNumber: targetDay,
-        config: null
+        config: hasValidConfig ? configAtDate : null
     };
 }
 window.getResolvedMilestoneDateKey = getResolvedMilestoneDateKey;
@@ -12358,7 +12296,6 @@ function switchMilestoneTab(moduleName, btnElement) {
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="text-xs font-bold text-white shrink-0">${displayDate}</h4>
-                            ${isCreatorScheduled ? '<span class="badge-pill bg-indigo-950/60 text-indigo-300 border border-indigo-700/50 text-[9px] font-bold py-0.5 px-1.5 shrink-0"><i class="fas fa-calendar-check mr-1 text-indigo-400"></i> Creator Scheduled</span>' : ''}
                             ${dayTitle ? `<span class="text-xs font-bold ${isImmerse ? 'text-purple-300' : 'text-indigo-300'} font-heading truncate max-w-[110px] sm:max-w-xs md:max-w-md">• ${dayTitle}</span>` : ''}
                         </div>
                         <div class="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
