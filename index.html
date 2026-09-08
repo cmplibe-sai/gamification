@@ -15,7 +15,7 @@
     
     <!-- Tailwind CSS (for layout utilities) & Custom Minimalist Design System -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="styles.css?v=2.9.1">
+    <link rel="stylesheet" href="styles.css?v=2.9.2">
 </head>
 <body class="min-h-screen custom-scrollbar">
 
@@ -62,45 +62,45 @@
         
         <!-- Navigation Header -->
         <nav class="fixed top-0 w-full z-50 glass border-b border-slate-800/90">
-            <div class="max-w-7xl mx-auto px-4 md:px-8 h-20 flex items-center justify-between">
+            <div class="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-8 h-16 md:h-20 flex items-center justify-between">
                 
                 <!-- Brand Logo -->
-                <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
-                    <img src="assets/logo.png" alt="cMPLi Be" class="h-8 md:h-9 w-auto object-contain">
+                <div class="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onclick="switchTab(isAdminLogin ? 'adminTab' : 'dashboardTab')">
+                    <img src="assets/logo.png" alt="cMPLi Be" class="h-7 sm:h-8 md:h-9 w-auto object-contain">
                     <span class="hidden sm:inline-block text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">Arena</span>
                 </div>
                 
                 <!-- Learner Navigation Tabs -->
-                <div id="learnerNav" class="hidden flex items-center gap-1 md:gap-3">
-                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden md:inline">Home</span></button>
-                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span>Level-Up (4 Milestones)</span></button>
-                    <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
+                <div id="learnerNav" class="hidden flex items-center gap-1 sm:gap-1.5 md:gap-3">
+                    <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active"><i class="fas fa-home"></i> <span class="hidden sm:inline">Home</span></button>
+                    <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn"><i class="fas fa-layer-group"></i> <span>Level-Up<span class="hidden md:inline"> (4 Milestones)</span></span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span><span class="hidden lg:inline"> Leaderboard</span></button>
                     
                     <!-- LC Currency Pill -->
-                    <div class="bg-slate-900/90 px-3.5 py-1.5 rounded-full border border-amber-500/30 flex items-center gap-2 ml-2 shadow-inner shadow-black">
+                    <div class="bg-slate-900/90 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-amber-500/30 flex items-center gap-1 sm:gap-2 ml-1 sm:ml-2 shadow-inner shadow-black shrink-0">
                         <i class="fas fa-coins text-amber-400 text-xs"></i>
-                        <span id="userPoints" class="text-amber-400 font-extrabold text-xs md:text-sm">0</span>
-                        <span class="text-[10px] text-slate-400 uppercase font-bold">LCs</span>
+                        <span id="userPoints" class="text-amber-400 font-extrabold text-xs sm:text-sm">0</span>
+                        <span class="text-[9px] sm:text-[10px] text-slate-400 uppercase font-bold">LCs</span>
                     </div>
 
                     <!-- Logout -->
-                    <button onclick="logout()" class="ml-2 w-8 h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700" title="Logout">
+                    <button onclick="logout()" class="ml-1 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
                     </button>
                 </div>
 
                 <!-- Admin Navigation Tabs -->
-                <div id="adminNav" class="hidden flex items-center gap-2 md:gap-3">
-                    <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active"><i class="fas fa-chart-line"></i> <span class="hidden md:inline">Overview</span></button>
-                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span>Level-Up Command</span></button>
-                    <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden md:inline">Leaderboard</span></button>
+                <div id="adminNav" class="hidden flex items-center gap-1 sm:gap-2 md:gap-3">
+                    <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active"><i class="fas fa-chart-line"></i> <span class="hidden sm:inline">Overview</span></button>
+                    <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn"><i class="fas fa-sliders-h"></i> <span>Level-Up<span class="hidden md:inline"> Command</span></span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span></button>
                     
-                    <div class="bg-emerald-950/40 px-3.5 py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-2 text-emerald-400 text-xs font-extrabold tracking-wider uppercase ml-2">
-                        <i class="fas fa-shield-alt"></i> <span class="hidden sm:inline">Creator Hub</span>
+                    <div class="bg-emerald-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-1 sm:ml-2 shrink-0">
+                        <i class="fas fa-shield-alt"></i> <span class="hidden md:inline">Creator Hub</span>
                     </div>
 
                     <!-- Logout -->
-                    <button onclick="logout()" class="ml-2 w-8 h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700" title="Logout">
+                    <button onclick="logout()" class="ml-1 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
                     </button>
                 </div>
@@ -108,7 +108,7 @@
         </nav>
 
         <!-- Main Content Area -->
-        <main class="pt-28 pb-20 px-4 md:px-8 max-w-7xl mx-auto w-full flex-1">
+        <main class="pt-20 md:pt-28 pb-16 px-3 sm:px-6 md:px-8 max-w-7xl mx-auto w-full flex-1">
             
             <!-- ==============================================================
                  1. STUDENT / LEARNER HOME DASHBOARD
@@ -153,36 +153,36 @@
                 </div>
 
                 <!-- learnAgiliti Quotient® and Future Readiness Gauge -->
-                <div class="glass-card p-6 md:p-8 border-slate-800">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
+                <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
                         <div>
-                            <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
+                            <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2">
                                 <i class="fas fa-gauge-high text-indigo-400"></i> learnAgiliti Quotient® and Future Readiness
                             </h3>
-                            <p class="text-xs text-slate-400 mt-1">Your real-time performance signal across milestones and modules.</p>
+                            <p class="text-xs text-slate-400 mt-0.5 sm:mt-1">Your real-time performance signal across milestones and modules.</p>
                         </div>
-                        <span id="lqZoneBadge" class="badge-pill badge-amber"><i class="fas fa-bolt mr-1"></i> Growing Zone</span>
+                        <span id="lqZoneBadge" class="badge-pill badge-amber shrink-0"><i class="fas fa-bolt mr-1"></i> Growing Zone</span>
                     </div>
 
-                    <div class="flex flex-col gap-3 mb-6">
+                    <div class="flex flex-col gap-3 mb-5">
                         <div>
-                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Milestone</label>
-                            <div id="lqMilestoneFilters" class="flex flex-wrap gap-2"></div>
+                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Milestone</label>
+                            <div id="lqMilestoneFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1"></div>
                         </div>
                         <div>
-                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Module</label>
-                            <div id="lqModuleFilters" class="flex flex-wrap gap-2"></div>
+                            <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Module</label>
+                            <div id="lqModuleFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1"></div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-5 sm:gap-6 items-center">
                         <div id="lqGaugeVisual" class="relative lg:col-span-2"></div>
                         <div class="lg:col-span-3 space-y-3">
-                            <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                            <div class="glass p-3.5 sm:p-4 rounded-xl border border-slate-800 bg-slate-900/50">
                                 <h5 class="text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5"><i class="fas fa-brain mr-1"></i> Performance Insights</h5>
                                 <p id="lqInsightsOverview" class="text-xs text-slate-300 leading-relaxed"></p>
                             </div>
-                            <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                            <div class="glass p-3.5 sm:p-4 rounded-xl border border-slate-800 bg-slate-900/50">
                                 <h5 class="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1.5"><i class="fas fa-crosshairs mr-1"></i> Focus Areas</h5>
                                 <div id="lqFocusAreas" class="flex flex-wrap gap-1.5"></div>
                             </div>
@@ -191,17 +191,17 @@
                 </div>
 
                 <!-- Cumulative Learning Currencies (LCs) Growth Timeline -->
-                <div class="glass-card p-6 md:p-8 border-slate-800">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-800">
+                <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-5 pb-4 border-b border-slate-800">
                         <div>
-                            <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2.5">
+                            <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2">
                                 <i class="fas fa-chart-line text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"></i> Cumulative LC Growth Velocity
                             </h3>
-                            <p class="text-xs text-slate-400 mt-1">Daily progression of your total earned Learning Currencies (LCs) over time.</p>
+                            <p class="text-xs text-slate-400 mt-0.5 sm:mt-1">Daily progression of your total earned Learning Currencies (LCs) over time.</p>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 shrink-0">
                             <label for="lcTimeframeFilter" class="text-xs font-bold text-slate-400">Timeline:</label>
-                            <select id="lcTimeframeFilter" onchange="changeLcChartTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3.5 py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
+                            <select id="lcTimeframeFilter" onchange="changeLcChartTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
                                 <option value="7d">Last 7 Days</option>
                                 <option value="30d" selected>Last 30 Days</option>
                                 <option value="90d">Last 90 Days</option>
@@ -211,38 +211,38 @@
                     </div>
 
                     <!-- Metric Highlights Banner -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                            <div>
-                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Cumulative LCs</p>
-                                <p id="lcKpiTotalCumulative" class="text-xl font-extrabold text-white font-mono mt-0.5">0 LCs</p>
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Total LCs</p>
+                                <p id="lcKpiTotalCumulative" class="text-xs sm:text-lg md:text-xl font-extrabold text-white font-mono mt-0.5 truncate">0 LCs</p>
                             </div>
-                            <div class="w-9 h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                                <i class="fas fa-coins text-sm"></i>
-                            </div>
-                        </div>
-                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                            <div>
-                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gained in Period</p>
-                                <p id="lcKpiGainedInPeriod" class="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">+0 LCs</p>
-                            </div>
-                            <div class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                                <i class="fas fa-arrow-trend-up text-sm"></i>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 items-center justify-center text-indigo-400 shrink-0 ml-1">
+                                <i class="fas fa-coins text-xs md:text-sm"></i>
                             </div>
                         </div>
-                        <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                            <div>
-                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Velocity / Day</p>
-                                <p id="lcKpiDailyAverage" class="text-xl font-extrabold text-cyan-300 font-mono mt-0.5">0.0 LCs/day</p>
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Gained</p>
+                                <p id="lcKpiGainedInPeriod" class="text-xs sm:text-lg md:text-xl font-extrabold text-emerald-400 font-mono mt-0.5 truncate">+0 LCs</p>
                             </div>
-                            <div class="w-9 h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                                <i class="fas fa-bolt text-sm"></i>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 items-center justify-center text-emerald-400 shrink-0 ml-1">
+                                <i class="fas fa-arrow-trend-up text-xs md:text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Velocity</p>
+                                <p id="lcKpiDailyAverage" class="text-xs sm:text-lg md:text-xl font-extrabold text-cyan-300 font-mono mt-0.5 truncate">0.0/d</p>
+                            </div>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 items-center justify-center text-cyan-400 shrink-0 ml-1">
+                                <i class="fas fa-bolt text-xs md:text-sm"></i>
                             </div>
                         </div>
                     </div>
 
                     <!-- Line Chart Canvas -->
-                    <div class="relative w-full h-[260px] md:h-[300px]">
+                    <div class="relative w-full h-[220px] sm:h-[260px] md:h-[300px]">
                         <canvas id="lcGrowthChart"></canvas>
                     </div>
                 </div>
@@ -311,7 +311,7 @@
                     </div>
 
                     <!-- Dynamic Module Sub-Nav (Dip, POD, Immerse, Real-World Execution, Problem-Solution, Corporate Residency) -->
-                    <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="milestoneSubNav"></div>
+                    <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar" id="milestoneSubNav"></div>
 
                     <!-- Dynamic Timelines & Module Content Container -->
                     <div id="milestoneTimelinesContent" class="glass-card p-6 md:p-8 border-slate-800 min-h-[400px]"></div>
@@ -412,36 +412,36 @@
                     </div>
 
                     <!-- Creator View: learnAgiliti Quotient® and Future Readiness Speedometer Gauge -->
-                    <div class="glass-card p-6 md:p-8 border-slate-800">
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
+                    <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
                             <div>
-                                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2">
+                                <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2">
                                     <i class="fas fa-gauge-high text-indigo-400"></i> learnAgiliti Quotient® and Future Readiness
                                 </h3>
-                                <p class="text-xs text-slate-400 mt-1">Learner's real-time performance signal across unlocked milestones and active modules.</p>
+                                <p class="text-xs text-slate-400 mt-0.5 sm:mt-1">Learner's real-time performance signal across unlocked milestones and active modules.</p>
                             </div>
-                            <span id="adminLqZoneBadge" class="badge-pill badge-amber"><i class="fas fa-bolt mr-1"></i> Growing Zone</span>
+                            <span id="adminLqZoneBadge" class="badge-pill badge-amber shrink-0"><i class="fas fa-bolt mr-1"></i> Growing Zone</span>
                         </div>
 
-                        <div class="flex flex-col gap-3 mb-6">
+                        <div class="flex flex-col gap-3 mb-5">
                             <div>
-                                <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Milestone Pathway</label>
-                                <div id="adminLqMilestoneFilters" class="flex flex-wrap gap-2"></div>
+                                <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Milestone Pathway</label>
+                                <div id="adminLqMilestoneFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1"></div>
                             </div>
                             <div>
-                                <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">Module Filter</label>
-                                <div id="adminLqModuleFilters" class="flex flex-wrap gap-2"></div>
+                                <label class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Module Filter</label>
+                                <div id="adminLqModuleFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar py-1"></div>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+                        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5 sm:gap-6 items-center">
                             <div id="adminLqGaugeVisual" class="relative lg:col-span-2"></div>
                             <div class="lg:col-span-3 space-y-3">
-                                <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                                <div class="glass p-3.5 sm:p-4 rounded-xl border border-slate-800 bg-slate-900/50">
                                     <h5 class="text-[11px] font-bold text-indigo-300 uppercase tracking-wider mb-1.5"><i class="fas fa-brain mr-1"></i> Learner Performance Insights</h5>
                                     <p id="adminLqInsightsOverview" class="text-xs text-slate-300 leading-relaxed"></p>
                                 </div>
-                                <div class="glass p-4 rounded-xl border border-slate-800 bg-slate-900/50">
+                                <div class="glass p-3.5 sm:p-4 rounded-xl border border-slate-800 bg-slate-900/50">
                                     <h5 class="text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1.5"><i class="fas fa-crosshairs mr-1"></i> Focus &amp; Growth Areas</h5>
                                     <div id="adminLqFocusAreas" class="flex flex-wrap gap-1.5"></div>
                                 </div>
@@ -450,17 +450,17 @@
                     </div>
 
                     <!-- Creator View: Cumulative Learning Currencies (LCs) Growth Timeline -->
-                    <div class="glass-card p-6 md:p-8 border-slate-800">
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-800">
+                    <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-5 pb-4 border-b border-slate-800">
                             <div>
-                                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2.5">
+                                <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2">
                                     <i class="fas fa-chart-line text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"></i> Cumulative LC Growth Velocity
                                 </h3>
-                                <p class="text-xs text-slate-400 mt-1">Daily progression of learner's total earned Learning Currencies (LCs) over time.</p>
+                                <p class="text-xs text-slate-400 mt-0.5 sm:mt-1">Daily progression of learner's total earned Learning Currencies (LCs) over time.</p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 shrink-0">
                                 <label for="adminLcTimeframeFilter" class="text-xs font-bold text-slate-400">Timeline:</label>
-                                <select id="adminLcTimeframeFilter" onchange="changeAdminLcChartTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3.5 py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
+                                <select id="adminLcTimeframeFilter" onchange="changeAdminLcChartTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
                                     <option value="7d">Last 7 Days</option>
                                     <option value="30d" selected>Last 30 Days</option>
                                     <option value="90d">Last 90 Days</option>
@@ -470,38 +470,38 @@
                         </div>
 
                         <!-- Metric Highlights Banner -->
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                            <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                                <div>
-                                    <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Cumulative LCs</p>
-                                    <p id="adminLcKpiTotalCumulative" class="text-xl font-extrabold text-white font-mono mt-0.5">0 LCs</p>
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+                            <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Total LCs</p>
+                                    <p id="adminLcKpiTotalCumulative" class="text-xs sm:text-lg md:text-xl font-extrabold text-white font-mono mt-0.5 truncate">0 LCs</p>
                                 </div>
-                                <div class="w-9 h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                                    <i class="fas fa-coins text-sm"></i>
-                                </div>
-                            </div>
-                            <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                                <div>
-                                    <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Gained in Period</p>
-                                    <p id="adminLcKpiGainedInPeriod" class="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">+0 LCs</p>
-                                </div>
-                                <div class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                                    <i class="fas fa-arrow-trend-up text-sm"></i>
+                                <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 items-center justify-center text-indigo-400 shrink-0 ml-1">
+                                    <i class="fas fa-coins text-xs md:text-sm"></i>
                                 </div>
                             </div>
-                            <div class="glass p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
-                                <div>
-                                    <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Velocity / Day</p>
-                                    <p id="adminLcKpiDailyAverage" class="text-xl font-extrabold text-cyan-300 font-mono mt-0.5">0.0 LCs/day</p>
+                            <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Gained</p>
+                                    <p id="adminLcKpiGainedInPeriod" class="text-xs sm:text-lg md:text-xl font-extrabold text-emerald-400 font-mono mt-0.5 truncate">+0 LCs</p>
                                 </div>
-                                <div class="w-9 h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                                    <i class="fas fa-bolt text-sm"></i>
+                                <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 items-center justify-center text-emerald-400 shrink-0 ml-1">
+                                    <i class="fas fa-arrow-trend-up text-xs md:text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Velocity</p>
+                                    <p id="adminLcKpiDailyAverage" class="text-xs sm:text-lg md:text-xl font-extrabold text-cyan-300 font-mono mt-0.5 truncate">0.0/d</p>
+                                </div>
+                                <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 items-center justify-center text-cyan-400 shrink-0 ml-1">
+                                    <i class="fas fa-bolt text-xs md:text-sm"></i>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Line Chart Canvas -->
-                        <div class="relative w-full h-[260px] md:h-[300px]">
+                        <div class="relative w-full h-[220px] sm:h-[260px] md:h-[300px]">
                             <canvas id="adminLcGrowthChart"></canvas>
                         </div>
                     </div>
@@ -571,13 +571,13 @@
                     </div>
 
                     <!-- Module Sub Nav (All 6 Modules) -->
-                    <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-2" id="adminMilestoneSubNav"></div>
+                    <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar" id="adminMilestoneSubNav"></div>
 
                     <!-- View Switcher -->
-                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-lg">
-                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md">Check-ins & Quiz Setup</button>
-                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Completion Grid Matrix</button>
-                        <button id="btnTabPrereqs" onclick="switchAdminMilestoneTab('prereqs')" class="flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">Credential Prerequisites</button>
+                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-lg overflow-x-auto no-scrollbar">
+                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md whitespace-nowrap">Check-ins & Quiz Setup</button>
+                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Completion Grid Matrix</button>
+                        <button id="btnTabPrereqs" onclick="switchAdminMilestoneTab('prereqs')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Credential Prerequisites</button>
                     </div>
 
                     <!-- VIEW 1: Checkins / POD Quiz Configurator -->
@@ -634,27 +634,27 @@
          ============================================================== -->
 
     <!-- cMPLi POD RANDOMIZED QUIZ MODAL -->
-    <div id="podQuizModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-        <div class="glass w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col border border-indigo-500/40 shadow-2xl modal-enter">
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+    <div id="podQuizModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-2xl rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col border border-indigo-500/40 shadow-2xl modal-enter max-h-[92vh]">
+            <div class="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-                        <i class="fas fa-podcast text-lg"></i>
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                        <i class="fas fa-podcast text-base sm:text-lg"></i>
                     </div>
                     <div>
                         <span id="podQuizDayBadge" class="badge-pill badge-indigo">cMPLi POD Day 1</span>
-                        <h3 class="text-lg font-bold text-white font-heading mt-0.5">Podcast Comprehension Quiz</h3>
+                        <h3 class="text-base sm:text-lg font-bold text-white font-heading mt-0.5">Podcast Comprehension Quiz</h3>
                     </div>
                 </div>
-                <button onclick="closePodQuizModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                <button onclick="closePodQuizModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
             
-            <div class="p-6 md:p-8 overflow-y-auto custom-scrollbar max-h-[75vh] space-y-6">
+            <div class="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar max-h-[75vh] space-y-4 sm:space-y-6">
                 <!-- Audio Notice Banner -->
-                <div class="p-4 bg-indigo-950/40 rounded-2xl border border-indigo-500/30 flex items-start gap-3">
-                    <i class="fas fa-headphones text-indigo-400 text-lg mt-0.5"></i>
+                <div class="p-3.5 sm:p-4 bg-indigo-950/40 rounded-2xl border border-indigo-500/30 flex items-start gap-3">
+                    <i class="fas fa-headphones text-indigo-400 text-base sm:text-lg mt-0.5 shrink-0"></i>
                     <div>
                         <h4 class="text-xs font-bold text-white uppercase tracking-wider">Audio Episode on learn.cmplibe.com</h4>
                         <p class="text-xs text-slate-300 mt-1">Answer the 3 randomly drawn questions below based on today’s POD audio to earn <strong>+33 LCs</strong>.</p>
@@ -662,13 +662,13 @@
                 </div>
 
                 <!-- 3 Randomized Questions Container -->
-                <div id="podQuizQuestionsList" class="space-y-6"></div>
+                <div id="podQuizQuestionsList" class="space-y-5 sm:space-y-6"></div>
 
                 <div id="podQuizError" class="hidden p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-xs font-bold flex items-center gap-2">
                     <i class="fas fa-exclamation-circle"></i> <span id="podQuizErrorText">Please answer all 3 questions.</span>
                 </div>
 
-                <button id="btnSubmitPodQuiz" onclick="submitPodQuiz()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-indigo-600 to-cyan-600 border-indigo-500 shadow-indigo-600/30">
+                <button id="btnSubmitPodQuiz" onclick="submitPodQuiz()" class="btn-primary w-full py-3.5 text-xs sm:text-sm bg-gradient-to-r from-indigo-600 to-cyan-600 border-indigo-500 shadow-indigo-600/30 font-bold">
                     <i class="fas fa-paper-plane"></i> Submit Quiz & Claim +33 LCs
                 </button>
             </div>
@@ -678,31 +678,31 @@
     <!-- Dynamic Checkin Modal Container is generated dynamically by app.js -->
 
     <!-- Rules & Regulations Modal -->
-    <div id="termsModal" class="fixed inset-0 bg-black/85 z-[100] hidden flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="glass max-w-2xl w-full rounded-3xl border border-indigo-500/40 shadow-2xl relative max-h-[90vh] flex flex-col modal-enter">
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/60 rounded-t-3xl">
-                <h3 class="text-xl font-bold text-white font-heading flex items-center gap-2"><i class="fas fa-balance-scale text-indigo-400"></i> Platform Rules & Regulations</h3>
-                <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"><i class="fas fa-times text-sm"></i></button>
+    <div id="termsModal" class="fixed inset-0 bg-black/85 z-[100] hidden flex items-center justify-center p-3 sm:p-4 backdrop-blur-md">
+        <div class="glass max-w-2xl w-full rounded-2xl sm:rounded-3xl border border-indigo-500/40 shadow-2xl relative max-h-[90vh] flex flex-col modal-enter">
+            <div class="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/60 rounded-t-2xl sm:rounded-t-3xl">
+                <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2"><i class="fas fa-balance-scale text-indigo-400"></i> Platform Rules & Regulations</h3>
+                <button onclick="document.getElementById('termsModal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"><i class="fas fa-times text-sm"></i></button>
             </div>
-            <div class="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs text-slate-300 leading-relaxed" id="termsContent"></div>
-            <div class="p-6 border-t border-slate-800 bg-slate-900/60 rounded-b-3xl">
+            <div class="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 text-xs text-slate-300 leading-relaxed" id="termsContent"></div>
+            <div class="p-4 sm:p-6 border-t border-slate-800 bg-slate-900/60 rounded-b-2xl sm:rounded-b-3xl">
                 <button id="termsAgreeBtn" onclick="document.getElementById('termsModal').classList.add('hidden')" class="btn-primary w-full py-3 text-sm">I Understand & Agree</button>
             </div>
         </div>
     </div>
 
     <!-- Student Promotion Modal (Admin Only) -->
-    <div id="promoteStudentModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-        <div class="glass w-full max-w-md rounded-3xl overflow-hidden flex flex-col border border-emerald-500/40 shadow-2xl modal-enter">
-            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                <h3 class="text-lg font-bold text-white font-heading flex items-center gap-2">
+    <div id="promoteStudentModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-md rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col border border-emerald-500/40 shadow-2xl modal-enter max-h-[90vh]">
+            <div class="p-4 sm:p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <h3 class="text-base sm:text-lg font-bold text-white font-heading flex items-center gap-2">
                     <i class="fas fa-user-graduate text-emerald-400"></i> Promote Student
                 </h3>
-                <button onclick="closePromoteModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                <button onclick="closePromoteModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
-            <div class="p-6 space-y-4 text-xs">
+            <div class="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto custom-scrollbar">
                 <input type="hidden" id="promoteUserId">
                 <div>
                     <label class="block text-slate-400 font-bold mb-1">Student</label>
@@ -736,12 +736,12 @@
     <script src="timeline.js?v=2.9.1"></script>
     <script src="courses.js?v=2.9.1"></script>
     <script src="api.js?v=2.9.5"></script>
-    <script src="app.js?v=2.9.9"></script>
+    <script src="app.js?v=2.9.10"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
-    <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md hidden">
-        <div class="glass-card w-full max-w-xl p-8 border-indigo-500/40 text-center space-y-6 rounded-3xl shadow-2xl relative modal-enter">
-            <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="absolute top-5 right-5 text-slate-400 hover:text-white text-lg">
+    <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass-card w-full max-w-xl p-5 sm:p-8 border-indigo-500/40 text-center space-y-4 sm:space-y-6 rounded-2xl sm:rounded-3xl shadow-2xl relative modal-enter max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="absolute top-4 right-4 sm:top-5 sm:right-5 text-slate-400 hover:text-white text-base sm:text-lg">
                 <i class="fas fa-times"></i>
             </button>
             <div id="claimCredentialContent"></div>

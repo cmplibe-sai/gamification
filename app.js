@@ -476,7 +476,7 @@ function renderLqMilestonePills(prefix = 'lq') {
         const active = ms.id === activeMs;
         const name = LQ_MILESTONE_NAMES[ms.id] || ms.name;
         const isCurrent = ms.id === highest;
-        return `<button onclick="selectLqMilestone(${ms.id}, '${prefix}')" class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
+        return `<button onclick="selectLqMilestone(${ms.id}, '${prefix}')" class="shrink-0 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
             <i class="fas fa-trophy text-[10px] ${active ? 'text-amber-300' : 'text-slate-500'}"></i>
             <span>${name}</span>
             ${isCurrent ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50 uppercase ml-1">Current</span>' : ''}
@@ -507,7 +507,7 @@ function renderLqModulePills(prefix = 'lq') {
 
     el.innerHTML = pills.map(p => {
         const active = p.code === selectedMod;
-        return `<button onclick="selectLqModule('${p.code}', '${prefix}')" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30 ring-1 ring-cyan-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
+        return `<button onclick="selectLqModule('${p.code}', '${prefix}')" class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${active ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30 ring-1 ring-cyan-400' : 'bg-slate-900 text-slate-300 border border-slate-700/80 hover:bg-slate-800 hover:text-white'}">
             <i class="fas ${p.icon} text-[11px] ${active ? 'text-white' : 'text-slate-400'}"></i>
             <span>${p.name}</span>
         </button>`;
@@ -10293,7 +10293,7 @@ function openSubmissionModal(dayNum, moduleName) {
     const modalHtml = `
         <div id="submissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="document.getElementById('submissionModalDynamic')?.remove()"></div>
-            <div class="relative bg-slate-900 border border-slate-700/80 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl animate-fade-in-up space-y-6">
+            <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[88vh] overflow-y-auto custom-scrollbar shadow-2xl animate-fade-in-up space-y-4 sm:space-y-6">
                 
                 <div class="flex justify-between items-start border-b border-slate-800 pb-4">
                     <div>
