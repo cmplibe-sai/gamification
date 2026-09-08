@@ -1160,17 +1160,19 @@ function generatePersonalizedCheckinFeedback(coverage, options = {}) {
 
     const words = (studentText || '').trim().split(/\s+/).filter(w => w.length > 0);
     const wordCount = words.length;
+    const firstName = (userName || '').trim().split(/\s+/)[0];
+    const greeting = firstName ? `Welcome ${firstName}` : `Welcome`;
 
     // 1. Journey Progress Note based on past check-ins
     let progressNote = '';
     if (pastCheckinsCount === 0) {
-        progressNote = `🌟 Journey Milestone: Welcome to your very first check-in! Stepping up and completing Day 1 takes real initiative. Building this daily reflection rhythm will rapidly compound your clarity and communication skills.`;
+        progressNote = `🌟 Journey Milestone: ${greeting} to your very first check-in! Stepping up and completing Day 1 takes real initiative. Building this daily reflection rhythm will rapidly compound your clarity and communication skills.`;
     } else if (pastCheckinsCount === 1) {
-        progressNote = `🌟 Progress Note: Check-in #2 completed! You are already establishing solid momentum and showing greater comfort articulating your thoughts.`;
+        progressNote = `🌟 Progress Note: Check-in #2 completed${firstName ? `, ${firstName}` : ''}! You are already establishing solid momentum and showing greater comfort articulating your thoughts.`;
     } else if (pastCheckinsCount < 6) {
-        progressNote = `🌟 Progress Note: Check-in #${pastCheckinsCount + 1}! Daily consistency is kicking in. Your reflections are showing sharper conceptual grasp than earlier sessions.`;
+        progressNote = `🌟 Progress Note: Check-in #${pastCheckinsCount + 1}${firstName ? `, ${firstName}` : ''}! Daily consistency is kicking in. Your reflections are showing sharper conceptual grasp than earlier sessions.`;
     } else {
-        progressNote = `🌟 Progress Note: Stellar habit with ${pastCheckinsCount} completed check-ins! Your articulation, vocabulary retention, and executive presence have visibly matured.`;
+        progressNote = `🌟 Progress Note: Stellar habit with ${pastCheckinsCount} completed check-ins${firstName ? `, ${firstName}` : ''}! Your articulation, vocabulary retention, and executive presence have visibly matured.`;
     }
 
     // 2. Vocal Delivery & Pronunciation feedback
