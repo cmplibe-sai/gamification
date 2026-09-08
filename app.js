@@ -6814,10 +6814,48 @@ function renderAdminCheckinsList() {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
-    const savedDates = Object.keys(customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]).sort();
+    const msConfigs = customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule];
+    const savedDates = Object.keys(msConfigs);
+    const msId = activeAdminMilestoneId || 1;
+    const totalSessions = (activeAdminModule === 'immerse') ? (msId === 1 ? 9 : 12) : (msId === 1 ? 21 : 24);
+    const startDateStr = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[msId]) || getLocalDateKey(new Date());
+    let cohortStartDate = new Date(startDateStr + 'T00:00:00');
+    if (isNaN(cohortStartDate.getTime())) cohortStartDate = new Date();
+    cohortStartDate.setHours(0,0,0,0);
+
+    // Map each saved date to its explicit or inferred day number
+    const listItems = savedDates.map((dateKey, idx) => {
+        const cfg = msConfigs[dateKey] || {};
+        let dayNum = Number(cfg.dayNumber || cfg.sessionDay || cfg.day);
+        if (!dayNum && cfg.title) {
+            const m = String(cfg.title).match(/(?:Session|Day)\s*(\d+)/i);
+            if (m) dayNum = parseInt(m[1], 10);
+        }
+        if (!dayNum) {
+            for (let d = 1; d <= totalSessions; d++) {
+                if (getLocalDateKey(getMilestoneSessionDate(cohortStartDate, d, activeAdminModule)) === dateKey) {
+                    dayNum = d;
+                    break;
+                }
+            }
+        }
+        if (!dayNum) dayNum = idx + 1;
+        const defaultDateForDay = getLocalDateKey(getMilestoneSessionDate(cohortStartDate, dayNum, activeAdminModule));
+        const isRescheduled = dateKey !== defaultDateForDay;
+
+        return {
+            dateKey: dateKey,
+            dayNum: dayNum,
+            isRescheduled: isRescheduled,
+            cfg: cfg
+        };
+    });
+
+    // Sort list items by Day Number ascending
+    listItems.sort((a, b) => (a.dayNum - b.dayNum) || a.dateKey.localeCompare(b.dateKey));
     
     if (!activeAdminDateKey) {
-        activeAdminDateKey = savedDates.length > 0 ? savedDates[0] : new Date().toISOString().split('T')[0];
+        activeAdminDateKey = listItems.length > 0 ? listItems[0].dateKey : new Date().toISOString().split('T')[0];
     }
 
     let html = `
@@ -6837,16 +6875,20 @@ function renderAdminCheckinsList() {
         <div class="space-y-1 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
     `;
 
-    if (savedDates.length === 0) {
+    if (listItems.length === 0) {
         html += `<div class="text-xs text-slate-500 p-4 text-center">No dates configured for ${activeAdminModule} yet.</div>`;
     } else {
-        savedDates.forEach(dateKey => {
-            const isActive = dateKey === activeAdminDateKey;
-            const dateStr = new Date(dateKey).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        listItems.forEach(item => {
+            const isActive = item.dateKey === activeAdminDateKey;
+            const dateStr = new Date(item.dateKey + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
             
-            html += `<button onclick="loadAdminCheckinEditor('${dateKey}')" class="w-full text-left p-3 rounded-lg text-sm font-bold transition-all flex justify-between items-center ${isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
-                <span>${dateStr}</span>
-                <span class="text-[10px] font-bold text-slate-400">Edit</span>
+            html += `<button onclick="loadAdminCheckinEditor('${item.dateKey}', ${item.dayNum})" class="w-full text-left p-3 rounded-lg text-sm font-bold transition-all flex justify-between items-center ${isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
+                <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-indigo-950 text-indigo-300 border border-indigo-800/40'}">Day ${item.dayNum}</span>
+                    <span class="text-xs font-semibold">${dateStr}</span>
+                    ${item.isRescheduled ? `<span class="badge-pill bg-amber-950/70 text-amber-300 border border-amber-700/50 text-[9px] px-1 py-0.2">Rescheduled</span>` : ''}
+                </div>
+                <span class="text-[10px] font-bold ${isActive ? 'text-indigo-200' : 'text-slate-400'}">Edit</span>
             </button>`;
         });
     }
@@ -7526,8 +7568,15 @@ function saveAdminPodCheckinConfig(dateKey) {
     const audioTitle = document.getElementById('podAudioTitle')?.value.trim() || `cMPLi POD Day Insights`;
     const audioUrl = document.getElementById('podAudioUrl')?.value.trim() || '';
 
+    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
+    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+
     const dayConfig = {
-        date: dateKey,
+        date: chosenDate,
+        dateKey: chosenDate,
+        dayNumber: chosenDay,
+        sessionDay: chosenDay,
+        day: chosenDay,
         title: audioTitle,
         audioTitle: audioTitle,
         audioUrl: audioUrl,
@@ -7538,7 +7587,12 @@ function saveAdminPodCheckinConfig(dateKey) {
         questions: questions
     };
 
-    customMilestoneConfigs[activeAdminMilestoneId]['pod'][dateKey] = dayConfig;
+    if (chosenDate !== dateKey) {
+        delete customMilestoneConfigs[activeAdminMilestoneId]['pod'][dateKey];
+    }
+    customMilestoneConfigs[activeAdminMilestoneId]['pod'][chosenDate] = dayConfig;
+    activeAdminDateKey = chosenDate;
+
     try {
         localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
     } catch(e) {
@@ -7552,7 +7606,7 @@ function saveAdminPodCheckinConfig(dateKey) {
         body: JSON.stringify({
             milestoneId: activeAdminMilestoneId,
             moduleName: 'pod',
-            dateKey: dateKey,
+            dateKey: chosenDate,
             config: dayConfig,
             allConfigs: customMilestoneConfigs
         })
@@ -7598,7 +7652,7 @@ function getPodQuestionsPool() {
 }
 window.getPodQuestionsPool = getPodQuestionsPool;
 
-function loadAdminCheckinEditor(dateKey) {
+function loadAdminCheckinEditor(dateKey, preferredDayNum) {
     activeAdminDateKey = dateKey;
     renderAdminCheckinsList(); // Refresh list to show active state
     
@@ -7635,7 +7689,54 @@ function loadAdminCheckinEditor(dateKey) {
         ]
     };
 
-    const displayDateObj = new Date(dateKey);
+    const msId = activeAdminMilestoneId || 1;
+    const totalSessions = (activeAdminModule === 'immerse') ? (msId === 1 ? 9 : 12) : (msId === 1 ? 21 : 24);
+    let assignedDay = preferredDayNum || savedConfig.dayNumber || savedConfig.sessionDay || savedConfig.day;
+    if (!assignedDay && savedConfig.title) {
+        const m = String(savedConfig.title).match(/(?:Session|Day)\s*(\d+)/i);
+        if (m) assignedDay = parseInt(m[1], 10);
+    }
+    if (!assignedDay) {
+        const startDateStr = (typeof milestoneCohortStartDates !== 'undefined' && milestoneCohortStartDates[msId]) || getLocalDateKey(new Date());
+        let startDate = new Date(startDateStr + 'T00:00:00');
+        if (isNaN(startDate.getTime())) startDate = new Date();
+        startDate.setHours(0,0,0,0);
+        for (let d = 1; d <= totalSessions; d++) {
+            if (getLocalDateKey(getMilestoneSessionDate(startDate, d, activeAdminModule)) === dateKey) {
+                assignedDay = d;
+                break;
+            }
+        }
+    }
+    if (!assignedDay) assignedDay = 1;
+
+    let dayOptionsHtml = '';
+    for (let d = 1; d <= totalSessions; d++) {
+        dayOptionsHtml += `<option value="${d}" ${Number(d) === Number(assignedDay) ? 'selected' : ''}>Day ${d}</option>`;
+    }
+
+    const daySchedulerBarHtml = `
+        <div class="glass-card p-3.5 border-indigo-500/30 bg-slate-900/90 rounded-2xl mb-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-md">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-indigo-300 uppercase tracking-wider"><i class="fas fa-layer-group mr-1"></i> Session Day:</span>
+                    <select id="configDayNumber" class="bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600 focus:border-indigo-500 outline-none">
+                        ${dayOptionsHtml}
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-300"><i class="fas fa-calendar-alt mr-1"></i> Scheduled Date:</span>
+                    <input type="date" id="configSessionDate" value="${dateKey}" class="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-600 focus:border-indigo-500 outline-none" />
+                </div>
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <i class="fas fa-info-circle text-indigo-400"></i>
+                <span>Change date above to postpone or reschedule without swapping Day identities.</span>
+            </div>
+        </div>
+    `;
+
+    const displayDateObj = new Date(dateKey + 'T00:00:00');
     const displayDate = !isNaN(displayDateObj.getTime()) ? displayDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : dateKey;
     const editor = document.getElementById('adminCheckinEditor');
     if (!editor) return;
@@ -7644,13 +7745,14 @@ function loadAdminCheckinEditor(dateKey) {
     if (activeAdminModule === 'pod') {
         const poolQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions)) ? savedConfig.questions : [];
         editor.innerHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 border-b border-slate-700 pb-4">
                 <div>
                     <div class="flex items-center gap-2 mb-1">
                         <span class="badge-pill badge-indigo text-[10px]"><i class="fas fa-podcast"></i> cMPLi POD Setup</span>
+                        <span class="badge-pill bg-indigo-950 text-indigo-300 border border-indigo-700/50 text-[10px] font-bold">Day ${assignedDay}</span>
                         <span id="podPoolCountBadge" class="badge-pill bg-slate-800 text-slate-300 text-[10px]">${poolQuestions.length} Questions in Pool</span>
                     </div>
-                    <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                    <h4 class="text-xl font-bold text-white font-heading">Day ${assignedDay}: ${displayDate}</h4>
                     <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
                     <p class="text-xs mt-1.5 text-slate-400">Upload podcast audio & question pool (20-50 recommended). 3 randomized questions will be served to each student.</p>
                 </div>
@@ -7661,6 +7763,8 @@ function loadAdminCheckinEditor(dateKey) {
                     </button>
                 </div>
             </div>
+
+            ${daySchedulerBarHtml}
 
             <!-- Scoring & Active Listening Rules Banner -->
             <div class="glass-card p-4 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -7756,13 +7860,14 @@ function loadAdminCheckinEditor(dateKey) {
             : [{ title: savedConfig.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }];
 
         editor.innerHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 border-b border-slate-700 pb-4">
                 <div>
                     <div class="flex items-center gap-2 mb-1">
                         <span class="badge-pill bg-purple-600/30 text-purple-300 text-[10px] font-bold uppercase"><i class="fas fa-video mr-1"></i> cMPLi IMMERSE Setup</span>
+                        <span class="badge-pill bg-purple-950 text-purple-300 border border-purple-700/50 text-[10px] font-bold">Day ${assignedDay}</span>
                         <span class="badge-pill bg-slate-800 text-slate-300 text-[10px]">Mon-Wed-Fri Schedule</span>
                     </div>
-                    <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                    <h4 class="text-xl font-bold text-white font-heading">Day ${assignedDay}: ${displayDate}</h4>
                     <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
                     <p class="text-xs mt-1.5 text-slate-400">Set up daily video check-in. Students answer the One Main Question via live camera or video upload.</p>
                 </div>
@@ -7773,6 +7878,8 @@ function loadAdminCheckinEditor(dateKey) {
                     </button>
                 </div>
             </div>
+
+            ${daySchedulerBarHtml}
 
             <!-- 2-Factor Scoring & Evaluation Rules Banner -->
             <div class="glass-card p-4 border-purple-500/30 bg-gradient-to-r from-purple-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
@@ -7813,7 +7920,7 @@ function loadAdminCheckinEditor(dateKey) {
                     </div>
                     <div>
                         <label class="block text-[11px] font-bold text-slate-400 mb-1">Interval Window End</label>
-                        <input type="time" id="configEndTime" value="${savedConfig.endTime || '23:59'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-mono" ${disableAttr} />
+                        <input type="time" id="configEndTime" value="${savedConfig.endTime || '23:59'}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:border-purple-500 font-mono" ${disableAttr}>
                     </div>
                 </div>
             </div>
@@ -7878,9 +7985,13 @@ function loadAdminCheckinEditor(dateKey) {
 
     // --- CASE B: cMPLi DIP MODULE (STANDARD CHECK-IN EDITOR) ---
     editor.innerHTML = `
-        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 border-b border-slate-700 pb-4">
             <div>
-                <h4 class="text-xl font-bold text-white font-heading">Configuring: ${displayDate}</h4>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="badge-pill badge-emerald text-[10px]"><i class="fas fa-pen mr-1"></i> cMPLi DIP Setup</span>
+                    <span class="badge-pill bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-[10px] font-bold">Day ${assignedDay}</span>
+                </div>
+                <h4 class="text-xl font-bold text-white font-heading">Day ${assignedDay}: ${displayDate}</h4>
                 <p class="text-xs text-indigo-400 font-bold tracking-wide uppercase mt-0.5">${ms.name}</p>
                 <p class="text-xs mt-1.5 ${isPastDate ? 'text-slate-400' : 'text-emerald-300'}">${isPastDate ? 'Past date — editable.' : 'Today/future date — editable.'}</p>
             </div>
@@ -7889,6 +8000,8 @@ function loadAdminCheckinEditor(dateKey) {
                 <button id="btnSaveConfig" onclick="saveAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-lg transition-all"><i class="fas fa-save mr-1"></i> Save Changes</button>
             </div>
         </div>
+        
+        ${daySchedulerBarHtml}
         
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
@@ -7976,8 +8089,15 @@ function saveAdminCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
+    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
+    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+
     const dayConfig = {
-        date: dateKey,
+        date: chosenDate,
+        dateKey: chosenDate,
+        dayNumber: chosenDay,
+        sessionDay: chosenDay,
+        day: chosenDay,
         title: document.getElementById('configDayTitle')?.value.trim() || '',
         articleText: document.getElementById('configDayArticle')?.value.trim() || '',
         description: document.getElementById('configDayArticle')?.value.trim() || '',
@@ -7997,7 +8117,11 @@ function saveAdminCheckinConfig(dateKey) {
         }
     });
 
-    customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey] = dayConfig;
+    if (chosenDate !== dateKey) {
+        delete customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][dateKey];
+    }
+    customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][chosenDate] = dayConfig;
+    activeAdminDateKey = chosenDate;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
     
     // Sync to Server backend for cross-browser persistence
@@ -8007,7 +8131,7 @@ function saveAdminCheckinConfig(dateKey) {
         body: JSON.stringify({
             milestoneId: activeAdminMilestoneId,
             moduleName: activeAdminModule,
-            dateKey: dateKey,
+            dateKey: chosenDate,
             config: dayConfig,
             allConfigs: customMilestoneConfigs
         })
@@ -8037,6 +8161,9 @@ function saveAdminImmerseCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId]['immerse']) customMilestoneConfigs[activeAdminMilestoneId]['immerse'] = {};
 
+    const chosenDay = parseInt(document.getElementById('configDayNumber')?.value, 10) || 1;
+    const chosenDate = document.getElementById('configSessionDate')?.value || dateKey;
+
     const mainQuestion = document.getElementById('configMainQuestion')?.value.trim() || '';
     const dayTitle = document.getElementById('configDayTitle')?.value.trim() || mainQuestion || 'cMPLi Immerse Reflection';
     const dayDescription = document.getElementById('configDayDescription')?.value.trim() || '';
@@ -8062,7 +8189,11 @@ function saveAdminImmerseCheckinConfig(dateKey) {
     }
 
     const dayConfig = {
-        date: dateKey,
+        date: chosenDate,
+        dateKey: chosenDate,
+        dayNumber: chosenDay,
+        sessionDay: chosenDay,
+        day: chosenDay,
         title: dayTitle,
         description: dayDescription,
         mainQuestion: mainQuestion,
@@ -8074,7 +8205,12 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         questions: questions
     };
 
-    customMilestoneConfigs[activeAdminMilestoneId]['immerse'][dateKey] = dayConfig;
+    if (chosenDate !== dateKey) {
+        delete customMilestoneConfigs[activeAdminMilestoneId]['immerse'][dateKey];
+    }
+    customMilestoneConfigs[activeAdminMilestoneId]['immerse'][chosenDate] = dayConfig;
+    activeAdminDateKey = chosenDate;
+
     try {
         localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
     } catch(e) {
@@ -8087,7 +8223,7 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         body: JSON.stringify({
             milestoneId: activeAdminMilestoneId,
             moduleName: 'immerse',
-            dateKey: dateKey,
+            dateKey: chosenDate,
             config: dayConfig,
             allConfigs: customMilestoneConfigs
         })
@@ -8127,6 +8263,10 @@ function generateMilestoneImmerseDates() {
         if (!customMilestoneConfigs[msId]['immerse'][dKey]) {
             customMilestoneConfigs[msId]['immerse'][dKey] = {
                 date: dKey,
+                dateKey: dKey,
+                dayNumber: d,
+                sessionDay: d,
+                day: d,
                 title: `Session ${d}: Video Reflection`,
                 description: `Context and background topics for Session ${d}. Learners reflect on implementation milestones, mental models, challenges faced, and lessons learned.`,
                 mainQuestion: `Explain your core implementation insights for Session ${d} and the architectural roadblocks you solved.`,
@@ -8193,8 +8333,16 @@ function duplicateAdminCheckinConfig(sourceDateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
     
+    const nextDayNum = Number(sourceConfig.dayNumber || sourceConfig.sessionDay || sourceConfig.day || 1) + 1;
+    const dayPrompt = prompt(`Which Session Day is this duplicated config for? (e.g. 1, 2, 3...)`, nextDayNum);
+    const targetDay = parseInt(dayPrompt, 10) || nextDayNum;
+
     const cloned = JSON.parse(JSON.stringify(sourceConfig));
     cloned.date = targetStr;
+    cloned.dateKey = targetStr;
+    cloned.dayNumber = targetDay;
+    cloned.sessionDay = targetDay;
+    cloned.day = targetDay;
     customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule][targetStr] = cloned;
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
 
@@ -10655,43 +10803,109 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
 window.getMilestoneSessionDate = getMilestoneSessionDate;
 
 // Resolves session date: creator-configured manual/rescheduled dates take precedence over default MWF/Mon-Sat math
+// Day identity is bound to explicit dayNumber rather than naive chronological date sorting
 function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum) {
     const normMod = normalizeLevelUpType(moduleName || 'dip');
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && (customMilestoneConfigs[msId][normMod] || customMilestoneConfigs[msId][moduleName])) || {};
-    
-    // Extract dates explicitly configured by creator
-    const configuredKeys = Object.keys(msConfigs).filter(k => {
-        const c = msConfigs[k];
-        return c && (
+    const targetDay = Number(dayNum) || 1;
+
+    // Helper to test if a config object has content
+    const isConfigValid = (c) => Boolean(
+        c && (
             (c.title && c.title.trim()) ||
             (c.mainQuestion && c.mainQuestion.trim()) ||
             (c.audioUrl && c.audioUrl.trim()) ||
             (Array.isArray(c.questions) && c.questions.length > 0)
-        );
+        )
+    );
+
+    // 1. PRIMARY MATCH: Look for explicit dayNumber / sessionDay assigned to this dayNum
+    for (const k of Object.keys(msConfigs)) {
+        const c = msConfigs[k];
+        if (!c) continue;
+        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
+        if (cDay === targetDay && isConfigValid(c)) {
+            const dateKey = c.date || c.dateKey || k;
+            const dateObj = new Date(dateKey + 'T00:00:00');
+            return {
+                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
+                cardDateKey: dateKey,
+                isCreatorScheduled: true,
+                dayNumber: targetDay,
+                config: c
+            };
+        }
+    }
+
+    // 2. SECONDARY MATCH: Title explicitly matching "Session N:" or "Day N:"
+    for (const k of Object.keys(msConfigs)) {
+        const c = msConfigs[k];
+        if (!c || !c.title) continue;
+        const m = String(c.title).match(/(?:Session|Day)\s*(\d+)/i);
+        if (m && Number(m[1]) === targetDay && isConfigValid(c)) {
+            const dateKey = c.date || c.dateKey || k;
+            const dateObj = new Date(dateKey + 'T00:00:00');
+            return {
+                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
+                cardDateKey: dateKey,
+                isCreatorScheduled: true,
+                dayNumber: targetDay,
+                config: c
+            };
+        }
+    }
+
+    // 3. TERTIARY MATCH: Check if there is a config keyed at the default session date for this dayNum
+    const defaultDate = getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName);
+    const defaultDateKey = getLocalDateKey(defaultDate);
+    if (msConfigs[defaultDateKey] && isConfigValid(msConfigs[defaultDateKey])) {
+        const c = msConfigs[defaultDateKey];
+        // Only match if this config is not explicitly assigned to a DIFFERENT day
+        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
+        if (!cDay || cDay === targetDay) {
+            return {
+                cardDate: defaultDate,
+                cardDateKey: defaultDateKey,
+                isCreatorScheduled: true,
+                dayNumber: targetDay,
+                config: c
+            };
+        }
+    }
+
+    // 4. FALLBACK FOR UNASSIGNED LEGACY DATES (no explicit dayNumber)
+    const unassignedKeys = Object.keys(msConfigs).filter(k => {
+        const c = msConfigs[k];
+        if (!isConfigValid(c)) return false;
+        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
+        return !cDay;
     }).sort();
 
-    const targetIdx = (Number(dayNum) || 1) - 1;
-    if (configuredKeys[targetIdx]) {
-        const dateKey = configuredKeys[targetIdx];
+    const targetIdx = targetDay - 1;
+    if (unassignedKeys[targetIdx]) {
+        const dateKey = unassignedKeys[targetIdx];
         const dateObj = new Date(dateKey + 'T00:00:00');
         return {
-            cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName),
+            cardDate: !isNaN(dateObj.getTime()) ? dateObj : defaultDate,
             cardDateKey: dateKey,
-            isCreatorScheduled: true
+            isCreatorScheduled: true,
+            dayNumber: targetDay,
+            config: msConfigs[dateKey]
         };
     }
 
-    const defaultDate = getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName);
     return {
         cardDate: defaultDate,
-        cardDateKey: getLocalDateKey(defaultDate),
-        isCreatorScheduled: false
+        cardDateKey: defaultDateKey,
+        isCreatorScheduled: false,
+        dayNumber: targetDay,
+        config: null
     };
 }
 window.getResolvedMilestoneDateKey = getResolvedMilestoneDateKey;
 
-// Checks if learner has successfully submitted/completed cMPLi Dip for a date
-function hasUserCompletedDipForDate(user, msId, dateKey) {
+// Checks if learner has successfully submitted/completed cMPLi Dip for a date/session
+function hasUserCompletedDipForDate(user, msId, dateKey, sessionDay) {
     if (!user) return false;
     const allSubs = getUserSubmissionsByUserId(user);
     const dipSubs = allSubs.filter(s => {
@@ -10702,11 +10916,23 @@ function hasUserCompletedDipForDate(user, msId, dateKey) {
 
     return dipSubs.some(sub => {
         const sDate = sub.dateKey || (sub.date ? String(sub.date).split('T')[0] : (sub.timestamp ? getLocalDateKey(new Date(sub.timestamp)) : null));
-        const matchesDate = !dateKey || sDate === dateKey;
+        const matchesDateOrDay = (!dateKey && !sessionDay) ||
+            (dateKey && sDate === dateKey) ||
+            (sessionDay && String(sub.day || sub.sessionDay) === String(sessionDay));
+        if (!matchesDateOrDay) return false;
+
         const isEvaluating = sub.status === 'evaluating';
-        const isMismatch = !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
-        const isDone = !isMismatch && (sub.status === 'completed' || isEvaluating || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
-        return matchesDate && isDone;
+        const isMismatch = !isEvaluating && (
+            sub.status === 'rejected_mismatch' ||
+            (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50)))
+        );
+        const isDone = !isMismatch && (
+            sub.status === 'completed' ||
+            isEvaluating ||
+            Number(sub.matchPercentage) >= 50 ||
+            Number(sub.lcReward) > 0
+        );
+        return isDone;
     });
 }
 window.hasUserCompletedDipForDate = hasUserCompletedDipForDate;
@@ -10841,7 +11067,7 @@ function openSubmissionModal(dayNum, moduleName) {
 
     // Prerequisite: cMPLi Immerse requires cMPLi Dip completed first
     if (isImmerse && !isTestMode) {
-        const hasDip = hasUserCompletedDipForDate(currentUser, msId, cardDateKey) || hasUserCompletedDipForDate(currentUser, msId, todayKey);
+        const hasDip = hasUserCompletedDipForDate(currentUser, msId, cardDateKey, dayNum);
         if (!hasDip) {
             showImmerseDipPrereqModal(cardDateKey);
             return;
@@ -10852,8 +11078,8 @@ function openSubmissionModal(dayNum, moduleName) {
         ? customMilestoneConfigs[msId][moduleName] 
         : {};
     
-    // STRICT: Only check this specific cardDateKey (no todayKey fallback leak!)
-    const savedDayCfg = msConfigs[cardDateKey] || {};
+    // STRICT: Only check this specific cardDateKey / resolved config (no todayKey fallback leak!)
+    const savedDayCfg = resolved.config || msConfigs[cardDateKey] || {};
     
     // Check if creator has configured this day
     const isConfigured = Boolean(
@@ -11904,35 +12130,39 @@ function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, mod
     };
 
     // 2. Determine reference day for streak with creator rescheduled dates
-    let latestScheduledDay = 0;
-    let todayScheduledDay = 0;
+    const scheduledSessions = [];
     const effectiveMsId = msId || (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1);
     for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
         const resolved = (typeof getResolvedMilestoneDateKey === 'function')
             ? getResolvedMilestoneDateKey(effectiveMsId, moduleName, milestoneStartDate, dayNum)
             : { cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)) };
-        const cardDateKey = resolved.cardDateKey;
-        if (cardDateKey <= todayKey) {
-            latestScheduledDay = dayNum;
-        }
-        if (cardDateKey === todayKey) {
-            todayScheduledDay = dayNum;
-        }
+        scheduledSessions.push({
+            dayNum: dayNum,
+            dateKey: resolved.cardDateKey
+        });
     }
 
-    if (latestScheduledDay === 0) {
+    // Filter to due sessions (scheduled on or before today) and sort in chronological order of their date
+    const dueSessions = scheduledSessions
+        .filter(s => s.dateKey <= todayKey)
+        .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+
+    if (dueSessions.length === 0) {
         return { completedCount, currentStreak: 0 };
     }
 
-    let startDay = latestScheduledDay;
-    // If today has a session scheduled and it's not yet completed, don't penalize active streak; count backwards from yesterday!
-    if (todayScheduledDay > 0 && !isDayCompleted(todayScheduledDay)) {
-        startDay = todayScheduledDay - 1;
+    // Check if today has a session scheduled
+    const todaySession = dueSessions.find(s => s.dateKey === todayKey);
+    let checkList = [...dueSessions];
+    // If today has a session and it's not completed yet, don't penalize active streak; count backwards from yesterday
+    if (todaySession && !isDayCompleted(todaySession.dayNum)) {
+        checkList = checkList.filter(s => s.dayNum !== todaySession.dayNum);
     }
 
     let currentStreak = 0;
-    for (let d = startDay; d >= 1; d--) {
-        if (isDayCompleted(d)) {
+    // Walk backwards through chronological due sessions
+    for (let i = checkList.length - 1; i >= 0; i--) {
+        if (isDayCompleted(checkList[i].dayNum)) {
             currentStreak++;
         } else {
             break;
@@ -12067,9 +12297,9 @@ function switchMilestoneTab(moduleName, btnElement) {
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
-                actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 shrink-0 whitespace-nowrap"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
+                actionBtn = `<button onclick="openPodSessionModal(${dayNum}, '${cardDateKey}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 shrink-0 whitespace-nowrap"><i class="fas fa-podcast mr-1"></i> Start POD</button>`;
             } else if (isImmerse) {
-                const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey, dayNum);
                 if (!hasDip && !isTestMode) {
                     actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                 } else {
@@ -12082,9 +12312,9 @@ function switchMilestoneTab(moduleName, btnElement) {
             if (isTestMode) {
                 statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold whitespace-nowrap">Past (Bypass)</span>';
                 if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    actionBtn = `<button onclick="openPodSessionModal(${dayNum}, '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey, dayNum);
                     if (!hasDip && !isTestMode) {
                         actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                     } else {
@@ -12101,9 +12331,9 @@ function switchMilestoneTab(moduleName, btnElement) {
             if (isTestMode) {
                 statusBadge = '<span class="badge-pill badge-indigo text-[10px] font-bold whitespace-nowrap">Future (Bypass)</span>';
                 if (moduleName === 'pod') {
-                    actionBtn = `<button onclick="openPodSessionModal(${dayNum})" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    actionBtn = `<button onclick="openPodSessionModal(${dayNum}, '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 } else if (isImmerse) {
-                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey) || hasUserCompletedDipForDate(currentUser, activeMilestoneId, todayKey);
+                    const hasDip = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey, dayNum);
                     if (!hasDip && !isTestMode) {
                         actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                     } else {
