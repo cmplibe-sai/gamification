@@ -9787,10 +9787,11 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         };
     }
 
-    // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
+    // TIER 3 — Moderate Partial Match (50% – 80%) → ~50% of basePoints LCs
     if (coverage <= 80) {
-        const pts = isLate ? 3 : 17;
-        const deduction = 33 - pts;
+        const fullExpected = Number(basePoints) || 33;
+        const pts = isLate ? 3 : Math.round(fullExpected * 0.50);
+        const deduction = Math.max(0, fullExpected - pts);
         const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
@@ -9799,15 +9800,16 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: `⚠️ [Moderate Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
                 `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Why ${pts} LCs instead of 33 LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the full 33 LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
         };
     }
 
-    // TIER 2 — Good Match (81% – 90%) → 23 LCs
+    // TIER 2 — Good Match (81% – 90%) → ~70% of basePoints LCs
     if (coverage <= 90) {
-        const pts = isLate ? 3 : 23;
-        const deduction = 33 - pts;
+        const fullExpected = Number(basePoints) || 33;
+        const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
+        const deduction = Math.max(0, fullExpected - pts);
         const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. While your content match scored high (${coverage}%), late window policy awarded +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
@@ -9816,8 +9818,8 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: `✅ [Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
                 `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Why ${pts} LCs instead of 33 LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full 33 LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the remaining 10 LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full 33 LCs!${lateNote}`
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!${lateNote}`
         };
     }
 
@@ -9837,26 +9839,116 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 window.evaluateReflectionAgainstRubric = evaluateReflectionAgainstRubric;
 
 
+// Robust Audio Draft Storage using IndexedDB (Binary Blobs) with localStorage fallback
+const AudioDraftStore = {
+    dbPromise: null,
+    getDB() {
+        if (!this.dbPromise) {
+            this.dbPromise = new Promise((resolve) => {
+                if (!window.indexedDB) return resolve(null);
+                try {
+                    const req = indexedDB.open('cmpli_audio_drafts_v1', 1);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('drafts')) {
+                            db.createObjectStore('drafts');
+                        }
+                    };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                } catch(e) {
+                    resolve(null);
+                }
+            });
+        }
+        return this.dbPromise;
+    },
+    async set(key, blobOrData) {
+        try {
+            const db = await this.getDB();
+            if (db) {
+                return new Promise((resolve) => {
+                    const tx = db.transaction('drafts', 'readwrite');
+                    tx.objectStore('drafts').put(blobOrData, key);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onerror = () => resolve(false);
+                });
+            }
+        } catch(e) {}
+        // Fallback to localStorage for strings / small data
+        try {
+            if (typeof blobOrData === 'string') {
+                localStorage.setItem(key, blobOrData);
+            }
+        } catch(e) {}
+    },
+    async get(key) {
+        try {
+            const db = await this.getDB();
+            if (db) {
+                const val = await new Promise((resolve) => {
+                    const tx = db.transaction('drafts', 'readonly');
+                    const req = tx.objectStore('drafts').get(key);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                });
+                if (val) return val;
+            }
+        } catch(e) {}
+        return localStorage.getItem(key);
+    },
+    async remove(key) {
+        try {
+            const db = await this.getDB();
+            if (db) {
+                const tx = db.transaction('drafts', 'readwrite');
+                tx.objectStore('drafts').delete(key);
+            }
+        } catch(e) {}
+        try { localStorage.removeItem(key); } catch(e) {}
+    }
+};
+window.AudioDraftStore = AudioDraftStore;
+
 // Audio draft recovery helpers
-window.restoreAudioDraft = function(idx, draftKey) {
+window.restoreAudioDraft = async function(idx, draftKey) {
     try {
         if (!draftKey) {
             draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
         }
-        const draftData = localStorage.getItem(draftKey);
+        const draftData = await AudioDraftStore.get(draftKey);
         if (!draftData) return;
+
+        let previewUrl = '';
+        let base64Data = '';
+
+        if (draftData instanceof Blob) {
+            previewUrl = URL.createObjectURL(draftData);
+            window._recordedAudioBlobs = window._recordedAudioBlobs || {};
+            window._recordedAudioBlobs[idx] = draftData;
+            base64Data = await new Promise((resolve) => {
+                const r = new FileReader();
+                r.onloadend = () => resolve(r.result || '');
+                r.readAsDataURL(draftData);
+            });
+        } else if (typeof draftData === 'string') {
+            previewUrl = draftData;
+            base64Data = draftData;
+        }
+
         window._recordedAudioData = window._recordedAudioData || {};
-        window._recordedAudioData[idx] = draftData;
+        window._recordedAudioData[idx] = previewUrl;
         const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
-        if (hiddenData) hiddenData.value = draftData;
+        if (hiddenData) hiddenData.value = previewUrl;
+
         const previewEl = document.getElementById(`audio_preview_${idx}`);
         if (previewEl) {
-            previewEl.src = draftData;
+            previewEl.src = previewUrl;
             previewEl.classList.remove('hidden');
         }
         const downloadLink = document.getElementById(`audio_download_${idx}`);
         if (downloadLink) {
-            downloadLink.href = draftData;
+            downloadLink.href = previewUrl;
             downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}_recovered.webm`;
             downloadLink.classList.remove('hidden');
             downloadLink.classList.add('inline-flex');
@@ -9865,13 +9957,13 @@ window.restoreAudioDraft = function(idx, draftKey) {
         if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Restored from Draft! Ready to submit.</span>';
         document.getElementById(`draft_banner_${idx}`)?.remove();
 
-        // Also initiate server upload for restored draft if it's base64
-        if (draftData.startsWith('data:')) {
+        // Also initiate server upload for restored draft
+        if (base64Data && base64Data.startsWith('data:')) {
             window._audioUploadPromises = window._audioUploadPromises || {};
             window._audioUploadPromises[idx] = apiFetch('/api/upload-media', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dataUrl: draftData, prefix: `audio_q${idx + 1}` })
+                body: JSON.stringify({ dataUrl: base64Data, prefix: `audio_q${idx + 1}` })
             }).then(r => r.json()).then(uploadRes => {
                 if (uploadRes && uploadRes.success && uploadRes.url) {
                     window._recordedAudioServerUrls = window._recordedAudioServerUrls || {};
@@ -9885,12 +9977,20 @@ window.restoreAudioDraft = function(idx, draftKey) {
     }
 };
 
-window.discardAudioDraft = function(idx, draftKey) {
+window.discardAudioDraft = async function(idx, draftKey) {
     try {
         if (!draftKey) {
             draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
         }
-        localStorage.removeItem(draftKey);
+        await AudioDraftStore.remove(draftKey);
+        if (window._activeAudioCtx) {
+            try {
+                if (window._activeAudioCtx.state !== 'closed') {
+                    window._activeAudioCtx.close();
+                }
+            } catch(e) {}
+            window._activeAudioCtx = null;
+        }
         document.getElementById(`draft_banner_${idx}`)?.remove();
         const recStatus = document.getElementById(`audio_rec_status_${idx}`);
         if (recStatus) recStatus.innerHTML = '<span class="text-slate-400">Draft discarded. Click "Record with Mic" to start fresh.</span>';
@@ -9899,6 +9999,16 @@ window.discardAudioDraft = function(idx, draftKey) {
 
 async function startAudioRecording(idx) {
     try {
+        // Close any dangling AudioContext from previous runs to prevent resource leak on iOS/mobile
+        if (window._activeAudioCtx) {
+            try {
+                if (window._activeAudioCtx.state !== 'closed') {
+                    window._activeAudioCtx.close();
+                }
+            } catch(e) {}
+            window._activeAudioCtx = null;
+        }
+
         _audioChunks = [];
         const audioConstraints = {
             audio: {
@@ -9917,6 +10027,9 @@ async function startAudioRecording(idx) {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (AudioContextClass) {
                 const audioCtx = new AudioContextClass();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(() => {});
+                }
                 const source = audioCtx.createMediaStreamSource(_audioStream);
                 const gainNode = audioCtx.createGain();
                 gainNode.gain.value = 2.0; // Boost microphone gain for mobile devices
@@ -9958,21 +10071,18 @@ async function startAudioRecording(idx) {
             }
         }
 
+        let lastDraftSaveTime = Date.now();
         _audioRecorder.ondataavailable = e => {
             if (e.data && e.data.size > 0) {
                 _audioChunks.push(e.data);
-                // Autosave draft every 3 seconds to localStorage so sudden power-off/refresh is never lost
-                if (_audioChunks.length % 3 === 0) {
+                // Autosave draft every 10 seconds asynchronously using IndexedDB Blob storage (no base64 overhead!)
+                const now = Date.now();
+                if (now - lastDraftSaveTime >= 10000) {
+                    lastDraftSaveTime = now;
                     try {
                         const tempBlob = new Blob(_audioChunks, { type: 'audio/webm' });
-                        const r = new FileReader();
-                        r.onloadend = () => {
-                            if (r.result) {
-                                const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
-                                try { localStorage.setItem(draftKey, r.result); } catch(err) {}
-                            }
-                        };
-                        r.readAsDataURL(tempBlob);
+                        const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+                        AudioDraftStore.set(draftKey, tempBlob);
                     } catch(e) {}
                 }
             }
@@ -10006,23 +10116,20 @@ async function startAudioRecording(idx) {
                 downloadLink.classList.add('inline-flex');
             }
 
+            // Save complete recording Blob directly to IndexedDB
+            const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
+            AudioDraftStore.set(draftKey, blob);
+
             const recStatus = document.getElementById(`audio_rec_status_${idx}`);
             if (recStatus) recStatus.innerHTML = '<span class="text-cyan-400 font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Securing & Uploading Voice Note...</span>';
 
-            // Track this upload so submitCheckinForm can await it instead of racing it —
-            // otherwise a fast submit grabs the blob: URL above, which the server can't
-            // transcribe (blob: URLs only exist in this browser tab), causing a false
-            // "content mismatch" rejection even for a genuine recording.
+            // Track this upload so submitCheckinForm can await it instead of racing it
             window._audioUploadPromises = window._audioUploadPromises || {};
             window._audioUploadPromises[idx] = new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64Data = reader.result;
                     window._recordedAudioData[idx] = base64Data;
-
-                    // Save complete recording to draft storage until form is successfully submitted
-                    const draftKey = `audio_draft_${(currentUser && currentUser._id) || 'usr'}_${window._activeCheckinMsId || 1}_${window._activeCheckinMod || 'dip'}_${window._activeCheckinDay || 1}_q${idx}`;
-                    try { localStorage.setItem(draftKey, base64Data); } catch(err) {}
 
                     try {
                         const uploadRes = await apiFetch('/api/upload-media', {
@@ -10057,6 +10164,14 @@ async function startAudioRecording(idx) {
             if (_audioStream) {
                 _audioStream.getTracks().forEach(track => track.stop());
                 _audioStream = null;
+            }
+            if (window._activeAudioCtx) {
+                try {
+                    if (window._activeAudioCtx.state !== 'closed') {
+                        window._activeAudioCtx.close();
+                    }
+                } catch(e) {}
+                window._activeAudioCtx = null;
             }
         };
 
@@ -10504,7 +10619,7 @@ function openSubmissionModal(dayNum, moduleName) {
 
     const modalHtml = `
         <div id="submissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="document.getElementById('submissionModalDynamic')?.remove()"></div>
+            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md" onclick="closeSubmissionModal()"></div>
             <div class="relative bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-2xl w-full max-h-[88vh] overflow-y-auto custom-scrollbar shadow-2xl animate-fade-in-up space-y-4 sm:space-y-6">
                 
                 <div class="flex justify-between items-start border-b border-slate-800 pb-4">
@@ -10523,7 +10638,7 @@ function openSubmissionModal(dayNum, moduleName) {
                             ${ms.name} • Date: <strong class="text-slate-200">${displayDate}</strong>
                         </p>
                     </div>
-                    <button onclick="document.getElementById('submissionModalDynamic')?.remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                    <button onclick="closeSubmissionModal()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -10707,7 +10822,7 @@ function openSubmissionModal(dayNum, moduleName) {
                         </button>` : '<div></div>'}
                         
                         <div class="flex gap-2 w-full sm:w-auto">
-                            <button type="button" onclick="document.getElementById('submissionModalDynamic')?.remove()" class="btn-secondary py-2.5 px-4 text-xs font-bold flex-1 sm:flex-initial">
+                            <button type="button" onclick="closeSubmissionModal()" class="btn-secondary py-2.5 px-4 text-xs font-bold flex-1 sm:flex-initial">
                                 Cancel
                             </button>
                             <button type="submit" id="btnSubmitCheckinForm" class="btn-primary py-2.5 px-6 text-xs font-bold ${isImmerse ? 'bg-purple-600 hover:bg-purple-500' : 'bg-emerald-600 hover:bg-emerald-500'} flex-1 sm:flex-initial">
@@ -10722,14 +10837,14 @@ function openSubmissionModal(dayNum, moduleName) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    // Auto-detect unsaved audio drafts from localStorage for each audio question
+    // Auto-detect unsaved audio drafts from AudioDraftStore for each audio question
     try {
         const uId = (currentUser && currentUser._id) || 'usr';
-        questions.forEach((q, idx) => {
+        questions.forEach(async (q, idx) => {
             const qType = (q.type || 'text').toLowerCase();
             if (qType === 'audio' || qType === 'voice' || qType === 'audio/voice') {
                 const draftKey = `audio_draft_${uId}_${msId}_${moduleName}_${dayNum}_q${idx}`;
-                const saved = localStorage.getItem(draftKey);
+                const saved = await AudioDraftStore.get(draftKey);
                 if (saved) {
                     const banner = document.getElementById(`draft_banner_${idx}`);
                     if (banner) banner.classList.remove('hidden');
@@ -10739,6 +10854,33 @@ function openSubmissionModal(dayNum, moduleName) {
     } catch(e) {}
 }
 window.openSubmissionModal = openSubmissionModal;
+
+function closeSubmissionModal() {
+    if (_audioRecorder && _audioRecorder.state !== 'inactive') {
+        try { _audioRecorder.stop(); } catch(e) {}
+    }
+    if (_audioStream) {
+        try { _audioStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+        _audioStream = null;
+    }
+    if (_videoRecorder && _videoRecorder.state !== 'inactive') {
+        try { _videoRecorder.stop(); } catch(e) {}
+    }
+    if (_videoStream) {
+        try { _videoStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+        _videoStream = null;
+    }
+    if (window._activeAudioCtx) {
+        try {
+            if (window._activeAudioCtx.state !== 'closed') {
+                window._activeAudioCtx.close();
+            }
+        } catch(e) {}
+        window._activeAudioCtx = null;
+    }
+    document.getElementById('submissionModalDynamic')?.remove();
+}
+window.closeSubmissionModal = closeSubmissionModal;
 
 function bypassCheckinFormFields(count) {
     for (let idx = 0; idx < count; idx++) {
@@ -11256,14 +11398,20 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             responses: answers
         };
 
-        // Close submission input form
-        document.getElementById('submissionModalDynamic')?.remove();
+        // Close submission input form and release audio context/tracks
+        if (typeof closeSubmissionModal === 'function') {
+            closeSubmissionModal();
+        } else {
+            document.getElementById('submissionModalDynamic')?.remove();
+        }
 
         // Clear autosaved audio drafts on submission
         try {
             const uId = (currentUser && currentUser._id) || 'usr';
             for (let i = 0; i < 10; i++) {
-                localStorage.removeItem(`audio_draft_${uId}_${msId}_${moduleName}_${dayNum}_q${i}`);
+                const draftKey = `audio_draft_${uId}_${msId}_${moduleName}_${dayNum}_q${i}`;
+                if (window.AudioDraftStore) AudioDraftStore.remove(draftKey);
+                localStorage.removeItem(draftKey);
             }
         } catch(e) {}
 

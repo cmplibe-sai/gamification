@@ -1231,10 +1231,11 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         };
     }
 
-    // TIER 3 — Moderate Partial Match (50% – 80%) → 17 LCs
+    // TIER 3 — Moderate Partial Match (50% – 80%) → ~50% of basePoints LCs
     if (coverage <= 80) {
-        const pts = isLate ? 3 : 17;
-        const deduction = 33 - pts;
+        const fullExpected = Number(basePoints) || 33;
+        const pts = isLate ? 3 : Math.round(fullExpected * 0.50);
+        const deduction = Math.max(0, fullExpected - pts);
         const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window (11:59 PM cutoff). While your content match scored ${coverage}%, late submission rules apply, awarding +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
@@ -1243,15 +1244,16 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: `⚠️ [Moderate Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
                 `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Partial Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Why ${pts} LCs instead of 33 LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the full 33 LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection scored in the Moderate tier (${coverage}%). Core ideas were touched upon, but key sections were summarized too briefly (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the full ${fullExpected} LCs next time, elaborate more deeply on what you learned and practical real-world takeaways. Speak clearly and confidently!${lateNote}`
         };
     }
 
-    // TIER 2 — Good Match (81% – 90%) → 23 LCs
+    // TIER 2 — Good Match (81% – 90%) → ~70% of basePoints LCs
     if (coverage <= 90) {
-        const pts = isLate ? 3 : 23;
-        const deduction = 33 - pts;
+        const fullExpected = Number(basePoints) || 33;
+        const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
+        const deduction = Math.max(0, fullExpected - pts);
         const lateNote = isLate ? `\n⏰ Note: Submitted outside the daily on-time window. While your content match scored high (${coverage}%), late window policy awarded +${pts} LCs to your wallet.` : ``;
         return {
             matchPercentage: coverage,
@@ -1260,8 +1262,8 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             isLate: isLate,
             remarks: `✅ [Good Match — ${pts} LCs Awarded${isLate ? ' (Late Window)' : ''}]\n` +
                 `Content Match: ${coverage}% | Credited: +${pts} LCs | Status: Approved${isLate ? ' (Late Window)' : ''}\n` +
-                `Why ${pts} LCs instead of 33 LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full 33 LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
-                `How to improve: To capture the remaining 10 LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full 33 LCs!${lateNote}`
+                `Why ${pts} LCs instead of ${fullExpected} LCs: Your reflection showed strong alignment and scored in the Good tier (${coverage}%). Full ${fullExpected} LCs are reserved for Excellent reflections scoring above 90% (-${deduction} LCs deduction).\n` +
+                `How to improve: To capture the remaining ${deduction} LCs next time, articulate more of the practical real-world applications and key lessons rather than a brief summary. Aim for >90% coverage to unlock the full ${fullExpected} LCs!${lateNote}`
         };
     }
 
