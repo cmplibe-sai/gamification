@@ -2620,12 +2620,29 @@ app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], as
 // User-bound with rate limiting (prevents brute-force key harvesting)
 app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'], (req, res) => {
     try {
-        const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+        const dateKey = String(req.query.dateKey || '').trim();
+        const msId = String(req.query.milestoneId || '1').trim();
+        const allConfigs = getMilestoneConfigsFromDb();
+        const dayConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
 
-        if (!fs.existsSync(poolPath)) {
-            return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
+        let pool = [];
+        if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
+            pool = dayConfig.questions;
+        } else {
+            const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+
+            if (fs.existsSync(poolPath)) {
+                try {
+                    const raw = fs.readFileSync(poolPath, 'utf8');
+                    pool = JSON.parse(raw);
+                } catch(e) {}
+            }
+        }
+
+        if (!Array.isArray(pool) || pool.length === 0) {
+            return res.status(404).json({ success: false, error: 'Quiz pool questions not found for this session' });
         }
 
         const userId = String(req.query.userId || req.headers['x-user-id'] || 'anon').trim();
@@ -2645,8 +2662,6 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
             userSessionRates.set(userId, recent);
         }
 
-        const raw = fs.readFileSync(poolPath, 'utf8');
-        const pool = JSON.parse(raw);
         const count = Math.min(Math.max(parseInt(req.query.count, 10) || 3, 1), 10);
 
         const shuffled = [...pool].sort(() => 0.5 - Math.random()).slice(0, count);

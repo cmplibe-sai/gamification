@@ -10122,7 +10122,20 @@ async function openPodSessionModal(dayNum, dateKey) {
         return;
     }
 
-    const audioTitle = dayConfig.audioTitle || dayConfig.title || `cMPLi POD Day ${dayNum}: Snabbit 15-Minute Beauty Fix`;
+    const rawTitle = dayConfig.audioTitle || dayConfig.title || `Snabbit’s 15-Minute Beauty Fix`;
+    // Clean any redundant "cMPLi POD Day X", "SimpliPod Day X", or leading "Day X:" prefixes
+    let cleanStoryTitle = rawTitle
+        .replace(/^cMPLi\s*POD\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
+        .replace(/^SimpliPod\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
+        .replace(/^Day\s*\d+\s*[-:•]\s*/i, '')
+        .trim();
+
+    // Format date in Indian style: DD-MM-YYYY
+    let indianDate = activePodSessionDateKey;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(activePodSessionDateKey)) {
+        const [y, m, d] = activePodSessionDateKey.split('-');
+        indianDate = `${d}-${m}-${y}`;
+    }
 
     // Secure server-side question session: answers and explanations are NEVER sent to the learner
     window._activePodSessionId = null;
@@ -10130,7 +10143,8 @@ async function openPodSessionModal(dayNum, dateKey) {
 
     try {
         const uId = (currentUser && (currentUser._id || currentUser.id)) || 'anon';
-        const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}`).then(r => r.json());
+        const msId = activeMilestoneId || '1';
+        const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}&dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(msId)}`).then(r => r.json());
         if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
             window._activePodSessionId = sessRes.sessionId;
             learnerQuestions = sessRes.questions;
@@ -10172,9 +10186,9 @@ async function openPodSessionModal(dayNum, dateKey) {
                 
                 <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
                     <div>
-                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> cMPLi POD • Day ${dayNum}</span>
-                        <h3 class="text-2xl font-extrabold text-white font-heading">${audioTitle}</h3>
-                        <p class="text-xs text-slate-400 mt-1">Scheduled Date: <strong class="text-slate-200">${activePodSessionDateKey}</strong></p>
+                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> SimpliPod</span>
+                        <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading">Day ${dayNum}: ${cleanStoryTitle}</h3>
+                        <p class="text-xs text-slate-400 mt-1">Date: <strong class="text-slate-200 font-mono">${indianDate}</strong></p>
                     </div>
                     <button onclick="document.getElementById('podSessionModal').remove()" class="text-slate-400 hover:text-white bg-slate-700/60 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
                         <i class="fas fa-times"></i>
@@ -10192,7 +10206,7 @@ async function openPodSessionModal(dayNum, dateKey) {
                                 <span class="badge-pill badge-indigo text-[9px] uppercase tracking-widest">Active Listening Stream</span>
                                 <span id="podListeningBadge" class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">85% Required</span>
                             </div>
-                            <h4 class="text-sm font-bold text-white truncate mt-1">${audioTitle}</h4>
+                            <h4 class="text-sm font-bold text-white truncate mt-1">Audio Narration • ${cleanStoryTitle}</h4>
                             <p class="text-[11px] text-slate-400 mt-0.5">Listen to at least 85% of this episode to unlock the 3 comprehension questions.</p>
                         </div>
                     </div>

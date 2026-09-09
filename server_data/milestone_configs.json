@@ -61,8 +61,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 3,
-        "startTime": "05:00",
-        "endTime": "17:00",
+        "startTime": "05:30",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "Tell us another company you know that is into similar business :)",
@@ -91,8 +91,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 3,
-        "startTime": "05:00",
-        "endTime": "17:00",
+        "startTime": "05:30",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "Can you tell one such case in Business Strategy you recently learnt in class?",
@@ -121,8 +121,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 3,
-        "startTime": "05:00",
-        "endTime": "17:00",
+        "startTime": "05:30",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "How will you position yourself at the nexus of high-tech digital finance and high-touch borrower relationships?",
@@ -520,6 +520,728 @@
             "pts": 11
           }
         ]
+      },
+      "2026-09-09": {
+        "date": "2026-09-09",
+        "dateKey": "2026-09-09",
+        "dayNumber": 3,
+        "sessionDay": 3,
+        "day": 3,
+        "title": "#cD542: Snabbit’s 15-Minute Beauty Fix",
+        "articleText": "How long does it take for you to get a basic threading or quick hair-styling done before a last-minute office presentation or an evening event? Traditionally, it meant calling a local salon hours in advance, travelling through traffic, or waiting for a scheduled home-salon technician to arrive in a 2-hour delivery window. Bengaluru-based startup Snabbit is upending this status quo by taking the \"instant\" ethos of quick-commerce and applying it directly to personal grooming.\n\n• Snabbit initially built its core engine around hyper-local, on-demand domestic home services, aggregating and formalising household cleaning, chores, and maintenance.\n\n• By focusing on ultra-dense neighborhood micro-markets, Snabbit achieved sub-15-minute fulfillment times for daily household chores.\n\n• Having raised over US$112 million, including a massive Series D round, the company is now executing a natural category expansion- instant, salon-at-home services.\n\nThe business logic behind Snabbit’s foray into beauty is rooted in customer overlap and purchase frequency.\n\n• While traditional at-home beauty models rely on planned, high-ticket packages with long appointment wait times, Snabbit targets high-frequency, low-ticket daily beauty needs such as threading, waxing, quick facials, and saree draping\n\n• Its strategy hinges on supply-side innovation- beauty professionals are cross-trained into multi-skilled service providers capable of handling multiple tasks in a single session.\n\n• Combined with lightweight, single-use monodose kits from premium brands like O3+ and Rica, workers can travel light and complete jobs rapidly within a tight geographic radius.\n\nOperating on a unit-pricing revenue model starting as low as Rs.49 with no minimum order requirements, Snabbit extracts platform commission while maximizing the daily utilization rates of its all-women service workforce. This instant-fulfillment beauty vertical deepens platform stickiness, converting occasional app users into daily active consumers who rely on Snabbit for both house cleaning and quick personal grooming.\n\nFor business, marketing, and operations graduates, the rise of instant home services creates entry-level roles across vendor acquisition, micro-market operations, supply chain management, and growth marketing. Building density in neighborhood clusters demands field-level execution, customer engagement, and tactical partner management.",
+        "description": "How long does it take for you to get a basic threading or quick hair-styling done before a last-minute office presentation or an evening event? Traditionally, it meant calling a local salon hours in advance, travelling through traffic, or waiting for a scheduled home-salon technician to arrive in a 2-hour delivery window. Bengaluru-based startup Snabbit is upending this status quo by taking the \"instant\" ethos of quick-commerce and applying it directly to personal grooming.\n\n• Snabbit initially built its core engine around hyper-local, on-demand domestic home services, aggregating and formalising household cleaning, chores, and maintenance.\n\n• By focusing on ultra-dense neighborhood micro-markets, Snabbit achieved sub-15-minute fulfillment times for daily household chores.\n\n• Having raised over US$112 million, including a massive Series D round, the company is now executing a natural category expansion- instant, salon-at-home services.\n\nThe business logic behind Snabbit’s foray into beauty is rooted in customer overlap and purchase frequency.\n\n• While traditional at-home beauty models rely on planned, high-ticket packages with long appointment wait times, Snabbit targets high-frequency, low-ticket daily beauty needs such as threading, waxing, quick facials, and saree draping\n\n• Its strategy hinges on supply-side innovation- beauty professionals are cross-trained into multi-skilled service providers capable of handling multiple tasks in a single session.\n\n• Combined with lightweight, single-use monodose kits from premium brands like O3+ and Rica, workers can travel light and complete jobs rapidly within a tight geographic radius.\n\nOperating on a unit-pricing revenue model starting as low as Rs.49 with no minimum order requirements, Snabbit extracts platform commission while maximizing the daily utilization rates of its all-women service workforce. This instant-fulfillment beauty vertical deepens platform stickiness, converting occasional app users into daily active consumers who rely on Snabbit for both house cleaning and quick personal grooming.\n\nFor business, marketing, and operations graduates, the rise of instant home services creates entry-level roles across vendor acquisition, micro-market operations, supply chain management, and growth marketing. Building density in neighborhood clusters demands field-level execution, customer engagement, and tactical partner management.",
+        "mainQuestion": "",
+        "audioTitle": "#cD542: Snabbit’s 15-Minute Beauty Fix",
+        "audioUrl": "",
+        "lcOnTime": 33,
+        "lcLate": 3,
+        "startTime": "05:30",
+        "endTime": "17:30",
+        "questions": [
+          {
+            "id": "q_snabbit_1",
+            "title": "What is the primary operational innovation that enabled Snabbit to achieve sub-15-minute fulfillment?",
+            "options": [
+              "Hyper-dense neighborhood micro-market clustering",
+              "Using helicopters for transportation",
+              "Requiring customers to travel halfway",
+              "Operating only between 2:00 AM and 4:00 AM"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit operates on hyper-local density in micro-markets, minimizing transit distance and enabling workers to reach customers in under 15 minutes.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_2",
+            "title": "Before expanding into beauty, what was Snabbit's core foundational service engine?",
+            "options": [
+              "Hyper-local domestic home cleaning and chores",
+              "Used car reselling",
+              "Cryptocurrency wallet custody",
+              "Long-haul interstate freight"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit initially aggregated and formalized domestic cleaning, chores, and home maintenance in dense residential hubs.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_3",
+            "title": "How much total funding has Snabbit raised, including its Series D financing round?",
+            "options": [
+              "Over US$ 112 million",
+              "Under US$ 500,000",
+              "Exactly US$ 5 million",
+              "US$ 10 billion"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit has raised over US$112 million, demonstrating deep venture backing for high-density service networks.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_4",
+            "title": "Why is personal grooming considered a natural category expansion for Snabbit?",
+            "options": [
+              "High customer overlap and recurring purchase frequency",
+              "Salons are legally mandated to close at noon",
+              "Beauty requires zero physical presence",
+              "Household cleaners are strictly forbidden from styling hair"
+            ],
+            "correctOption": 0,
+            "explanation": "Existing home-cleaning customers frequently require grooming, creating high synergy and zero incremental customer acquisition cost.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_5",
+            "title": "In which Indian tech hub is Snabbit headquartered and pioneering its service model?",
+            "options": [
+              "Bengaluru",
+              "Kolkata",
+              "Shimla",
+              "Bhopal"
+            ],
+            "correctOption": 0,
+            "explanation": "Bengaluru is Snabbit's home market and testing ground for micro-market density.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_6",
+            "title": "What traditional consumer friction did salon customers face prior to Snabbit's instant model?",
+            "options": [
+              "Calling hours in advance, travel traffic, or 2-hour waiting windows",
+              "Salons charged zero rupees for haircuts",
+              "Government permits were required to enter salons",
+              "Salons only accepted barter payments"
+            ],
+            "correctOption": 0,
+            "explanation": "Traditional salon visits involved advance appointments, traveling through traffic, or enduring wide 2-hour arrival windows.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_7",
+            "title": "What type of beauty services does Snabbit strategically focus on?",
+            "options": [
+              "High-frequency, low-ticket daily grooming needs",
+              "6-month permanent cosmetic surgeries",
+              "High-cost bridal retreats taking 3 full days",
+              "Custom jewelry manufacturing"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit targets routine grooming (threading, waxing, quick facials, draping) that recurs weekly or bi-weekly.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_8",
+            "title": "What is Snabbit's entry-level pricing model for grooming services?",
+            "options": [
+              "Starting as low as Rs. 49 with no minimum order requirements",
+              "Mandatory Rs. 5,000 upfront deposit",
+              "Hourly retainers of Rs. 10,000",
+              "Annual subscription only"
+            ],
+            "correctOption": 0,
+            "explanation": "Removing minimum order friction and starting at Rs. 49 encourages immediate impulse booking.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_9",
+            "title": "How does Snabbit solve the supply-side equipment mobility problem for beauty workers?",
+            "options": [
+              "Lightweight, single-use monodose kits from premium brands",
+              "Heavy industrial salon chairs carried on scooters",
+              "Installing permanent beauty stations in every apartment lobby",
+              "Requiring customers to provide all creams and machinery"
+            ],
+            "correctOption": 0,
+            "explanation": "Single-use monodose kits (like O3+ and Rica) allow workers to travel light and execute tasks cleanly in minutes.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_10",
+            "title": "What distinctive demographic characterizes Snabbit's beauty service partner workforce?",
+            "options": [
+              "An all-women service workforce",
+              "Only high-school interns",
+              "Robotic automated delivery drones",
+              "Temporary foreign exchange students"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit empowers an all-women workforce, providing flexible earning opportunities and higher daily job utilization.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_11",
+            "title": "What metric represents the share of revenue Snabbit captures on each booking?",
+            "options": [
+              "Platform take-rate or commission fee",
+              "Gross merchandise volume discount",
+              "Subscriber churn percentage",
+              "Federal customs excise tax"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit monetizes by taking a percentage take-rate/commission on each transaction processed.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_12",
+            "title": "How does daily workforce utilization impact Snabbit's unit economics?",
+            "options": [
+              "Higher completed jobs per worker per day lowers dead transit time and boosts margins",
+              "Fewer jobs per worker increases platform profitability",
+              "Transit time has zero effect on operational costs",
+              "Workforce utilization is irrelevant to platform viability"
+            ],
+            "correctOption": 0,
+            "explanation": "Minimizing transit between appointments maximizes jobs per day per professional, expanding margins.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_13",
+            "title": "Compared to Urban Company's planned appointment packages, what is Snabbit's core differentiator?",
+            "options": [
+              "Instant on-demand fulfillment in under 15 minutes",
+              "Mandatory 48-hour advance notice",
+              "Exclusively serving rural villages",
+              "Providing only phone consultation"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit brings the quick-commerce 'instant fulfillment' ethos to home services instead of multi-hour pre-booked slots.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_14",
+            "title": "What is cross-skilling in the context of Snabbit's service workforce?",
+            "options": [
+              "Training partners to execute multiple adjacent service categories",
+              "Teaching workers how to trade equity stocks",
+              "Requiring partners to write computer code",
+              "Transferring workers across state borders weekly"
+            ],
+            "correctOption": 0,
+            "explanation": "Cross-skilled workers can perform home cleaning and express grooming in adjacent sessions, smoothing demand spikes.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_15",
+            "title": "Why does hyper-local cluster density create a strong competitive moat?",
+            "options": [
+              "High density reduces travel distance, lowering partner idle time and delivery latency",
+              "It allows the platform to shut down server infrastructure",
+              "Competitors are legally barred from entering high-density pin codes",
+              "It eliminates the need for smartphone applications"
+            ],
+            "correctOption": 0,
+            "explanation": "Density reduces transit time, creating unbeatable SLAs and higher partner retention that competitors cannot replicate without equivalent order volume.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_16",
+            "title": "What role does single-use monodose packaging play in building consumer trust?",
+            "options": [
+              "Guarantees hygiene, prevents cross-contamination, and standardizes product quality",
+              "Allows workers to resell open containers",
+              "Increases plastic waste to intimidate rivals",
+              "Obscures product branding from the customer"
+            ],
+            "correctOption": 0,
+            "explanation": "Sealed monodose packs from certified brands ensure freshness, sterility, and verifiable authentic product usage.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_17",
+            "title": "Which premium beauty brands are partnered with Snabbit for single-use service kits?",
+            "options": [
+              "O3+ and Rica",
+              "Generic unbranded bulk creams",
+              "Petroleum jelly exclusively",
+              "Industrial paint manufacturers"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit partners with recognized professional salon brands like O3+ and Rica to instill premium consumer confidence.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_18",
+            "title": "What consumer psychological trigger does the absence of minimum order value activate?",
+            "options": [
+              "Low barrier to trial and high impulse ordering",
+              "Fear of hidden platform surcharges",
+              "Belief that the service must be defective",
+              "Preference for long-term legal contracts"
+            ],
+            "correctOption": 0,
+            "explanation": "Zero minimum order value removes cognitive hesitation, converting curious browsers into first-time transacting users.",
+            "category": "Customer Acquisition & Marketing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_19",
+            "title": "What does Customer Acquisition Cost (CAC) represent in platform marketplace economics?",
+            "options": [
+              "The total marketing and sales expense required to acquire one new paying user",
+              "The monthly wage of customer support agents",
+              "The cost of manufacturing delivery bags",
+              "The tax paid on annual dividends"
+            ],
+            "correctOption": 0,
+            "explanation": "CAC measures marketing, referral, and promotional costs incurred to win a paying customer.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_20",
+            "title": "How does cross-selling beauty to cleaning customers affect Snabbit's blended CAC?",
+            "options": [
+              "Significantly decreases blended CAC by leveraging existing active app users",
+              "Doubles acquisition costs exponentially",
+              "Requires launching a separate app with new branding",
+              "Forces Snabbit to pay double Google search ad bids"
+            ],
+            "correctOption": 0,
+            "explanation": "Existing users are cross-sold at near-zero incremental acquisition cost, substantially depressing overall blended CAC.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_21",
+            "title": "What is Average Order Value (AOV), and how does Snabbit balance low AOV with profitability?",
+            "options": [
+              "AOV is the average spend per booking; balanced via high order frequency and dense routing",
+              "AOV is the partner's age; balanced through fitness training",
+              "AOV is the number of apps downloaded per phone",
+              "AOV measures warehouse electricity bills"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit compensates for lower individual ticket sizes with multiple repeat weekly orders packed into tight travel radiuses.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_22",
+            "title": "What is 'dead-heading' in on-demand service logistics?",
+            "options": [
+              "Unproductive transit time spent traveling between bookings without earning revenue",
+              "Deleting inactive customer accounts from the database",
+              "When a worker's smartphone battery discharges",
+              "An engine malfunction in a delivery scooter"
+            ],
+            "correctOption": 0,
+            "explanation": "Dead-heading is non-billable travel time between clients. Minimizing it is crucial for gig-economy profitability.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_23",
+            "title": "What is an entry-level Business Development Executive (BDE) expected to do in Snabbit's expansion?",
+            "options": [
+              "Acquire local vendor partners and onboard skilled service professionals in target clusters",
+              "Write back-end database migration scripts",
+              "Manage international cross-border currency hedges",
+              "Audit corporate tax filings with the ministry"
+            ],
+            "correctOption": 0,
+            "explanation": "BDEs drive ground-level supply onboarding, identifying talent and onboarding service professionals into the cluster network.",
+            "category": "Career Roles & Business Development",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_24",
+            "title": "What key metric would a Micro-Market Operations Manager track daily?",
+            "options": [
+              "Order fulfillment rate, SLA compliance time, and partner daily utilization",
+              "Instagram follower count of competing celebrities",
+              "The price of gold on international exchanges",
+              "National electricity grid frequency"
+            ],
+            "correctOption": 0,
+            "explanation": "Micro-market leads obsess over neighborhood-level order fill rates, 15-minute SLA fulfillment, and partner job counts.",
+            "category": "Career Roles & Business Development",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_25",
+            "title": "Why is 'dark-store' density in quick-commerce analogous to partner density in Snabbit?",
+            "options": [
+              "Both position supply nodes within 2 km of demand to minimize delivery latency",
+              "Both require large out-of-town industrial park warehouses",
+              "Both sell perishable vegetables to institutional hotels",
+              "Neither relies on digital internet routing"
+            ],
+            "correctOption": 0,
+            "explanation": "Just as dark stores position inventory near consumers, clustered workers position service capacity within minutes of homes.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_26",
+            "title": "What happens to platform unit economics when order density in a neighborhood doubles?",
+            "options": [
+              "Transit time drops, throughput per worker rises, and per-order delivery cost decreases",
+              "Operational overhead doubles and the system collapses",
+              "Customers are forced to wait twice as long",
+              "Workers are required to purchase cars"
+            ],
+            "correctOption": 0,
+            "explanation": "Density exhibits strong positive economies of scale: shorter hops between clients unlock higher daily capacity per professional.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_27",
+            "title": "Which of the following is an example of an impulse beauty service suited for Snabbit?",
+            "options": [
+              "Quick eyebrow threading or saree draping before an evening event",
+              "A 12-week permanent hair transplant procedure",
+              "Extensive orthodontic jaw realignment",
+              "Full cosmetic rhinoplasty"
+            ],
+            "correctOption": 0,
+            "explanation": "Routine grooming and draping are instant-need, low-risk services ideal for immediate 15-minute dispatch.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_28",
+            "title": "How does Snabbit ensure service standard consistency across hundreds of independent partners?",
+            "options": [
+              "Standardized training modules, prescribed monodose kits, and rigorous checklist protocols",
+              "Allowing each worker to invent their own recipes",
+              "Leaving partner quality completely unchecked",
+              "Using automated facial recognition cameras in customers' bedrooms"
+            ],
+            "correctOption": 0,
+            "explanation": "Standard operating procedures, uniform training, and branded single-dose consumables enforce consistent service delivery.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_29",
+            "title": "What is Lifetime Value (LTV) in subscription and recurring on-demand services?",
+            "options": [
+              "The total net profit contributed by a customer across their entire relationship with the platform",
+              "The lifespan of the delivery scooter in years",
+              "The maximum age limit for app registration",
+              "The warranty period of mobile smartphone batteries"
+            ],
+            "correctOption": 0,
+            "explanation": "LTV measures cumulative gross margin generated from a customer across all repeat bookings over time.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_30",
+            "title": "Why does high-frequency grooming increase customer Lifetime Value (LTV)?",
+            "options": [
+              "Regular bi-weekly bookings accumulate substantial revenue over months compared to rare annual visits",
+              "Customers pay large upfront deposits that never refund",
+              "It prevents customers from ever buying groceries again",
+              "It forces customers to sign 10-year platform mortgages"
+            ],
+            "correctOption": 0,
+            "explanation": "Frequent repeat visits create compounding revenue streams, driving up LTV and supporting sustainable marketing payback.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_31",
+            "title": "What is the primary barrier to entry for a new startup attempting to replicate Snabbit in Bengaluru?",
+            "options": [
+              "High capital expenditure needed to recruit, train, and subsidize supply density across micro-markets",
+              "Software servers are unavailable in Karnataka",
+              "Patents prevent anyone else from offering haircuts",
+              "Smartphones cannot download competing apps in India"
+            ],
+            "correctOption": 0,
+            "explanation": "Building parallel partner supply and demand density simultaneously requires immense capital and deep field execution.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_32",
+            "title": "How does Snabbit handle cancellations or partner unavailability in a live cluster?",
+            "options": [
+              "Dynamic dispatch algorithms reassign nearby active floating workers in the micro-market",
+              "The entire app is shut down for 24 hours",
+              "The customer is fined Rs. 10,000 immediately",
+              "Workers are reported to the local police"
+            ],
+            "correctOption": 0,
+            "explanation": "Algorithmic routing redirects nearby unassigned cluster capacity to cover emergencies with minimal delay.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_33",
+            "title": "What is the typical ratio of LTV to CAC considered healthy for high-growth consumer platforms?",
+            "options": [
+              "At least 3:1 (LTV is 3 times higher than CAC)",
+              "0.1:1 (Spending 10x more than lifetime earnings)",
+              "Exactly 1:1 with zero margin",
+              "Negative 5:1"
+            ],
+            "correctOption": 0,
+            "explanation": "An LTV:CAC ratio of 3x or higher indicates strong unit economics and marketing capital efficiency.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_34",
+            "title": "What role does customer app feedback and star ratings play in platform governance?",
+            "options": [
+              "Identifies top performers for incentive bonuses and flags partners needing retraining",
+              "It is stored in private files and never read",
+              "Low ratings automatically ban customers from ordering food",
+              "High ratings allow workers to skip work for a month"
+            ],
+            "correctOption": 0,
+            "explanation": "Two-way ratings enforce quality assurance, reward high-rated professionals, and detect service anomalies quickly.",
+            "category": "Customer Acquisition & Marketing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_35",
+            "title": "How does Snabbit's model empower informal women domestic workers in urban cities?",
+            "options": [
+              "Transitions informal domestic helpers into formalized, certified, higher-earning micro-entrepreneurs",
+              "Restricts women from operating smartphones",
+              "Forces workers to work 24 hours without breaks",
+              "Pays workers only in company equity shares"
+            ],
+            "correctOption": 0,
+            "explanation": "Formal platform onboarding grants higher predictable earnings, social security benefits, and skill accreditation.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_36",
+            "title": "What is a 'micro-market' in urban operational planning?",
+            "options": [
+              "A compact geographic radius (e.g. 2-3 sq km) treated as an autonomous unit of supply and demand",
+              "A store that only sells microscopic goods",
+              "An international stock exchange for penny stocks",
+              "A flea market open only on Sunday afternoons"
+            ],
+            "correctOption": 0,
+            "explanation": "Micro-markets segment urban cities into self-contained operational cells where supply matches localized demand.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_37",
+            "title": "Why is customer retention more critical than customer acquisition for Snabbit's unit economics?",
+            "options": [
+              "Retained users book repeatedly with near-zero marketing cost, amortizing the initial CAC",
+              "New users pay triple the service price",
+              "Retained users never expect discounts",
+              "Platform acquisition software stops working after 1,000 downloads"
+            ],
+            "correctOption": 0,
+            "explanation": "High retention unlocks compound repeat transactions where margin is pure profit rather than marketing recovery.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_38",
+            "title": "What is 'service latency' and how does Snabbit minimize it?",
+            "options": [
+              "The time elapsed between a user placing an order and the partner arriving at their door",
+              "The internet ping time between servers and satellites",
+              "The duration of an app update download",
+              "The delay in processing credit card statements at end of month"
+            ],
+            "correctOption": 0,
+            "explanation": "Service latency is wait time; Snabbit compresses it to sub-15 minutes using proximity routing.",
+            "category": "Quick-Commerce & Instant Domestic Services",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_39",
+            "title": "What would be a key task for a Growth Marketing Manager at Snabbit?",
+            "options": [
+              "Designing hyper-local referral loops, cluster launch campaigns, and push notification triggers",
+              "Fixing plumbing in corporate headquarters",
+              "Signing physical agreements with paper mills",
+              "Inspecting engine oil in delivery vans"
+            ],
+            "correctOption": 0,
+            "explanation": "Growth marketers optimize customer acquisition funnels, local resident referral incentives, and cohort retention.",
+            "category": "Career Roles & Business Development",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_40",
+            "title": "Why does quick commerce struggle with bulky salon equipment?",
+            "options": [
+              "Bulky equipment slows down transport and prevents workers from rapid multi-stop scooter routing",
+              "Government bans scooters from carrying machinery",
+              "Electricity grids in Bengaluru reject heavy salon chairs",
+              "Customers prefer buying their own hair dryers"
+            ],
+            "correctOption": 0,
+            "explanation": "Compact, portable kits allow rapid navigation through traffic; bulky apparatus undermines 15-minute mobility.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_41",
+            "title": "If a BDE candidate is interviewing with Snabbit, what demonstrated capability would stand out most?",
+            "options": [
+              "Proven ability to build vendor relationships and recruit service partners in field micro-markets",
+              "Writing 10-year macroeconomic thesis papers on European bond markets",
+              "Winning online chess championships",
+              "Decorating high-end interior architecture villas"
+            ],
+            "correctOption": 0,
+            "explanation": "Field execution, hustle, and the ability to inspire, onboard, and retain gig-economy partners are primary BDE strengths.",
+            "category": "Career Roles & Business Development",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_42",
+            "title": "What is 'platform stickiness'?",
+            "options": [
+              "The tendency of consumers to return frequently and integrate the platform into daily habits",
+              "The physical adhesive used on marketing stickers",
+              "When a smartphone app freezes on screen",
+              "A legal restriction against uninstalling software"
+            ],
+            "correctOption": 0,
+            "explanation": "Stickiness measures consumer habituation—turning an occasional app into a daily or weekly routine.",
+            "category": "Customer Acquisition & Marketing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_43",
+            "title": "How does combining home cleaning and beauty services enhance platform stickiness?",
+            "options": [
+              "Users open the app multiple times a week for different household needs rather than once a month",
+              "It forces users to pay double monthly subscription fees",
+              "It replaces the need for search engines",
+              "Users cannot delete the app while laundry is running"
+            ],
+            "correctOption": 0,
+            "explanation": "Multi-category utility deepens app engagement, creating multiple touchpoints per household each week.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_44",
+            "title": "What is 'unit pricing' in Snabbit's commercial model?",
+            "options": [
+              "Transparent pricing per discrete service item (e.g. Rs. 49 threading) rather than vague hourly rates",
+              "Selling shares of the company to customers",
+              "Charging customers by their apartment square footage exclusively",
+              "Charging based on ambient weather temperature"
+            ],
+            "correctOption": 0,
+            "explanation": "Clear itemized pricing removes uncertainty and allows customers to customize small or large service carts.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_45",
+            "title": "What operational challenge arises during peak festive seasons (e.g. Diwali, Eid, Weddings)?",
+            "options": [
+              "Demand surges beyond available cluster partner capacity, requiring dynamic pricing and overflow planning",
+              "No customers request beauty services during festivals",
+              "Workers are required to work in complete darkness",
+              "Prices must legally drop to zero rupees"
+            ],
+            "correctOption": 0,
+            "explanation": "Festivals create massive demand spikes; platforms must mobilize reserve capacity and optimize route scheduling.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_46",
+            "title": "What does a Supply Chain & Procurement Executive manage at Snabbit?",
+            "options": [
+              "Bulk procurement, inventory forecasting, and dark-node distribution of branded monodose kits",
+              "Managing physical retail stores in shopping malls",
+              "Writing marketing slogans for billboard ads",
+              "Designing corporate logo animations"
+            ],
+            "correctOption": 0,
+            "explanation": "Procurement teams ensure continuous stock of authenticated single-dose kits at neighborhood hub replenishment points.",
+            "category": "Career Roles & Business Development",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_47",
+            "title": "How does Snabbit protect workers' safety during evening or on-demand home visits?",
+            "options": [
+              "In-app SOS panic buttons, live GPS trip monitoring, and verified customer identity protocols",
+              "Requiring workers to travel only with armed bodyguards",
+              "Banning visits after 11:00 AM",
+              "Workers are forbidden from using mobile phones"
+            ],
+            "correctOption": 0,
+            "explanation": "Rigorous customer verification, real-time GPS telemetry, and 24/7 dedicated safety response units safeguard female professionals.",
+            "category": "Supply-Side Operations",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_48",
+            "title": "What is 'contribution margin' in on-demand service unit economics?",
+            "options": [
+              "Revenue remaining per order after deducting direct partner payouts, product kit costs, and payment fees",
+              "Charity donations deducted from corporate profits",
+              "The percentage of company equity held by founders",
+              "The amount of tax paid on imported salon creams"
+            ],
+            "correctOption": 0,
+            "explanation": "Contribution margin measures profitability per individual order before allocating fixed corporate overheads.",
+            "category": "Unit Economics & Pricing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_49",
+            "title": "Why is Bengaluru an ideal proving ground for instant quick-commerce and services in India?",
+            "options": [
+              "High density of tech-savvy, dual-income households with limited free time and high willingness to pay",
+              "It has zero existing traditional beauty salons",
+              "Public transport is completely free for all citizens",
+              "Bengaluru has zero traffic congestion"
+            ],
+            "correctOption": 0,
+            "explanation": "Dual-income professionals value time savings and readily adopt digital platforms that eliminate domestic errand friction.",
+            "category": "Customer Acquisition & Marketing",
+            "pts": 11
+          },
+          {
+            "id": "q_snabbit_50",
+            "title": "What is the ultimate strategic vision of Snabbit's instant domestic services platform?",
+            "options": [
+              "To become the ubiquitous operating system for instant domestic chores and personal grooming in urban homes",
+              "To replace physical hospitals with online video games",
+              "To manufacture scooters for overseas export",
+              "To open brick-and-mortar luxury shopping malls across Europe"
+            ],
+            "correctOption": 0,
+            "explanation": "Snabbit aims to be the everyday utility platform that handles all immediate household maintenance and grooming needs in minutes.",
+            "category": "Competitive Advantage & Strategy",
+            "pts": 11
+          }
+        ],
+        "tasks": [],
+        "extra": false,
+        "cancelled": false
       }
     },
     "immerse": {
@@ -554,8 +1276,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 0,
-        "startTime": "05:00",
-        "endTime": "23:59",
+        "startTime": "17:00",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "How do you reach out to a snabbit for job opportunity for a BDE role?",
@@ -580,8 +1302,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 0,
-        "startTime": "05:00",
-        "endTime": "23:59",
+        "startTime": "17:00",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "How do you know about bajaj electricals?",
@@ -606,8 +1328,8 @@
         "audioUrl": "",
         "lcOnTime": 33,
         "lcLate": 0,
-        "startTime": "05:00",
-        "endTime": "23:59",
+        "startTime": "17:00",
+        "endTime": "17:30",
         "questions": [
           {
             "title": "Do you know any other NBFC companies in the manufacturing industry?",
