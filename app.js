@@ -11851,8 +11851,12 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
     const endTime = dayConfig.endTime || (isImmerse ? '23:59' : '17:00');
     const isTest = (typeof isTestUser === 'function') && isTestUser();
 
-    const oldModal = document.getElementById('submissionModalDynamic');
-    if (oldModal) oldModal.remove();
+    if (typeof closeSubmissionModal === 'function') {
+        closeSubmissionModal();
+    } else {
+        const oldModal = document.getElementById('submissionModalDynamic');
+        if (oldModal) oldModal.remove();
+    }
 
     const modalHtml = `
         <div id="submissionModalDynamic" class="fixed inset-0 z-[150] flex items-center justify-center p-4">

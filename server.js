@@ -883,183 +883,260 @@ function deriveDayNumber(module, dateKey, explicitDay) {
     }
 }
 
+let isGoogleSheetSyncing = false;
+
 async function syncGoogleSheetData(sheetIdInput) {
-    const sheetId = (sheetIdInput || DEFAULT_GOOGLE_SHEET_ID).trim();
-    console.log(`[GoogleSheetSync] Fetching CSV from sheet: ${sheetId}...`);
-    const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
-
-    const res = await fetch(exportUrl);
-    if (!res.ok) {
-        throw new Error(`Failed to fetch Google Sheet CSV: HTTP ${res.status} ${res.statusText}`);
+    if (isGoogleSheetSyncing) {
+        console.log('[GoogleSheetSync] Sync already in progress, skipping concurrent run.');
+        return { success: true, count: 0, message: 'Sync already in progress' };
     }
-    const csvText = await res.text();
-    const rows = parseCSV(csvText);
-    if (!rows || rows.length < 2) {
-        return { success: true, count: 0, message: 'No data rows found in Google Sheet' };
-    }
+    isGoogleSheetSyncing = true;
 
-    const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
-    const getIdx = (candidates) => headers.findIndex(h => candidates.some(c => h === c || h.includes(c)));
+    try {
+        const sheetId = (sheetIdInput || DEFAULT_GOOGLE_SHEET_ID).trim();
+        console.log(`[GoogleSheetSync] Fetching CSV from sheet: ${sheetId}...`);
+        const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
-    const dateIdx = getIdx(['date']);
-    const modIdx = getIdx(['module']);
-    const msIdx = getIdx(['milestone']);
-    const titleIdx = getIdx(['title', 'topic']);
-    const descIdx = getIdx(['description', 'article']);
-    const mainQIdx = getIdx(['main question', 'question']);
-    const lcOnTimeIdx = getIdx(['on time', 'lc on time', 'lcs on time']);
-    const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
-    const startIdx = getIdx(['start time', 'start']);
-    const endIdx = getIdx(['end time', 'end']);
-    const timeWinIdx = getIdx(['interval', 'window', 'timing']);
-    const dayIdx = getIdx(['day number', 'session day', 'day', 'session']);
-    const audioUrlIdx = getIdx(['audio url', 'audio link', 'podcast url', 'audio']);
-    const quizQIdx = getIdx(['quiz question', 'q1 question', 'mcq']);
-    const quizOptIdx = getIdx(['quiz options', 'options', 'choices']);
-    const quizAnsIdx = getIdx(['quiz answer', 'correct answer', 'answer', 'correct']);
+        const res = await fetch(exportUrl, { signal: AbortSignal.timeout(15000) });
+        if (!res.ok) {
+            throw new Error(`Failed to fetch Google Sheet CSV: HTTP ${res.status} ${res.statusText}`);
+        }
+        const csvText = await res.text();
+        const rows = parseCSV(csvText);
+        if (!rows || rows.length < 2) {
+            return { success: true, count: 0, message: 'No data rows found in Google Sheet' };
+        }
 
-    const currentConfigs = getMilestoneConfigsFromDb();
-    let syncedCount = 0;
-    const syncedEntries = [];
+        const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
+        const getIdx = (candidates) => headers.findIndex(h => candidates.some(c => h === c || h.includes(c) || c.includes(h)));
 
-    for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
+        const dateIdx = getIdx(['date']);
+        const modIdx = getIdx(['module']);
+        const msIdx = getIdx(['milestone']);
+        const titleIdx = getIdx(['title', 'topic']);
+        const descIdx = getIdx(['description', 'article']);
+        const mainQIdx = getIdx(['main question', 'question']);
+        const lcOnTimeIdx = getIdx(['on time', 'lc on time', 'lcs on time']);
+        const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
+        const startIdx = getIdx(['start time', 'start']);
+        const endIdx = getIdx(['end time', 'end']);
+        const timeWinIdx = getIdx(['interval', 'window', 'timing']);
+        const dayIdx = getIdx(['day number', 'session day', 'day', 'session']);
+        const audioUrlIdx = getIdx(['audio url', 'audio link', 'podcast url', 'audio']);
+        const quizQIdx = getIdx(['quiz question', 'q1 question', 'mcq', 'quiz', 'question 1', 'q1', 'prompt']);
+        const quizOptIdx = getIdx(['quiz options', 'q1 options', 'options', 'choices', 'answers']);
+        const quizAnsIdx = getIdx(['quiz answer', 'correct answer', 'q1 answer', 'q1 correct', 'answer', 'correct']);
 
-        const rawDate = dateIdx !== -1 ? row[dateIdx] : '';
-        const dateKey = normalizeDateKey(rawDate);
-        if (!dateKey) continue;
+        const currentConfigs = getMilestoneConfigsFromDb();
+        let syncedCount = 0;
+        const syncedEntries = [];
 
-        const module = normalizeModule(modIdx !== -1 ? row[modIdx] : 'dip');
-        const msId = String((msIdx !== -1 && row[msIdx]) ? row[msIdx] : '1').trim() || '1';
-        const title = (titleIdx !== -1 ? row[titleIdx] : '') || `cMPLi ${module.toUpperCase()} Insights`;
-        const articleText = (descIdx !== -1 ? row[descIdx] : '') || '';
-        const mainQuestion = (mainQIdx !== -1 ? row[mainQIdx] : '') || '';
-        const rawLcOn = lcOnTimeIdx !== -1 ? parseInt(row[lcOnTimeIdx], 10) : NaN;
-        const rawLcLate = lcLateIdx !== -1 ? parseInt(row[lcLateIdx], 10) : NaN;
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row || row.length === 0) continue;
 
-        const lcOnTime = !isNaN(rawLcOn) && rawLcOn > 0 ? rawLcOn : (msId === '1' ? 33 : 133);
-        const lcLate = module === 'immerse' ? 0 : (!isNaN(rawLcLate) ? rawLcLate : 3);
+            const rawDate = dateIdx !== -1 ? row[dateIdx] : '';
+            const dateKey = normalizeDateKey(rawDate);
+            if (!dateKey) continue;
 
-        let startTime = (startIdx !== -1 && row[startIdx]) ? normalizeTime(row[startIdx], '05:00') : '05:00';
-        let endTime = (endIdx !== -1 && row[endIdx]) ? normalizeTime(row[endIdx], module === 'immerse' ? '23:59' : '17:00') : (module === 'immerse' ? '23:59' : '17:00');
-        if (timeWinIdx !== -1 && row[timeWinIdx]) {
-            const parts = row[timeWinIdx].split(/[-–to]+/i);
-            if (parts.length >= 2) {
-                startTime = normalizeTime(parts[0], startTime);
-                endTime = normalizeTime(parts[1], endTime);
+            const module = normalizeModule(modIdx !== -1 ? row[modIdx] : 'dip');
+            const msId = String((msIdx !== -1 && row[msIdx]) ? row[msIdx] : '1').trim() || '1';
+
+            // Retrieve existing config for safe merge without silent blanking
+            const existing = currentConfigs[msId]?.[module]?.[dateKey] || {};
+
+            // Safe Merge: Preserve existing title/article/question if cell in sheet is blank
+            const rawTitle = titleIdx !== -1 ? String(row[titleIdx] || '').trim() : '';
+            const title = rawTitle || existing.title || existing.audioTitle || `cMPLi ${module.toUpperCase()} Insights`;
+
+            const rawDesc = descIdx !== -1 ? String(row[descIdx] || '').trim() : '';
+            const articleText = rawDesc || existing.articleText || existing.description || '';
+
+            const rawMainQ = mainQIdx !== -1 ? String(row[mainQIdx] || '').trim() : '';
+            const mainQuestion = rawMainQ || existing.mainQuestion || '';
+
+            const rawLcOn = lcOnTimeIdx !== -1 ? parseInt(row[lcOnTimeIdx], 10) : NaN;
+            const rawLcLate = lcLateIdx !== -1 ? parseInt(row[lcLateIdx], 10) : NaN;
+
+            const lcOnTime = !isNaN(rawLcOn) && rawLcOn > 0 ? rawLcOn : (existing.lcOnTime || (msId === '1' ? 33 : 133));
+            const lcLate = module === 'immerse' ? 0 : (!isNaN(rawLcLate) ? rawLcLate : (existing.lcLate !== undefined ? existing.lcLate : 3));
+
+            let startTime = existing.startTime || '05:00';
+            let endTime = existing.endTime || (module === 'immerse' ? '23:59' : '17:00');
+            if (startIdx !== -1 && row[startIdx] && String(row[startIdx]).trim()) {
+                startTime = normalizeTime(row[startIdx], startTime);
             }
-        }
-
-        // Derive Day Number
-        const explicitDay = dayIdx !== -1 ? row[dayIdx] : null;
-        let dayNum = null;
-        if (currentConfigs[msId]?.[module]?.[dateKey]?.dayNumber) {
-            dayNum = currentConfigs[msId][module][dateKey].dayNumber;
-        } else {
-            dayNum = deriveDayNumber(module, dateKey, explicitDay);
-        }
-
-        // Audio URL for podcast or audio reflection
-        let audioUrl = (audioUrlIdx !== -1 ? row[audioUrlIdx] : '') || '';
-        if (!audioUrl && mainQuestion && (mainQuestion.startsWith('http://') || mainQuestion.startsWith('https://')) && (mainQuestion.includes('.mp3') || mainQuestion.includes('.wav') || mainQuestion.includes('.m4a') || mainQuestion.includes('cloudinary'))) {
-            audioUrl = mainQuestion;
-        }
-
-        // Questions builder
-        let questions = [];
-        if (module === 'pod') {
-            let quizTitle = (quizQIdx !== -1 ? row[quizQIdx] : '') || mainQuestion || 'SimpliPod Reflection Quiz';
-            let optionsStr = (quizOptIdx !== -1 ? row[quizOptIdx] : '');
-            let answerStr = (quizAnsIdx !== -1 ? row[quizAnsIdx] : '0');
-            let options = [];
-            if (optionsStr) {
-                options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
+            if (endIdx !== -1 && row[endIdx] && String(row[endIdx]).trim()) {
+                endTime = normalizeTime(row[endIdx], endTime);
             }
-            if (options.length === 0) {
-                const optA = row[getIdx(['option a', 'opt a'])] || 'Option A';
-                const optB = row[getIdx(['option b', 'opt b'])] || 'Option B';
-                const optC = row[getIdx(['option c', 'opt c'])] || 'Option C';
-                const optD = row[getIdx(['option d', 'opt d'])] || 'Option D';
-                options = [optA, optB, optC, optD];
+            if (timeWinIdx !== -1 && row[timeWinIdx] && String(row[timeWinIdx]).trim()) {
+                const parts = String(row[timeWinIdx]).split(/[-–to]+/i);
+                if (parts.length >= 2) {
+                    startTime = normalizeTime(parts[0], startTime);
+                    endTime = normalizeTime(parts[1], endTime);
+                }
             }
 
-            let correctOpt = 0;
-            const rawAns = String(answerStr || '').toUpperCase().trim();
-            if (rawAns === 'B' || rawAns === '2') correctOpt = 1;
-            else if (rawAns === 'C' || rawAns === '3') correctOpt = 2;
-            else if (rawAns === 'D' || rawAns === '4') correctOpt = 3;
-            else if (!isNaN(parseInt(rawAns, 10)) && parseInt(rawAns, 10) >= 0 && parseInt(rawAns, 10) <= 3) correctOpt = parseInt(rawAns, 10);
+            // Derive Day Number
+            const explicitDay = dayIdx !== -1 ? row[dayIdx] : null;
+            let dayNum = null;
+            if (existing.dayNumber) {
+                dayNum = existing.dayNumber;
+            } else {
+                dayNum = deriveDayNumber(module, dateKey, explicitDay);
+            }
 
-            questions = [
-                {
-                    id: `q_${Date.now()}_${i}`,
-                    title: quizTitle,
-                    type: 'mcq',
-                    options: options.length >= 2 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
-                    correctOption: correctOpt,
-                    pts: 11
+            // Audio URL for podcast or audio reflection
+            let rawAudioUrl = (audioUrlIdx !== -1 ? String(row[audioUrlIdx] || '').trim() : '');
+            if (!rawAudioUrl && rawMainQ && (rawMainQ.startsWith('http://') || rawMainQ.startsWith('https://')) && (rawMainQ.includes('.mp3') || rawMainQ.includes('.wav') || rawMainQ.includes('.m4a') || rawMainQ.includes('cloudinary'))) {
+                rawAudioUrl = rawMainQ;
+            }
+            const audioUrl = rawAudioUrl || existing.audioUrl || '';
+
+            // Questions builder
+            let questions = [];
+            if (module === 'pod') {
+                let quizTitle = (quizQIdx !== -1 ? String(row[quizQIdx] || '').trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
+                let optionsStr = (quizOptIdx !== -1 ? String(row[quizOptIdx] || '').trim() : '');
+                let answerStr = (quizAnsIdx !== -1 ? String(row[quizAnsIdx] || '').trim() : '');
+                let options = [];
+                if (optionsStr) {
+                    options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
                 }
-            ];
-        } else if (module === 'immerse') {
-            questions = [
-                {
-                    title: mainQuestion || "Record your video reflection answering today's main question.",
-                    type: 'video'
+                if (options.length === 0) {
+                    const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
+                    const optB = (row[getIdx(['option b', 'opt b'])] || '').trim();
+                    const optC = (row[getIdx(['option c', 'opt c'])] || '').trim();
+                    const optD = (row[getIdx(['option d', 'opt d'])] || '').trim();
+                    if (optA || optB || optC || optD) {
+                        options = [optA || 'Option A', optB || 'Option B', optC || 'Option C', optD || 'Option D'];
+                    }
                 }
-            ];
-        } else {
-            // Dip
-            questions = [
-                {
-                    title: mainQuestion || "What key insight or reflection did you gain today?",
-                    type: 'text'
-                },
-                {
-                    title: "Upload Audio Reflection / Voice Note (3-4 mins)",
-                    type: 'audio'
+                if (options.length === 0 && existing.questions?.[0]?.options) {
+                    options = existing.questions[0].options;
                 }
-            ];
+                if (options.length === 0) {
+                    options = ['Option A', 'Option B', 'Option C', 'Option D'];
+                }
+
+                let correctOpt = 0;
+                if (answerStr) {
+                    const textMatchIdx = options.findIndex(opt => opt.trim().toLowerCase() === answerStr.toLowerCase());
+                    if (textMatchIdx !== -1) {
+                        correctOpt = textMatchIdx;
+                    } else {
+                        const upper = answerStr.toUpperCase();
+                        if (upper === 'B' || upper === '2') correctOpt = 1;
+                        else if (upper === 'C' || upper === '3') correctOpt = 2;
+                        else if (upper === 'D' || upper === '4') correctOpt = 3;
+                        else if (!isNaN(parseInt(upper, 10)) && parseInt(upper, 10) >= 0 && parseInt(upper, 10) < options.length) {
+                            correctOpt = parseInt(upper, 10);
+                        }
+                    }
+                } else if (existing.questions?.[0]?.correctOption !== undefined) {
+                    correctOpt = existing.questions[0].correctOption;
+                }
+                // Safe bounds clamp: guarantee correctOpt never exceeds options array bounds
+                correctOpt = Math.max(0, Math.min(options.length - 1, correctOpt));
+
+                questions = [
+                    {
+                        id: existing.questions?.[0]?.id || `q_${Date.now()}_${i}`,
+                        title: quizTitle,
+                        type: 'mcq',
+                        options: options,
+                        correctOption: correctOpt,
+                        pts: 11
+                    }
+                ];
+            } else if (module === 'immerse') {
+                if (rawMainQ) {
+                    questions = [
+                        {
+                            title: rawMainQ,
+                            type: 'video'
+                        }
+                    ];
+                } else if (existing.questions && existing.questions.length > 0) {
+                    questions = existing.questions;
+                } else {
+                    questions = [
+                        {
+                            title: "Record your video reflection answering today's main question.",
+                            type: 'video'
+                        }
+                    ];
+                }
+            } else {
+                // Dip
+                if (rawMainQ) {
+                    questions = [
+                        {
+                            title: rawMainQ,
+                            type: 'text'
+                        },
+                        {
+                            title: "Upload Audio Reflection / Voice Note (3-4 mins)",
+                            type: 'audio'
+                        }
+                    ];
+                } else if (existing.questions && existing.questions.length > 0) {
+                    questions = existing.questions;
+                } else {
+                    questions = [
+                        {
+                            title: "What key insight or reflection did you gain today?",
+                            type: 'text'
+                        },
+                        {
+                            title: "Upload Audio Reflection / Voice Note (3-4 mins)",
+                            type: 'audio'
+                        }
+                    ];
+                }
+            }
+
+            const dayConfig = {
+                date: dateKey,
+                dateKey: dateKey,
+                dayNumber: dayNum,
+                sessionDay: dayNum,
+                day: dayNum,
+                title: title,
+                articleText: articleText,
+                description: articleText,
+                mainQuestion: mainQuestion,
+                audioTitle: title,
+                audioUrl: audioUrl,
+                lcOnTime: lcOnTime,
+                lcLate: lcLate,
+                startTime: startTime,
+                endTime: endTime,
+                questions: questions,
+                tasks: existing.tasks || [],
+                extra: Boolean(existing.extra),
+                cancelled: Boolean(existing.cancelled)
+            };
+
+            if (!currentConfigs[msId]) currentConfigs[msId] = {};
+            if (!currentConfigs[msId][module]) currentConfigs[msId][module] = {};
+            currentConfigs[msId][module][dateKey] = dayConfig;
+
+            syncedCount++;
+            syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum });
         }
 
-        const dayConfig = {
-            date: dateKey,
-            dateKey: dateKey,
-            dayNumber: dayNum,
-            sessionDay: dayNum,
-            day: dayNum,
-            title: title,
-            articleText: articleText,
-            description: articleText,
-            mainQuestion: mainQuestion,
-            audioTitle: title,
-            audioUrl: audioUrl,
-            lcOnTime: lcOnTime,
-            lcLate: lcLate,
-            startTime: startTime,
-            endTime: endTime,
-            questions: questions,
-            tasks: currentConfigs[msId]?.[module]?.[dateKey]?.tasks || [],
-            extra: Boolean(currentConfigs[msId]?.[module]?.[dateKey]?.extra),
-            cancelled: Boolean(currentConfigs[msId]?.[module]?.[dateKey]?.cancelled)
+        saveMilestoneConfigsToDb(currentConfigs);
+        console.log(`[GoogleSheetSync] ✅ Successfully synced ${syncedCount} sessions from Google Sheet (${sheetId})`);
+        return {
+            success: true,
+            count: syncedCount,
+            sheetId: sheetId,
+            syncedEntries: syncedEntries
         };
-
-        if (!currentConfigs[msId]) currentConfigs[msId] = {};
-        if (!currentConfigs[msId][module]) currentConfigs[msId][module] = {};
-        currentConfigs[msId][module][dateKey] = dayConfig;
-
-        syncedCount++;
-        syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum });
+    } finally {
+        isGoogleSheetSyncing = false;
     }
-
-    saveMilestoneConfigsToDb(currentConfigs);
-    console.log(`[GoogleSheetSync] ✅ Successfully synced ${syncedCount} sessions from Google Sheet (${sheetId})`);
-    return {
-        success: true,
-        count: syncedCount,
-        sheetId: sheetId,
-        syncedEntries: syncedEntries
-    };
 }
 
 // REST Endpoints for Google Sheet Sync
