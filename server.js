@@ -2309,12 +2309,12 @@ function cleanScriptForSpeech(text) {
         line = line.trim();
         if (!line) continue;
 
-        // Pronunciation & acronym normalizer for specific spoken artifacts
-        line = line.replace(/\bAU\b/g, 'as you');
-        line = line.replace(/&/g, ' and ');
-        line = line.replace(/%/g, ' percent');
+        // Currency & math symbols to natural words
+        line = line.replace(/AU\$\s*(\d+)/gi, '$1 Australian dollars');
         line = line.replace(/US\$\s*(\d+)/gi, '$1 US dollars');
         line = line.replace(/\$\s*(\d+)/g, '$1 dollars');
+        line = line.replace(/&/g, ' and ');
+        line = line.replace(/%/g, ' percent');
         line = line.replace(/\+/g, ' plus ');
 
         // Trailing cadence punctuation: ensure natural vocal pause without doubling punctuation
