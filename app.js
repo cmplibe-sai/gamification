@@ -6288,7 +6288,7 @@ window.persistCertificateApproval = persistCertificateApproval;
 
 function isCertificateApproved(userId, msId) {
     const record = mockApprovedCertificates[`${userId}_MS${msId}`];
-    return record === true || (record && typeof record === 'object' && record.approved === true);
+    return Boolean(record === true || (record && typeof record === 'object' && record.approved === true));
 }
 window.isCertificateApproved = isCertificateApproved;
 
@@ -12844,6 +12844,9 @@ function switchMilestoneTab(moduleName, btnElement) {
         // Do not prepend historical configs from before the learner's module start date unless learner has an actual submission on that date
         const hasSubOnDate = typeSubs.some(s => (s.dateKey === dk || s.date === dk));
         if (dk < learnerStartKey && !hasSubOnDate) return;
+
+        // When a milestone is already completed, do not append unsubmitted extra dates beyond the completed horizon
+        if (isCompletedMilestone && !hasSubOnDate && orderedSessionDateKeys.length >= totalSessions) return;
 
         const hasContent = Boolean(cfg.extra || cfg.rescheduled || cfg.dayNumber || cfg.title || cfg.mainQuestion || (Array.isArray(cfg.questions) && cfg.questions.length > 0));
         if (hasContent) {
