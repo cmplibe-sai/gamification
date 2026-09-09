@@ -614,6 +614,59 @@ app.post(['/api/milestone-module-access', '/api/module-access', '/gamification/a
     }
 });
 
+// ==============================================================
+// DEDICATED MODULE ACTIVATION DATES DATABASE ENGINE
+// ==============================================================
+const MODULE_ACTIVATION_DATES_FILE = path.join(DATA_DIR, 'module_activation_dates.json');
+
+function getModuleActivationDatesFromDb() {
+    try {
+        if (fs.existsSync(MODULE_ACTIVATION_DATES_FILE)) {
+            const raw = fs.readFileSync(MODULE_ACTIVATION_DATES_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed;
+        }
+    } catch(e) {
+        console.warn('Error reading module_activation_dates.json:', e);
+    }
+    return store.moduleActivationDates || {};
+}
+
+function saveModuleActivationDatesToDb(dates) {
+    try {
+        const obj = (dates && typeof dates === 'object') ? dates : {};
+        fs.writeFileSync(MODULE_ACTIVATION_DATES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.moduleActivationDates = obj;
+        saveStore();
+        console.log(`[Module Activation Dates DB] Saved to ${MODULE_ACTIVATION_DATES_FILE}:`, obj);
+        return obj;
+    } catch(e) {
+        console.error('Error writing module_activation_dates.json:', e);
+        return store.moduleActivationDates || {};
+    }
+}
+
+app.get(['/api/module-activation-dates', '/gamification/api/module-activation-dates'], (req, res) => {
+    const data = getModuleActivationDatesFromDb();
+    res.json({ success: true, data });
+});
+
+app.post(['/api/module-activation-dates', '/gamification/api/module-activation-dates'], (req, res) => {
+    try {
+        const { msId, module: modName, date, allDates } = req.body;
+        const current = getModuleActivationDatesFromDb();
+        if (allDates && typeof allDates === 'object') {
+            Object.assign(current, allDates);
+        } else if (msId && modName && date) {
+            current[`${msId}_${String(modName).toLowerCase().trim()}`] = String(date);
+        }
+        const saved = saveModuleActivationDatesToDb(current);
+        res.json({ success: true, data: saved });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // ==============================================================
 // DEDICATED MILESTONE CONFIGS DATABASE ENGINE
@@ -1021,6 +1074,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             lastUpdated: store.lastUpdated || 1000,
             milestoneConfigs: getMilestoneConfigsFromDb(),
             moduleAccess: getModuleAccessFromDb(),
+            moduleActivationDates: getModuleActivationDatesFromDb(),
             joinDates: getUserJoinDatesFromDb(),
             userModuleStartDates: getUserModuleStartDatesFromDb(),
             levelUpAccess: liveLevelUpAccess,
@@ -1642,6 +1696,30 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                     return res.status(400).json({
                         success: false,
                         error: 'Prerequisite requirement: You must complete and submit your daily cMPLi Dip check-in before unlocking and submitting cMPLi Immerse.'
+                    });
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // SERVER-SIDE REQUIRED TASKS GATING GUARD
+        // -------------------------------------------------------------
+        const allConfigs = getMilestoneConfigsFromDb();
+        const subDate = sub.dateKey || (sub.date ? String(sub.date).split('T')[0] : null);
+        const normMod = String(sub.moduleType || sub.type || 'dip').toLowerCase();
+        const sessionCfg = (allConfigs && allConfigs[String(msId)] && allConfigs[String(msId)][normMod] && subDate)
+            ? allConfigs[String(msId)][normMod][subDate]
+            : null;
+        if (sessionCfg && Array.isArray(sessionCfg.tasks) && sessionCfg.tasks.length > 0) {
+            const requiredTasks = sessionCfg.tasks.filter(t => t.required === true);
+            if (requiredTasks.length > 0) {
+                const completedTaskIds = Array.isArray(sub.completedTaskIds) ? sub.completedTaskIds : [];
+                const missingTask = requiredTasks.find(rt => !completedTaskIds.includes(rt.id));
+                if (missingTask && !sub.isTestUser && !sub.isTestMode) {
+                    console.log(`[Tasks Guard] Rejecting submission for ${sub.userEmail || sub.userId} - Missing required task: "${missingTask.title}"`);
+                    return res.status(400).json({
+                        success: false,
+                        error: `Required task incomplete: "${missingTask.title}". Please complete all required tasks before submitting.`
                     });
                 }
             }

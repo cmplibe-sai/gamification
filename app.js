@@ -2301,7 +2301,7 @@ async function syncGlobalServerData() {
             return;
         }
 
-        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, moduleActivationDates: serverModuleActivationDates, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
 
@@ -2432,6 +2432,14 @@ async function syncGlobalServerData() {
         if (serverModuleAccess && typeof serverModuleAccess === 'object') {
             customMilestoneModuleAccess = serverModuleAccess;
             try { localStorage.setItem('customMilestoneModuleAccess', JSON.stringify(customMilestoneModuleAccess)); } catch(e) {}
+        }
+
+        // 3b. MODULE ACTIVATION DATES SYNC
+        if (serverModuleActivationDates && typeof serverModuleActivationDates === 'object') {
+            let localActDates = {};
+            try { localActDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+            const mergedAct = { ...localActDates, ...serverModuleActivationDates };
+            try { localStorage.setItem('moduleActivationDates', JSON.stringify(mergedAct)); } catch(e) {}
         }
 
         // 4. USER JOIN DATES SYNC
@@ -6510,6 +6518,13 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
         actDates[`${key}_${normalizedMod}`] = todayKey;
         try { localStorage.setItem('moduleActivationDates', JSON.stringify(actDates)); } catch(e) {}
 
+        // Sync activation date to server
+        apiFetch('/api/module-activation-dates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msId: key, module: normalizedMod, date: todayKey, allDates: actDates })
+        }).catch(e => console.warn('Failed to sync module activation date to server:', e));
+
         // Auto-stamp Day 1 for all cohort users who do not have an explicit start date for this module yet
         const allUsers = (typeof window !== 'undefined' && Array.isArray(window.adminRealtimeUsers) && window.adminRealtimeUsers.length > 0)
             ? window.adminRealtimeUsers
@@ -6986,6 +7001,9 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
             if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
                 mappedDay = rawDay;
             }
+        }
+        if (rawDate && !daySubMap[rawDate]) {
+            daySubMap[rawDate] = s;
         }
         if (mappedDay && !daySubMap[mappedDay]) {
             daySubMap[mappedDay] = s;
@@ -11088,9 +11106,9 @@ function hasUserCompletedDipForDate(user, msId, dateKey, sessionDay) {
 
     return dipSubs.some(sub => {
         const sDate = sub.dateKey || (sub.date ? String(sub.date).split('T')[0] : (sub.timestamp ? getLocalDateKey(new Date(sub.timestamp)) : null));
-        const matchesDateOrDay = (!dateKey && !sessionDay) ||
-            (dateKey && sDate === dateKey) ||
-            (sessionDay && String(sub.day || sub.sessionDay) === String(sessionDay));
+        const matchesDateOrDay = dateKey
+            ? (sDate === dateKey)
+            : (sessionDay && String(sub.day || sub.sessionDay) === String(sessionDay));
         if (!matchesDateOrDay) return false;
 
         const isEvaluating = sub.status === 'evaluating';
@@ -12521,43 +12539,67 @@ function switchMilestoneTab(moduleName, btnElement) {
     const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions, activeMilestoneId);
 
     // Collect all configured session dateKeys for this module (respecting cancelled flag)
-    // Cancelled sessions are invisible to the learner; remaining sessions are renumbered 1..N sequentially
     const msConfigsForModule = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeMilestoneId][normalizedMod]) || {};
-    // Build ordered list of sessions: standard MWF/Mon-Sat slots + extra sessions, minus cancelled ones
+    
+    // Build ordered list of sessions:
+    // 1. Standard slots (day 1..totalSessions), taking getResolvedMilestoneDateKey into account
     let orderedSessionDateKeys = [];
+    const standardSlotDateMap = {}; // maps dateKey -> standard day slot d
     for (let d = 1; d <= totalSessions; d++) {
-        const defaultDk = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName));
-        const cfg = msConfigsForModule[defaultDk];
+        const resolved = (typeof getResolvedMilestoneDateKey === 'function')
+            ? getResolvedMilestoneDateKey(activeMilestoneId, moduleName, milestoneStartDate, d)
+            : { cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName)) };
+        const slotDk = resolved.cardDateKey;
+        const cfg = msConfigsForModule[slotDk];
         if (cfg && cfg.cancelled) continue; // skip cancelled standard slots
-        orderedSessionDateKeys.push(defaultDk);
+        if (!orderedSessionDateKeys.includes(slotDk)) {
+            orderedSessionDateKeys.push(slotDk);
+            standardSlotDateMap[slotDk] = d;
+        }
     }
-    // Merge in extra sessions (sorted by date)
+
+    // 2. Merge any other configured dates in msConfigsForModule (extra sessions, legacy rescheduled sessions, explicit dayNumber sessions)
     Object.keys(msConfigsForModule).forEach(dk => {
         const cfg = msConfigsForModule[dk];
-        if (cfg && cfg.extra && !cfg.cancelled && !orderedSessionDateKeys.includes(dk)) {
+        if (!cfg || cfg.cancelled || orderedSessionDateKeys.includes(dk)) return;
+        const hasContent = Boolean(cfg.extra || cfg.rescheduled || cfg.dayNumber || cfg.title || cfg.mainQuestion || (Array.isArray(cfg.questions) && cfg.questions.length > 0));
+        if (hasContent) {
             orderedSessionDateKeys.push(dk);
+            if (cfg.dayNumber && !standardSlotDateMap[dk]) {
+                standardSlotDateMap[dk] = Number(cfg.dayNumber);
+            }
         }
     });
     orderedSessionDateKeys.sort();
 
+    // Assign collision-proof unique day numbers for all sessions
+    let extraDayCounter = totalSessions;
+    const sessionDayMap = {};
+    const usedDayNumbers = new Set(Object.values(standardSlotDateMap));
+
+    orderedSessionDateKeys.forEach(dk => {
+        if (standardSlotDateMap[dk]) {
+            sessionDayMap[dk] = standardSlotDateMap[dk];
+        } else {
+            // Assign next available unique day number > totalSessions to prevent collision with any standard day!
+            do {
+                extraDayCounter++;
+            } while (usedDayNumbers.has(extraDayCounter));
+            sessionDayMap[dk] = extraDayCounter;
+            usedDayNumbers.add(extraDayCounter);
+        }
+    });
+
     orderedSessionDateKeys.forEach((cardDateKey, idx) => {
         const effectiveDayNum = idx + 1; // sequential numbering for visible sessions
+        const dayNum = sessionDayMap[cardDateKey]; // guaranteed collision-proof internal dayNum
         const cardDate = new Date(cardDateKey + 'T00:00:00');
         if (isNaN(cardDate.getTime())) return;
         cardDate.setHours(0,0,0,0);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        // Find standard day number for submission matching or fallback to effectiveDayNum
-        let dayNum = effectiveDayNum;
-        for (let d = 1; d <= totalSessions; d++) {
-            if (getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName)) === cardDateKey) {
-                dayNum = d;
-                break;
-            }
-        }
-
-        // EXCLUSIVE RESOLUTION: matching submission from daySubMap
-        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[dayNum] || null;
+        // EXCLUSIVE RESOLUTION: matching submission from daySubMap (primary match by dateKey, then collision-proof dayNum)
+        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[cardDateKey] || daySubMap[dayNum] || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
