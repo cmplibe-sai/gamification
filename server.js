@@ -2137,8 +2137,23 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
     }
 });
 
+// In-memory store for active learner quiz sessions with 2-hour TTL
+const podQuizSessions = new Map();
+setInterval(() => {
+    const now = Date.now();
+    for (const [sId, sData] of podQuizSessions.entries()) {
+        if (sData.expiresAt < now) podQuizSessions.delete(sId);
+    }
+}, 300000);
+
+// Creator / Admin endpoint to inspect the full 50-question pool with answer keys
 app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) => {
     try {
+        const isCreator = req.query.role === 'creator' || req.headers['x-role'] === 'creator' || req.query.admin === 'true' || req.headers['x-creator-access'] === 'true';
+        if (!isCreator) {
+            return res.status(403).json({ success: false, error: 'Access denied: Creator authentication required to inspect full answer keys.' });
+        }
+
         const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
             ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
             : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
@@ -2151,6 +2166,118 @@ app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) =>
         return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
     } catch (err) {
         console.error('Error serving pod quiz pool:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Learner-facing endpoint: returns 3 random questions with correctOption & explanation STRIPPED
+app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'], (req, res) => {
+    try {
+        const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+
+        if (!fs.existsSync(poolPath)) {
+            return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
+        }
+
+        const raw = fs.readFileSync(poolPath, 'utf8');
+        const pool = JSON.parse(raw);
+        const count = Math.min(Math.max(parseInt(req.query.count, 10) || 3, 1), 10);
+
+        const shuffled = [...pool].sort(() => 0.5 - Math.random()).slice(0, count);
+        const sessionId = `pod_sess_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        const sessionAnswers = {};
+        const sessionExplanations = {};
+        const sessionPts = {};
+
+        const learnerQuestions = shuffled.map(q => {
+            const originalOptions = [...(q.options || [])];
+            const correctIdx = typeof q.correctOption === 'number' ? q.correctOption : 0;
+            const tagged = originalOptions.map((opt, idx) => ({ text: opt, isCorrect: idx === correctIdx }));
+            const jumbled = [...tagged].sort(() => 0.5 - Math.random());
+            const newCorrectIdx = jumbled.findIndex(item => item.isCorrect);
+
+            sessionAnswers[q.id] = newCorrectIdx >= 0 ? newCorrectIdx : 0;
+            sessionExplanations[q.id] = q.explanation || '';
+            sessionPts[q.id] = q.pts || 11;
+
+            // Strip correctOption and explanation so client cannot leak answer keys
+            return {
+                id: q.id,
+                title: q.title,
+                options: jumbled.map(item => item.text),
+                category: q.category || 'Comprehension',
+                pts: q.pts || 11
+            };
+        });
+
+        podQuizSessions.set(sessionId, {
+            sessionId,
+            expiresAt: Date.now() + (2 * 3600 * 1000), // 2 hours TTL
+            answers: sessionAnswers,
+            explanations: sessionExplanations,
+            pts: sessionPts,
+            questions: learnerQuestions
+        });
+
+        return res.json({
+            success: true,
+            sessionId,
+            count: learnerQuestions.length,
+            questions: learnerQuestions
+        });
+    } catch (err) {
+        console.error('Error serving pod session questions:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Server-side quiz grading endpoint: calculates score and returns results with explanations post-submission
+app.post(['/api/pod/grade-session', '/gamification/api/pod/grade-session'], (req, res) => {
+    try {
+        const { sessionId, responses } = req.body || {};
+        if (!sessionId || !podQuizSessions.has(sessionId)) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired quiz session. Please restart the quiz.' });
+        }
+
+        const session = podQuizSessions.get(sessionId);
+        let totalScore = 0;
+        let maxScore = 0;
+
+        const gradedResults = (responses || []).map(r => {
+            const qId = r.id;
+            const chosenIdx = typeof r.selectedOption === 'number' ? r.selectedOption : parseInt(r.selectedOption, 10);
+            const correctIdx = session.answers[qId];
+            const pts = session.pts[qId] || 11;
+            maxScore += pts;
+
+            const isCorrect = (chosenIdx === correctIdx);
+            if (isCorrect) totalScore += pts;
+
+            return {
+                id: qId,
+                selectedOption: chosenIdx,
+                correctOption: correctIdx,
+                isCorrect,
+                pts: isCorrect ? pts : 0,
+                maxPts: pts,
+                explanation: session.explanations[qId] || ''
+            };
+        });
+
+        // Invalidate session so it cannot be re-submitted
+        podQuizSessions.delete(sessionId);
+
+        return res.json({
+            success: true,
+            score: totalScore,
+            maxScore: maxScore || 33,
+            matchPercentage: Math.round((totalScore / (maxScore || 33)) * 100),
+            results: gradedResults
+        });
+    } catch (err) {
+        console.error('Error grading pod session:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });

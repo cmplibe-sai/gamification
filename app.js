@@ -7952,16 +7952,14 @@ try {
 
 async function loadPodQuizPool() {
     try {
-        const res = await apiFetch('/api/pod/quiz-pool').then(r => r.json());
+        const res = await apiFetch('/api/pod/quiz-pool?role=creator').then(r => r.json());
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
             window._podQuizPool50 = res.data;
-            try { localStorage.setItem('podQuizPool50', JSON.stringify(res.data)); } catch(e) {}
         }
     } catch(err) {
-        console.warn('Could not fetch remote pod quiz pool, using cached/fallback:', err);
+        console.warn('Could not fetch creator pod quiz pool:', err);
     }
 }
-loadPodQuizPool();
 
 function getPodQuestionsPool() {
     if (window._podQuizPool50 && Array.isArray(window._podQuizPool50) && window._podQuizPool50.length > 0) {
@@ -9827,7 +9825,7 @@ window.setPodPlaybackSpeed = function(speed, btn) {
     }
 };
 
-function openPodSessionModal(dayNum, dateKey) {
+async function openPodSessionModal(dayNum, dateKey) {
     activePodSessionDay = dayNum;
     activePodSessionDateKey = dateKey || getLocalDateKey(new Date());
 
@@ -9847,31 +9845,44 @@ function openPodSessionModal(dayNum, dateKey) {
     }
 
     const audioTitle = dayConfig.audioTitle || dayConfig.title || `cMPLi POD Day ${dayNum}: Snabbit 15-Minute Beauty Fix`;
-    const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
-        ? dayConfig.questions 
-        : getPodQuestionsPool();
 
-    // 1. Pick 3 randomized questions from Creator's pool
-    const shuffled = [...pool].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 3);
+    // Secure server-side question session: answers and explanations are NEVER sent to the learner
+    window._activePodSessionId = null;
+    let learnerQuestions = [];
 
-    // 2. JUMBLE / SHUFFLE OPTIONS (A, B, C, D) FOR EVERY CUSTOMER (TAG-BASED INDEX MAPPING)
-    activePodSessionQuestions = selected.map(q => {
-        const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
-        const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
+    try {
+        const sessRes = await apiFetch('/api/pod/session-questions?count=3').then(r => r.json());
+        if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
+            window._activePodSessionId = sessRes.sessionId;
+            learnerQuestions = sessRes.questions;
+        }
+    } catch(err) {
+        console.warn('Could not fetch server-side pod session questions, using local pool:', err);
+    }
 
-        // Map each option with isCorrect flag before shuffling to avoid duplicate text string index collisions
-        const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
-        const jumbled = [...tagged].sort(() => 0.5 - Math.random());
-        const newCorrectIndex = jumbled.findIndex(item => item.isCorrect);
+    if (learnerQuestions.length === 0) {
+        const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
+            ? dayConfig.questions 
+            : getPodQuestionsPool();
 
-        return {
-            ...q,
-            options: jumbled.map(item => item.text),
-            correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
-            pts: q.pts || 11
-        };
-    });
+        const shuffled = [...pool].sort(() => 0.5 - Math.random());
+        learnerQuestions = shuffled.slice(0, 3).map(q => {
+            const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
+            const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
+            const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
+            const jumbled = [...tagged].sort(() => 0.5 - Math.random());
+            const newCorrectIndex = jumbled.findIndex(item => item.isCorrect);
+
+            return {
+                ...q,
+                options: jumbled.map(item => item.text),
+                correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
+                pts: q.pts || 11
+            };
+        });
+    }
+
+    activePodSessionQuestions = learnerQuestions;
 
     const hasAudio = !!audioUrl;
 
@@ -10160,39 +10171,67 @@ window.openPodSessionModal = openPodSessionModal;
 async function submitPodSessionQuiz() {
     if (!currentUser) return alert('Please login first.');
 
-    const answers = [];
-    let allAnswered = true;
+    // Check that all questions are answered
+    for (let idx = 0; idx < activePodSessionQuestions.length; idx++) {
+        const selected = document.querySelector(`input[name="pod_session_q_${idx}"]:checked`);
+        if (!selected) {
+            return alert("Please answer all 3 comprehension questions before submitting.");
+        }
+    }
+
+    let calculatedPoints = 0;
+    let serverGradedResults = null;
+
+    // Secure server-side grading if an active session exists
+    if (window._activePodSessionId) {
+        try {
+            const rawResponses = activePodSessionQuestions.map((q, idx) => {
+                const sel = document.querySelector(`input[name="pod_session_q_${idx}"]:checked`);
+                return {
+                    id: q.id || `q_${idx}`,
+                    selectedOption: sel ? parseInt(sel.value, 10) : 0
+                };
+            });
+
+            const gradeRes = await apiFetch('/api/pod/grade-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: window._activePodSessionId, responses: rawResponses })
+            }).then(r => r.json());
+
+            if (gradeRes && gradeRes.success) {
+                calculatedPoints = gradeRes.score;
+                serverGradedResults = gradeRes.results;
+            }
+        } catch(gradeErr) {
+            console.warn('Server grading failed, falling back to local calculation:', gradeErr);
+        }
+    }
 
     activePodSessionQuestions.forEach((q, idx) => {
         const selected = document.querySelector(`input[name="pod_session_q_${idx}"]:checked`);
-        if (!selected) {
-            allAnswered = false;
-        } else {
-            const selectedIdx = parseInt(selected.value, 10);
-            const isCorrect = (q.correctOption !== undefined) ? (selectedIdx === q.correctOption) : true;
-            const pts = q.pts || 11;
-            answers.push({
-                question: q.title,
-                answer: (q.options && q.options[selectedIdx]) || `Option ${selectedIdx + 1}`,
-                type: 'mcq',
-                options: q.options || [],
-                selectedOption: selectedIdx,
-                correctOption: q.correctOption,
-                isCorrect: isCorrect,
-                pts: isCorrect ? pts : 0,
-                maxPts: pts
-            });
+        const selectedIdx = parseInt(selected.value, 10);
+        const gr = (serverGradedResults && serverGradedResults.find(r => r.id === (q.id || `q_${idx}`))) || null;
+        const isCorrect = gr ? gr.isCorrect : ((q.correctOption !== undefined) ? (selectedIdx === q.correctOption) : true);
+        const pts = gr ? gr.pts : (isCorrect ? (q.pts || 11) : 0);
+
+        if (!serverGradedResults && isCorrect) {
+            calculatedPoints += pts;
         }
-    });
 
-    if (!allAnswered) {
-        return alert("Please answer all 3 comprehension questions before submitting.");
-    }
-
-    // STRICT ACCURACY CALCULATION (11 LCs per correct question = up to 33 LCs)
-    let calculatedPoints = 0;
-    answers.forEach(a => {
-        if (a.isCorrect) calculatedPoints += (a.pts || 11);
+        answers.push({
+            id: q.id || `q_${idx}`,
+            question: q.title,
+            answer: (q.options && q.options[selectedIdx]) || `Option ${selectedIdx + 1}`,
+            type: 'mcq',
+            options: q.options || [],
+            selectedOption: selectedIdx,
+            correctOption: gr ? gr.correctOption : q.correctOption,
+            isCorrect: isCorrect,
+            pts: pts,
+            maxPts: q.pts || 11,
+            explanation: gr ? gr.explanation : (q.explanation || '')
+        });
     });
 
     const subData = {
@@ -10934,6 +10973,8 @@ window.restoreAudioDraft = async function(idx, draftKey) {
             previewUrl = URL.createObjectURL(draftData);
             window._recordedAudioBlobs = window._recordedAudioBlobs || {};
             window._recordedAudioBlobs[idx] = draftData;
+            window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
+            window._accumulatedAudioBlobs[idx] = [draftData];
             base64Data = await new Promise((resolve) => {
                 const r = new FileReader();
                 r.onloadend = () => resolve(r.result || '');
@@ -10957,12 +10998,29 @@ window.restoreAudioDraft = async function(idx, draftKey) {
         const downloadLink = document.getElementById(`audio_download_${idx}`);
         if (downloadLink) {
             downloadLink.href = previewUrl;
-            downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}_recovered.webm`;
+            downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}_recovered.wav`;
             downloadLink.classList.remove('hidden');
             downloadLink.classList.add('inline-flex');
         }
+
+        // Toggle buttons so user can Resume or Start Fresh
+        const startBtn = document.getElementById(`btn_start_audio_${idx}`);
+        const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
+        const resumeBtn = document.getElementById(`btn_resume_audio_${idx}`);
+        const resetBtn = document.getElementById(`btn_reset_audio_${idx}`);
+        if (startBtn) startBtn.classList.add('hidden');
+        if (stopBtn) stopBtn.classList.add('hidden');
+        if (resumeBtn) {
+            resumeBtn.classList.remove('hidden');
+            const totalW = window._totalTeleprompterWords || 0;
+            const nextWord = Math.min((window._currentReadWordIndex || 0) + 1, totalW);
+            const resumeLabel = document.getElementById('resume_word_num');
+            if (resumeLabel) resumeLabel.innerText = nextWord;
+        }
+        if (resetBtn) resetBtn.classList.remove('hidden');
+
         const recStatus = document.getElementById(`audio_rec_status_${idx}`);
-        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Restored from Draft! Ready to submit.</span>';
+        if (recStatus) recStatus.innerHTML = '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Audio Restored from Draft! Listen above or click &quot;Resume&quot; to continue.</span>';
         document.getElementById(`draft_banner_${idx}`)?.remove();
 
         // Also initiate server upload for restored draft
@@ -11012,9 +11070,15 @@ window.discardAudioDraft = async function(idx, draftKey) {
 function renderMarkdownText(text) {
     if (!text || typeof text !== 'string') return '';
 
-    // Strip wrapping quotes and double-quotes from CSV
+    // Strip wrapping quotes and double-quotes from CSV safely without stripping author quotes
     let cleaned = text.trim();
-    cleaned = cleaned.replace(/^"+|"+$/g, '').trim();
+    if (cleaned.startsWith('"""') && cleaned.endsWith('"""')) {
+        cleaned = cleaned.slice(3, -3).trim();
+    } else if (cleaned.startsWith('""') && cleaned.endsWith('""')) {
+        cleaned = cleaned.slice(2, -2).trim();
+    } else if (cleaned.startsWith('"') && cleaned.endsWith('"') && (cleaned.includes('""') || cleaned.includes('\n') || cleaned.includes(','))) {
+        cleaned = cleaned.slice(1, -1).trim();
+    }
     cleaned = cleaned.replace(/""/g, '"');
 
     // If text already has full HTML tags, sanitize scripts and return
@@ -11247,10 +11311,18 @@ function startTeleprompterScroll() {
     }, stepMs);
 
     // 2. Ultra-slow word-by-word reading progression timer (~750ms per word = ~2.75 minutes for 220 words)
+    // Coordinated with Speech Recognition: does not fight the student while they are speaking!
     const totalWords = window._totalTeleprompterWords || (window._teleprompterWords ? window._teleprompterWords.length : 0);
     const msPerWord = Math.round(750 / (window._teleprompterSpeed || 1));
     window._teleprompterCadenceInterval = setInterval(() => {
         if (!window._teleprompterIsPlaying) return;
+
+        // If Speech Recognition is actively transcribing words in the last 4500ms, let speech drive it!
+        const hasActiveSpeech = window._lastSpeechMatchTime && (Date.now() - window._lastSpeechMatchTime < 4500);
+        if (hasActiveSpeech) {
+            return;
+        }
+
         const cur = window._currentReadWordIndex || 0;
         if (cur < totalWords - 1) {
             updateTeleprompterWordHighlight(cur + 1);
@@ -11480,14 +11552,111 @@ function clearCheckinFormDraft(dayNum, moduleName, cardDateKey) {
 window.clearCheckinFormDraft = clearCheckinFormDraft;
 
 // ==============================================================
+// WEB AUDIO API AUDIOBUFFER STITCHING & 16-BIT PCM WAV ENCODER
+// Guarantees seamless concatenation across multiple recording takes / pauses
+// without WebM container header corruption, playback stall, or duration loss.
+// ==============================================================
+function audioBufferToWavBlob(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const length = buffer.length * numChannels * bytesPerSample;
+    const bufferArray = new ArrayBuffer(44 + length);
+    const view = new DataView(bufferArray);
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + length, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, length, true);
+
+    let offset = 44;
+    for (let i = 0; i < buffer.length; i++) {
+        for (let channel = 0; channel < numChannels; channel++) {
+            let sample = buffer.getChannelData(channel)[i];
+            sample = Math.max(-1, Math.min(1, sample));
+            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            offset += 2;
+        }
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+async function concatAudioBlobs(blobList) {
+    if (!blobList || blobList.length === 0) return null;
+    if (blobList.length === 1 && blobList[0].type === 'audio/wav') return blobList[0];
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+        return new Blob(blobList, { type: blobList[0].type || 'audio/webm' });
+    }
+
+    const ctx = new AudioContextClass();
+    const audioBuffers = [];
+
+    for (const blob of blobList) {
+        if (!blob || blob.size === 0) continue;
+        try {
+            const ab = await blob.arrayBuffer();
+            const decoded = await ctx.decodeAudioData(ab.slice(0));
+            audioBuffers.push(decoded);
+        } catch(err) {
+            console.warn('[Audio Concat] decodeAudioData error, skipping blob:', err);
+        }
+    }
+    if (ctx.state !== 'closed') {
+        try { ctx.close(); } catch(e) {}
+    }
+
+    if (audioBuffers.length === 0) return blobList[0];
+    if (audioBuffers.length === 1) return audioBufferToWavBlob(audioBuffers[0]);
+
+    const totalLength = audioBuffers.reduce((sum, b) => sum + b.length, 0);
+    const numChannels = Math.max(...audioBuffers.map(b => b.numberOfChannels));
+    const sampleRate = audioBuffers[0].sampleRate;
+
+    const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(numChannels, totalLength, sampleRate);
+    const mergedBuffer = offlineCtx.createBuffer(numChannels, totalLength, sampleRate);
+
+    for (let channel = 0; channel < numChannels; channel++) {
+        const channelData = mergedBuffer.getChannelData(channel);
+        let currentOffset = 0;
+        for (const buf of audioBuffers) {
+            const srcChannelData = buf.getChannelData(channel % buf.numberOfChannels);
+            channelData.set(srcChannelData, currentOffset);
+            currentOffset += buf.length;
+        }
+    }
+
+    return audioBufferToWavBlob(mergedBuffer);
+}
+
+// ==============================================================
 // VOICE RECORDING ENGINE WITH RESUME & SPEECH SYNCHRONIZATION
 // Appends subsequent recording segments and turns read words RED live
 // ==============================================================
 window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
+window._recordingAutosaveTimer = null;
 
 async function startAudioRecording(idx, isResume = false) {
     try {
-        // Close dangling AudioContext from previous runs to prevent resource leak on mobile
         if (window._activeAudioCtx) {
             try {
                 if (window._activeAudioCtx.state !== 'closed') {
@@ -11515,7 +11684,6 @@ async function startAudioRecording(idx, isResume = false) {
         };
         _audioStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
-        // Hardware / Web Audio gain booster for clear volume
         let recStream = _audioStream;
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -11568,6 +11736,7 @@ async function startAudioRecording(idx, isResume = false) {
                             const lookahead = Math.min(cur + 12, window._teleprompterWords.length);
                             for (let w = cur; w < lookahead; w++) {
                                 if (window._teleprompterWords[w]?.clean === lastToken || window._teleprompterWords[w]?.clean.startsWith(lastToken)) {
+                                    window._lastSpeechMatchTime = Date.now();
                                     updateTeleprompterWordHighlight(w);
                                     break;
                                 }
@@ -11588,7 +11757,12 @@ async function startAudioRecording(idx, isResume = false) {
             }
         };
 
-        _audioRecorder.onstop = () => {
+        _audioRecorder.onstop = async () => {
+            if (window._recordingAutosaveTimer) {
+                clearInterval(window._recordingAutosaveTimer);
+                window._recordingAutosaveTimer = null;
+            }
+
             if (window._speechRec && window._speechRec[idx]) {
                 try { window._speechRec[idx].stop(); } catch(e) {}
             }
@@ -11602,7 +11776,12 @@ async function startAudioRecording(idx, isResume = false) {
             const allBlobs = (window._accumulatedAudioBlobs[idx] && window._accumulatedAudioBlobs[idx].length > 0)
                 ? window._accumulatedAudioBlobs[idx]
                 : [new Blob(_audioChunks, { type: 'audio/webm' })];
-            const combinedBlob = new Blob(allBlobs, { type: 'audio/webm' });
+
+            // Stitch audio blobs via Web Audio PCM buffer concatenation to prevent WebM container corruption
+            const combinedBlob = await concatAudioBlobs(allBlobs);
+            if (combinedBlob) {
+                window._accumulatedAudioBlobs[idx] = [combinedBlob];
+            }
             const blobUrl = URL.createObjectURL(combinedBlob);
 
             window._recordedAudioData = window._recordedAudioData || {};
@@ -11621,7 +11800,7 @@ async function startAudioRecording(idx, isResume = false) {
             const downloadLink = document.getElementById(`audio_download_${idx}`);
             if (downloadLink) {
                 downloadLink.href = blobUrl;
-                downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.webm`;
+                downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.wav`;
                 downloadLink.classList.remove('hidden');
                 downloadLink.classList.add('inline-flex');
             }
@@ -11703,6 +11882,12 @@ async function startAudioRecording(idx, isResume = false) {
         _audioRecorder.start(1000);
         startTeleprompterScroll();
 
+        // 10-second periodic draft autosave during active recording
+        if (window._recordingAutosaveTimer) clearInterval(window._recordingAutosaveTimer);
+        window._recordingAutosaveTimer = setInterval(() => {
+            if (typeof saveCheckinFormDraft === 'function') saveCheckinFormDraft();
+        }, 10000);
+
         const startBtn = document.getElementById(`btn_start_audio_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
         const resumeBtn = document.getElementById(`btn_resume_audio_${idx}`);
@@ -11730,6 +11915,10 @@ function resumeAudioRecording(idx) {
 window.resumeAudioRecording = resumeAudioRecording;
 
 function resetAudioRecording(idx) {
+    if (window._recordingAutosaveTimer) {
+        clearInterval(window._recordingAutosaveTimer);
+        window._recordingAutosaveTimer = null;
+    }
     window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
     window._accumulatedAudioBlobs[idx] = [];
     _audioChunks = [];
@@ -11763,6 +11952,10 @@ function resetAudioRecording(idx) {
 window.resetAudioRecording = resetAudioRecording;
 
 function stopAudioRecording(idx) {
+    if (window._recordingAutosaveTimer) {
+        clearInterval(window._recordingAutosaveTimer);
+        window._recordingAutosaveTimer = null;
+    }
     if (_audioRecorder && _audioRecorder.state !== 'inactive') {
         _audioRecorder.stop();
     }
