@@ -57,6 +57,26 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/gamification/uploads', express.static(UPLOADS_DIR));
 
+// Seed essential assets (Podcast audio & 50-Quiz pool) from tracked data/ dir if missing
+try {
+    const trackedDataDir = path.join(__dirname, 'data');
+    const trackedAudio = path.join(trackedDataDir, 'uploads', 'snabbit_podcast_ep1.wav');
+    const targetAudio = path.join(UPLOADS_DIR, 'snabbit_podcast_ep1.wav');
+    if (fs.existsSync(trackedAudio) && !fs.existsSync(targetAudio)) {
+        fs.copyFileSync(trackedAudio, targetAudio);
+        console.log('[Seed Asset] Copied snabbit_podcast_ep1.wav to uploads directory');
+    }
+
+    const trackedQuiz = path.join(trackedDataDir, 'pod_quiz_pool_snabbit.json');
+    const targetQuiz = path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json');
+    if (fs.existsSync(trackedQuiz) && !fs.existsSync(targetQuiz)) {
+        fs.copyFileSync(trackedQuiz, targetQuiz);
+        console.log('[Seed Asset] Copied pod_quiz_pool_snabbit.json to server_data directory');
+    }
+} catch (seedErr) {
+    console.warn('[Seed Asset Warning]', seedErr.message);
+}
+
 function saveBase64MediaToFile(dataUrl, prefix) {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
     try {
@@ -2113,6 +2133,24 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
         return res.json({ success: true, url: savedPath, diskPath: absoluteDiskPath });
     } catch (err) {
         console.error('Upload media API error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) => {
+    try {
+        const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+
+        if (fs.existsSync(poolPath)) {
+            const raw = fs.readFileSync(poolPath, 'utf8');
+            const data = JSON.parse(raw);
+            return res.json({ success: true, count: data.length, data });
+        }
+        return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
+    } catch (err) {
+        console.error('Error serving pod quiz pool:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
