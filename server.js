@@ -216,6 +216,7 @@ if (!store.submissionsRevision) {
 }
 
 // Auto-migration for Chandra's Day 1 DIP submission to credit 6 LCs as required by Creator
+// and Chandra's Day 1 IMMERSE submission to ensure day is 1 (not 4)
 if (Array.isArray(store.submissions)) {
     let touched = false;
     store.submissions.forEach(s => {
@@ -227,6 +228,12 @@ if (Array.isArray(store.submissions)) {
             s.userPhone = '8217707977';
             touched = true;
             console.log('[Store Migration] Updated sub_1788004511662_n00meu to 6 LCs for Chandra');
+        }
+        if (s.id === 'sub_1788769419339_b2k2d' && (Number(s.day) !== 1 || Number(s.sessionDay) !== 1)) {
+            s.day = 1;
+            s.sessionDay = 1;
+            touched = true;
+            console.log('[Store Migration] Updated sub_1788769419339_b2k2d to Day 1 for Chandra');
         }
     });
     if (touched) {
