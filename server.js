@@ -2262,6 +2262,215 @@ app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) =>
     }
 });
 
+// -------------------------------------------------------------
+// Script Speech Normalizer for ElevenLabs Voice Generation
+// Eliminates bullets, code, bold/italic markers, and formatting artifacts
+// -------------------------------------------------------------
+function cleanScriptForSpeech(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    let cleaned = text;
+
+    // 1. Remove code blocks and inline code
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, ' ');
+    cleaned = cleaned.replace(/`([^`]+)`/g, '$1');
+
+    // 2. Remove markdown images and links (retain readable link text)
+    cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, ' ');
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+    // 3. Remove raw HTML tags
+    cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+
+    // 4. Clean blockquotes and markdown headers
+    cleaned = cleaned.replace(/^[ \t]*>[ \t]*/gm, ' ');
+    cleaned = cleaned.replace(/^[ \t]*#{1,6}[ \t]+/gm, ' ');
+
+    // 5. Ordered bold/italic markdown stripping (strictly ordered: 3, 2, 1)
+    cleaned = cleaned.replace(/\*\*\*([^*]+)\*\*\*/g, '$1');
+    cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+    cleaned = cleaned.replace(/\*([^*]+)\*/g, '$1');
+    cleaned = cleaned.replace(/___([^_]+)___/g, '$1');
+    cleaned = cleaned.replace(/__([^_]+)__/g, '$1');
+    cleaned = cleaned.replace(/_([^_]+)_/g, '$1');
+
+    // 6. Line by line processing for bullet lists, numbering & natural speech cadence
+    const lines = cleaned.split(/\r?\n/);
+    const speechLines = [];
+
+    for (let rawLine of lines) {
+        let line = rawLine.trim();
+        if (!line) continue;
+
+        // Strip bullet marks (•, -, *, +, etc.)
+        line = line.replace(/^[•\-\*\+]\s+/, '');
+        // Strip numbered list prefixes (1., 2), 1.1, etc.)
+        line = line.replace(/^\d+[\.\)]\s+/, '');
+        line = line.trim();
+        if (!line) continue;
+
+        // Pronunciation & acronym normalizer for specific spoken artifacts
+        line = line.replace(/\bAU\b/g, 'as you');
+        line = line.replace(/&/g, ' and ');
+        line = line.replace(/%/g, ' percent');
+        line = line.replace(/US\$\s*(\d+)/gi, '$1 US dollars');
+        line = line.replace(/\$\s*(\d+)/g, '$1 dollars');
+        line = line.replace(/\+/g, ' plus ');
+
+        // Trailing cadence punctuation: ensure natural vocal pause without doubling punctuation
+        if (!/[.!?:;,—–]$/.test(line)) {
+            line += '.';
+        }
+
+        speechLines.push(line);
+    }
+
+    // 7. Join with space and normalize any whitespace
+    return speechLines.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// In-memory rate limiter for voice synthesis (max 3 calls per 3 minutes to prevent credit draining)
+const voiceGenRateLimiter = new Map(); // ip -> [timestamps]
+
+// Creator endpoint: generates authentic British podcast audio via ElevenLabs
+// Strictly protected by Creator Bearer token and rate-limited
+app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], async (req, res) => {
+    try {
+        // 1. Auth Gate: Require valid creator Bearer token
+        if (!verifyCreatorToken(req)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Unauthorized: Valid creator session token required to generate voice audio.'
+            });
+        }
+
+        // 2. Rate Limiting: Max 3 requests per 3 minutes
+        const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+        const now = Date.now();
+        const timestamps = (voiceGenRateLimiter.get(clientIp) || []).filter(t => now - t < 180000);
+        if (timestamps.length >= 3) {
+            return res.status(429).json({
+                success: false,
+                error: 'Rate limit exceeded: You can generate up to 3 podcast narrations per 3 minutes to protect your ElevenLabs credits.'
+            });
+        }
+        timestamps.push(now);
+        voiceGenRateLimiter.set(clientIp, timestamps);
+
+        // 3. Environment check
+        const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
+        if (!elevenKey) {
+            return res.status(503).json({
+                success: false,
+                error: 'ElevenLabs configuration missing: ELEVENLABS_API_KEY is not set in .env on the server.'
+            });
+        }
+
+        const { text, voiceId, milestoneId, dateKey } = req.body || {};
+        const configuredVoiceId = (process.env.ELEVENLABS_VOICE_ID || '').trim();
+        const targetVoiceId = (voiceId && typeof voiceId === 'string' && voiceId.trim()) 
+            ? voiceId.trim() 
+            : configuredVoiceId;
+
+        if (!targetVoiceId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Voice ID missing: Provide a voiceId or set ELEVENLABS_VOICE_ID in .env.'
+            });
+        }
+
+        // Voice ID guard: prioritize configured cloned voice ID
+        const effectiveVoiceId = configuredVoiceId || targetVoiceId;
+
+        // 4. Text cleaning
+        if (!text || typeof text !== 'string' || !text.trim()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Script text is required to synthesize speech.'
+            });
+        }
+
+        const cleanedSpeechText = cleanScriptForSpeech(text);
+        if (!cleanedSpeechText) {
+            return res.status(400).json({
+                success: false,
+                error: 'Script text contained no readable prose after cleaning.'
+            });
+        }
+
+        console.log(`[ElevenLabs Voice Synthesis] Synthesizing ${cleanedSpeechText.length} chars with voice: ${effectiveVoiceId}...`);
+
+        // 5. Call ElevenLabs TTS API with British Voice Model Calibration
+        const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(effectiveVoiceId)}?output_format=mp3_44100_128`;
+        const response = await fetch(elevenUrl, {
+            method: 'POST',
+            headers: {
+                'xi-api-key': elevenKey,
+                'Content-Type': 'application/json',
+                'Accept': 'audio/mpeg'
+            },
+            body: JSON.stringify({
+                text: cleanedSpeechText,
+                model_id: 'eleven_multilingual_v2',
+                voice_settings: {
+                    stability: 0.65,
+                    similarity_boost: 0.85,
+                    style: 0.0,
+                    use_speaker_boost: true
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errStatus = response.status;
+            let errDetail = '';
+            try {
+                const errJson = await response.json();
+                errDetail = errJson.detail?.message || errJson.message || JSON.stringify(errJson);
+            } catch(e) {
+                errDetail = await response.text();
+            }
+
+            console.error(`[ElevenLabs API Error ${errStatus}]:`, errDetail);
+            if (errStatus === 401) {
+                return res.status(401).json({ success: false, error: 'Unauthorized: Invalid ElevenLabs API Key in server .env' });
+            } else if (errStatus === 402 || (errDetail && /quota|credit|balance/i.test(errDetail))) {
+                return res.status(402).json({ success: false, error: 'ElevenLabs quota/credits exhausted. Please check your ElevenLabs subscription.' });
+            } else if (errStatus === 429) {
+                return res.status(429).json({ success: false, error: 'ElevenLabs rate limit exceeded. Please wait a minute and retry.' });
+            }
+            return res.status(errStatus).json({ success: false, error: `ElevenLabs generation failed (${errStatus}): ${errDetail}` });
+        }
+
+        // 6. Stream/save buffer safely to disk
+        const arrayBuf = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+
+        // Deterministic collision-safe filename: pod_m${msId}_${dateKey}.mp3
+        const safeMsId = parseInt(milestoneId, 10) || 1;
+        const safeDateKey = String(dateKey || 'ep1').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const fileName = `pod_m${safeMsId}_${safeDateKey}.mp3`;
+        const filePath = path.join(UPLOADS_DIR, fileName);
+
+        fs.writeFileSync(filePath, buffer);
+        console.log(`[ElevenLabs Voice Generated] Saved ${buffer.length} bytes to ${fileName}`);
+
+        const publicUrl = `/gamification/uploads/${fileName}`;
+        return res.json({
+            success: true,
+            audioUrl: publicUrl,
+            fileName: fileName,
+            cleanedTextPreview: cleanedSpeechText.slice(0, 140) + '...',
+            charCount: cleanedSpeechText.length,
+            fileSizeBytes: buffer.length
+        });
+
+    } catch (err) {
+        console.error('Error generating ElevenLabs voice audio:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Learner-facing endpoint: returns 3 random questions with correctOption & explanation STRIPPED
 // User-bound with rate limiting (prevents brute-force key harvesting)
 app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'], (req, res) => {

@@ -7879,6 +7879,8 @@ function saveAdminPodCheckinConfig(dateKey) {
         }
     });
 
+    const narrationScript = document.getElementById('podNarrationScriptText')?.value.trim() || '';
+
     const dayConfig = {
         date: chosenDate,
         dateKey: chosenDate,
@@ -7888,6 +7890,8 @@ function saveAdminPodCheckinConfig(dateKey) {
         title: audioTitle,
         audioTitle: audioTitle,
         audioUrl: audioUrl,
+        articleText: narrationScript,
+        description: narrationScript,
         lcOnTime: 33,
         lcLate: 0,
         startTime: '00:00',
@@ -8282,6 +8286,132 @@ function filterPodInspectorQuestions() {
 }
 window.filterPodInspectorQuestions = filterPodInspectorQuestions;
 
+async function synthesizePodElevenLabsAudio(dateKey) {
+    const scriptEl = document.getElementById('podNarrationScriptText');
+    const scriptText = (scriptEl ? scriptEl.value : '').trim();
+
+    if (!scriptText) {
+        alert('Please provide narration script text in the box above to synthesize your podcast audio with ElevenLabs.');
+        return;
+    }
+
+    // 1. Ensure creator token is present
+    let token = window._creatorAuthToken;
+    if (!token) {
+        try { token = sessionStorage.getItem('cmpli_creator_token'); } catch(e) {}
+    }
+
+    if (!token) {
+        const enteredSecret = prompt('🔐 SimpliPod Creator Authentication:\n\nEnter Creator Security Key to synthesize ElevenLabs podcast audio:');
+        if (!enteredSecret || !enteredSecret.trim()) {
+            if (typeof showToast === 'function') showToast('Creator Security Key required.', 'warning');
+            return;
+        }
+
+        try {
+            const tokenRes = await apiFetch('/api/auth/creator-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminSecret: enteredSecret.trim() })
+            }).then(r => r.json());
+
+            if (!tokenRes || !tokenRes.success || !tokenRes.token) {
+                const errMsg = tokenRes?.error || 'Authentication failed: Invalid Creator Security Key.';
+                if (typeof showToast === 'function') showToast(errMsg, 'error');
+                alert(errMsg);
+                return;
+            }
+
+            token = tokenRes.token;
+            window._creatorAuthToken = token;
+            try { sessionStorage.setItem('cmpli_creator_token', token); } catch(e) {}
+        } catch(authErr) {
+            alert('Authentication network error.');
+            return;
+        }
+    }
+
+    const btn = document.getElementById('btnSynthesizeElevenLabs');
+    const originalBtnHtml = btn ? btn.innerHTML : '';
+    const statusEl = document.getElementById('podElevenLabsStatus');
+
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin text-amber-300"></i> Synthesizing Voice...`;
+        }
+        if (statusEl) {
+            statusEl.innerHTML = `<span class="text-amber-400 font-semibold flex items-center gap-1.5"><i class="fas fa-circle-notch fa-spin"></i> Generating British cloned voice narration via ElevenLabs... Please wait 5–15 seconds.</span>`;
+        }
+
+        const titleEl = document.getElementById('podAudioTitle');
+        const episodeTitle = titleEl ? titleEl.value : '';
+
+        const res = await apiFetch('/api/pod/generate-voice', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                text: scriptText,
+                milestoneId: activeAdminMilestoneId || 1,
+                dateKey: dateKey || activeAdminDateKey,
+                title: episodeTitle
+            })
+        }).then(r => r.json());
+
+        if (!res || !res.success || !res.audioUrl) {
+            const errMsg = res?.error || 'Voice generation failed. Please check your ElevenLabs configuration in .env.';
+            if (statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold"><i class="fas fa-exclamation-triangle"></i> ${errMsg}</span>`;
+            alert(errMsg);
+            return;
+        }
+
+        // 2. Success! Set audio URL in the form
+        const audioInput = document.getElementById('podAudioUrl');
+        if (audioInput) {
+            audioInput.value = res.audioUrl;
+        }
+
+        // 3. Update Audio Status & Preview player
+        const audioStatusEl = document.getElementById('podAudioStatus');
+        if (audioStatusEl) {
+            audioStatusEl.innerHTML = `<span class="text-xs text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> ElevenLabs British Cloned Audio Generated & Ready (${res.charCount || ''} chars)</span>`;
+        }
+
+        const previewEl = document.getElementById('podAudioPreviewPlayer');
+        if (previewEl) {
+            previewEl.innerHTML = `
+                <div class="mt-2 p-3 bg-slate-950 rounded-xl border border-indigo-500/40 flex items-center gap-3 animate-fade-in-up">
+                    <div class="w-9 h-9 rounded-lg bg-indigo-600/30 text-indigo-400 flex items-center justify-center shrink-0">
+                        <i class="fas fa-play text-xs"></i>
+                    </div>
+                    <div class="flex-1">
+                        <audio controls autoplay class="w-full h-8 rounded-lg" src="${res.audioUrl}"></audio>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (statusEl) {
+            statusEl.innerHTML = `<span class="text-emerald-400 font-semibold flex items-center gap-1.5"><i class="fas fa-check-circle"></i> Synthesized successfully! Audio stream attached to episode. Click Save below to persist.</span>`;
+        }
+        if (typeof showToast === 'function') showToast('ElevenLabs voice generated and attached successfully!', 'success');
+
+    } catch (err) {
+        console.error('Synthesis error:', err);
+        if (statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-semibold"><i class="fas fa-times-circle"></i> Network error generating audio: ${err.message}</span>`;
+        alert('Network error connecting to ElevenLabs voice synthesis API.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+        }
+    }
+}
+window.synthesizePodElevenLabsAudio = synthesizePodElevenLabsAudio;
+
 function loadAdminCheckinEditor(dateKey, preferredDayNum) {
     activeAdminDateKey = dateKey;
     renderAdminCheckinsList(); // Refresh list to show active state
@@ -8430,6 +8560,38 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                             </div>
                         </div>
                     ` : ''}
+                </div>
+            </div>
+
+            <!-- ElevenLabs Professional Cloned British Voice Studio -->
+            <div class="glass-card p-4 border-indigo-500/30 bg-gradient-to-br from-slate-900 via-indigo-950/20 to-slate-900 rounded-2xl mb-6 space-y-3">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-8 h-8 rounded-xl bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 flex items-center justify-center text-sm shadow-inner">
+                            <i class="fas fa-microphone-alt"></i>
+                        </span>
+                        <div>
+                            <h6 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                ElevenLabs Authentic Voice Studio 
+                                <span class="badge-pill bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[9px] font-bold">British Cloned Voice</span>
+                            </h6>
+                            <p class="text-[11px] text-slate-400">Synthesizes podcast audio using your authentic ElevenLabs British voice clone.</p>
+                        </div>
+                    </div>
+                    <button type="button" id="btnSynthesizeElevenLabs" onclick="synthesizePodElevenLabsAudio('${dateKey}')" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 shrink-0">
+                        <i class="fas fa-wand-magic-sparkles text-amber-300"></i> Synthesize British Voice
+                    </button>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[11px] font-bold text-slate-400">Narration Script (Auto-cleans bullets, markdown formatting & pronunciation artifacts)</label>
+                        <span class="text-[10px] text-indigo-300 font-mono" id="scriptCharCounter">${(savedConfig.articleText || savedConfig.description || '').length} characters</span>
+                    </div>
+                    <textarea id="podNarrationScriptText" rows="4" placeholder="Paste or write today's podcast narration script. Bullets, markdown symbols, and abbreviations are automatically converted to natural British vocal cadence..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 focus:border-indigo-500 custom-scrollbar leading-relaxed" oninput="const c = document.getElementById('scriptCharCounter'); if(c) c.innerText = this.value.length + ' characters';">${(savedConfig.articleText || savedConfig.description || '').replace(/"/g, '&quot;')}</textarea>
+                </div>
+                <div id="podElevenLabsStatus" class="text-[11px] text-slate-400 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-indigo-400"></i>
+                    <span>Tuned for British delivery: Multi-lingual v2 · Stability 0.65 · Similarity 0.85 · Natural cadence pauses</span>
                 </div>
             </div>
 
