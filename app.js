@@ -11057,10 +11057,7 @@ function getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName) {
 }
 window.getMilestoneSessionDate = getMilestoneSessionDate;
 
-// Resolves session date for a given learner Day N:
-// The learner's milestoneStartDate anchors their Day 1 — this is NEVER overridden by creator configs.
-// Creator configs are date-keyed; we look up the config AT the learner's computed session date.
-// The dayNumber stored inside a config is only used for admin display, NOT for date resolution.
+// Resolves session date: creator-configured manual/rescheduled dates and explicit dayNumber take precedence over default math
 function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum) {
     const normMod = normalizeLevelUpType(moduleName || 'dip');
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && (customMilestoneConfigs[msId][normMod] || customMilestoneConfigs[msId][moduleName])) || {};
@@ -11068,7 +11065,7 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
 
     // Helper to test if a config object has content
     const isConfigValid = (c) => Boolean(
-        c && (
+        c && !c.cancelled && (
             (c.title && c.title.trim()) ||
             (c.mainQuestion && c.mainQuestion.trim()) ||
             (c.audioUrl && c.audioUrl.trim()) ||
@@ -11076,11 +11073,49 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
         )
     );
 
-    // ALWAYS compute the learner's session date from their start date — this is the canonical date for Day N
+    // 1. PRIMARY MATCH: Look for explicit dayNumber / sessionDay assigned to this targetDay
+    for (const k of Object.keys(msConfigs)) {
+        const c = msConfigs[k];
+        if (!c || c.cancelled) continue;
+        const cDay = Number(c.dayNumber || c.sessionDay || c.day);
+        if (cDay === targetDay && isConfigValid(c)) {
+            const dateKey = c.date || c.dateKey || k;
+            const dateObj = new Date(dateKey + 'T00:00:00');
+            return {
+                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
+                cardDateKey: dateKey,
+                isCreatorScheduled: true,
+                dayNumber: targetDay,
+                config: c,
+                isCancelled: false,
+                isExtra: Boolean(c.extra)
+            };
+        }
+    }
+
+    // 2. SECONDARY MATCH: Title explicitly matching "Session N:" or "Day N:"
+    for (const k of Object.keys(msConfigs)) {
+        const c = msConfigs[k];
+        if (!c || !c.title || c.cancelled) continue;
+        const m = String(c.title).match(/(?:Session|Day)\s*(\d+)/i);
+        if (m && Number(m[1]) === targetDay && isConfigValid(c)) {
+            const dateKey = c.date || c.dateKey || k;
+            const dateObj = new Date(dateKey + 'T00:00:00');
+            return {
+                cardDate: !isNaN(dateObj.getTime()) ? dateObj : getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName),
+                cardDateKey: dateKey,
+                isCreatorScheduled: true,
+                dayNumber: targetDay,
+                config: c,
+                isCancelled: false,
+                isExtra: Boolean(c.extra)
+            };
+        }
+    }
+
+    // 3. TERTIARY MATCH: Standard scheduled date
     const defaultDate = getMilestoneSessionDate(milestoneStartDate, targetDay, moduleName);
     const defaultDateKey = getLocalDateKey(defaultDate);
-
-    // Look up creator config AT the learner's session date (date-keyed lookup, not dayNumber-keyed)
     const configAtDate = msConfigs[defaultDateKey];
     const hasValidConfig = isConfigValid(configAtDate);
 
@@ -11089,7 +11124,9 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
         cardDateKey: defaultDateKey,
         isCreatorScheduled: false,
         dayNumber: targetDay,
-        config: hasValidConfig ? configAtDate : null
+        config: hasValidConfig ? configAtDate : null,
+        isCancelled: Boolean(configAtDate && configAtDate.cancelled),
+        isExtra: Boolean(configAtDate && configAtDate.extra)
     };
 }
 window.getResolvedMilestoneDateKey = getResolvedMilestoneDateKey;
@@ -12566,7 +12603,11 @@ function switchMilestoneTab(moduleName, btnElement) {
         if (hasContent) {
             orderedSessionDateKeys.push(dk);
             if (cfg.dayNumber && !standardSlotDateMap[dk]) {
-                standardSlotDateMap[dk] = Number(cfg.dayNumber);
+                const candidateDay = Number(cfg.dayNumber);
+                const alreadyUsed = Object.values(standardSlotDateMap).includes(candidateDay);
+                if (!alreadyUsed) {
+                    standardSlotDateMap[dk] = candidateDay;
+                }
             }
         }
     });
