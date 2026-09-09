@@ -6744,6 +6744,9 @@ function openAdminMilestone(id) {
         }).join('');
     }
 
+    const btnInspect = document.getElementById('btnInspectPodQuizPool');
+    if (btnInspect) btnInspect.style.display = (activeAdminModule === 'pod') ? 'inline-flex' : 'none';
+
     const btnCheckins = document.getElementById('btnTabCheckins');
     if (isCampusPartner) {
         if (btnCheckins) btnCheckins.style.display = 'none';
@@ -6964,6 +6967,11 @@ window.saveAdminPrereqsForm = saveAdminPrereqsForm;
 
 function switchAdminModuleTab(mod) {
     activeAdminModule = mod;
+    const btnInspect = document.getElementById('btnInspectPodQuizPool');
+    if (btnInspect) {
+        btnInspect.style.display = (mod === 'pod') ? 'inline-flex' : 'none';
+    }
+
     document.querySelectorAll('[id^="adminModuleWrapper_"]').forEach(el => {
         el.className = 'flex items-center gap-1.5 text-slate-400 hover:bg-slate-800 hover:text-white px-3 py-2 rounded-t-xl font-bold text-xs transition-all cursor-pointer';
     });
@@ -8073,9 +8081,14 @@ async function openPodQuizPoolInspectorModal() {
                             Case Study: <strong>Snabbit — The 15-Minute Beauty Fix (Sub-15 Min Domestic Services)</strong>. Full answer keys, choices & explanations.
                         </p>
                     </div>
-                    <button onclick="document.getElementById('podQuizInspectorModal').remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="downloadPodQuizPoolCSV()" class="px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm" title="Download all 50 questions with choices & answer keys as CSV">
+                            <i class="fas fa-file-csv text-emerald-400"></i> <span class="hidden sm:inline">Download</span> CSV
+                        </button>
+                        <button onclick="document.getElementById('podQuizInspectorModal').remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Filters & Search Bar -->
@@ -8101,9 +8114,14 @@ async function openPodQuizPoolInspectorModal() {
                 <!-- Footer -->
                 <div class="pt-3 border-t border-slate-800 flex items-center justify-between shrink-0">
                     <span class="text-xs text-slate-400" id="podInspectorMatchCount">Showing ${questions.length} of ${questions.length} questions</span>
-                    <button type="button" onclick="document.getElementById('podQuizInspectorModal').remove()" class="btn-primary py-2 px-5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500">
-                        Close Inspector
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="downloadPodQuizPoolCSV()" class="btn-secondary py-2 px-4 text-xs font-bold text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/20 flex items-center gap-1.5">
+                            <i class="fas fa-download text-emerald-400"></i> Export CSV
+                        </button>
+                        <button type="button" onclick="document.getElementById('podQuizInspectorModal').remove()" class="btn-primary py-2 px-5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500">
+                            Close Inspector
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -8114,6 +8132,58 @@ async function openPodQuizPoolInspectorModal() {
     renderPodInspectorQuestions(questions);
 }
 window.openPodQuizPoolInspectorModal = openPodQuizPoolInspectorModal;
+
+function downloadPodQuizPoolCSV() {
+    const questions = window._podQuizPool50 || [];
+    if (!questions || questions.length === 0) {
+        alert('No questions loaded to download.');
+        return;
+    }
+
+    const headers = ['ID', 'Question', 'Category', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Option Index', 'Correct Answer', 'Explanation', 'Points'];
+    const escapeCsv = (val) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+    };
+
+    const rows = questions.map((q, idx) => {
+        const opts = q.options || [];
+        const optA = opts[0] || '';
+        const optB = opts[1] || '';
+        const optC = opts[2] || '';
+        const optD = opts[3] || '';
+        const cIdx = (q.correctOption !== undefined) ? q.correctOption : 0;
+        const cAns = opts[cIdx] || '';
+        return [
+            escapeCsv(q.id || `q_${idx + 1}`),
+            escapeCsv(q.title || q.question || ''),
+            escapeCsv(q.category || 'General'),
+            escapeCsv(optA),
+            escapeCsv(optB),
+            escapeCsv(optC),
+            escapeCsv(optD),
+            escapeCsv(cIdx),
+            escapeCsv(cAns),
+            escapeCsv(q.explanation || ''),
+            escapeCsv(q.pts || 11)
+        ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const dateStr = (typeof getLocalDateKey === 'function') ? getLocalDateKey(new Date()) : 'export';
+    link.setAttribute('download', `simplipod_50_questions_bank_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    if (typeof showToast === 'function') showToast('Downloaded 50 SimpliPod questions CSV', 'success');
+}
+window.downloadPodQuizPoolCSV = downloadPodQuizPoolCSV;
 
 function renderPodInspectorQuestions(list) {
     const container = document.getElementById('podInspectorQuestionsList');
