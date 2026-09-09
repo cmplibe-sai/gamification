@@ -850,7 +850,7 @@ function normalizeModule(val) {
 function normalizeTime(val, fallback) {
     if (!val) return fallback;
     const s = String(val).trim();
-    const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+    const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(am|pm)$/i);
     if (m12) {
         let h = parseInt(m12[1], 10);
         const min = (m12[2] || '00').padStart(2, '0');
@@ -859,7 +859,7 @@ function normalizeTime(val, fallback) {
         if (ap === 'am' && h === 12) h = 0;
         return `${String(h).padStart(2, '0')}:${min}`;
     }
-    const m24 = s.match(/^(\d{1,2}):(\d{2})$/);
+    const m24 = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
     if (m24) {
         return `${m24[1].padStart(2, '0')}:${m24[2]}`;
     }
