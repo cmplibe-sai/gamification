@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const dns = require('dns');
@@ -2139,19 +2140,74 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
 
 // In-memory store for active learner quiz sessions with 2-hour TTL
 const podQuizSessions = new Map();
+const userSessionRates = new Map();
+const validCreatorTokens = new Map();
+
 setInterval(() => {
     const now = Date.now();
     for (const [sId, sData] of podQuizSessions.entries()) {
         if (sData.expiresAt < now) podQuizSessions.delete(sId);
     }
+    for (const [uId, timestamps] of userSessionRates.entries()) {
+        const recent = timestamps.filter(t => now - t < 600000);
+        if (recent.length === 0) userSessionRates.delete(uId);
+        else userSessionRates.set(uId, recent);
+    }
+    for (const [tok, exp] of validCreatorTokens.entries()) {
+        if (exp < now) validCreatorTokens.delete(tok);
+    }
 }, 300000);
 
-// Creator / Admin endpoint to inspect the full 50-question pool with answer keys
+function verifyCreatorToken(req) {
+    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.query.token;
+    if (!authHeader || typeof authHeader !== 'string') return false;
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!validCreatorTokens.has(cleanToken)) return false;
+    const expiry = validCreatorTokens.get(cleanToken);
+    if (Date.now() > expiry) {
+        validCreatorTokens.delete(cleanToken);
+        return false;
+    }
+    return true;
+}
+
+// Issues a cryptographic creator session token to verified admin/creator credentials
+app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (req, res) => {
+    try {
+        const { email, phone } = req.body || {};
+        const defaultAdmins = [
+            'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
+            'saikumaryadiki@gmail.com', 'admin@cmplibe.com'
+        ];
+        const defaultAdminPhones = ['6309764212', '9845421644'];
+        const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+        const allAdmins = [...defaultAdmins, ...envAdmins];
+
+        const cleanEmail = String(email || '').toLowerCase().trim();
+        const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+
+        const isAuthorized = allAdmins.includes(cleanEmail) || (cleanPhone && (allAdmins.includes(cleanPhone) || defaultAdminPhones.includes(cleanPhone)));
+        if (!isAuthorized) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Access restricted to authorized creator credentials.' });
+        }
+
+        const token = `cmpli_crt_${crypto.randomBytes(32).toString('hex')}`;
+        validCreatorTokens.set(token, Date.now() + (24 * 3600 * 1000)); // 24-hour validity
+        return res.json({ success: true, token });
+    } catch(err) {
+        console.error('Error issuing creator token:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Creator / Admin endpoint: strictly protected by signed creator session token
 app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) => {
     try {
-        const isCreator = req.query.role === 'creator' || req.headers['x-role'] === 'creator' || req.query.admin === 'true' || req.headers['x-creator-access'] === 'true';
-        if (!isCreator) {
-            return res.status(403).json({ success: false, error: 'Access denied: Creator authentication required to inspect full answer keys.' });
+        if (!verifyCreatorToken(req)) {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Access denied: Valid authenticated creator bearer token required to inspect full answer keys.' 
+            });
         }
 
         const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
@@ -2171,6 +2227,7 @@ app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) =>
 });
 
 // Learner-facing endpoint: returns 3 random questions with correctOption & explanation STRIPPED
+// User-bound with rate limiting (prevents brute-force key harvesting)
 app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'], (req, res) => {
     try {
         const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
@@ -2179,6 +2236,23 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
 
         if (!fs.existsSync(poolPath)) {
             return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
+        }
+
+        const userId = String(req.query.userId || req.headers['x-user-id'] || 'anon').trim();
+        const now = Date.now();
+
+        // Rate limit: max 6 sessions per 10 minutes per user to prevent answer bank harvesting
+        if (userId !== 'anon') {
+            const history = userSessionRates.get(userId) || [];
+            const recent = history.filter(t => now - t < 600000);
+            if (recent.length >= 6) {
+                return res.status(429).json({ 
+                    success: false, 
+                    error: 'Rate limit exceeded: Too many quiz sessions generated. Please complete your active quiz.' 
+                });
+            }
+            recent.push(now);
+            userSessionRates.set(userId, recent);
         }
 
         const raw = fs.readFileSync(poolPath, 'utf8');
@@ -2214,6 +2288,7 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
 
         podQuizSessions.set(sessionId, {
             sessionId,
+            userId,
             expiresAt: Date.now() + (2 * 3600 * 1000), // 2 hours TTL
             answers: sessionAnswers,
             explanations: sessionExplanations,
@@ -2236,12 +2311,18 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
 // Server-side quiz grading endpoint: calculates score and returns results with explanations post-submission
 app.post(['/api/pod/grade-session', '/gamification/api/pod/grade-session'], (req, res) => {
     try {
-        const { sessionId, responses } = req.body || {};
+        const { sessionId, userId, responses } = req.body || {};
         if (!sessionId || !podQuizSessions.has(sessionId)) {
             return res.status(400).json({ success: false, error: 'Invalid or expired quiz session. Please restart the quiz.' });
         }
 
         const session = podQuizSessions.get(sessionId);
+
+        // Verify session ownership if bound
+        if (session.userId && session.userId !== 'anon' && userId && String(userId).trim() !== session.userId) {
+            return res.status(403).json({ success: false, error: 'Session ownership verification failed.' });
+        }
+
         let totalScore = 0;
         let maxScore = 0;
 
@@ -2266,7 +2347,7 @@ app.post(['/api/pod/grade-session', '/gamification/api/pod/grade-session'], (req
             };
         });
 
-        // Invalidate session so it cannot be re-submitted
+        // Invalidate session so it cannot be re-submitted or harvested
         podQuizSessions.delete(sessionId);
 
         return res.json({

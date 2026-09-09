@@ -7952,9 +7952,32 @@ try {
 
 async function loadPodQuizPool() {
     try {
-        const res = await apiFetch('/api/pod/quiz-pool?role=creator').then(r => r.json());
+        if (!window._creatorAuthToken && typeof currentUser !== 'undefined' && currentUser) {
+            try {
+                const tokenRes = await apiFetch('/api/auth/creator-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: currentUser.email || '', 
+                        phone: currentUser.phone || '' 
+                    })
+                }).then(r => r.json());
+                if (tokenRes && tokenRes.success && tokenRes.token) {
+                    window._creatorAuthToken = tokenRes.token;
+                }
+            } catch(tokErr) {}
+        }
+
+        const headers = {};
+        if (window._creatorAuthToken) {
+            headers['Authorization'] = `Bearer ${window._creatorAuthToken}`;
+        }
+
+        const res = await apiFetch('/api/pod/quiz-pool', { headers }).then(r => r.json());
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
             window._podQuizPool50 = res.data;
+        } else if (res && res.error) {
+            console.warn('Creator question bank access notice:', res.error);
         }
     } catch(err) {
         console.warn('Could not fetch creator pod quiz pool:', err);
@@ -9851,7 +9874,8 @@ async function openPodSessionModal(dayNum, dateKey) {
     let learnerQuestions = [];
 
     try {
-        const sessRes = await apiFetch('/api/pod/session-questions?count=3').then(r => r.json());
+        const uId = (currentUser && (currentUser._id || currentUser.id)) || 'anon';
+        const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}`).then(r => r.json());
         if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
             window._activePodSessionId = sessRes.sessionId;
             learnerQuestions = sessRes.questions;
@@ -10196,7 +10220,11 @@ async function submitPodSessionQuiz() {
             const gradeRes = await apiFetch('/api/pod/grade-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId: window._activePodSessionId, responses: rawResponses })
+                body: JSON.stringify({ 
+                    sessionId: window._activePodSessionId, 
+                    userId: String(currentUser._id || currentUser.id || 'usr_anon'),
+                    responses: rawResponses 
+                })
             }).then(r => r.json());
 
             if (gradeRes && gradeRes.success) {
@@ -10208,6 +10236,7 @@ async function submitPodSessionQuiz() {
         }
     }
 
+    const answers = [];
     activePodSessionQuestions.forEach((q, idx) => {
         const selected = document.querySelector(`input[name="pod_session_q_${idx}"]:checked`);
         const selectedIdx = parseInt(selected.value, 10);
