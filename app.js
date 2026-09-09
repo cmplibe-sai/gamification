@@ -6823,30 +6823,39 @@ function renderAdminCheckinsList() {
     if (isNaN(cohortStartDate.getTime())) cohortStartDate = new Date();
     cohortStartDate.setHours(0,0,0,0);
 
-    // Map each saved date to its explicit or inferred day number
+    // Map each saved date to its canonical day number by computing which standard session slot it falls on.
+    // We intentionally IGNORE the stored cfg.dayNumber field here to avoid duplicates from stale configs.
+    let sequentialExtra = totalSessions; // Extra (off-schedule) sessions get day numbers > totalSessions
     const listItems = savedDates.map((dateKey, idx) => {
         const cfg = msConfigs[dateKey] || {};
-        let dayNum = Number(cfg.dayNumber || cfg.sessionDay || cfg.day);
-        if (!dayNum && cfg.title) {
-            const m = String(cfg.title).match(/(?:Session|Day)\s*(\d+)/i);
-            if (m) dayNum = parseInt(m[1], 10);
-        }
-        if (!dayNum) {
-            for (let d = 1; d <= totalSessions; d++) {
-                if (getLocalDateKey(getMilestoneSessionDate(cohortStartDate, d, activeAdminModule)) === dateKey) {
-                    dayNum = d;
-                    break;
-                }
+        // Skip cancelled sessions — still show in admin list but marked cancelled
+        const isCancelled = cfg.cancelled === true;
+        const isExtra = cfg.extra === true;
+
+        // Find which standard slot this dateKey matches (MWF for immerse, Mon-Sat for dip/pod)
+        let dayNum = null;
+        for (let d = 1; d <= totalSessions; d++) {
+            if (getLocalDateKey(getMilestoneSessionDate(cohortStartDate, d, activeAdminModule)) === dateKey) {
+                dayNum = d;
+                break;
             }
         }
-        if (!dayNum) dayNum = idx + 1;
-        const defaultDateForDay = getLocalDateKey(getMilestoneSessionDate(cohortStartDate, dayNum, activeAdminModule));
-        const isRescheduled = dateKey !== defaultDateForDay;
+        // If not on standard schedule: extra or genuinely rescheduled
+        const isOnStandardSchedule = dayNum !== null;
+        if (!dayNum) {
+            sequentialExtra++;
+            dayNum = sequentialExtra;
+        }
+
+        // RESCHEDULED: only show badge when creator explicitly flagged it OR date is off the standard grid
+        const isRescheduled = cfg.rescheduled === true || (!isOnStandardSchedule && !isExtra && !isCancelled);
 
         return {
             dateKey: dateKey,
             dayNum: dayNum,
             isRescheduled: isRescheduled,
+            isExtra: isExtra,
+            isCancelled: isCancelled,
             cfg: cfg
         };
     });
@@ -6881,12 +6890,21 @@ function renderAdminCheckinsList() {
         listItems.forEach(item => {
             const isActive = item.dateKey === activeAdminDateKey;
             const dateStr = new Date(item.dateKey + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-            
-            html += `<button onclick="loadAdminCheckinEditor('${item.dateKey}', ${item.dayNum})" class="w-full text-left p-3 rounded-lg text-sm font-bold transition-all flex justify-between items-center ${isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}">
+            const dayLabel = item.isCancelled ? `Day ${item.dayNum} ✕` : `Day ${item.dayNum}`;
+            const rowStyle = item.isCancelled
+                ? (isActive ? 'bg-rose-900/40 text-rose-200 shadow-md' : 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300 opacity-60')
+                : (isActive ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800 hover:text-white');
+            const dayBadgeStyle = item.isCancelled
+                ? (isActive ? 'bg-white/20 text-white' : 'bg-rose-950 text-rose-400 border border-rose-800/40')
+                : (isActive ? 'bg-white/20 text-white' : 'bg-indigo-950 text-indigo-300 border border-indigo-800/40');
+
+            html += `<button onclick="loadAdminCheckinEditor('${item.dateKey}', ${item.dayNum})" class="w-full text-left p-3 rounded-lg text-sm font-bold transition-all flex justify-between items-center ${rowStyle}">
                 <div class="flex items-center gap-2">
-                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-indigo-950 text-indigo-300 border border-indigo-800/40'}">Day ${item.dayNum}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold ${dayBadgeStyle}">${dayLabel}</span>
                     <span class="text-xs font-semibold">${dateStr}</span>
-                    ${item.isRescheduled ? `<span class="badge-pill bg-amber-950/70 text-amber-300 border border-amber-700/50 text-[9px] px-1 py-0.2">Rescheduled</span>` : ''}
+                    ${item.isExtra ? `<span class="badge-pill bg-cyan-950/70 text-cyan-300 border border-cyan-700/50 text-[9px] px-1">Extra</span>` : ''}
+                    ${item.isRescheduled ? `<span class="badge-pill bg-amber-950/70 text-amber-300 border border-amber-700/50 text-[9px] px-1">Rescheduled</span>` : ''}
+                    ${item.isCancelled ? `<span class="badge-pill bg-rose-950/70 text-rose-300 border border-rose-700/50 text-[9px] px-1">Cancelled</span>` : ''}
                 </div>
                 <span class="text-[10px] font-bold ${isActive ? 'text-indigo-200' : 'text-slate-400'}">Edit</span>
             </button>`;
@@ -7585,6 +7603,20 @@ function saveAdminPodCheckinConfig(dateKey) {
     }
     if (!chosenDay) chosenDay = 1;
 
+    // Collect extra/cancelled session flags
+    const isExtra = document.getElementById('configIsExtra')?.checked || false;
+    const isCancelled = document.getElementById('configIsCancelled')?.checked || false;
+    // Collect predefined learner tasks
+    const tasks = [];
+    document.querySelectorAll('#adminTasksContainer .group').forEach(row => {
+        const titleInput = row.querySelector('input[type="text"]');
+        const typeSelect = row.querySelector('.task-type-select');
+        const reqCb = row.querySelector('.task-required-cb');
+        if (titleInput && titleInput.value.trim()) {
+            tasks.push({ id: 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), title: titleInput.value.trim(), type: typeSelect ? typeSelect.value : 'activity', required: reqCb ? reqCb.checked : false });
+        }
+    });
+
     const dayConfig = {
         date: chosenDate,
         dateKey: chosenDate,
@@ -7598,7 +7630,10 @@ function saveAdminPodCheckinConfig(dateKey) {
         lcLate: 0,
         startTime: '00:00',
         endTime: '23:59',
-        questions: questions
+        questions: questions,
+        tasks: tasks,
+        extra: isExtra,
+        cancelled: isCancelled
     };
 
     customMilestoneConfigs[activeAdminMilestoneId]['pod'][chosenDate] = dayConfig;
@@ -7835,6 +7870,54 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
             </div>
 
             <div id="adminPodQuestionsContainer" class="space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar pr-1"></div>
+
+            <!-- SESSION CONTROLS: Extra / Cancelled flag -->
+            <div class="glass-card p-4 border-indigo-500/20 space-y-3 bg-slate-950/70 rounded-2xl mt-6">
+                <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fas fa-sliders-h text-indigo-400"></i> Session Schedule Controls
+                </h5>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="configIsExtra" class="w-4 h-4 rounded accent-cyan-500" ${savedConfig.extra ? 'checked' : ''} />
+                        <span class="text-xs font-bold text-cyan-300"><i class="fas fa-plus-circle mr-1"></i>Extra Session</span>
+                        <span class="text-[10px] text-slate-500">(Added outside standard Mon-Sat grid)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="configIsCancelled" class="w-4 h-4 rounded accent-rose-500" ${savedConfig.cancelled ? 'checked' : ''} />
+                        <span class="text-xs font-bold text-rose-300"><i class="fas fa-ban mr-1"></i>Cancel This Session</span>
+                        <span class="text-[10px] text-slate-500">(Hidden from learner — day numbering skips this date)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- PREDEFINED LEARNER TASKS -->
+            <div class="glass-card p-5 border-indigo-500/20 space-y-4 bg-slate-950/70 rounded-2xl mt-4">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <div>
+                        <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-tasks text-indigo-400"></i> Predefined Learner Tasks
+                        </h5>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Learners see these tasks in the check-in modal. Required tasks must be ticked before submitting.</p>
+                    </div>
+                    ${isEditable ? `<button type="button" onclick="addAdminTaskField()" class="btn-secondary py-1.5 px-3 text-xs text-indigo-300 border-indigo-500/30"><i class="fas fa-plus mr-1"></i> Add Task</button>` : ''}
+                </div>
+                <div id="adminTasksContainer" class="space-y-2">
+                    ${(savedConfig.tasks || []).map((t, ti) => `
+                        <div class="flex flex-wrap gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group">
+                            <i class="fas fa-grip-vertical text-slate-500 cursor-move text-sm"></i>
+                            <input type="text" value="${(t.title || '').replace(/"/g, '&quot;')}" placeholder="Task description..." class="flex-1 bg-transparent border-none outline-none text-xs text-white focus:ring-1 ring-indigo-500 rounded px-2 py-1 min-w-[180px]" />
+                            <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 task-type-select">
+                                <option value="activity" ${t.type === 'activity' ? 'selected' : ''}>Activity</option>
+                                <option value="achievement" ${t.type === 'achievement' ? 'selected' : ''}>Achievement</option>
+                            </select>
+                            <label class="flex items-center gap-1 text-[10px] text-amber-300 font-bold whitespace-nowrap cursor-pointer">
+                                <input type="checkbox" class="task-required-cb accent-amber-500" ${t.required ? 'checked' : ''} /> Required
+                            </label>
+                            ${isEditable ? `<button type="button" onclick="this.closest('.group').remove()" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
 
         setTimeout(() => {
@@ -7968,6 +8051,54 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                     `).join('')}
                 </div>
             </div>
+
+            <!-- SESSION CONTROLS: Extra / Cancelled flag -->
+            <div class="glass-card p-4 border-purple-500/20 space-y-3 bg-slate-950/70 rounded-2xl">
+                <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <i class="fas fa-sliders-h text-purple-400"></i> Session Schedule Controls
+                </h5>
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="configIsExtra" class="w-4 h-4 rounded accent-cyan-500" ${savedConfig.extra ? 'checked' : ''} />
+                        <span class="text-xs font-bold text-cyan-300"><i class="fas fa-plus-circle mr-1"></i>Extra Session</span>
+                        <span class="text-[10px] text-slate-500">(Added outside MWF grid)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="configIsCancelled" class="w-4 h-4 rounded accent-rose-500" ${savedConfig.cancelled ? 'checked' : ''} />
+                        <span class="text-xs font-bold text-rose-300"><i class="fas fa-ban mr-1"></i>Cancel This Session</span>
+                        <span class="text-[10px] text-slate-500">(Hidden from learner — skipped in day numbering)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- PREDEFINED LEARNER TASKS -->
+            <div class="glass-card p-5 border-purple-500/20 space-y-4 bg-slate-950/70 rounded-2xl">
+                <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                    <div>
+                        <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-tasks text-purple-400"></i> Predefined Learner Tasks
+                        </h5>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Learners see these tasks in the check-in modal. Required tasks must be ticked before submitting.</p>
+                    </div>
+                    ${isEditable ? `<button type="button" onclick="addAdminTaskField()" class="btn-secondary py-1.5 px-3 text-xs text-purple-300 border-purple-500/30"><i class="fas fa-plus mr-1"></i> Add Task</button>` : ''}
+                </div>
+                <div id="adminTasksContainer" class="space-y-2">
+                    ${(savedConfig.tasks || []).map((t, ti) => `
+                        <div class="flex flex-wrap gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group">
+                            <i class="fas fa-grip-vertical text-slate-500 cursor-move text-sm"></i>
+                            <input type="text" value="${(t.title || '').replace(/"/g, '&quot;')}" placeholder="Task description (e.g. Read the article, Complete 10 pushups)..." class="flex-1 bg-transparent border-none outline-none text-xs text-white focus:ring-1 ring-purple-500 rounded px-2 py-1 min-w-[180px]" />
+                            <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-purple-500 task-type-select">
+                                <option value="activity" ${t.type === 'activity' ? 'selected' : ''}>Activity</option>
+                                <option value="achievement" ${t.type === 'achievement' ? 'selected' : ''}>Achievement</option>
+                            </select>
+                            <label class="flex items-center gap-1 text-[10px] text-amber-300 font-bold whitespace-nowrap cursor-pointer">
+                                <input type="checkbox" class="task-required-cb accent-amber-500" ${t.required ? 'checked' : ''} /> Required
+                            </label>
+                            ${isEditable ? `<button type="button" onclick="this.closest('.group').remove()" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
         return;
     }
@@ -7989,7 +8120,6 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                 <button id="btnSaveConfig" onclick="saveAdminCheckinConfig('${dateKey}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-lg transition-all"><i class="fas fa-save mr-1"></i> Save Changes</button>
             </div>
         </div>
-        
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
                 <label class="block text-xs font-bold text-slate-400 mb-1">LC Reward (On Time)</label>
@@ -8048,6 +8178,54 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                 <textarea id="configDayArticle" rows="7" placeholder="Enter or paste the ~350-word master reference article text here..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:border-indigo-500 font-mono leading-relaxed custom-scrollbar" ${disableAttr}>${savedConfig.articleText || savedConfig.description || ''}</textarea>
             </div>
         </div>
+
+        <!-- SESSION CONTROLS: Extra / Cancelled flag -->
+        <div class="glass-card p-4 border-slate-700 space-y-3 bg-slate-950/70 rounded-2xl mt-6">
+            <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                <i class="fas fa-sliders-h text-emerald-400"></i> Session Schedule Controls
+            </h5>
+            <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" id="configIsExtra" class="w-4 h-4 rounded accent-cyan-500" ${savedConfig.extra ? 'checked' : ''} />
+                    <span class="text-xs font-bold text-cyan-300"><i class="fas fa-plus-circle mr-1"></i>Extra Session</span>
+                    <span class="text-[10px] text-slate-500">(Added outside standard Mon-Sat grid)</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" id="configIsCancelled" class="w-4 h-4 rounded accent-rose-500" ${savedConfig.cancelled ? 'checked' : ''} />
+                    <span class="text-xs font-bold text-rose-300"><i class="fas fa-ban mr-1"></i>Cancel This Session</span>
+                    <span class="text-[10px] text-slate-500">(Hidden from learner — day numbering skips this date)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- PREDEFINED LEARNER TASKS -->
+        <div class="glass-card p-5 border-slate-700 space-y-4 bg-slate-950/70 rounded-2xl mt-4">
+            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                <div>
+                    <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i class="fas fa-tasks text-emerald-400"></i> Predefined Learner Tasks
+                    </h5>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Learners see these as a checklist in the check-in modal. Required tasks must be ticked before submitting.</p>
+                </div>
+                ${isEditable ? `<button type="button" onclick="addAdminTaskField()" class="btn-secondary py-1.5 px-3 text-xs"><i class="fas fa-plus mr-1"></i> Add Task</button>` : ''}
+            </div>
+            <div id="adminTasksContainer" class="space-y-2">
+                ${(savedConfig.tasks || []).map((t, ti) => `
+                    <div class="flex flex-wrap gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group">
+                        <i class="fas fa-grip-vertical text-slate-500 cursor-move text-sm"></i>
+                        <input type="text" value="${(t.title || '').replace(/"/g, '&quot;')}" placeholder="Task description..." class="flex-1 bg-transparent border-none outline-none text-xs text-white focus:ring-1 ring-indigo-500 rounded px-2 py-1 min-w-[180px]" />
+                        <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 task-type-select">
+                            <option value="activity" ${t.type === 'activity' ? 'selected' : ''}>Activity</option>
+                            <option value="achievement" ${t.type === 'achievement' ? 'selected' : ''}>Achievement</option>
+                        </select>
+                        <label class="flex items-center gap-1 text-[10px] text-amber-300 font-bold whitespace-nowrap cursor-pointer">
+                            <input type="checkbox" class="task-required-cb accent-amber-500" ${t.required ? 'checked' : ''} /> Required
+                        </label>
+                        ${isEditable ? `<button type="button" onclick="this.closest('.group').remove()" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
     `;
 }
 
@@ -8072,6 +8250,28 @@ function addAdminQuestionField() {
 }
 window.addAdminQuestionField = addAdminQuestionField;
 
+function addAdminTaskField() {
+    const container = document.getElementById('adminTasksContainer');
+    if (!container) return;
+    
+    const fieldHtml = `
+        <div class="flex flex-wrap gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group">
+            <i class="fas fa-grip-vertical text-slate-500 cursor-move text-sm"></i>
+            <input type="text" placeholder="Task description..." class="flex-1 bg-transparent border-none outline-none text-xs text-white focus:ring-1 ring-indigo-500 rounded px-2 py-1 min-w-[180px]" />
+            <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500 task-type-select">
+                <option value="activity">Activity</option>
+                <option value="achievement">Achievement</option>
+            </select>
+            <label class="flex items-center gap-1 text-[10px] text-amber-300 font-bold whitespace-nowrap cursor-pointer">
+                <input type="checkbox" class="task-required-cb accent-amber-500" /> Required
+            </label>
+            <button type="button" onclick="this.closest('.group').remove()" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash"></i></button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', fieldHtml);
+}
+window.addAdminTaskField = addAdminTaskField;
+
 function saveAdminCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule]) customMilestoneConfigs[activeAdminMilestoneId][activeAdminModule] = {};
@@ -8090,6 +8290,20 @@ function saveAdminCheckinConfig(dateKey) {
     }
     if (!chosenDay) chosenDay = 1;
 
+    // Collect extra/cancelled session flags
+    const isExtra2 = document.getElementById('configIsExtra')?.checked || false;
+    const isCancelled2 = document.getElementById('configIsCancelled')?.checked || false;
+    // Collect predefined learner tasks
+    const tasks2 = [];
+    document.querySelectorAll('#adminTasksContainer .group').forEach(row => {
+        const titleInput = row.querySelector('input[type="text"]');
+        const typeSelect = row.querySelector('.task-type-select');
+        const reqCb = row.querySelector('.task-required-cb');
+        if (titleInput && titleInput.value.trim()) {
+            tasks2.push({ id: 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), title: titleInput.value.trim(), type: typeSelect ? typeSelect.value : 'activity', required: reqCb ? reqCb.checked : false });
+        }
+    });
+
     const dayConfig = {
         date: chosenDate,
         dateKey: chosenDate,
@@ -8103,7 +8317,10 @@ function saveAdminCheckinConfig(dateKey) {
         lcLate: parseInt(document.getElementById('configLcLate')?.value, 10) || 3,
         startTime: document.getElementById('configStartTime')?.value || '05:00',
         endTime: document.getElementById('configEndTime')?.value || '17:00',
-        questions: []
+        questions: [],
+        tasks: tasks2,
+        extra: isExtra2,
+        cancelled: isCancelled2
     };
 
     const questionRows = document.querySelectorAll('#adminQuestionsContainer .group');
@@ -8194,6 +8411,20 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         });
     }
 
+    // Collect extra/cancelled session flags
+    const isExtra3 = document.getElementById('configIsExtra')?.checked || false;
+    const isCancelled3 = document.getElementById('configIsCancelled')?.checked || false;
+    // Collect predefined learner tasks
+    const tasks3 = [];
+    document.querySelectorAll('#adminTasksContainer .group').forEach(row => {
+        const titleInput = row.querySelector('input[type="text"]');
+        const typeSelect = row.querySelector('.task-type-select');
+        const reqCb = row.querySelector('.task-required-cb');
+        if (titleInput && titleInput.value.trim()) {
+            tasks3.push({ id: 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), title: titleInput.value.trim(), type: typeSelect ? typeSelect.value : 'activity', required: reqCb ? reqCb.checked : false });
+        }
+    });
+
     const dayConfig = {
         date: chosenDate,
         dateKey: chosenDate,
@@ -8208,7 +8439,10 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         lcLate: 0, // Ontime LCs only
         startTime: startTime,
         endTime: endTime,
-        questions: questions
+        questions: questions,
+        tasks: tasks3,
+        extra: isExtra3,
+        cancelled: isCancelled3
     };
 
     customMilestoneConfigs[activeAdminMilestoneId]['immerse'][chosenDate] = dayConfig;
@@ -9779,12 +10013,12 @@ async function joinMilestoneNow(msId) {
     
     try { localStorage.setItem('userMilestoneJoinDates', JSON.stringify(dates)); } catch(e) {}
     
-    // Also explicitly initialize Day 1 for all active modules in this milestone to todayKey
-    ['dip', 'pod', 'immerse'].forEach(mod => {
-        if (typeof setUserModuleStartDate === 'function') {
-            setUserModuleStartDate(currentUser._id, msId, mod, todayKey);
-        }
-    });
+    // Only DIP starts on join date. POD and Immerse Day 1 must be set separately by the creator
+    // when they explicitly enable those modules for the customer (so each module's Day 1 starts
+    // from the date the creator grants access — not the milestone join date).
+    if (typeof setUserModuleStartDate === 'function') {
+        setUserModuleStartDate(currentUser._id, msId, 'dip', todayKey);
+    }
 
     // Sync to server (send delta only to avoid clobbering other users' join dates)
     apiFetch('/api/user-join-date', {
@@ -10972,7 +11206,7 @@ function showCheckinSetupInProgressModal(moduleName, dateDisplayStr) {
 }
 window.showCheckinSetupInProgressModal = showCheckinSetupInProgressModal;
 
-function openSubmissionModal(dayNum, moduleName) {
+function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
     const msId = activeMilestoneId || 1;
@@ -10985,8 +11219,20 @@ function openSubmissionModal(dayNum, moduleName) {
 
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, msId, moduleName) : null);
-    if (!userJoinDateStr || (milestoneJoinDate && userJoinDateStr < milestoneJoinDate)) {
-        userJoinDateStr = milestoneJoinDate || todayKey;
+    // Only fall back if no module start date exists at all.
+    // For DIP, fallback is milestoneJoinDate. For POD/IMMERSE, fallback is module activation date or todayKey.
+    if (!userJoinDateStr) {
+        let actDates = {};
+        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+        const modActDate = actDates[`${msId}_${normalizeLevelUpType(moduleName)}`];
+        if (normalizeLevelUpType(moduleName) === 'dip') {
+            userJoinDateStr = milestoneJoinDate || todayKey;
+        } else {
+            userJoinDateStr = modActDate || todayKey;
+        }
+    } else if (milestoneJoinDate && userJoinDateStr < milestoneJoinDate) {
+        // Guard: module start cannot precede milestone join — that would be a data error
+        userJoinDateStr = milestoneJoinDate;
     }
     let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
@@ -10996,11 +11242,21 @@ function openSubmissionModal(dayNum, moduleName) {
     const isTestMode = (typeof isTestUser === 'function') && isTestUser();
 
     // Resolve date taking creator manual scheduling into account
-    const resolved = (typeof getResolvedMilestoneDateKey === 'function')
-        ? getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum)
-        : { cardDate: getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName), cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)) };
-    const cardDate = resolved.cardDate;
-    const cardDateKey = resolved.cardDateKey;
+    let cardDate = null;
+    let cardDateKey = cardDateKeyOverride || null;
+    let resolved = null;
+    if (cardDateKey) {
+        cardDate = new Date(cardDateKey + 'T00:00:00');
+        if (isNaN(cardDate.getTime())) cardDate = new Date();
+        cardDate.setHours(0,0,0,0);
+        resolved = { cardDate: cardDate, cardDateKey: cardDateKey, config: (customMilestoneConfigs?.[msId]?.[moduleName]?.[cardDateKey]) || null };
+    } else {
+        resolved = (typeof getResolvedMilestoneDateKey === 'function')
+            ? getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNum)
+            : { cardDate: getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName), cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)) };
+        cardDate = resolved.cardDate;
+        cardDateKey = resolved.cardDateKey;
+    }
     const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
     // Prerequisite: cMPLi Immerse requires cMPLi Dip completed first
@@ -11041,6 +11297,7 @@ function openSubmissionModal(dayNum, moduleName) {
         lcLate: isImmerse ? 0 : (savedDayCfg.lcLate || 3),
         startTime: savedDayCfg.startTime || '05:00',
         endTime: savedDayCfg.endTime || (isImmerse ? '23:59' : '17:00'),
+        tasks: (savedDayCfg.tasks && Array.isArray(savedDayCfg.tasks)) ? savedDayCfg.tasks : [],
         questions: (savedDayCfg.questions && savedDayCfg.questions.length > 0) ? savedDayCfg.questions : (
             isImmerse ? [
                 { title: savedDayCfg.mainQuestion || "Record your video reflection answering today's main question.", type: "video" }
@@ -11162,6 +11419,32 @@ function openSubmissionModal(dayNum, moduleName) {
 
                 <!-- Questions Form -->
                 <form id="activeCheckinForm" onsubmit="event.preventDefault(); submitCheckinForm(${dayNum}, '${moduleName}', '${cardDateKey}', ${lcOnTime}, ${lcLate}, '${endTime}')" class="space-y-5">
+                    ${(dayConfig.tasks && dayConfig.tasks.length > 0) ? `
+                    <!-- Predefined Learner Tasks Checklist -->
+                    <div class="p-4 sm:p-5 bg-slate-950/80 rounded-2xl border border-indigo-500/30 space-y-3 shadow-inner">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                            <label class="block text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-tasks text-indigo-400"></i> Today's Assigned Tasks
+                            </label>
+                            <span class="text-[11px] font-mono text-indigo-300 font-semibold" id="tasks_progress_count">0 / ${dayConfig.tasks.length} Completed</span>
+                        </div>
+                        <div class="space-y-2">
+                            ${dayConfig.tasks.map((t, ti) => `
+                                <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 cursor-pointer transition-all">
+                                    <input type="checkbox" class="task-checkbox mt-0.5 w-4 h-4 rounded text-indigo-600 bg-slate-800 border-slate-700 focus:ring-indigo-500 focus:ring-offset-0" data-task-id="${t.id || ('t_' + ti)}" ${t.required ? 'data-required="true"' : ''} onchange="updateSubmissionTasksProgress()" />
+                                    <div class="flex-1 min-w-0 text-xs">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="font-medium text-slate-200">${t.title}</span>
+                                            ${t.required ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/40 font-bold uppercase">Required</span>' : '<span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Optional</span>'}
+                                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40 capitalize">${t.type || 'activity'}</span>
+                                        </div>
+                                    </div>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+
                     ${questions.map((q, idx) => {
                         const qTitle = q.title || `Question ${idx + 1}`;
                         const qType = (q.type || 'text').toLowerCase();
@@ -11336,7 +11619,18 @@ function closeSubmissionModal() {
 }
 window.closeSubmissionModal = closeSubmissionModal;
 
+function updateSubmissionTasksProgress() {
+    const total = document.querySelectorAll('.task-checkbox').length;
+    const completed = document.querySelectorAll('.task-checkbox:checked').length;
+    const el = document.getElementById('tasks_progress_count');
+    if (el) el.innerText = `${completed} / ${total} Completed`;
+}
+window.updateSubmissionTasksProgress = updateSubmissionTasksProgress;
+
 function bypassCheckinFormFields(count) {
+    document.querySelectorAll('.task-checkbox').forEach(cb => { cb.checked = true; });
+    if (typeof updateSubmissionTasksProgress === 'function') updateSubmissionTasksProgress();
+
     for (let idx = 0; idx < count; idx++) {
         const inp = document.getElementById(`checkin_input_${idx}`);
         const mcqRadios = document.querySelectorAll(`input[name="checkin_mcq_${idx}"]`);
@@ -11694,6 +11988,27 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             : {};
         const dayConfig = msConfigs[cardDateKey] || {};
 
+        // Verify required predefined learner tasks are completed
+        const taskCheckboxes = form.querySelectorAll('.task-checkbox');
+        const completedTaskIds = [];
+        let hasUncheckedRequiredTask = false;
+        taskCheckboxes.forEach(cb => {
+            if (cb.checked) {
+                completedTaskIds.push(cb.getAttribute('data-task-id'));
+            } else if (cb.getAttribute('data-required') === 'true') {
+                hasUncheckedRequiredTask = true;
+            }
+        });
+
+        if (hasUncheckedRequiredTask) {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas ${String(moduleName || '').toLowerCase() === 'immerse' ? 'fa-video' : 'fa-paper-plane'} mr-1.5"></i> ${String(moduleName || '').toLowerCase() === 'immerse' ? 'Submit Video Reflection' : 'Submit Check-in'}`;
+            }
+            alert('Please complete all required tasks before submitting your check-in.');
+            return;
+        }
+
         const isImmerseMod = String(moduleName || '').toLowerCase() === 'immerse';
         const questions = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
             ? dayConfig.questions 
@@ -11848,6 +12163,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             sessionDescription: dayConfig.description || '',
             mainQuestion: dayConfig.mainQuestion || '',
             videoUrl: (answers.find(a => a.videoUrl)?.videoUrl) || '',
+            completedTaskIds: completedTaskIds,
             answers: answers,
             responses: answers
         };
@@ -12169,9 +12485,23 @@ function switchMilestoneTab(moduleName, btnElement) {
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
     
-    // Auto-align Day 1: if module start date is missing OR precedes milestone join date, align with join date or todayKey
-    if (!userJoinDateStr || (milestoneJoinDate && userJoinDateStr < milestoneJoinDate)) {
-        userJoinDateStr = milestoneJoinDate || todayKey;
+    // Only fall back if no start date exists at all. Do NOT overwrite valid module start
+    // dates that are legitimately AFTER the join date (e.g. Immerse enabled weeks after join).
+    if (!userJoinDateStr) {
+        let actDates = {};
+        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+        const modActDate = actDates[`${activeMilestoneId}_${normalizedMod}`];
+        if (normalizedMod === 'dip') {
+            userJoinDateStr = milestoneJoinDate || todayKey;
+        } else {
+            userJoinDateStr = modActDate || todayKey;
+        }
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
+        }
+    } else if (milestoneJoinDate && userJoinDateStr < milestoneJoinDate) {
+        // Data guard: module start cannot precede milestone join date
+        userJoinDateStr = milestoneJoinDate;
         if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
             setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
         }
@@ -12190,18 +12520,44 @@ function switchMilestoneTab(moduleName, btnElement) {
     // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card taking creator rescheduling into account
     const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions, activeMilestoneId);
 
-    for (let dayNum = 1; dayNum <= totalSessions; dayNum++) {
-        // Resolve date with creator manual scheduling/rescheduling support
-        const resolved = (typeof getResolvedMilestoneDateKey === 'function')
-            ? getResolvedMilestoneDateKey(activeMilestoneId, moduleName, milestoneStartDate, dayNum)
-            : { cardDate: getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName), cardDateKey: getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, dayNum, moduleName)), isCreatorScheduled: false };
-        const cardDate = resolved.cardDate;
-        const cardDateKey = resolved.cardDateKey;
-        const isCreatorScheduled = resolved.isCreatorScheduled;
+    // Collect all configured session dateKeys for this module (respecting cancelled flag)
+    // Cancelled sessions are invisible to the learner; remaining sessions are renumbered 1..N sequentially
+    const msConfigsForModule = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeMilestoneId][normalizedMod]) || {};
+    // Build ordered list of sessions: standard MWF/Mon-Sat slots + extra sessions, minus cancelled ones
+    let orderedSessionDateKeys = [];
+    for (let d = 1; d <= totalSessions; d++) {
+        const defaultDk = getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName));
+        const cfg = msConfigsForModule[defaultDk];
+        if (cfg && cfg.cancelled) continue; // skip cancelled standard slots
+        orderedSessionDateKeys.push(defaultDk);
+    }
+    // Merge in extra sessions (sorted by date)
+    Object.keys(msConfigsForModule).forEach(dk => {
+        const cfg = msConfigsForModule[dk];
+        if (cfg && cfg.extra && !cfg.cancelled && !orderedSessionDateKeys.includes(dk)) {
+            orderedSessionDateKeys.push(dk);
+        }
+    });
+    orderedSessionDateKeys.sort();
+
+    orderedSessionDateKeys.forEach((cardDateKey, idx) => {
+        const effectiveDayNum = idx + 1; // sequential numbering for visible sessions
+        const cardDate = new Date(cardDateKey + 'T00:00:00');
+        if (isNaN(cardDate.getTime())) return;
+        cardDate.setHours(0,0,0,0);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
+        // Find standard day number for submission matching or fallback to effectiveDayNum
+        let dayNum = effectiveDayNum;
+        for (let d = 1; d <= totalSessions; d++) {
+            if (getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, d, moduleName)) === cardDateKey) {
+                dayNum = d;
+                break;
+            }
+        }
+
         // EXCLUSIVE RESOLUTION: matching submission from daySubMap
-        const sub = daySubMap[dayNum] || null;
+        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[dayNum] || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
@@ -12225,7 +12581,7 @@ function switchMilestoneTab(moduleName, btnElement) {
             statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
             actionBtn = `
                 <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry</button>
+                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry</button>
                     <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 sm:px-2.5 text-[11px] font-bold text-slate-300 hover:text-white shrink-0" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
                 </div>
             `;
@@ -12241,10 +12597,10 @@ function switchMilestoneTab(moduleName, btnElement) {
                 if (!hasDip && !isTestMode) {
                     actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                 } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 shrink-0 whitespace-nowrap"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse', '${cardDateKey}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 shrink-0 whitespace-nowrap"><i class="fas fa-video mr-1"></i> Start Immerse</button>`;
                 }
             } else {
-                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 shrink-0 whitespace-nowrap"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
+                actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-primary py-1 px-3 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 shrink-0 whitespace-nowrap"><i class="fas fa-pen mr-1"></i> Start check-in</button>`;
             }
         } else if (isPast) {
             if (isTestMode) {
@@ -12256,10 +12612,10 @@ function switchMilestoneTab(moduleName, btnElement) {
                     if (!hasDip && !isTestMode) {
                         actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                     } else {
-                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-purple-400 border-purple-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                     }
                 } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
             } else {
                 statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px] whitespace-nowrap">Missed</span>';
@@ -12275,10 +12631,10 @@ function switchMilestoneTab(moduleName, btnElement) {
                     if (!hasDip && !isTestMode) {
                         actionBtn = `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
                     } else {
-                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                        actionBtn = `<button onclick="openSubmissionModal(${dayNum}, 'immerse', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                     }
                 } else {
-                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
+                    actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-400 border-indigo-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
             } else {
                 statusBadge = '<span class="badge-pill bg-slate-800 text-slate-500 text-[10px] whitespace-nowrap">Locked</span>';
@@ -12291,7 +12647,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                 <div class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0 ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (isToday ? (isImmerse ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30') : 'bg-slate-900 text-slate-500 border border-slate-800')} flex flex-col items-center justify-center font-bold shadow-inner">
                         <span class="text-[9px] uppercase tracking-tighter">Day</span>
-                        <span class="text-xs font-mono font-black">${dayNum}</span>
+                        <span class="text-xs font-mono font-black">${effectiveDayNum}</span>
                     </div>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
@@ -12307,7 +12663,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                 <div class="shrink-0 flex items-center gap-1 sm:gap-1.5">${actionBtn}</div>
             </div>
         `;
-    }
+    });
 
     // Calculate module-specific streak and progress banner
     const { completedCount, currentStreak } = calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName, activeMilestoneId);
