@@ -2309,10 +2309,10 @@ function cleanScriptForSpeech(text) {
         line = line.trim();
         if (!line) continue;
 
-        // Currency & math symbols to natural words
-        line = line.replace(/AU\$\s*(\d+)/gi, '$1 Australian dollars');
-        line = line.replace(/US\$\s*(\d+)/gi, '$1 US dollars');
-        line = line.replace(/\$\s*(\d+)/g, '$1 dollars');
+        // Currency & math symbols to natural words (supports commas and decimals e.g. $1,000,000 or $500.50)
+        line = line.replace(/AU\$\s*([\d,]+(?:\.\d+)?)/gi, '$1 Australian dollars');
+        line = line.replace(/US\$\s*([\d,]+(?:\.\d+)?)/gi, '$1 US dollars');
+        line = line.replace(/\$\s*([\d,]+(?:\.\d+)?)/g, '$1 dollars');
         line = line.replace(/&/g, ' and ');
         line = line.replace(/%/g, ' percent');
         line = line.replace(/\+/g, ' plus ');
