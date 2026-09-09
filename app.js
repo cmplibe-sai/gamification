@@ -7158,6 +7158,8 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
             ? getResolvedMilestoneDateKey(effectiveMsId, moduleName, startDateObj, d)
             : { cardDateKey: getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName)) };
         const slotDk = resolved.cardDateKey;
+        const cfg = msConfigs[slotDk];
+        if (cfg && cfg.cancelled) continue; // skip cancelled slots
         if (!orderedDateKeys.includes(slotDk)) orderedDateKeys.push(slotDk);
     }
     // Include any creator configured dates on or after learnerStartKey (or with user submission)
@@ -7194,12 +7196,6 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
     });
 
     sortedSubs.forEach(s => {
-        // Auto-normalize Chandra's Day 1 Immerse submission
-        if (s.id === 'sub_1788769419339_b2k2d' || (normMod === 'immerse' && (s.dateKey === '2026-09-07' || s.date === '2026-09-07') && (s.userEmail === 'chandrasai349@gmail.com' || s.userName === 'Chandra'))) {
-            s.day = 1;
-            s.sessionDay = 1;
-        }
-
         let mappedDay = null;
         const rawDate = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
         if (rawDate) {
@@ -7434,7 +7430,10 @@ function renderAdminCohortSubmissions() {
                 userStartDateStr = sortedModSubs[0].dateKey || sortedModSubs[0].date || (sortedModSubs[0].submittedAt ? sortedModSubs[0].submittedAt.split('T')[0] : null);
             }
             if (!userStartDateStr) {
-                userStartDateStr = (activeAdminModule === 'dip' ? userMsJoinDate : null) || userMsJoinDate || getLocalDateKey(new Date());
+                userStartDateStr = userMsJoinDate || getLocalDateKey(new Date());
+            } else if (userMsJoinDate && userStartDateStr < userMsJoinDate) {
+                // Join-date floor guard: module start date cannot precede milestone join date
+                userStartDateStr = userMsJoinDate;
             }
             let userMilestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
             if (isNaN(userMilestoneStartDate.getTime())) userMilestoneStartDate = new Date();
