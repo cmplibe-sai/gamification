@@ -749,23 +749,71 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 const MILESTONE_PREREQS_FILE = path.join(DATA_DIR, 'milestone_prereqs.json');
 
 const DEFAULT_MILESTONE_PREREQS = {
-    "1": { targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false },
-    "2": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
-    "3": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
-    "4": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false }
+    "1": {
+        prerequisites: [
+            { id: "prereq_1_dip", module: "dip", type: "days", targetValue: 21 },
+            { id: "prereq_1_pod", module: "pod", type: "days", targetValue: 21 },
+            { id: "prereq_1_immerse", module: "immerse", type: "days", targetValue: 0 }
+        ],
+        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false
+    },
+    "2": {
+        prerequisites: [
+            { id: "prereq_2_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_2_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    },
+    "3": {
+        prerequisites: [
+            { id: "prereq_3_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_3_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    },
+    "4": {
+        prerequisites: [
+            { id: "prereq_4_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_4_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    }
 };
+
+function normalizeServerPrereqs(raw) {
+    if (!raw || typeof raw !== 'object') return DEFAULT_MILESTONE_PREREQS;
+    const result = { ...raw };
+    for (const k of Object.keys(result)) {
+        const item = result[k];
+        if (item && typeof item === 'object') {
+            if (!Array.isArray(item.prerequisites)) {
+                item.prerequisites = [];
+                const tDip = (item.targetDips !== undefined) ? Number(item.targetDips) : 21;
+                const tPod = (item.targetPod !== undefined) ? Number(item.targetPod) : 21;
+                const tImmerse = (item.targetImmerse !== undefined) ? Number(item.targetImmerse) : 0;
+                if (tDip > 0) item.prerequisites.push({ id: `prereq_${k}_dip`, module: 'dip', type: 'days', targetValue: tDip });
+                if (tPod > 0) item.prerequisites.push({ id: `prereq_${k}_pod`, module: 'pod', type: 'days', targetValue: tPod });
+                if (tImmerse > 0) item.prerequisites.push({ id: `prereq_${k}_immerse`, module: 'immerse', type: 'days', targetValue: tImmerse });
+            }
+        }
+    }
+    return result;
+}
 
 function getMilestonePrereqsFromDb() {
     try {
         if (fs.existsSync(MILESTONE_PREREQS_FILE)) {
             const raw = fs.readFileSync(MILESTONE_PREREQS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') return { ...DEFAULT_MILESTONE_PREREQS, ...parsed };
+            if (parsed && typeof parsed === 'object') return normalizeServerPrereqs({ ...DEFAULT_MILESTONE_PREREQS, ...parsed });
         }
     } catch (e) {
         console.warn('Error reading milestone_prereqs.json:', e);
     }
-    return { ...DEFAULT_MILESTONE_PREREQS, ...(store.customMilestonePrereqs || {}) };
+    return normalizeServerPrereqs({ ...DEFAULT_MILESTONE_PREREQS, ...(store.customMilestonePrereqs || {}) });
 }
 
 function saveMilestonePrereqsToDb(configs) {

@@ -6139,25 +6139,82 @@ function getEnabledModulesForMilestone(msId) {
 //  when a Creator has not customized a milestone yet)
 // ==============================================================
 var DEFAULT_MILESTONE_PREREQS = {
-    "1": { targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false },
-    "2": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
-    "3": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false },
-    "4": { targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false }
+    "1": {
+        prerequisites: [
+            { id: "prereq_1_dip", module: "dip", type: "days", targetValue: 21 },
+            { id: "prereq_1_pod", module: "pod", type: "days", targetValue: 21 },
+            { id: "prereq_1_immerse", module: "immerse", type: "days", targetValue: 0 }
+        ],
+        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false
+    },
+    "2": {
+        prerequisites: [
+            { id: "prereq_2_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_2_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    },
+    "3": {
+        prerequisites: [
+            { id: "prereq_3_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_3_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    },
+    "4": {
+        prerequisites: [
+            { id: "prereq_4_dip", module: "dip", type: "days", targetValue: 30 },
+            { id: "prereq_4_pod", module: "pod", type: "days", targetValue: 30 },
+            { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 }
+        ],
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+    }
 };
 window.DEFAULT_MILESTONE_PREREQS = DEFAULT_MILESTONE_PREREQS;
+
+function normalizeMilestonePrereqs(rawCfg) {
+    const cfg = rawCfg || {};
+    let prereqs = Array.isArray(cfg.prerequisites) ? [...cfg.prerequisites] : null;
+    if (!prereqs) {
+        prereqs = [];
+        const tDip = (cfg.targetDips !== undefined) ? Number(cfg.targetDips) : 21;
+        const tPod = (cfg.targetPod !== undefined) ? Number(cfg.targetPod) : 21;
+        const tImmerse = (cfg.targetImmerse !== undefined) ? Number(cfg.targetImmerse) : 0;
+        if (tDip > 0) prereqs.push({ id: 'prereq_dip_legacy', module: 'dip', type: 'days', targetValue: tDip });
+        if (tPod > 0) prereqs.push({ id: 'prereq_pod_legacy', module: 'pod', type: 'days', targetValue: tPod });
+        if (tImmerse > 0) prereqs.push({ id: 'prereq_immerse_legacy', module: 'immerse', type: 'days', targetValue: tImmerse });
+    }
+    const dipDays = prereqs.find(p => p.module === 'dip' && p.type === 'days')?.targetValue || 0;
+    const podDays = prereqs.find(p => p.module === 'pod' && p.type === 'days')?.targetValue || 0;
+    const immerseDays = prereqs.find(p => p.module === 'immerse' && p.type === 'days')?.targetValue || 0;
+
+    return {
+        ...cfg,
+        prerequisites: prereqs,
+        targetDips: dipDays,
+        targetPod: podDays,
+        targetImmerse: immerseDays,
+        minLCs: (cfg.minLCs !== undefined) ? Number(cfg.minLCs) : 693,
+        autoUnlockNext: Boolean(cfg.autoUnlockNext)
+    };
+}
+window.normalizeMilestonePrereqs = normalizeMilestonePrereqs;
 
 function getMilestonePrereqConfig(msId) {
     const key = String(msId || 1);
     const defaults = DEFAULT_MILESTONE_PREREQS[key] || DEFAULT_MILESTONE_PREREQS["1"];
     const custom = (typeof customMilestonePrereqs !== 'undefined' && customMilestonePrereqs[key]) ? customMilestonePrereqs[key] : {};
-    return { ...defaults, ...custom };
+    return normalizeMilestonePrereqs({ ...defaults, ...custom });
 }
 window.getMilestonePrereqConfig = getMilestonePrereqConfig;
 
 async function saveMilestonePrereqConfig(msId, patch) {
     const key = String(msId || 1);
     if (typeof customMilestonePrereqs === 'undefined' || !customMilestonePrereqs) customMilestonePrereqs = {};
-    customMilestonePrereqs[key] = { ...getMilestonePrereqConfig(key), ...patch };
+    const base = getMilestonePrereqConfig(key);
+    customMilestonePrereqs[key] = normalizeMilestonePrereqs({ ...base, ...patch });
     try { localStorage.setItem('customMilestonePrereqs', JSON.stringify(customMilestonePrereqs)); } catch(e) {}
     try {
         await apiFetch('/api/milestone-prereqs', {
@@ -6261,17 +6318,43 @@ function openClaimCredentialModal() {
         const cfg = getMilestonePrereqConfig(msId);
 
         const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId));
-        const dipCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'dip').length;
-        const podCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'pod').length;
-        const immerseCompleted = userSubs.filter(s => normalizeLevelUpType(s.type) === 'immerse').length;
         const totalEarnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+        const meetsLcs = totalEarnedLcs >= (cfg.minLCs || 0);
 
-        const meetsDips = dipCompleted >= cfg.targetDips;
-        const meetsPod = podCompleted >= cfg.targetPod;
-        const meetsImmerse = !(cfg.targetImmerse > 0) || immerseCompleted >= cfg.targetImmerse;
-        const meetsLcs = totalEarnedLcs >= cfg.minLCs;
-        const meetsAllPrereqs = meetsDips && meetsPod && meetsImmerse && meetsLcs;
+        const rows = (cfg.prerequisites || []).map(p => {
+            const modCode = normalizeLevelUpType(p.module || 'dip');
+            const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: (p.module || '').toUpperCase(), icon: 'fa-cube text-slate-400' };
+            const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === modCode);
+            const targetVal = Number(p.targetValue) || 0;
 
+            if (p.type === 'lcs') {
+                const earnedInMod = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+                const ok = (targetVal === 0) || (earnedInMod >= targetVal);
+                return {
+                    label: `${mObj.name} LCs`,
+                    icon: mObj.icon || 'fa-coins text-amber-400',
+                    have: earnedInMod,
+                    need: targetVal,
+                    unit: 'LCs',
+                    ok: ok,
+                    barColor: 'bg-amber-500'
+                };
+            } else {
+                const count = modSubs.length;
+                const ok = (targetVal === 0) || (count >= targetVal);
+                return {
+                    label: `${mObj.name} Check-ins / Sessions`,
+                    icon: mObj.icon || 'fa-calendar-check text-indigo-400',
+                    have: count,
+                    need: targetVal,
+                    unit: 'Days',
+                    ok: ok,
+                    barColor: 'bg-indigo-500'
+                };
+            }
+        });
+
+        const meetsAllPrereqs = rows.every(r => r.ok) && meetsLcs;
         const isAdminApproved = isCertificateApproved(currentUser._id, msId);
         const isCredentialIssued = meetsAllPrereqs && (cfg.autoUnlockNext || isAdminApproved);
 
@@ -6293,9 +6376,12 @@ function openClaimCredentialModal() {
                 <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2.5 mt-4">
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">${credentialId}</span></div>
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Recipient Name:</span><span class="text-white font-bold">${currentUser.name || 'Learner'}</span></div>
-                    <div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi Dip Check-ins:</span><span class="text-emerald-400 font-mono font-bold">${dipCompleted} / ${cfg.targetDips} Days</span></div>
-                    <div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi POD Audio &amp; Quiz:</span><span class="text-emerald-400 font-mono font-bold">${podCompleted} / ${cfg.targetPod} Days</span></div>
-                    ${cfg.targetImmerse > 0 ? `<div class="flex justify-between text-xs"><span class="text-slate-400">cMPLi Immerse:</span><span class="text-emerald-400 font-mono font-bold">${immerseCompleted} / ${cfg.targetImmerse} Sessions</span></div>` : ''}
+                    ${rows.map(r => `
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-400">${r.label}:</span>
+                            <span class="text-emerald-400 font-mono font-bold">${r.have} / ${r.need} ${r.unit}</span>
+                        </div>
+                    `).join('')}
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Total LCs Earned:</span><span class="text-amber-400 font-mono font-bold">${totalEarnedLcs} / ${cfg.minLCs} LCs</span></div>
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued &amp; Authenticated</span></div>
                 </div>
@@ -6315,11 +6401,6 @@ function openClaimCredentialModal() {
             if (typeof triggerCredentialConfetti === 'function') triggerCredentialConfetti();
         } else {
             const pendingAdminReview = meetsAllPrereqs && !cfg.autoUnlockNext && !isAdminApproved;
-            const rows = [
-                { label: 'cMPLi Dip Check-ins', icon: 'fa-sun text-amber-400', have: dipCompleted, need: cfg.targetDips, ok: meetsDips, barColor: 'bg-amber-500' },
-                { label: 'cMPLi POD Audio & Quiz', icon: 'fa-podcast text-indigo-400', have: podCompleted, need: cfg.targetPod, ok: meetsPod, barColor: 'bg-indigo-500' }
-            ];
-            if (cfg.targetImmerse > 0) rows.push({ label: 'cMPLi Immerse Sessions', icon: 'fa-water text-cyan-400', have: immerseCompleted, need: cfg.targetImmerse, ok: meetsImmerse, barColor: 'bg-cyan-500' });
 
             content.innerHTML = `
                 <div class="w-16 h-16 ${pendingAdminReview ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' : 'bg-amber-500/20 text-amber-400 border-amber-500/40'} rounded-full flex items-center justify-center mx-auto border text-2xl mb-3">
@@ -6336,7 +6417,7 @@ function openClaimCredentialModal() {
                             <div>
                                 <div class="flex justify-between items-center">
                                     <span class="text-slate-300"><i class="fas ${r.icon} mr-1.5"></i> ${r.label}:</span>
-                                    <span class="font-mono font-bold ${r.ok ? 'text-emerald-400' : 'text-amber-400'}">${r.have} / ${r.need} Days ${r.ok ? '<i class="fas fa-check-circle ml-1"></i>' : ''}</span>
+                                    <span class="font-mono font-bold ${r.ok ? 'text-emerald-400' : 'text-amber-400'}">${r.have} / ${r.need} ${r.unit} ${r.ok ? '<i class="fas fa-check-circle ml-1"></i>' : ''}</span>
                                 </div>
                                 <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
                                     <div class="${r.barColor} h-full rounded-full" style="width:${Math.min(100, Math.round((r.have / Math.max(1, r.need)) * 100))}%;"></div>
@@ -6696,6 +6777,9 @@ window.switchAdminMilestoneTab = switchAdminMilestoneTab;
 // ==============================================================
 // ADMIN PANEL — CREATOR-CONFIGURABLE CREDENTIAL PREREQUISITES
 // ==============================================================
+window._adminPrereqsWorkingList = window._adminPrereqsWorkingList || null;
+window._adminPrereqsWorkingMsId = window._adminPrereqsWorkingMsId || null;
+
 function renderAdminPrereqsView() {
     const view = document.getElementById('adminPrereqsView');
     if (!view) return;
@@ -6705,32 +6789,82 @@ function renderAdminPrereqsView() {
     const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
     const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
 
+    // Reset or load working list when milestone changes
+    if (window._adminPrereqsWorkingMsId !== msId || !window._adminPrereqsWorkingList) {
+        window._adminPrereqsWorkingMsId = msId;
+        window._adminPrereqsWorkingList = JSON.parse(JSON.stringify(cfg.prerequisites || []));
+    }
+    const prereqList = window._adminPrereqsWorkingList;
+
+    const modulesOptions = (typeof ALL_PLATFORM_MODULES !== 'undefined' ? ALL_PLATFORM_MODULES : [
+        { code: 'dip', name: 'cMPLi Dip' },
+        { code: 'pod', name: 'cMPLi POD' },
+        { code: 'immerse', name: 'cMPLi Immerse' },
+        { code: 'projects', name: 'Real-World Execution' }
+    ]);
+
+    const itemsHtml = prereqList.map((item, idx) => {
+        return `
+            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3 relative group" data-prereq-id="${item.id}">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-indigo-400 font-heading">
+                        <i class="fas fa-shield-alt mr-1"></i> Prerequisite #${idx + 1}
+                    </span>
+                    <button type="button" onclick="removeAdminPrereqRule('${item.id}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors" title="Delete prerequisite">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Module</label>
+                        <select id="prereqMod_${item.id}" onchange="updateAdminPrereqRuleField('${item.id}', 'module', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-medium">
+                            ${modulesOptions.map(m => `<option value="${m.code}" ${m.code === item.module ? 'selected' : ''}>${m.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Criterion</label>
+                        <select id="prereqType_${item.id}" onchange="updateAdminPrereqRuleField('${item.id}', 'type', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-medium">
+                            <option value="days" ${item.type === 'days' ? 'selected' : ''}>Days / Sessions Completed</option>
+                            <option value="lcs" ${item.type === 'lcs' ? 'selected' : ''}>Minimum LCs in Module</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Target Value</label>
+                        <input type="number" min="0" id="prereqVal_${item.id}" value="${item.targetValue}" oninput="updateAdminPrereqRuleField('${item.id}', 'targetValue', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono font-bold">
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
     view.innerHTML = `
         <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
             <div>
                 <h4 class="text-sm font-bold text-white font-heading">Milestone ${msId}: ${cleanName} — Credential Prerequisites</h4>
-                <p class="text-xs text-slate-400 mt-1">These targets drive the learner's "Claim my Credential" screen, the entry rules modal, and the Completion Grid's approval math. Changes apply immediately to every learner in this milestone — anyone already past a target keeps their progress, and anyone below it simply sees the new target.</p>
+                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days or minimum LCs) required for learners to claim their credential. Changes apply immediately to every learner in this milestone.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi Dip Check-ins (days)</label>
-                    <input type="number" min="0" id="prereqTargetDips" value="${cfg.targetDips}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+            <!-- DYNAMIC PREREQUISITES LIST -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Module Completion Rules</label>
+                    <button type="button" onclick="addAdminPrereqRule()" class="btn-secondary py-1 px-3 text-xs font-bold text-indigo-400 border border-indigo-500/40 hover:bg-indigo-500/20 shadow-sm flex items-center gap-1.5">
+                        <i class="fas fa-plus-circle"></i> Add Prerequisite
+                    </button>
                 </div>
-                <div>
-                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi POD Audio & Quiz (days)</label>
-                    <input type="number" min="0" id="prereqTargetPod" value="${cfg.targetPod}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Target cMPLi Immerse Sessions (0 = not required)</label>
-                    <input type="number" min="0" id="prereqTargetImmerse" value="${cfg.targetImmerse}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs text-slate-400 font-bold mb-1.5">Minimum Required LCs</label>
-                    <input type="number" min="0" id="prereqMinLCs" value="${cfg.minLCs}" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+                <div id="adminPrereqsListContainer" class="space-y-3">
+                    ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites added yet. Click &quot;Add Prerequisite&quot; above.</div>'}
                 </div>
             </div>
 
+            <!-- OVERALL MILESTONE MINIMUM LCS -->
+            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/60 space-y-1.5">
+                <label class="block text-xs text-slate-300 font-bold">Overall Milestone Minimum Required LCs</label>
+                <p class="text-[11px] text-slate-400">Total Learning Coins earned across all modules required for this milestone.</p>
+                <input type="number" min="0" id="prereqMinLCs" value="${cfg.minLCs}" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono font-bold focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <!-- AUTO-UNLOCK GATE -->
             <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between gap-4">
                 <div>
                     <p class="text-xs font-bold text-white">Milestone ${msId + 1} Unlock Gate</p>
@@ -6753,14 +6887,46 @@ function renderAdminPrereqsView() {
 }
 window.renderAdminPrereqsView = renderAdminPrereqsView;
 
+function addAdminPrereqRule() {
+    if (!window._adminPrereqsWorkingList) window._adminPrereqsWorkingList = [];
+    const newId = 'prereq_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+    window._adminPrereqsWorkingList.push({
+        id: newId,
+        module: 'dip',
+        type: 'days',
+        targetValue: 21
+    });
+    renderAdminPrereqsView();
+}
+window.addAdminPrereqRule = addAdminPrereqRule;
+
+function removeAdminPrereqRule(id) {
+    if (!window._adminPrereqsWorkingList) return;
+    window._adminPrereqsWorkingList = window._adminPrereqsWorkingList.filter(item => String(item.id) !== String(id));
+    renderAdminPrereqsView();
+}
+window.removeAdminPrereqRule = removeAdminPrereqRule;
+
+function updateAdminPrereqRuleField(id, field, value) {
+    if (!window._adminPrereqsWorkingList) return;
+    const item = window._adminPrereqsWorkingList.find(i => String(i.id) === String(id));
+    if (item) {
+        if (field === 'targetValue') item[field] = Math.max(0, Number(value) || 0);
+        else item[field] = value;
+    }
+}
+window.updateAdminPrereqRuleField = updateAdminPrereqRuleField;
+
 async function saveAdminPrereqsForm() {
     const msId = activeAdminMilestoneId || 1;
+    const prereqs = Array.isArray(window._adminPrereqsWorkingList) ? window._adminPrereqsWorkingList : [];
+    const minLCs = Math.max(0, Number(document.getElementById('prereqMinLCs')?.value) || 0);
+    const autoUnlockNext = !!document.getElementById('prereqAutoUnlock')?.checked;
+
     const patch = {
-        targetDips: Math.max(0, Number(document.getElementById('prereqTargetDips')?.value) || 0),
-        targetPod: Math.max(0, Number(document.getElementById('prereqTargetPod')?.value) || 0),
-        targetImmerse: Math.max(0, Number(document.getElementById('prereqTargetImmerse')?.value) || 0),
-        minLCs: Math.max(0, Number(document.getElementById('prereqMinLCs')?.value) || 0),
-        autoUnlockNext: !!document.getElementById('prereqAutoUnlock')?.checked
+        prerequisites: prereqs,
+        minLCs: minLCs,
+        autoUnlockNext: autoUnlockNext
     };
     await saveMilestonePrereqConfig(msId, patch);
 
@@ -11274,20 +11440,30 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
 
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, msId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, msId, moduleName) : null);
-    // Only fall back if no module start date exists at all.
-    // For DIP, fallback is milestoneJoinDate. For POD/IMMERSE, fallback is module activation date or todayKey.
+    let actDates = {};
+    try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+    const modActDate = actDates[`${msId}_${normalizeLevelUpType(moduleName)}`];
     if (!userJoinDateStr) {
-        let actDates = {};
-        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
-        const modActDate = actDates[`${msId}_${normalizeLevelUpType(moduleName)}`];
         if (normalizeLevelUpType(moduleName) === 'dip') {
             userJoinDateStr = milestoneJoinDate || todayKey;
         } else {
             userJoinDateStr = modActDate || todayKey;
         }
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, msId, normalizeLevelUpType(moduleName), userJoinDateStr);
+        }
+    } else if (normalizeLevelUpType(moduleName) !== 'dip' && modActDate && userJoinDateStr < modActDate) {
+        // Module start cannot precede platform activation date of that module
+        userJoinDateStr = modActDate;
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, msId, normalizeLevelUpType(moduleName), userJoinDateStr);
+        }
     } else if (milestoneJoinDate && userJoinDateStr < milestoneJoinDate) {
         // Guard: module start cannot precede milestone join — that would be a data error
         userJoinDateStr = milestoneJoinDate;
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, msId, normalizeLevelUpType(moduleName), userJoinDateStr);
+        }
     }
     let milestoneStartDate = new Date((userJoinDateStr || todayKey) + 'T00:00:00');
     if (isNaN(milestoneStartDate.getTime())) milestoneStartDate = new Date();
@@ -12540,17 +12716,22 @@ function switchMilestoneTab(moduleName, btnElement) {
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
     
-    // Only fall back if no start date exists at all. Do NOT overwrite valid module start
-    // dates that are legitimately AFTER the join date (e.g. Immerse enabled weeks after join).
+    let actDates = {};
+    try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
+    const modActDate = actDates[`${activeMilestoneId}_${normalizedMod}`];
+
     if (!userJoinDateStr) {
-        let actDates = {};
-        try { actDates = JSON.parse(localStorage.getItem('moduleActivationDates')) || {}; } catch(e) {}
-        const modActDate = actDates[`${activeMilestoneId}_${normalizedMod}`];
         if (normalizedMod === 'dip') {
             userJoinDateStr = milestoneJoinDate || todayKey;
         } else {
             userJoinDateStr = modActDate || todayKey;
         }
+        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
+            setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
+        }
+    } else if (normalizedMod !== 'dip' && modActDate && userJoinDateStr < modActDate) {
+        // Module start cannot precede platform activation date of that module
+        userJoinDateStr = modActDate;
         if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
             setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
         }
@@ -12596,9 +12777,14 @@ function switchMilestoneTab(moduleName, btnElement) {
     }
 
     // 2. Merge any other configured dates in msConfigsForModule (extra sessions, legacy rescheduled sessions, explicit dayNumber sessions)
+    const learnerStartKey = getLocalDateKey(milestoneStartDate);
     Object.keys(msConfigsForModule).forEach(dk => {
         const cfg = msConfigsForModule[dk];
         if (!cfg || cfg.cancelled || orderedSessionDateKeys.includes(dk)) return;
+        // Do not prepend historical configs from before the learner's module start date unless learner has an actual submission on that date
+        const hasSubOnDate = typeSubs.some(s => (s.dateKey === dk || s.date === dk));
+        if (dk < learnerStartKey && !hasSubOnDate) return;
+
         const hasContent = Boolean(cfg.extra || cfg.rescheduled || cfg.dayNumber || cfg.title || cfg.mainQuestion || (Array.isArray(cfg.questions) && cfg.questions.length > 0));
         if (hasContent) {
             orderedSessionDateKeys.push(dk);
@@ -12639,8 +12825,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         cardDate.setHours(0,0,0,0);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        // EXCLUSIVE RESOLUTION: matching submission from daySubMap (primary match by dateKey, then collision-proof dayNum)
-        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[cardDateKey] || daySubMap[dayNum] || null;
+        // EXCLUSIVE RESOLUTION: matching submission strictly by card date (never match across different calendar dates)
+        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[cardDateKey] || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
@@ -12659,18 +12845,18 @@ function switchMilestoneTab(moduleName, btnElement) {
 
         if (isEvaluating) {
             statusBadge = '<span class="badge-pill bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
         } else if (isMismatch) {
             statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
             actionBtn = `
                 <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
                     <button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry</button>
-                    <button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2 sm:px-2.5 text-[11px] font-bold text-slate-300 hover:text-white shrink-0" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
+                    <button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2 sm:px-2.5 text-[11px] font-bold text-slate-300 hover:text-white shrink-0" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
                 </div>
             `;
         } else if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold whitespace-nowrap"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
+            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -12840,15 +13026,20 @@ function viewSubmissionById(subId, userId, dayLabel, moduleType) {
 }
 window.viewSubmissionById = viewSubmissionById;
 
-function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleName) {
+function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleNameOrDateKey, maybeDateKey) {
     if (!currentUser) return alert('Please login first.');
     let targetUserId = currentUser._id;
     let dayNumber = dayNumberOrUserId;
     let moduleName = moduleNameOrDay;
-    if (maybeModuleName !== undefined) {
+    let cardDateKey = null;
+
+    if (typeof maybeModuleNameOrDateKey === 'string' && maybeModuleNameOrDateKey.includes('-')) {
+        cardDateKey = maybeModuleNameOrDateKey;
+    } else if (maybeModuleNameOrDateKey !== undefined) {
         targetUserId = dayNumberOrUserId;
         dayNumber = moduleNameOrDay;
-        moduleName = maybeModuleName;
+        moduleName = maybeModuleNameOrDateKey;
+        cardDateKey = maybeDateKey || null;
     }
     const msId = activeMilestoneId || 1;
     const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(targetUserId) : [];
@@ -12863,13 +13054,18 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleName) {
     const isImmerse = (normalizedMod === 'immerse');
     const totalSessions = isImmerse ? (msId === 1 ? 9 : 12) : ((msId === 1) ? 21 : 30);
 
-    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, normalizedMod, totalSessions);
+    const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, normalizedMod, totalSessions, msId);
 
-    let sub = daySubMap[Number(dayNumber)];
+    // Prioritize exact dateKey match, then daySubMap dateKey, then daySubMap dayNumber
+    let sub = (cardDateKey && typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey)))
+        || (cardDateKey && daySubMap[cardDateKey])
+        || daySubMap[Number(dayNumber)]
+        || null;
+
     if (!sub) {
         try {
             const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-            sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod && String(s.day) === String(dayNumber));
+            sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod && ((cardDateKey && (s.dateKey === cardDateKey || s.date === cardDateKey)) || String(s.day) === String(dayNumber)));
         } catch(e) {}
     }
     if (!sub) {
@@ -14270,10 +14466,15 @@ function openMilestoneEntryModal(msId) {
         <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
             <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider"><i class="fas fa-certificate text-indigo-400 mr-1"></i> Credential Prerequisites</h5>
             <ul class="list-disc list-inside space-y-1 text-slate-300">
-                <li>Complete <b>${cfg.targetDips} cMPLi Dip</b> daily check-ins.</li>
-                <li>Complete <b>${cfg.targetPod} cMPLi POD</b> audio episodes &amp; quizzes.</li>
-                ${cfg.targetImmerse > 0 ? `<li>Complete <b>${cfg.targetImmerse} cMPLi Immerse</b> sessions.</li>` : ''}
-                <li>Earn at least <b>${cfg.minLCs} LCs</b> in this milestone.</li>
+                ${(cfg.prerequisites || []).map(p => {
+                    const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === p.module)) || { name: (p.module || '').toUpperCase() };
+                    if (p.type === 'lcs') {
+                        return `<li>Earn at least <b>${p.targetValue} LCs</b> in <b>${mObj.name}</b>.</li>`;
+                    } else {
+                        return `<li>Complete <b>${p.targetValue} ${mObj.name}</b> check-in days / sessions.</li>`;
+                    }
+                }).join('')}
+                <li>Earn at least <b>${cfg.minLCs} total LCs</b> in this milestone.</li>
                 <li>${cfg.autoUnlockNext ? 'The next milestone unlocks automatically once your credential is claimed.' : 'The Creator reviews and approves every credential before the next milestone unlocks.'}</li>
             </ul>
         </div>
