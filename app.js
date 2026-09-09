@@ -10791,6 +10791,233 @@ window.discardAudioDraft = async function(idx, draftKey) {
     } catch(e) {}
 };
 
+// ==============================================================
+// RICH-TEXT / MARKDOWN FORMATTER FOR CHECK-IN SCRIPTS & ARTICLES
+// Supports bold, italics, bullet lists, numbered lists, and paragraphs
+// ==============================================================
+function renderMarkdownText(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    // If text already has full HTML tags, sanitize scripts and return
+    const hasHtmlTags = /<(?:p|b|strong|i|em|ul|ol|li|h[1-6]|div|br)\b/i.test(text);
+    if (hasHtmlTags) {
+        return text.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/\n/g, '<br/>');
+    }
+
+    // Escape raw HTML entities to prevent injection
+    let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // Bold formatting: **bold** or __bold__
+    escaped = escaped.replace(/\*\*(.+?)\*\*/g, (_, p) => `<strong class="font-bold text-white">${p}</strong>`);
+    escaped = escaped.replace(/__(.+?)__/g, (_, p) => `<strong class="font-bold text-white">${p}</strong>`);
+
+    // Italic formatting: *italic* or _italic_
+    escaped = escaped.replace(/(?<!\*)\*(?!\*)([^\*\n]+?)(?<!\*)\*(?!\*)/g, (_, p) => `<em class="italic text-slate-300">${p}</em>`);
+    escaped = escaped.replace(/(?<!_)_(?!_)([^_\n]+?)(?<!_)_(?!_)/g, (_, p) => `<em class="italic text-slate-300">${p}</em>`);
+
+    // Bullet and paragraph processing
+    const lines = escaped.split('\n');
+    const out = [];
+    let inList = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const bulletMatch = trimmed.match(/^[\-\*•]\s+(.*)$/);
+        const numMatch = trimmed.match(/^(\d+)[\.\)]\s+(.*)$/);
+
+        if (bulletMatch) {
+            if (!inList) {
+                out.push('<ul class="list-disc list-inside space-y-1.5 my-2 pl-2 text-slate-300">');
+                inList = 'ul';
+            }
+            out.push(`<li class="leading-relaxed">${bulletMatch[1]}</li>`);
+        } else if (numMatch) {
+            if (!inList) {
+                out.push('<ol class="list-decimal list-inside space-y-1.5 my-2 pl-2 text-slate-300">');
+                inList = 'ol';
+            }
+            out.push(`<li class="leading-relaxed">${numMatch[2]}</li>`);
+        } else {
+            if (inList) {
+                out.push(inList === 'ol' ? '</ol>' : '</ul>');
+                inList = false;
+            }
+            if (trimmed.length > 0) {
+                out.push(`<p class="mb-3 leading-relaxed text-slate-300">${trimmed}</p>`);
+            } else {
+                out.push('<div class="h-2"></div>');
+            }
+        }
+    }
+    if (inList) {
+        out.push(inList === 'ol' ? '</ol>' : '</ul>');
+    }
+    return out.join('\n');
+}
+window.renderMarkdownText = renderMarkdownText;
+
+// ==============================================================
+// TELEPROMPTER AUTO-SCROLL ENGINE
+// Smoothly scrolls reading content during microphone recording
+// ==============================================================
+window._teleprompterInterval = null;
+window._teleprompterSpeed = 1; // 1x, 1.5x, 2x
+window._teleprompterIsPlaying = false;
+
+function startTeleprompterScroll() {
+    const vp = document.getElementById('teleprompter_viewport');
+    if (!vp) return;
+    if (window._teleprompterInterval) {
+        clearInterval(window._teleprompterInterval);
+        window._teleprompterInterval = null;
+    }
+    window._teleprompterIsPlaying = true;
+    updateTeleprompterControlsUI(true);
+
+    const stepMs = 30;
+    window._teleprompterInterval = setInterval(() => {
+        const vpEl = document.getElementById('teleprompter_viewport');
+        if (!vpEl) {
+            stopTeleprompterScroll();
+            return;
+        }
+        const maxScroll = vpEl.scrollHeight - vpEl.clientHeight;
+        if (vpEl.scrollTop >= maxScroll - 2) {
+            // Reached bottom
+            stopTeleprompterScroll();
+            return;
+        }
+        const scrollDelta = 1.0 * (window._teleprompterSpeed || 1);
+        vpEl.scrollTop += scrollDelta;
+    }, stepMs);
+}
+window.startTeleprompterScroll = startTeleprompterScroll;
+
+function stopTeleprompterScroll() {
+    if (window._teleprompterInterval) {
+        clearInterval(window._teleprompterInterval);
+        window._teleprompterInterval = null;
+    }
+    window._teleprompterIsPlaying = false;
+    updateTeleprompterControlsUI(false);
+}
+window.stopTeleprompterScroll = stopTeleprompterScroll;
+
+function toggleTeleprompterScroll() {
+    if (window._teleprompterIsPlaying) {
+        stopTeleprompterScroll();
+    } else {
+        startTeleprompterScroll();
+    }
+}
+window.toggleTeleprompterScroll = toggleTeleprompterScroll;
+
+function resetTeleprompterScroll() {
+    const vp = document.getElementById('teleprompter_viewport');
+    if (vp) vp.scrollTop = 0;
+}
+window.resetTeleprompterScroll = resetTeleprompterScroll;
+
+function setTeleprompterSpeed(spd) {
+    window._teleprompterSpeed = spd;
+    ['1x', '15x', '2x'].forEach(k => {
+        const b = document.getElementById(`btn_tpromp_${k}`);
+        if (b) {
+            b.classList.remove('bg-indigo-600', 'text-white');
+            b.classList.add('bg-slate-800', 'text-slate-400');
+        }
+    });
+    const key = spd === 1.5 ? '15x' : (spd === 2 ? '2x' : '1x');
+    const activeBtn = document.getElementById(`btn_tpromp_${key}`);
+    if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-800', 'text-slate-400');
+        activeBtn.classList.add('bg-indigo-600', 'text-white');
+    }
+}
+window.setTeleprompterSpeed = setTeleprompterSpeed;
+
+function updateTeleprompterControlsUI(isPlaying) {
+    const btnToggle = document.getElementById('btn_teleprompter_toggle');
+    const icon = document.getElementById('icon_teleprompter_toggle');
+    const txt = document.getElementById('text_teleprompter_toggle');
+    if (icon && txt) {
+        if (isPlaying) {
+            icon.className = 'fas fa-pause text-[10px]';
+            txt.textContent = 'Pause';
+            if (btnToggle) {
+                btnToggle.classList.remove('bg-indigo-600/30', 'text-indigo-300');
+                btnToggle.classList.add('bg-amber-600/40', 'text-amber-300', 'border-amber-500/50');
+            }
+        } else {
+            icon.className = 'fas fa-play text-[10px]';
+            txt.textContent = 'Play';
+            if (btnToggle) {
+                btnToggle.classList.remove('bg-amber-600/40', 'text-amber-300', 'border-amber-500/50');
+                btnToggle.classList.add('bg-indigo-600/30', 'text-indigo-300');
+            }
+        }
+    }
+}
+window.updateTeleprompterControlsUI = updateTeleprompterControlsUI;
+
+// ==============================================================
+// CREATOR GOOGLE SHEETS LIVE SYNC TRIGGER
+// ==============================================================
+async function triggerGoogleSheetSync() {
+    const btn = document.getElementById('btnSyncGoogleSheet');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin text-emerald-400"></i> <span>Syncing Sheet...</span>';
+    }
+
+    try {
+        const res = await apiFetch('/api/sync-google-sheet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        }).then(r => r.json());
+
+        if (res && res.success) {
+            const syncRes = await apiFetch('/api/sync').then(r => r.json());
+            if (syncRes && syncRes.data && syncRes.data.milestoneConfigs) {
+                customMilestoneConfigs = syncRes.data.milestoneConfigs;
+                try {
+                    localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+                } catch(e) {}
+            }
+
+            if (typeof renderAdminCheckinsList === 'function') renderAdminCheckinsList();
+            if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+            if (typeof loadAdminCheckinEditor === 'function') {
+                loadAdminCheckinEditor(activeAdminDateKey || getLocalDateKey(new Date()));
+            }
+
+            if (btn) {
+                btn.innerHTML = `<i class="fas fa-check text-emerald-400"></i> <span>Synced (${res.count || 0})!</span>`;
+            }
+            alert(`🎉 Successfully synced ${res.count || 0} check-in sessions from Google Sheet!`);
+        } else {
+            alert('Google Sheet sync returned: ' + (res.error || res.message || 'Unknown issue'));
+        }
+    } catch(err) {
+        console.error('Google Sheet sync error:', err);
+        alert('Failed to sync Google Sheet: ' + err.message);
+    } finally {
+        setTimeout(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }, 2500);
+    }
+}
+window.triggerGoogleSheetSync = triggerGoogleSheetSync;
+
 async function startAudioRecording(idx) {
     try {
         // Close any dangling AudioContext from previous runs to prevent resource leak on iOS/mobile
@@ -10971,6 +11198,7 @@ async function startAudioRecording(idx) {
 
         // Pass 1000ms timeslice to receive audio chunks every second for real-time draft saving
         _audioRecorder.start(1000);
+        startTeleprompterScroll();
         const startBtn = document.getElementById(`btn_start_audio_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_audio_${idx}`);
         if (startBtn) startBtn.classList.add('hidden');
@@ -10989,6 +11217,7 @@ function stopAudioRecording(idx) {
     if (_audioRecorder && _audioRecorder.state !== 'inactive') {
         _audioRecorder.stop();
     }
+    stopTeleprompterScroll();
 }
 window.stopAudioRecording = stopAudioRecording;
 
@@ -11128,6 +11357,7 @@ async function startVideoRecording(idx) {
         };
 
         _videoRecorder.start();
+        startTeleprompterScroll();
         const startBtn = document.getElementById(`btn_start_video_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
         const rerecordBtn = document.getElementById(`btn_rerecord_video_${idx}`);
@@ -11148,6 +11378,7 @@ function stopVideoRecording(idx) {
     if (_videoRecorder && _videoRecorder.state !== 'inactive') {
         _videoRecorder.stop();
     }
+    stopTeleprompterScroll();
 }
 window.stopVideoRecording = stopVideoRecording;
 
@@ -11712,6 +11943,60 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                 </div>
                 `}
 
+                <!-- ONE MAIN REFLECTION QUESTION HIGHLIGHT (FOR DIP/GENERAL) -->
+                ${(!isImmerse && dayConfig.mainQuestion) ? `
+                <div class="p-4 bg-indigo-950/30 rounded-2xl border border-indigo-500/40 space-y-1.5 shadow-inner">
+                    <div class="flex items-center gap-2">
+                        <span class="badge-pill bg-indigo-600/30 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
+                            <i class="fas fa-question-circle mr-1"></i> Today's Reflection Focus
+                        </span>
+                    </div>
+                    <h4 class="text-sm font-bold text-white leading-relaxed font-heading">${dayConfig.mainQuestion}</h4>
+                </div>
+                ` : ''}
+
+                <!-- MASTER REFERENCE ARTICLE & READING TELEPROMPTER -->
+                ${(dayConfig.articleText || dayConfig.description) ? `
+                <div class="glass-card p-4 sm:p-5 rounded-2xl border border-indigo-500/30 bg-slate-950/80 shadow-lg space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/30">
+                                <i class="fas fa-file-alt"></i>
+                            </span>
+                            <div>
+                                <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                    Reference Script &amp; Teleprompter
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Auto-Flow</span>
+                                </h5>
+                                <p class="text-[10px] text-slate-400">Flows naturally down when you hit &quot;Record with Mic&quot;</p>
+                            </div>
+                        </div>
+                        <!-- Teleprompter Flow Controls -->
+                        <div class="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                            <button type="button" onclick="toggleTeleprompterScroll()" id="btn_teleprompter_toggle" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 border border-indigo-500/40 transition-all flex items-center gap-1">
+                                <i class="fas fa-play text-[10px]" id="icon_teleprompter_toggle"></i> <span id="text_teleprompter_toggle">Play</span>
+                            </button>
+                            <button type="button" onclick="resetTeleprompterScroll()" class="px-2 py-1 text-[11px] font-bold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" title="Reset to top">
+                                <i class="fas fa-undo text-[10px]"></i>
+                            </button>
+                            <div class="flex items-center gap-1 pl-1 border-l border-slate-800">
+                                <span class="text-[10px] text-slate-400 px-1">Speed:</span>
+                                <button type="button" onclick="setTeleprompterSpeed(1)" id="btn_tpromp_1x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white">1x</button>
+                                <button type="button" onclick="setTeleprompterSpeed(1.5)" id="btn_tpromp_15x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400 hover:text-white">1.5x</button>
+                                <button type="button" onclick="setTeleprompterSpeed(2)" id="btn_tpromp_2x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400 hover:text-white">2x</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Teleprompter Scrollable Viewport -->
+                    <div id="teleprompter_viewport" class="relative max-h-60 sm:max-h-72 overflow-y-auto custom-scrollbar p-4 bg-slate-900/70 rounded-xl border border-slate-800/80 leading-relaxed text-xs sm:text-sm">
+                        <div id="teleprompter_content" class="text-slate-200 select-text">
+                            ${renderMarkdownText(dayConfig.articleText || dayConfig.description)}
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
                 <!-- Questions Form -->
                 <form id="activeCheckinForm" onsubmit="event.preventDefault(); submitCheckinForm(${dayNum}, '${moduleName}', '${cardDateKey}', ${lcOnTime}, ${lcLate}, '${endTime}')" class="space-y-5">
                     ${(dayConfig.tasks && dayConfig.tasks.length > 0) ? `
@@ -11888,6 +12173,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
 window.openSubmissionModal = openSubmissionModal;
 
 function closeSubmissionModal() {
+    stopTeleprompterScroll();
     if (_audioRecorder && _audioRecorder.state !== 'inactive') {
         try { _audioRecorder.stop(); } catch(e) {}
     }

@@ -572,11 +572,16 @@
                     <!-- Module Sub Nav (All 6 Modules) -->
                     <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar" id="adminMilestoneSubNav"></div>
 
-                    <!-- View Switcher -->
-                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-lg overflow-x-auto no-scrollbar">
-                        <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md whitespace-nowrap">Check-ins & Quiz Setup</button>
-                        <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Completion Grid Matrix</button>
-                        <button id="btnTabPrereqs" onclick="switchAdminMilestoneTab('prereqs')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Credential Prerequisites</button>
+                    <!-- View Switcher & Quick Actions -->
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 max-w-lg overflow-x-auto no-scrollbar">
+                            <button id="btnTabCheckins" onclick="switchAdminMilestoneTab('checkins')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md whitespace-nowrap">Check-ins &amp; Quiz Setup</button>
+                            <button id="btnTabCompletion" onclick="switchAdminMilestoneTab('completion')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Completion Grid Matrix</button>
+                            <button id="btnTabPrereqs" onclick="switchAdminMilestoneTab('prereqs')" class="shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap">Credential Prerequisites</button>
+                        </div>
+                        <button id="btnSyncGoogleSheet" onclick="triggerGoogleSheetSync()" class="px-3.5 py-2 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 text-xs font-bold transition-all flex items-center gap-2 shadow-sm">
+                            <i class="fas fa-file-excel text-emerald-400"></i> <span>Sync Google Sheet</span>
+                        </button>
                     </div>
 
                     <!-- VIEW 1: Checkins / POD Quiz Configurator -->

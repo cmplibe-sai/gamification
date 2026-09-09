@@ -749,6 +749,352 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 
 
 // ==============================================================
+// GOOGLE SHEETS LIVE SYNC ENGINE FOR CHECK-INS & QUIZZES
+// ==============================================================
+const DEFAULT_GOOGLE_SHEET_ID = '1uiiUiqJ-_wtOzbtBZwFuaOS0C6NlV405ZE4RCdTy7VU';
+
+function parseCSV(text) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                field += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            row.push(field.trim());
+            field = '';
+        } else if ((char === '\r' || char === '\n') && !inQuotes) {
+            if (char === '\r' && nextChar === '\n') i++;
+            row.push(field.trim());
+            if (row.some(c => c.length > 0)) rows.push(row);
+            row = [];
+            field = '';
+        } else {
+            field += char;
+        }
+    }
+    if (field.length > 0 || row.length > 0) {
+        row.push(field.trim());
+        if (row.some(c => c.length > 0)) rows.push(row);
+    }
+    return rows;
+}
+
+function normalizeDateKey(val) {
+    if (!val) return null;
+    const str = String(val).trim();
+    // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    let m = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (m) {
+        const d = m[1].padStart(2, '0');
+        const mo = m[2].padStart(2, '0');
+        const y = m[3];
+        return `${y}-${mo}-${d}`;
+    }
+    // YYYY-MM-DD or YYYY/MM/DD
+    m = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (m) {
+        const y = m[1];
+        const mo = m[2].padStart(2, '0');
+        const d = m[3].padStart(2, '0');
+        return `${y}-${mo}-${d}`;
+    }
+    // 8-digit DDMMyyyy
+    m = str.match(/^(\d{2})(\d{2})(\d{4})$/);
+    if (m) {
+        const d = m[1];
+        const mo = m[2];
+        const y = m[3];
+        return `${y}-${mo}-${d}`;
+    }
+    return null;
+}
+
+function normalizeModule(val) {
+    const s = String(val || '').toLowerCase().trim();
+    if (s.includes('immerse')) return 'immerse';
+    if (s.includes('pod')) return 'pod';
+    if (s.includes('dip')) return 'dip';
+    return 'dip';
+}
+
+function normalizeTime(val, fallback) {
+    if (!val) return fallback;
+    const s = String(val).trim();
+    const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+    if (m12) {
+        let h = parseInt(m12[1], 10);
+        const min = (m12[2] || '00').padStart(2, '0');
+        const ap = m12[3].toLowerCase();
+        if (ap === 'pm' && h < 12) h += 12;
+        if (ap === 'am' && h === 12) h = 0;
+        return `${String(h).padStart(2, '0')}:${min}`;
+    }
+    const m24 = s.match(/^(\d{1,2}):(\d{2})$/);
+    if (m24) {
+        return `${m24[1].padStart(2, '0')}:${m24[2]}`;
+    }
+    return fallback;
+}
+
+function deriveDayNumber(module, dateKey, explicitDay) {
+    if (explicitDay && !isNaN(Number(explicitDay)) && Number(explicitDay) > 0) {
+        return Number(explicitDay);
+    }
+    if (!dateKey) return 1;
+    // Reference start date for cohort (e.g. 2026-09-07)
+    const baseDate = new Date('2026-09-07T00:00:00');
+    const targetDate = new Date(dateKey + 'T00:00:00');
+    if (isNaN(targetDate.getTime())) return 1;
+
+    if (module === 'immerse') {
+        // Mon, Wed, Fri
+        let cur = new Date(baseDate.getTime());
+        let count = 0;
+        if (targetDate >= baseDate) {
+            while (cur <= targetDate) {
+                const dow = cur.getDay();
+                if (dow === 1 || dow === 3 || dow === 5) count++;
+                cur.setDate(cur.getDate() + 1);
+            }
+            return Math.max(1, count);
+        }
+        return 1;
+    } else {
+        // Dip / Pod: Mon - Sat (skip Sunday)
+        let cur = new Date(baseDate.getTime());
+        let count = 0;
+        if (targetDate >= baseDate) {
+            while (cur <= targetDate) {
+                if (cur.getDay() !== 0) count++;
+                cur.setDate(cur.getDate() + 1);
+            }
+            return Math.max(1, count);
+        }
+        return 1;
+    }
+}
+
+async function syncGoogleSheetData(sheetIdInput) {
+    const sheetId = (sheetIdInput || DEFAULT_GOOGLE_SHEET_ID).trim();
+    console.log(`[GoogleSheetSync] Fetching CSV from sheet: ${sheetId}...`);
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+
+    const res = await fetch(exportUrl);
+    if (!res.ok) {
+        throw new Error(`Failed to fetch Google Sheet CSV: HTTP ${res.status} ${res.statusText}`);
+    }
+    const csvText = await res.text();
+    const rows = parseCSV(csvText);
+    if (!rows || rows.length < 2) {
+        return { success: true, count: 0, message: 'No data rows found in Google Sheet' };
+    }
+
+    const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
+    const getIdx = (candidates) => headers.findIndex(h => candidates.some(c => h === c || h.includes(c)));
+
+    const dateIdx = getIdx(['date']);
+    const modIdx = getIdx(['module']);
+    const msIdx = getIdx(['milestone']);
+    const titleIdx = getIdx(['title', 'topic']);
+    const descIdx = getIdx(['description', 'article']);
+    const mainQIdx = getIdx(['main question', 'question']);
+    const lcOnTimeIdx = getIdx(['on time', 'lc on time', 'lcs on time']);
+    const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
+    const startIdx = getIdx(['start time', 'start']);
+    const endIdx = getIdx(['end time', 'end']);
+    const timeWinIdx = getIdx(['interval', 'window', 'timing']);
+    const dayIdx = getIdx(['day number', 'session day', 'day', 'session']);
+    const audioUrlIdx = getIdx(['audio url', 'audio link', 'podcast url', 'audio']);
+    const quizQIdx = getIdx(['quiz question', 'q1 question', 'mcq']);
+    const quizOptIdx = getIdx(['quiz options', 'options', 'choices']);
+    const quizAnsIdx = getIdx(['quiz answer', 'correct answer', 'answer', 'correct']);
+
+    const currentConfigs = getMilestoneConfigsFromDb();
+    let syncedCount = 0;
+    const syncedEntries = [];
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const rawDate = dateIdx !== -1 ? row[dateIdx] : '';
+        const dateKey = normalizeDateKey(rawDate);
+        if (!dateKey) continue;
+
+        const module = normalizeModule(modIdx !== -1 ? row[modIdx] : 'dip');
+        const msId = String((msIdx !== -1 && row[msIdx]) ? row[msIdx] : '1').trim() || '1';
+        const title = (titleIdx !== -1 ? row[titleIdx] : '') || `cMPLi ${module.toUpperCase()} Insights`;
+        const articleText = (descIdx !== -1 ? row[descIdx] : '') || '';
+        const mainQuestion = (mainQIdx !== -1 ? row[mainQIdx] : '') || '';
+        const rawLcOn = lcOnTimeIdx !== -1 ? parseInt(row[lcOnTimeIdx], 10) : NaN;
+        const rawLcLate = lcLateIdx !== -1 ? parseInt(row[lcLateIdx], 10) : NaN;
+
+        const lcOnTime = !isNaN(rawLcOn) && rawLcOn > 0 ? rawLcOn : (msId === '1' ? 33 : 133);
+        const lcLate = module === 'immerse' ? 0 : (!isNaN(rawLcLate) ? rawLcLate : 3);
+
+        let startTime = (startIdx !== -1 && row[startIdx]) ? normalizeTime(row[startIdx], '05:00') : '05:00';
+        let endTime = (endIdx !== -1 && row[endIdx]) ? normalizeTime(row[endIdx], module === 'immerse' ? '23:59' : '17:00') : (module === 'immerse' ? '23:59' : '17:00');
+        if (timeWinIdx !== -1 && row[timeWinIdx]) {
+            const parts = row[timeWinIdx].split(/[-–to]+/i);
+            if (parts.length >= 2) {
+                startTime = normalizeTime(parts[0], startTime);
+                endTime = normalizeTime(parts[1], endTime);
+            }
+        }
+
+        // Derive Day Number
+        const explicitDay = dayIdx !== -1 ? row[dayIdx] : null;
+        let dayNum = null;
+        if (currentConfigs[msId]?.[module]?.[dateKey]?.dayNumber) {
+            dayNum = currentConfigs[msId][module][dateKey].dayNumber;
+        } else {
+            dayNum = deriveDayNumber(module, dateKey, explicitDay);
+        }
+
+        // Audio URL for podcast or audio reflection
+        let audioUrl = (audioUrlIdx !== -1 ? row[audioUrlIdx] : '') || '';
+        if (!audioUrl && mainQuestion && (mainQuestion.startsWith('http://') || mainQuestion.startsWith('https://')) && (mainQuestion.includes('.mp3') || mainQuestion.includes('.wav') || mainQuestion.includes('.m4a') || mainQuestion.includes('cloudinary'))) {
+            audioUrl = mainQuestion;
+        }
+
+        // Questions builder
+        let questions = [];
+        if (module === 'pod') {
+            let quizTitle = (quizQIdx !== -1 ? row[quizQIdx] : '') || mainQuestion || 'SimpliPod Reflection Quiz';
+            let optionsStr = (quizOptIdx !== -1 ? row[quizOptIdx] : '');
+            let answerStr = (quizAnsIdx !== -1 ? row[quizAnsIdx] : '0');
+            let options = [];
+            if (optionsStr) {
+                options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
+            }
+            if (options.length === 0) {
+                const optA = row[getIdx(['option a', 'opt a'])] || 'Option A';
+                const optB = row[getIdx(['option b', 'opt b'])] || 'Option B';
+                const optC = row[getIdx(['option c', 'opt c'])] || 'Option C';
+                const optD = row[getIdx(['option d', 'opt d'])] || 'Option D';
+                options = [optA, optB, optC, optD];
+            }
+
+            let correctOpt = 0;
+            const rawAns = String(answerStr || '').toUpperCase().trim();
+            if (rawAns === 'B' || rawAns === '2') correctOpt = 1;
+            else if (rawAns === 'C' || rawAns === '3') correctOpt = 2;
+            else if (rawAns === 'D' || rawAns === '4') correctOpt = 3;
+            else if (!isNaN(parseInt(rawAns, 10)) && parseInt(rawAns, 10) >= 0 && parseInt(rawAns, 10) <= 3) correctOpt = parseInt(rawAns, 10);
+
+            questions = [
+                {
+                    id: `q_${Date.now()}_${i}`,
+                    title: quizTitle,
+                    type: 'mcq',
+                    options: options.length >= 2 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
+                    correctOption: correctOpt,
+                    pts: 11
+                }
+            ];
+        } else if (module === 'immerse') {
+            questions = [
+                {
+                    title: mainQuestion || "Record your video reflection answering today's main question.",
+                    type: 'video'
+                }
+            ];
+        } else {
+            // Dip
+            questions = [
+                {
+                    title: mainQuestion || "What key insight or reflection did you gain today?",
+                    type: 'text'
+                },
+                {
+                    title: "Upload Audio Reflection / Voice Note (3-4 mins)",
+                    type: 'audio'
+                }
+            ];
+        }
+
+        const dayConfig = {
+            date: dateKey,
+            dateKey: dateKey,
+            dayNumber: dayNum,
+            sessionDay: dayNum,
+            day: dayNum,
+            title: title,
+            articleText: articleText,
+            description: articleText,
+            mainQuestion: mainQuestion,
+            audioTitle: title,
+            audioUrl: audioUrl,
+            lcOnTime: lcOnTime,
+            lcLate: lcLate,
+            startTime: startTime,
+            endTime: endTime,
+            questions: questions,
+            tasks: currentConfigs[msId]?.[module]?.[dateKey]?.tasks || [],
+            extra: Boolean(currentConfigs[msId]?.[module]?.[dateKey]?.extra),
+            cancelled: Boolean(currentConfigs[msId]?.[module]?.[dateKey]?.cancelled)
+        };
+
+        if (!currentConfigs[msId]) currentConfigs[msId] = {};
+        if (!currentConfigs[msId][module]) currentConfigs[msId][module] = {};
+        currentConfigs[msId][module][dateKey] = dayConfig;
+
+        syncedCount++;
+        syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum });
+    }
+
+    saveMilestoneConfigsToDb(currentConfigs);
+    console.log(`[GoogleSheetSync] ✅ Successfully synced ${syncedCount} sessions from Google Sheet (${sheetId})`);
+    return {
+        success: true,
+        count: syncedCount,
+        sheetId: sheetId,
+        syncedEntries: syncedEntries
+    };
+}
+
+// REST Endpoints for Google Sheet Sync
+app.get(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
+    try {
+        const sheetId = req.query.sheetId || DEFAULT_GOOGLE_SHEET_ID;
+        const result = await syncGoogleSheetData(sheetId);
+        res.json(result);
+    } catch (err) {
+        console.error('[GoogleSheetSync Error]:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
+    try {
+        const sheetId = req.body.sheetId || req.query.sheetId || DEFAULT_GOOGLE_SHEET_ID;
+        const result = await syncGoogleSheetData(sheetId);
+        res.json(result);
+    } catch (err) {
+        console.error('[GoogleSheetSync Error]:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Periodic automatic background sync (every 10 minutes) & initial sync at server start
+setTimeout(() => {
+    syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Initial GoogleSheetSync Notice]:', err.message));
+}, 3000);
+setInterval(() => {
+    syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Periodic GoogleSheetSync Notice]:', err.message));
+}, 10 * 60 * 1000);
+
+
+// ==============================================================
 // DEDICATED MILESTONE CREDENTIAL PREREQUISITES DATABASE ENGINE
 // (Creator-configurable: target Dips/POD/Immerse counts, min LCs,
 //  and whether the next milestone auto-unlocks or needs admin approval)
