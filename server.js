@@ -2190,7 +2190,15 @@ app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (r
         }
 
         const { adminSecret } = req.body || {};
-        const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || 'cmpli_creator_2026').trim();
+        const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
+
+        if (!configuredSecret) {
+            console.error('[Security Error] CREATOR_ADMIN_SECRET is not configured on the server.');
+            return res.status(503).json({ 
+                success: false, 
+                error: 'Creator authentication service unavailable: CREATOR_ADMIN_SECRET is not configured on the server.' 
+            });
+        }
 
         if (!adminSecret || typeof adminSecret !== 'string') {
             return res.status(403).json({ 
