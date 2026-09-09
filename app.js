@@ -325,10 +325,7 @@ function getLqEligibleDays(userId, msId, moduleCode) {
     if (isNaN(startDateObj.getTime())) startDateObj = new Date();
 
     const cfg = getMilestonePrereqConfig(msId);
-    let maxSessions = 21;
-    if (cleanMod === 'dip') maxSessions = cfg.targetDips || 21;
-    else if (cleanMod === 'pod') maxSessions = cfg.targetPod || 21;
-    else if (cleanMod === 'immerse') maxSessions = cfg.targetImmerse || 10;
+    let maxSessions = 100;
 
     let eligibleCount = 0;
     for (let d = 1; d <= maxSessions; d++) {
@@ -6138,6 +6135,36 @@ function getEnabledModulesForMilestone(msId) {
 //  as customMilestonePrereqs; falls back to these platform defaults
 //  when a Creator has not customized a milestone yet)
 // ==============================================================
+// Helper to determine the unit of completion for each platform module
+function getModuleCompletionUnit(moduleCode) {
+    const code = normalizeLevelUpType(moduleCode || 'dip');
+    if (code === 'projects' || code === 'problem_solution' || code === 'residency') {
+        return 'Projects';
+    }
+    if (code === 'immerse') {
+        return 'Sessions';
+    }
+    return 'Days';
+}
+window.getModuleCompletionUnit = getModuleCompletionUnit;
+
+function getModuleCompletionLabel(moduleCode, criterionType) {
+    const code = normalizeLevelUpType(moduleCode || 'dip');
+    const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === code)) || { name: (moduleCode || '').toUpperCase() };
+    if (criterionType === 'lcs') {
+        return `${mObj.name} LCs`;
+    }
+    const unit = getModuleCompletionUnit(code);
+    if (unit === 'Projects') {
+        return `${mObj.name} Projects Completed`;
+    }
+    if (unit === 'Sessions') {
+        return `${mObj.name} Sessions Completed`;
+    }
+    return `${mObj.name} Check-in Days Completed`;
+}
+window.getModuleCompletionLabel = getModuleCompletionLabel;
+
 var DEFAULT_MILESTONE_PREREQS = {
     "1": {
         prerequisites: [
@@ -6145,7 +6172,7 @@ var DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_1_pod", module: "pod", type: "days", targetValue: 21 },
             { id: "prereq_1_immerse", module: "immerse", type: "days", targetValue: 0 }
         ],
-        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false
+        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 0, autoUnlockNext: false
     },
     "2": {
         prerequisites: [
@@ -6153,7 +6180,7 @@ var DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_2_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     },
     "3": {
         prerequisites: [
@@ -6161,7 +6188,7 @@ var DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_3_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     },
     "4": {
         prerequisites: [
@@ -6169,7 +6196,7 @@ var DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_4_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     }
 };
 window.DEFAULT_MILESTONE_PREREQS = DEFAULT_MILESTONE_PREREQS;
@@ -6196,7 +6223,7 @@ function normalizeMilestonePrereqs(rawCfg) {
         targetDips: dipDays,
         targetPod: podDays,
         targetImmerse: immerseDays,
-        minLCs: (cfg.minLCs !== undefined) ? Number(cfg.minLCs) : 693,
+        minLCs: (cfg.minLCs !== undefined) ? Number(cfg.minLCs) : 0,
         autoUnlockNext: Boolean(cfg.autoUnlockNext)
     };
 }
@@ -6331,7 +6358,7 @@ function openClaimCredentialModal() {
                 const earnedInMod = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
                 const ok = (targetVal === 0) || (earnedInMod >= targetVal);
                 return {
-                    label: `${mObj.name} LCs`,
+                    label: getModuleCompletionLabel(modCode, 'lcs'),
                     icon: mObj.icon || 'fa-coins text-amber-400',
                     have: earnedInMod,
                     need: targetVal,
@@ -6342,19 +6369,21 @@ function openClaimCredentialModal() {
             } else {
                 const count = modSubs.length;
                 const ok = (targetVal === 0) || (count >= targetVal);
+                const unit = getModuleCompletionUnit(modCode);
+                const label = getModuleCompletionLabel(modCode, 'days');
                 return {
-                    label: `${mObj.name} Check-ins / Sessions`,
-                    icon: mObj.icon || 'fa-calendar-check text-indigo-400',
+                    label: label,
+                    icon: mObj.icon || (unit === 'Projects' ? 'fa-briefcase text-purple-400' : (unit === 'Sessions' ? 'fa-water text-cyan-400' : 'fa-calendar-check text-indigo-400')),
                     have: count,
                     need: targetVal,
-                    unit: 'Days',
+                    unit: unit,
                     ok: ok,
-                    barColor: 'bg-indigo-500'
+                    barColor: (unit === 'Projects' ? 'bg-purple-500' : (unit === 'Sessions' ? 'bg-cyan-500' : 'bg-indigo-500'))
                 };
             }
         });
 
-        const meetsAllPrereqs = rows.every(r => r.ok) && meetsLcs;
+        const meetsAllPrereqs = rows.length > 0 ? rows.every(r => r.ok) : true;
         const isAdminApproved = isCertificateApproved(currentUser._id, msId);
         const isCredentialIssued = meetsAllPrereqs && (cfg.autoUnlockNext || isAdminApproved);
 
@@ -6382,7 +6411,6 @@ function openClaimCredentialModal() {
                             <span class="text-emerald-400 font-mono font-bold">${r.have} / ${r.need} ${r.unit}</span>
                         </div>
                     `).join('')}
-                    <div class="flex justify-between text-xs"><span class="text-slate-400">Total LCs Earned:</span><span class="text-amber-400 font-mono font-bold">${totalEarnedLcs} / ${cfg.minLCs} LCs</span></div>
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued &amp; Authenticated</span></div>
                 </div>
 
@@ -6424,10 +6452,6 @@ function openClaimCredentialModal() {
                                 </div>
                             </div>
                         `).join('')}
-                        <div class="flex justify-between items-center pt-2 border-t border-slate-800">
-                            <span class="text-slate-300"><i class="fas fa-coins text-amber-400 mr-1.5"></i> Minimum LCs Target:</span>
-                            <span class="font-mono font-bold ${meetsLcs ? 'text-emerald-400' : 'text-slate-400'}">${totalEarnedLcs} / ${cfg.minLCs} LCs</span>
-                        </div>
                     </div>
                 </div>
 
@@ -6804,6 +6828,10 @@ function renderAdminPrereqsView() {
     ]);
 
     const itemsHtml = prereqList.map((item, idx) => {
+        const itemModCode = normalizeLevelUpType(item.module || 'dip');
+        const unitText = (typeof getModuleCompletionUnit === 'function') ? getModuleCompletionUnit(itemModCode) : 'Days';
+        const criterionDaysLabel = `${unitText} Completed`;
+
         return `
             <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3 relative group" data-prereq-id="${item.id}">
                 <div class="flex items-center justify-between">
@@ -6824,7 +6852,7 @@ function renderAdminPrereqsView() {
                     <div>
                         <label class="block text-[11px] text-slate-400 font-bold mb-1">Criterion</label>
                         <select id="prereqType_${item.id}" onchange="updateAdminPrereqRuleField('${item.id}', 'type', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-medium">
-                            <option value="days" ${item.type === 'days' ? 'selected' : ''}>Days / Sessions Completed</option>
+                            <option value="days" ${item.type === 'days' ? 'selected' : ''}>${criterionDaysLabel}</option>
                             <option value="lcs" ${item.type === 'lcs' ? 'selected' : ''}>Minimum LCs in Module</option>
                         </select>
                     </div>
@@ -6841,7 +6869,7 @@ function renderAdminPrereqsView() {
         <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
             <div>
                 <h4 class="text-sm font-bold text-white font-heading">Milestone ${msId}: ${cleanName} — Credential Prerequisites</h4>
-                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days or minimum LCs) required for learners to claim their credential. Changes apply immediately to every learner in this milestone.</p>
+                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days, projects, or minimum LCs) required for learners to claim their credential. Changes apply immediately to every learner in this milestone.</p>
             </div>
 
             <!-- DYNAMIC PREREQUISITES LIST -->
@@ -6855,13 +6883,6 @@ function renderAdminPrereqsView() {
                 <div id="adminPrereqsListContainer" class="space-y-3">
                     ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites added yet. Click &quot;Add Prerequisite&quot; above.</div>'}
                 </div>
-            </div>
-
-            <!-- OVERALL MILESTONE MINIMUM LCS -->
-            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/60 space-y-1.5">
-                <label class="block text-xs text-slate-300 font-bold">Overall Milestone Minimum Required LCs</label>
-                <p class="text-[11px] text-slate-400">Total Learning Coins earned across all modules required for this milestone.</p>
-                <input type="number" min="0" id="prereqMinLCs" value="${cfg.minLCs}" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono font-bold focus:outline-none focus:border-indigo-500">
             </div>
 
             <!-- AUTO-UNLOCK GATE -->
@@ -6913,6 +6934,9 @@ function updateAdminPrereqRuleField(id, field, value) {
     if (item) {
         if (field === 'targetValue') item[field] = Math.max(0, Number(value) || 0);
         else item[field] = value;
+        if (field === 'module') {
+            renderAdminPrereqsView();
+        }
     }
 }
 window.updateAdminPrereqRuleField = updateAdminPrereqRuleField;
@@ -6920,12 +6944,11 @@ window.updateAdminPrereqRuleField = updateAdminPrereqRuleField;
 async function saveAdminPrereqsForm() {
     const msId = activeAdminMilestoneId || 1;
     const prereqs = Array.isArray(window._adminPrereqsWorkingList) ? window._adminPrereqsWorkingList : [];
-    const minLCs = Math.max(0, Number(document.getElementById('prereqMinLCs')?.value) || 0);
     const autoUnlockNext = !!document.getElementById('prereqAutoUnlock')?.checked;
 
     const patch = {
         prerequisites: prereqs,
-        minLCs: minLCs,
+        minLCs: 0,
         autoUnlockNext: autoUnlockNext
     };
     await saveMilestonePrereqConfig(msId, patch);
@@ -6938,6 +6961,7 @@ async function saveAdminPrereqsForm() {
     if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
 }
 window.saveAdminPrereqsForm = saveAdminPrereqsForm;
+
 
 function switchAdminModuleTab(mod) {
     activeAdminModule = mod;
@@ -7006,7 +7030,7 @@ function renderAdminCheckinsList() {
 
     // Map each saved date to its canonical day number by computing which standard session slot it falls on.
     // We intentionally IGNORE the stored cfg.dayNumber field here to avoid duplicates from stale configs.
-    let sequentialExtra = totalSessions; // Extra (off-schedule) sessions get day numbers > totalSessions
+    let sequentialExtra = 100; // Extra (off-schedule) sessions get day numbers > 100
     const listItems = savedDates.map((dateKey, idx) => {
         const cfg = msConfigs[dateKey] || {};
         // Skip cancelled sessions — still show in admin list but marked cancelled
@@ -7015,7 +7039,7 @@ function renderAdminCheckinsList() {
 
         // Find which standard slot this dateKey matches (MWF for immerse, Mon-Sat for dip/pod)
         let dayNum = null;
-        for (let d = 1; d <= totalSessions; d++) {
+        for (let d = 1; d <= 100; d++) {
             if (getLocalDateKey(getMilestoneSessionDate(cohortStartDate, d, activeAdminModule)) === dateKey) {
                 dayNum = d;
                 break;
@@ -12710,7 +12734,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                         <i class="fas fa-exclamation-triangle"></i> Important Commitment Notice:
                     </div>
                     <p class="text-[11px] text-amber-200/80 leading-normal">
-                        Your 21-day timeline begins counting from the moment you click Join. Make sure you are ready to commit to daily reflections and check-ins.
+                        Your milestone timeline begins counting from the moment you click Join. Make sure you are ready to commit to daily reflections and check-ins to fulfill your milestone prerequisites.
                     </p>
                 </div>
 
@@ -12756,7 +12780,29 @@ function switchMilestoneTab(moduleName, btnElement) {
     const typeSubs = allUserSubs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(moduleName) && String(s.milestoneId || 1) === String(activeMilestoneId || 1));
 
     const isImmerse = (normalizeLevelUpType(moduleName) === 'immerse');
-    let totalSessions = isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30);
+
+    // DYNAMIC MILESTONE HORIZON:
+    // Base target sessions from creator's active prerequisite rule (e.g. 21 for Dip, 9 for Immerse)
+    const prereqCfg = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(activeMilestoneId) : {};
+    const modDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === normalizedMod && p.type === 'days');
+    const baseTargetSessions = modDaysRule ? (Number(modDaysRule.targetValue) || (isImmerse ? 9 : 21)) : (isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30));
+
+    // Calculate elapsed sessions from milestoneStartDate to today
+    let elapsedSessionsTillToday = 1;
+    while (elapsedSessionsTillToday < 500 && getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, elapsedSessionsTillToday, moduleName)) <= todayKey) {
+        elapsedSessionsTillToday++;
+    }
+    // elapsedSessionsTillToday - 1 is today (or the most recent session date on or before today)
+    // Add a rolling buffer of 3 upcoming days so learners always see upcoming schedule
+    const upcomingBuffer = 3;
+    let dynamicSessions = Math.max(baseTargetSessions, (elapsedSessionsTillToday - 1) + upcomingBuffer);
+
+    // Also ensure any higher submission days are included
+    let maxSubDay = 0;
+    typeSubs.forEach(s => {
+        if (s.day && Number(s.day) > maxSubDay) maxSubDay = Number(s.day);
+    });
+    let totalSessions = Math.max(dynamicSessions, maxSubDay);
     let cardsHtml = '';
 
     // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card taking creator rescheduling into account
@@ -12942,7 +12988,32 @@ function switchMilestoneTab(moduleName, btnElement) {
 
     // Calculate module-specific streak and progress banner
     const { completedCount, currentStreak } = calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, moduleName, activeMilestoneId);
-    const pctComplete = Math.min(100, Math.round((completedCount / (totalSessions || 1)) * 100));
+    
+    const activeModRules = (prereqCfg.prerequisites || []).filter(p => normalizeLevelUpType(p.module) === normalizedMod);
+    const activeDaysRule = activeModRules.find(p => p.type === 'days');
+    const activeLcsRule = activeModRules.find(p => p.type === 'lcs');
+
+    let bannerGoalText = '';
+    let pctComplete = 0;
+
+    if (activeLcsRule && !activeDaysRule) {
+        const targetLcs = Number(activeLcsRule.targetValue) || 1;
+        const earnedLcsInMod = typeSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+        pctComplete = Math.min(100, Math.round((earnedLcsInMod / targetLcs) * 100));
+        if (earnedLcsInMod >= targetLcs) {
+            bannerGoalText = `${completedCount} check-ins completed • ${earnedLcsInMod} LCs earned (Prerequisite target of ${targetLcs} LCs met! <i class="fas fa-check-circle text-emerald-400 ml-1"></i>)`;
+        } else {
+            bannerGoalText = `${completedCount} check-ins completed • ${earnedLcsInMod} of ${targetLcs} LCs earned (${targetLcs - earnedLcsInMod} more needed)`;
+        }
+    } else {
+        const targetDays = activeDaysRule ? (Number(activeDaysRule.targetValue) || baseTargetSessions) : baseTargetSessions;
+        pctComplete = Math.min(100, Math.round((completedCount / (targetDays || 1)) * 100));
+        if (completedCount >= targetDays) {
+            bannerGoalText = `${completedCount} check-ins completed (Prerequisite goal of ${targetDays} achieved! <i class="fas fa-check-circle text-emerald-400 ml-1"></i>)`;
+        } else {
+            bannerGoalText = `${completedCount} of ${targetDays} required check-ins completed (${targetDays - completedCount} more needed for credential)`;
+        }
+    }
     const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normalizedMod)) || { name: (moduleName || '').toUpperCase(), icon: 'fa-cube text-slate-400' };
 
     const streakBannerHtml = `
@@ -12959,7 +13030,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                         </span>
                     </div>
                     <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">
-                        ${completedCount} of ${totalSessions} check-ins completed in Milestone ${activeMilestoneId || 1}
+                        ${bannerGoalText}
                     </h3>
                 </div>
             </div>
@@ -14473,14 +14544,15 @@ function openMilestoneEntryModal(msId) {
             <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider"><i class="fas fa-certificate text-indigo-400 mr-1"></i> Credential Prerequisites</h5>
             <ul class="list-disc list-inside space-y-1 text-slate-300">
                 ${(cfg.prerequisites || []).map(p => {
-                    const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === p.module)) || { name: (p.module || '').toUpperCase() };
+                    const modCode = normalizeLevelUpType(p.module || 'dip');
+                    const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: (p.module || '').toUpperCase() };
                     if (p.type === 'lcs') {
                         return `<li>Earn at least <b>${p.targetValue} LCs</b> in <b>${mObj.name}</b>.</li>`;
                     } else {
-                        return `<li>Complete <b>${p.targetValue} ${mObj.name}</b> check-in days / sessions.</li>`;
+                        const unit = (typeof getModuleCompletionUnit === 'function') ? getModuleCompletionUnit(modCode).toLowerCase() : 'days';
+                        return `<li>Complete <b>${p.targetValue} ${unit}</b> in <b>${mObj.name}</b>.</li>`;
                     }
                 }).join('')}
-                <li>Earn at least <b>${cfg.minLCs} total LCs</b> in this milestone.</li>
                 <li>${cfg.autoUnlockNext ? 'The next milestone unlocks automatically once your credential is claimed.' : 'The Creator reviews and approves every credential before the next milestone unlocks.'}</li>
             </ul>
         </div>

@@ -755,7 +755,7 @@ const DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_1_pod", module: "pod", type: "days", targetValue: 21 },
             { id: "prereq_1_immerse", module: "immerse", type: "days", targetValue: 0 }
         ],
-        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 693, autoUnlockNext: false
+        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 0, autoUnlockNext: false
     },
     "2": {
         prerequisites: [
@@ -763,7 +763,7 @@ const DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_2_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     },
     "3": {
         prerequisites: [
@@ -771,7 +771,7 @@ const DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_3_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     },
     "4": {
         prerequisites: [
@@ -779,7 +779,7 @@ const DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_4_pod", module: "pod", type: "days", targetValue: 30 },
             { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 1980, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
     }
 };
 
@@ -798,6 +798,7 @@ function normalizeServerPrereqs(raw) {
                 if (tPod > 0) item.prerequisites.push({ id: `prereq_${k}_pod`, module: 'pod', type: 'days', targetValue: tPod });
                 if (tImmerse > 0) item.prerequisites.push({ id: `prereq_${k}_immerse`, module: 'immerse', type: 'days', targetValue: tImmerse });
             }
+            item.minLCs = (item.minLCs !== undefined) ? Number(item.minLCs) : 0;
         }
     }
     return result;
