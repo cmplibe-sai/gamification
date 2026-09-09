@@ -6346,7 +6346,6 @@ function openClaimCredentialModal() {
 
         const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId));
         const totalEarnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-        const meetsLcs = totalEarnedLcs >= (cfg.minLCs || 0);
 
         const rows = (cfg.prerequisites || []).map(p => {
             const modCode = normalizeLevelUpType(p.module || 'dip');
@@ -12787,15 +12786,24 @@ function switchMilestoneTab(moduleName, btnElement) {
     const modDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === normalizedMod && p.type === 'days');
     const baseTargetSessions = modDaysRule ? (Number(modDaysRule.targetValue) || (isImmerse ? 9 : 21)) : (isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30));
 
-    // Calculate elapsed sessions from milestoneStartDate to today
-    let elapsedSessionsTillToday = 1;
-    while (elapsedSessionsTillToday < 500 && getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, elapsedSessionsTillToday, moduleName)) <= todayKey) {
-        elapsedSessionsTillToday++;
+    // Check if this milestone is already completed/claimed by the learner
+    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
+    const isPastMilestone = (Number(activeMilestoneId) < Number(highestUnlocked));
+    const hasClaimedCredential = (currentUser && currentUser._id && typeof isCertificateApproved === 'function' && isCertificateApproved(currentUser._id, activeMilestoneId));
+    const isCompletedMilestone = isPastMilestone || hasClaimedCredential;
+
+    let dynamicSessions = baseTargetSessions;
+    if (!isCompletedMilestone) {
+        // Active milestone: calculate elapsed sessions from milestoneStartDate to today
+        let elapsedSessionsTillToday = 1;
+        while (elapsedSessionsTillToday < 500 && getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, elapsedSessionsTillToday, moduleName)) <= todayKey) {
+            elapsedSessionsTillToday++;
+        }
+        // elapsedSessionsTillToday - 1 is today (or the most recent session date on or before today)
+        // Add a rolling buffer of 3 upcoming days so learners always see upcoming schedule
+        const upcomingBuffer = 3;
+        dynamicSessions = Math.max(baseTargetSessions, (elapsedSessionsTillToday - 1) + upcomingBuffer);
     }
-    // elapsedSessionsTillToday - 1 is today (or the most recent session date on or before today)
-    // Add a rolling buffer of 3 upcoming days so learners always see upcoming schedule
-    const upcomingBuffer = 3;
-    let dynamicSessions = Math.max(baseTargetSessions, (elapsedSessionsTillToday - 1) + upcomingBuffer);
 
     // Also ensure any higher submission days are included
     let maxSubDay = 0;
