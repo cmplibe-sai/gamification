@@ -1010,11 +1010,16 @@ async function syncGoogleSheetData(sheetIdInput) {
             const cleaned = headers.findIndex(h => cleanedCandidates.includes(cleanHeader(h)));
             if (cleaned !== -1) return cleaned;
 
-            // 3. Whole-token phrase match (avoids false-matching 'milestone' or 'lcs on time' as time/date)
+            // 3. Whole-token phrase match with candidate-aware collision protection
+            const blacklist = ['milestone', 'lc', 'lcs', 'late', 'score'];
+            const activeBlacklist = blacklist.filter(bWord => 
+                !candidates.some(cand => cand.toLowerCase().split(/\s+/).includes(bWord) || cand.toLowerCase().includes(bWord))
+            );
+
             return headers.findIndex(h => {
                 const hClean = h.replace(/[^a-z0-9\s]/g, ' ').trim();
                 const hWords = hClean.split(/\s+/);
-                if (hWords.includes('milestone') || hWords.includes('lc') || hWords.includes('lcs') || hWords.includes('late') || hWords.includes('score')) {
+                if (activeBlacklist.some(bWord => hWords.includes(bWord))) {
                     return false;
                 }
                 return candidates.some(cand => {
