@@ -863,7 +863,76 @@ function normalizeTime(val, fallback) {
     if (m24) {
         return `${m24[1].padStart(2, '0')}:${m24[2]}`;
     }
+    const mHourOnly = s.match(/^(\d{1,2})$/);
+    if (mHourOnly) {
+        const h = parseInt(mHourOnly[1], 10);
+        if (h >= 0 && h <= 24) {
+            return `${String(h).padStart(2, '0')}:00`;
+        }
+    }
     return fallback;
+}
+
+// Parses flexible time window strings from Google Sheets:
+// Supports ranges ("05:00 - 17:00", "5:00 PM - 7:00 PM", "17:00–18:30", "17:00 to 18:30"),
+// start + durations ("18:00 for 90 mins", "5 PM for 2 hours", "17:00, 45m"),
+// and standalone durations ("2 hours", "45 mins", "90 minutes", "1.5 hrs")
+function parseTimeWindow(val, currentStart, currentEnd) {
+    if (!val) return { startTime: currentStart, endTime: currentEnd };
+    const s = String(val).trim();
+    if (!s) return { startTime: currentStart, endTime: currentEnd };
+
+    // Pattern 1: Explicit Range e.g. "05:00 - 17:00", "5:00 PM - 7:00 PM", "5:00 PM to 6:30 PM", "17:00–18:30", "17:00 to 18:30"
+    const rangeSplit = s.split(/\s*(?:[-–—~]|\bto\b)\s*/i);
+    if (rangeSplit.length >= 2 && rangeSplit[0].trim() && rangeSplit[1].trim()) {
+        const p1 = normalizeTime(rangeSplit[0].trim(), currentStart);
+        const p2 = normalizeTime(rangeSplit[1].trim(), currentEnd);
+        return { startTime: p1, endTime: p2 };
+    }
+
+    // Pattern 2: Start time + duration e.g. "17:00 for 90 mins", "5 PM for 2 hours", "18:00, 45m", "17:00 + 1.5h"
+    const startPlusDur = s.match(/^(\d{1,2}(?::\d{2})?(?:\s*[AP]M)?)\s*(?:for|,|\+)\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)$/i);
+    if (startPlusDur) {
+        const baseStart = normalizeTime(startPlusDur[1].trim(), currentStart || '05:00');
+        const num = parseFloat(startPlusDur[2]);
+        const unit = startPlusDur[3].toLowerCase();
+        const addMinutes = (unit.startsWith('h')) ? Math.round(num * 60) : Math.round(num);
+        const [startH, startM] = (baseStart || '05:00').split(':').map(Number);
+        const totalStartMin = ((startH || 0) * 60) + (startM || 0);
+        const totalEndMin = Math.min(23 * 60 + 59, totalStartMin + addMinutes);
+        const endH = Math.floor(totalEndMin / 60);
+        const endM = totalEndMin % 60;
+        return {
+            startTime: baseStart,
+            endTime: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+        };
+    }
+
+    // Pattern 3: Duration only e.g. "2 hours", "1.5 hrs", "45 mins", "90 minutes", "1h", "45m"
+    const durMatch = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)$/i);
+    if (durMatch) {
+        const num = parseFloat(durMatch[1]);
+        const unit = durMatch[2].toLowerCase();
+        const addMinutes = (unit.startsWith('h')) ? Math.round(num * 60) : Math.round(num);
+
+        const [startH, startM] = (currentStart || '05:00').split(':').map(Number);
+        const totalStartMin = ((startH || 0) * 60) + (startM || 0);
+        const totalEndMin = Math.min(23 * 60 + 59, totalStartMin + addMinutes);
+        const endH = Math.floor(totalEndMin / 60);
+        const endM = totalEndMin % 60;
+        return {
+            startTime: currentStart || '05:00',
+            endTime: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+        };
+    }
+
+    // Pattern 4: Single time given (e.g. "05:00" or "5:00 PM"), update startTime
+    const singleTime = normalizeTime(s, null);
+    if (singleTime) {
+        return { startTime: singleTime, endTime: currentEnd };
+    }
+
+    return { startTime: currentStart, endTime: currentEnd };
 }
 
 function deriveDayNumber(module, dateKey, explicitDay) {
@@ -929,7 +998,32 @@ async function syncGoogleSheetData(sheetIdInput) {
         }
 
         const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
-        const getIdx = (candidates) => headers.findIndex(h => candidates.some(c => h === c || h.includes(c) || c.includes(h)));
+        const cleanHeader = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const getIdx = (candidates) => {
+            // 1. Exact match
+            const exact = headers.findIndex(h => candidates.some(c => h === c));
+            if (exact !== -1) return exact;
+
+            // 2. Cleaned exact match (e.g. 'time-duration' vs 'timeduration')
+            const cleanedCandidates = candidates.map(c => cleanHeader(c));
+            const cleaned = headers.findIndex(h => cleanedCandidates.includes(cleanHeader(h)));
+            if (cleaned !== -1) return cleaned;
+
+            // 3. Whole-token phrase match (avoids false-matching 'milestone' or 'lcs on time' as time/date)
+            return headers.findIndex(h => {
+                const hClean = h.replace(/[^a-z0-9\s]/g, ' ').trim();
+                const hWords = hClean.split(/\s+/);
+                if (hWords.includes('milestone') || hWords.includes('lc') || hWords.includes('lcs') || hWords.includes('late') || hWords.includes('score')) {
+                    return false;
+                }
+                return candidates.some(cand => {
+                    const candClean = cand.replace(/[^a-z0-9\s]/g, ' ').trim();
+                    if (candClean.length < 3) return false;
+                    return hClean === candClean || hClean.startsWith(candClean + ' ') || hClean.endsWith(' ' + candClean) || hClean.includes(' ' + candClean + ' ');
+                });
+            });
+        };
 
         const dateIdx = getIdx(['date']);
         const modIdx = getIdx(['module']);
@@ -939,17 +1033,39 @@ async function syncGoogleSheetData(sheetIdInput) {
         const mainQIdx = getIdx(['main question', 'question']);
         const lcOnTimeIdx = getIdx(['on time', 'lc on time', 'lcs on time']);
         const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
-        const startIdx = getIdx(['start time', 'start']);
-        const endIdx = getIdx(['end time', 'end']);
-        const timeWinIdx = getIdx(['interval', 'window', 'timing']);
+        const startIdx = getIdx(['start time', 'window start', 'opens at', 'open time', 'start', 'from time']);
+        const endIdx = getIdx(['end time', 'window end', 'closes at', 'close time', 'to time', 'end', 'deadline']);
+        const timeWinIdx = getIdx(['time duration', 'time window', 'timing', 'duration', 'submission window', 'open hours', 'time slot', 'interval', 'window']);
         const dayIdx = getIdx(['day number', 'session day', 'day', 'session']);
         const audioUrlIdx = getIdx(['audio url', 'audio link', 'podcast url', 'audio']);
         const quizQIdx = getIdx(['quiz question', 'q1 question', 'mcq', 'quiz', 'question 1', 'q1', 'prompt']);
         const quizOptIdx = getIdx(['quiz options', 'q1 options', 'options', 'choices', 'answers']);
         const quizAnsIdx = getIdx(['quiz answer', 'correct answer', 'q1 answer', 'q1 correct', 'answer', 'correct']);
 
+        // Helper: Check if existing config is completely identical to incoming config (Smart Diff)
+        const isConfigEqual = (existing, proposed) => {
+            if (!existing || typeof existing !== 'object' || Object.keys(existing).length === 0) return false;
+            if ((existing.title || existing.audioTitle || '') !== (proposed.title || '')) return false;
+            if ((existing.articleText || existing.description || '') !== (proposed.articleText || '')) return false;
+            if ((existing.mainQuestion || '') !== (proposed.mainQuestion || '')) return false;
+            if (Number(existing.lcOnTime || 0) !== Number(proposed.lcOnTime || 0)) return false;
+            if (Number(existing.lcLate || 0) !== Number(proposed.lcLate || 0)) return false;
+            if ((existing.startTime || '') !== (proposed.startTime || '')) return false;
+            if ((existing.endTime || '') !== (proposed.endTime || '')) return false;
+            if ((existing.audioUrl || '') !== (proposed.audioUrl || '')) return false;
+            if (Number(existing.dayNumber || existing.sessionDay || 0) !== Number(proposed.dayNumber || 0)) return false;
+
+            const eq = existing.questions || [];
+            const pq = proposed.questions || [];
+            if (eq.length !== pq.length) return false;
+            if (eq.length > 0 && JSON.stringify(eq) !== JSON.stringify(pq)) return false;
+
+            return true;
+        };
+
         const currentConfigs = getMilestoneConfigsFromDb();
         let syncedCount = 0;
+        let unchangedCount = 0;
         const syncedEntries = [];
 
         for (let i = 1; i < rows.length; i++) {
@@ -982,8 +1098,9 @@ async function syncGoogleSheetData(sheetIdInput) {
             const lcOnTime = !isNaN(rawLcOn) && rawLcOn > 0 ? rawLcOn : (existing.lcOnTime || (msId === '1' ? 33 : 133));
             const lcLate = module === 'immerse' ? 0 : (!isNaN(rawLcLate) ? rawLcLate : (existing.lcLate !== undefined ? existing.lcLate : 3));
 
-            let startTime = existing.startTime || '05:00';
-            let endTime = existing.endTime || (module === 'immerse' ? '23:59' : '17:00');
+            // Flexible Time Window: Parses "17:00 - 18:30", "5:00 PM to 6:30 PM", "90 mins", "1.5 hours", "18:00 for 90 mins"
+            let startTime = existing.startTime || (module === 'pod' ? '00:00' : '05:00');
+            let endTime = existing.endTime || (module === 'immerse' ? '23:59' : (module === 'pod' ? '23:59' : '17:00'));
             if (startIdx !== -1 && row[startIdx] && String(row[startIdx]).trim()) {
                 startTime = normalizeTime(row[startIdx], startTime);
             }
@@ -991,11 +1108,9 @@ async function syncGoogleSheetData(sheetIdInput) {
                 endTime = normalizeTime(row[endIdx], endTime);
             }
             if (timeWinIdx !== -1 && row[timeWinIdx] && String(row[timeWinIdx]).trim()) {
-                const parts = String(row[timeWinIdx]).split(/[-–to]+/i);
-                if (parts.length >= 2) {
-                    startTime = normalizeTime(parts[0], startTime);
-                    endTime = normalizeTime(parts[1], endTime);
-                }
+                const parsedWin = parseTimeWindow(row[timeWinIdx], startTime, endTime);
+                startTime = parsedWin.startTime;
+                endTime = parsedWin.endTime;
             }
 
             // Derive Day Number
@@ -1007,7 +1122,7 @@ async function syncGoogleSheetData(sheetIdInput) {
                 dayNum = deriveDayNumber(module, dateKey, explicitDay);
             }
 
-            // Audio URL for podcast or audio reflection
+            // Audio URL: Protect existing audio (e.g. generated via ElevenLabs or uploaded MP3)
             let rawAudioUrl = (audioUrlIdx !== -1 ? String(row[audioUrlIdx] || '').trim() : '');
             if (!rawAudioUrl && rawMainQ && (rawMainQ.startsWith('http://') || rawMainQ.startsWith('https://')) && (rawMainQ.includes('.mp3') || rawMainQ.includes('.wav') || rawMainQ.includes('.m4a') || rawMainQ.includes('cloudinary'))) {
                 rawAudioUrl = rawMainQ;
@@ -1017,59 +1132,70 @@ async function syncGoogleSheetData(sheetIdInput) {
             // Questions builder
             let questions = [];
             if (module === 'pod') {
-                let quizTitle = (quizQIdx !== -1 ? String(row[quizQIdx] || '').trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
-                let optionsStr = (quizOptIdx !== -1 ? String(row[quizOptIdx] || '').trim() : '');
-                let answerStr = (quizAnsIdx !== -1 ? String(row[quizAnsIdx] || '').trim() : '');
-                let options = [];
-                if (optionsStr) {
-                    options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
-                }
-                if (options.length === 0) {
-                    const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
-                    const optB = (row[getIdx(['option b', 'opt b'])] || '').trim();
-                    const optC = (row[getIdx(['option c', 'opt c'])] || '').trim();
-                    const optD = (row[getIdx(['option d', 'opt d'])] || '').trim();
-                    if (optA || optB || optC || optD) {
+                const hasExplicitQuizQ = (quizQIdx !== -1 && row[quizQIdx] && String(row[quizQIdx]).trim());
+                const optionsStr = (quizOptIdx !== -1 ? String(row[quizOptIdx] || '').trim() : '');
+                const answerStr = (quizAnsIdx !== -1 ? String(row[quizAnsIdx] || '').trim() : '');
+                const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
+                const hasExplicitOptions = Boolean(optionsStr || optA);
+
+                // If existing has a question pool (e.g. 50 MCQs) and sheet didn't supply explicit quiz questions/options:
+                if (existing.questions && existing.questions.length > 0 && !hasExplicitQuizQ && !hasExplicitOptions) {
+                    // PRESERVE the entire question pool intact
+                    questions = existing.questions;
+                } else {
+                    let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
+                    let options = [];
+                    if (optionsStr) {
+                        options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
+                    }
+                    if (options.length === 0 && optA) {
+                        const optB = (row[getIdx(['option b', 'opt b'])] || '').trim();
+                        const optC = (row[getIdx(['option c', 'opt c'])] || '').trim();
+                        const optD = (row[getIdx(['option d', 'opt d'])] || '').trim();
                         options = [optA || 'Option A', optB || 'Option B', optC || 'Option C', optD || 'Option D'];
                     }
-                }
-                if (options.length === 0 && existing.questions?.[0]?.options) {
-                    options = existing.questions[0].options;
-                }
-                if (options.length === 0) {
-                    options = ['Option A', 'Option B', 'Option C', 'Option D'];
-                }
-
-                let correctOpt = 0;
-                if (answerStr) {
-                    const textMatchIdx = options.findIndex(opt => opt.trim().toLowerCase() === answerStr.toLowerCase());
-                    if (textMatchIdx !== -1) {
-                        correctOpt = textMatchIdx;
-                    } else {
-                        const upper = answerStr.toUpperCase();
-                        if (upper === 'B' || upper === '2') correctOpt = 1;
-                        else if (upper === 'C' || upper === '3') correctOpt = 2;
-                        else if (upper === 'D' || upper === '4') correctOpt = 3;
-                        else if (!isNaN(parseInt(upper, 10)) && parseInt(upper, 10) >= 0 && parseInt(upper, 10) < options.length) {
-                            correctOpt = parseInt(upper, 10);
-                        }
+                    if (options.length === 0 && existing.questions?.[0]?.options) {
+                        options = existing.questions[0].options;
                     }
-                } else if (existing.questions?.[0]?.correctOption !== undefined) {
-                    correctOpt = existing.questions[0].correctOption;
-                }
-                // Safe bounds clamp: guarantee correctOpt never exceeds options array bounds
-                correctOpt = Math.max(0, Math.min(options.length - 1, correctOpt));
+                    if (options.length === 0) {
+                        options = ['Option A', 'Option B', 'Option C', 'Option D'];
+                    }
 
-                questions = [
-                    {
+                    let correctOpt = 0;
+                    if (answerStr) {
+                        const textMatchIdx = options.findIndex(opt => opt.trim().toLowerCase() === answerStr.toLowerCase());
+                        if (textMatchIdx !== -1) {
+                            correctOpt = textMatchIdx;
+                        } else {
+                            const upper = answerStr.toUpperCase();
+                            if (upper === 'B' || upper === '2') correctOpt = 1;
+                            else if (upper === 'C' || upper === '3') correctOpt = 2;
+                            else if (upper === 'D' || upper === '4') correctOpt = 3;
+                            else if (!isNaN(parseInt(upper, 10)) && parseInt(upper, 10) >= 0 && parseInt(upper, 10) < options.length) {
+                                correctOpt = parseInt(upper, 10);
+                            }
+                        }
+                    } else if (existing.questions?.[0]?.correctOption !== undefined) {
+                        correctOpt = existing.questions[0].correctOption;
+                    }
+                    correctOpt = Math.max(0, Math.min(options.length - 1, correctOpt));
+
+                    const primaryQuestion = {
                         id: existing.questions?.[0]?.id || `q_${Date.now()}_${i}`,
                         title: quizTitle,
                         type: 'mcq',
                         options: options,
                         correctOption: correctOpt,
                         pts: 11
+                    };
+
+                    // If existing had a rich question pool (e.g. 50 questions), keep questions 2..N
+                    if (existing.questions && existing.questions.length > 1) {
+                        questions = [primaryQuestion, ...existing.questions.slice(1)];
+                    } else {
+                        questions = [primaryQuestion];
                     }
-                ];
+                }
             } else if (module === 'immerse') {
                 if (rawMainQ) {
                     questions = [
@@ -1139,19 +1265,33 @@ async function syncGoogleSheetData(sheetIdInput) {
                 cancelled: Boolean(existing.cancelled)
             };
 
+            // Smart Diff: Skip if existing config is completely identical
+            if (isConfigEqual(existing, dayConfig)) {
+                unchangedCount++;
+                continue;
+            }
+
             if (!currentConfigs[msId]) currentConfigs[msId] = {};
             if (!currentConfigs[msId][module]) currentConfigs[msId][module] = {};
             currentConfigs[msId][module][dateKey] = dayConfig;
 
             syncedCount++;
-            syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum });
+            syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum, window: `${startTime} - ${endTime}` });
+            console.log(`[GoogleSheetSync] ⚡ Synced change for ${module.toUpperCase()} (${dateKey}): "${title}" [${startTime} - ${endTime}]`);
         }
 
-        saveMilestoneConfigsToDb(currentConfigs);
-        console.log(`[GoogleSheetSync] ✅ Successfully synced ${syncedCount} sessions from Google Sheet (${sheetId})`);
+        if (syncedCount > 0) {
+            saveMilestoneConfigsToDb(currentConfigs);
+            console.log(`[GoogleSheetSync] ✅ Successfully updated ${syncedCount} changed session(s) (${unchangedCount} unchanged, total: ${rows.length - 1}) from Google Sheet (${sheetId})`);
+        } else {
+            console.log(`[GoogleSheetSync] ℹ️ All ${unchangedCount} sessions in Google Sheet match current database. Zero unnecessary writes.`);
+        }
+
         return {
             success: true,
             count: syncedCount,
+            unchangedCount: unchangedCount,
+            totalRows: rows.length - 1,
             sheetId: sheetId,
             syncedEntries: syncedEntries
         };
