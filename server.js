@@ -2142,6 +2142,7 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
 const podQuizSessions = new Map();
 const userSessionRates = new Map();
 const validCreatorTokens = new Map();
+const failedCreatorAuthAttempts = new Map(); // ip -> { count, lockedUntil }
 
 setInterval(() => {
     const now = Date.now();
@@ -2155,6 +2156,9 @@ setInterval(() => {
     }
     for (const [tok, exp] of validCreatorTokens.entries()) {
         if (exp < now) validCreatorTokens.delete(tok);
+    }
+    for (const [ip, rec] of failedCreatorAuthAttempts.entries()) {
+        if (rec.lockedUntil && rec.lockedUntil < now) failedCreatorAuthAttempts.delete(ip);
     }
 }, 300000);
 
@@ -2171,25 +2175,49 @@ function verifyCreatorToken(req) {
     return true;
 }
 
-// Issues a cryptographic creator session token to verified admin/creator credentials
+// Issues a cryptographic creator session token to requesters providing the valid shared secret (CREATOR_ADMIN_SECRET)
 app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (req, res) => {
     try {
-        const { email, phone } = req.body || {};
-        const defaultAdmins = [
-            'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
-            'saikumaryadiki@gmail.com', 'admin@cmplibe.com'
-        ];
-        const defaultAdminPhones = ['6309764212', '9845421644'];
-        const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-        const allAdmins = [...defaultAdmins, ...envAdmins];
-
-        const cleanEmail = String(email || '').toLowerCase().trim();
-        const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
-
-        const isAuthorized = allAdmins.includes(cleanEmail) || (cleanPhone && (allAdmins.includes(cleanPhone) || defaultAdminPhones.includes(cleanPhone)));
-        if (!isAuthorized) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Access restricted to authorized creator credentials.' });
+        const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+        const now = Date.now();
+        const ipRecord = failedCreatorAuthAttempts.get(clientIp);
+        if (ipRecord && ipRecord.lockedUntil > now) {
+            const waitSecs = Math.ceil((ipRecord.lockedUntil - now) / 1000);
+            return res.status(429).json({ 
+                success: false, 
+                error: `Too many failed attempts. Access temporarily locked. Please retry after ${waitSecs} seconds.` 
+            });
         }
+
+        const { adminSecret } = req.body || {};
+        const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || 'cmpli_creator_2026').trim();
+
+        if (!adminSecret || typeof adminSecret !== 'string') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Unauthorized: Creator Security Key (adminSecret) is required.' 
+            });
+        }
+
+        const cleanProvided = String(adminSecret).trim();
+        const bufConfigured = Buffer.from(configuredSecret, 'utf8');
+        const bufProvided = Buffer.from(cleanProvided, 'utf8');
+
+        const isMatch = (bufConfigured.length === bufProvided.length) && 
+                        crypto.timingSafeEqual(bufConfigured, bufProvided);
+
+        if (!isMatch) {
+            const currentFails = (ipRecord ? ipRecord.count : 0) + 1;
+            const lockTime = currentFails >= 5 ? now + 600000 : 0; // 10-minute cooldown after 5 failed attempts
+            failedCreatorAuthAttempts.set(clientIp, { count: currentFails, lockedUntil: lockTime });
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Unauthorized: Invalid Creator Security Key.' 
+            });
+        }
+
+        // Authentication succeeded: clear failed tracker for IP
+        failedCreatorAuthAttempts.delete(clientIp);
 
         const token = `cmpli_crt_${crypto.randomBytes(32).toString('hex')}`;
         validCreatorTokens.set(token, Date.now() + (24 * 3600 * 1000)); // 24-hour validity

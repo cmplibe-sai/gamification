@@ -7945,59 +7945,43 @@ window.getAdminConfigForDate = getAdminConfigForDate;
 // Serves 3 randomized questions per learner + Creator Inspector Modal
 // -------------------------------------------------------------
 window._podQuizPool50 = [];
-try {
-    const cachedPool = localStorage.getItem('podQuizPool50');
-    if (cachedPool) window._podQuizPool50 = JSON.parse(cachedPool);
-} catch(e) {}
 
 async function loadPodQuizPool() {
     try {
-        if (!window._creatorAuthToken && typeof currentUser !== 'undefined' && currentUser) {
+        let token = window._creatorAuthToken;
+        if (!token) {
             try {
-                const tokenRes = await apiFetch('/api/auth/creator-token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email: currentUser.email || '', 
-                        phone: currentUser.phone || '' 
-                    })
-                }).then(r => r.json());
-                if (tokenRes && tokenRes.success && tokenRes.token) {
-                    window._creatorAuthToken = tokenRes.token;
-                }
-            } catch(tokErr) {}
+                token = sessionStorage.getItem('cmpli_creator_token');
+                if (token) window._creatorAuthToken = token;
+            } catch(e) {}
         }
 
-        const headers = {};
-        if (window._creatorAuthToken) {
-            headers['Authorization'] = `Bearer ${window._creatorAuthToken}`;
-        }
+        if (!token) return false;
 
-        const res = await apiFetch('/api/pod/quiz-pool', { headers }).then(r => r.json());
+        const res = await apiFetch('/api/pod/quiz-pool', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json());
+
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
             window._podQuizPool50 = res.data;
+            return true;
         } else if (res && res.error) {
             console.warn('Creator question bank access notice:', res.error);
+            window._creatorAuthToken = null;
+            try { sessionStorage.removeItem('cmpli_creator_token'); } catch(e) {}
+            return false;
         }
     } catch(err) {
         console.warn('Could not fetch creator pod quiz pool:', err);
+        return false;
     }
+    return false;
 }
 
 function getPodQuestionsPool() {
     if (window._podQuizPool50 && Array.isArray(window._podQuizPool50) && window._podQuizPool50.length > 0) {
         return window._podQuizPool50;
     }
-    try {
-        const cached = localStorage.getItem('podQuizPool50');
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                window._podQuizPool50 = parsed;
-                return parsed;
-            }
-        }
-    } catch(e) {}
     // Initial fallback if pool fetch is still in flight
     return [
         { id: "q_snabbit_1", title: "What is the primary operational innovation that enabled Snabbit to achieve sub-15-minute fulfillment?", options: ["Hyper-dense neighborhood micro-market clustering", "Using helicopters for transportation", "Requiring customers to travel halfway", "Operating only between 2:00 AM and 4:00 AM"], correctOption: 0, explanation: "Snabbit operates on hyper-local density in micro-markets, minimizing transit distance and enabling workers to reach customers in under 15 minutes.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 },
@@ -8012,16 +7996,55 @@ window.getPodQuestionsPool = getPodQuestionsPool;
 // ==============================================================
 // CREATOR COMMAND: 50-QUESTION SIMPLIPOD QUIZ INSPECTOR MODAL
 // Gives creators instant transparency into all questions, options & answer keys
+// Requires validated Creator Security Key (CREATOR_ADMIN_SECRET)
 // ==============================================================
 async function openPodQuizPoolInspectorModal() {
     const old = document.getElementById('podQuizInspectorModal');
     if (old) old.remove();
 
-    if (!window._podQuizPool50 || window._podQuizPool50.length === 0) {
-        await loadPodQuizPool();
+    let loaded = (window._podQuizPool50 && window._podQuizPool50.length >= 50);
+    if (!loaded) {
+        loaded = await loadPodQuizPool();
     }
-    const questions = getPodQuestionsPool();
 
+    if (!loaded) {
+        const enteredSecret = prompt('🔐 SimpliPod Creator Authentication:\n\nEnter Creator Security Key to inspect the 50-question bank and answer keys:');
+        if (!enteredSecret || !enteredSecret.trim()) {
+            if (typeof showToast === 'function') showToast('Creator Security Key required to inspect answer keys.', 'warning');
+            return;
+        }
+
+        try {
+            const tokenRes = await apiFetch('/api/auth/creator-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adminSecret: enteredSecret.trim() })
+            }).then(r => r.json());
+
+            if (!tokenRes || !tokenRes.success || !tokenRes.token) {
+                const errMsg = tokenRes?.error || 'Authentication failed: Invalid Creator Security Key.';
+                if (typeof showToast === 'function') showToast(errMsg, 'error');
+                alert(errMsg);
+                return;
+            }
+
+            window._creatorAuthToken = tokenRes.token;
+            try { sessionStorage.setItem('cmpli_creator_token', tokenRes.token); } catch(e) {}
+            if (typeof showToast === 'function') showToast('Creator authenticated successfully (24h session).', 'success');
+
+            loaded = await loadPodQuizPool();
+            if (!loaded) {
+                alert('Authenticated, but could not load question bank. Check server logs.');
+                return;
+            }
+        } catch(authErr) {
+            console.error('Creator authentication error:', authErr);
+            alert('Authentication network error. Please try again.');
+            return;
+        }
+    }
+
+    const questions = window._podQuizPool50 || [];
     const categories = ['All', ...new Set(questions.map(q => q.category || 'General'))];
 
     const modalHtml = `
