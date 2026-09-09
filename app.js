@@ -7228,10 +7228,23 @@ function renderAdminCohortSubmissions() {
         });
         const earnedLcs = calculatedLcs;
 
-        const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === normalizeLevelUpType(activeAdminModule) && String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1));
+        const cleanMod = normalizeLevelUpType(activeAdminModule);
+        const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === cleanMod && String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1));
         const prereqCfg = getMilestonePrereqConfig(activeAdminMilestoneId || 1);
-        const effectiveMax = Math.max(1, (activeAdminModule === 'immerse') ? prereqCfg.targetImmerse : (activeAdminModule === 'pod' ? prereqCfg.targetPod : prereqCfg.targetDips));
-        let completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
+
+        const modDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'days');
+        const modLcsRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'lcs');
+
+        let completionPct = 0;
+        if (modDaysRule && modDaysRule.targetValue > 0) {
+            completionPct = Math.min(100, Math.round((targetModuleSubs.length / modDaysRule.targetValue) * 100));
+        } else if (modLcsRule && modLcsRule.targetValue > 0) {
+            completionPct = Math.min(100, Math.round((earnedLcs / modLcsRule.targetValue) * 100));
+        } else {
+            const effectiveMax = Math.max(1, (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21)));
+            completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
+        }
+
         let isApproved = isCertificateApproved(user._id, activeAdminMilestoneId || 1);
         const isPending = completionPct >= 90 && !isApproved;
         
@@ -7264,9 +7277,14 @@ function renderAdminCohortSubmissions() {
     let isProjectGrid = (activeAdminModule === 'projects');
     let projectHeaders = [];
 
+    const activePrereqCfg = getMilestonePrereqConfig(activeAdminMilestoneId || 1);
+    const activeModDaysRule = (activePrereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === normalizeLevelUpType(activeAdminModule) && p.type === 'days');
+
     if (isProjectGrid) {
         projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []);
         maxDays = projectHeaders.length; 
+    } else if (activeModDaysRule && activeModDaysRule.targetValue > 0) {
+        maxDays = activeModDaysRule.targetValue;
     } else if (activeAdminMilestoneId === 2 || activeAdminMilestoneId === 3) {
         if (activeAdminModule === 'dip' || activeAdminModule === 'pod') maxDays = 30;
         if (activeAdminModule === 'immerse') maxDays = 12;
@@ -11452,12 +11470,6 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
         if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
             setUserModuleStartDate(currentUser._id, msId, normalizeLevelUpType(moduleName), userJoinDateStr);
         }
-    } else if (normalizeLevelUpType(moduleName) !== 'dip' && modActDate && userJoinDateStr < modActDate) {
-        // Module start cannot precede platform activation date of that module
-        userJoinDateStr = modActDate;
-        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
-            setUserModuleStartDate(currentUser._id, msId, normalizeLevelUpType(moduleName), userJoinDateStr);
-        }
     } else if (milestoneJoinDate && userJoinDateStr < milestoneJoinDate) {
         // Guard: module start cannot precede milestone join — that would be a data error
         userJoinDateStr = milestoneJoinDate;
@@ -12726,12 +12738,6 @@ function switchMilestoneTab(moduleName, btnElement) {
         } else {
             userJoinDateStr = modActDate || todayKey;
         }
-        if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
-            setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
-        }
-    } else if (normalizedMod !== 'dip' && modActDate && userJoinDateStr < modActDate) {
-        // Module start cannot precede platform activation date of that module
-        userJoinDateStr = modActDate;
         if (currentUser && currentUser._id && typeof setUserModuleStartDate === 'function') {
             setUserModuleStartDate(currentUser._id, activeMilestoneId, normalizedMod, userJoinDateStr);
         }
