@@ -2558,9 +2558,9 @@ app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], as
                 text: cleanedSpeechText,
                 model_id: 'eleven_multilingual_v2',
                 voice_settings: {
-                    stability: 0.65,
-                    similarity_boost: 0.85,
-                    style: 0.0,
+                    stability: typeof req.body?.stability === 'number' ? Math.max(0.1, Math.min(1.0, req.body.stability)) : 0.38,
+                    similarity_boost: typeof req.body?.similarityBoost === 'number' ? Math.max(0.1, Math.min(1.0, req.body.similarityBoost)) : 0.80,
+                    style: typeof req.body?.style === 'number' ? Math.max(0.0, Math.min(1.0, req.body.style)) : 0.20,
                     use_speaker_boost: true
                 }
             })
@@ -2626,7 +2626,7 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
         const dayConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
 
         let pool = [];
-        if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
+        if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) {
             pool = dayConfig.questions;
         } else {
             const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
@@ -2662,7 +2662,8 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
             userSessionRates.set(userId, recent);
         }
 
-        const count = Math.min(Math.max(parseInt(req.query.count, 10) || 3, 1), 10);
+        const requestedCount = parseInt(req.query.count, 10) || 3;
+        const count = Math.min(Math.max(requestedCount, 1), Math.min(10, pool.length));
 
         const shuffled = [...pool].sort(() => 0.5 - Math.random()).slice(0, count);
         const sessionId = `pod_sess_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;

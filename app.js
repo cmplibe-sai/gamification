@@ -8591,7 +8591,7 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                 </div>
                 <div id="podElevenLabsStatus" class="text-[11px] text-slate-400 flex items-center gap-2">
                     <i class="fas fa-info-circle text-indigo-400"></i>
-                    <span>Tuned for British delivery: Multi-lingual v2 · Stability 0.65 · Similarity 0.85 · Natural cadence pauses</span>
+                    <span>Tuned for Dynamic Storytelling: Multi-lingual v2 · Stability 0.38 (Expressive pitch modulation) · Style 0.20 · Similarity 0.80</span>
                 </div>
             </div>
 
@@ -10127,7 +10127,7 @@ async function openPodSessionModal(dayNum, dateKey) {
     let cleanStoryTitle = rawTitle
         .replace(/^cMPLi\s*POD\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
         .replace(/^SimpliPod\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
-        .replace(/^Day\s*\d+\s*[-:•]\s*/i, '')
+        .replace(/^Day\s*\d+\s*[-:•]?\s*/i, '')
         .trim();
 
     // Format date in Indian style: DD-MM-YYYY
