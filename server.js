@@ -1116,8 +1116,9 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
     const title = String(dayConfig?.title || context?.title || '').toLowerCase();
     const article = String(dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '').toLowerCase();
 
-    // 2. Check for Athulya case (date 2026-09-10 or matching keywords)
-    if (dateKey === '2026-09-10' || title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair')) {
+    // 2. Check for Athulya case (matching keywords, or default for 2026-09-10 if not overridden)
+    const isAthulya = title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair');
+    if (isAthulya || (dateKey === '2026-09-10' && (!title || isAthulya))) {
         const athulyaPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
             ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
             : path.join(__dirname, 'data', 'pod_quiz_pool_athulya.json');
@@ -1126,8 +1127,9 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         }
     }
 
-    // 3. Check for Snabbit case (date 2026-09-09 or matching keywords)
-    if (dateKey === '2026-09-09' || title.includes('snabbit') || article.includes('snabbit')) {
+    // 3. Check for Snabbit case (matching keywords, or default for 2026-09-09 if not overridden)
+    const isSnabbit = title.includes('snabbit') || article.includes('snabbit') || article.includes('15-minute beauty');
+    if (isSnabbit || (dateKey === '2026-09-09' && (!title || isSnabbit))) {
         const snabbitPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
             ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
             : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
