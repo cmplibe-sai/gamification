@@ -1103,17 +1103,18 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
 // SimpliPod Question Pool Resolver
 // Resolves 50-question pools per date/story (Athulya, Snabbit, dynamic)
 // -------------------------------------------------------------
-function getPodQuizPoolForDate(dateKey, msId = '1') {
+function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
     const allConfigs = getMilestoneConfigsFromDb();
-    const dayConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
+    const diskConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
+    const dayConfig = context ? { ...diskConfig, ...context } : diskConfig;
 
     // 1. If dayConfig already has a rich questions array (length >= 3), return it
     if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
         return dayConfig.questions;
     }
 
-    const title = String(dayConfig?.title || '').toLowerCase();
-    const article = String(dayConfig?.articleText || dayConfig?.description || '').toLowerCase();
+    const title = String(dayConfig?.title || context?.title || '').toLowerCase();
+    const article = String(dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '').toLowerCase();
 
     // 2. Check for Athulya case (date 2026-09-10 or matching keywords)
     if (dateKey === '2026-09-10' || title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair')) {
@@ -1135,9 +1136,11 @@ function getPodQuizPoolForDate(dateKey, msId = '1') {
         }
     }
 
-    // 4. Dynamic generation for any new story from sheet
-    if (dayConfig && (dayConfig.articleText || dayConfig.title)) {
-        const generated = generateDynamicQuizPoolFromContent(dayConfig.title, dayConfig.articleText || dayConfig.description, dateKey);
+    // 4. Dynamic generation for any new story (from fresh context or disk)
+    const effectiveTitle = dayConfig?.title || context?.title || '';
+    const effectiveArticle = dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '';
+    if (effectiveArticle || effectiveTitle) {
+        const generated = generateDynamicQuizPoolFromContent(effectiveTitle, effectiveArticle, dateKey);
         if (generated && generated.length >= 3) return generated;
     }
 
@@ -1328,8 +1331,8 @@ async function syncGoogleSheetData(sheetIdInput) {
                     // PRESERVE the entire question pool intact
                     questions = existing.questions;
                 } else if (!hasExplicitQuizQ && !hasExplicitOptions) {
-                    // Automatically assign the full question pool for this story/date
-                    questions = getPodQuizPoolForDate(dateKey, msId);
+                    // Automatically assign the full question pool for this story/date using freshly parsed context
+                    questions = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description });
                 } else {
                     let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
                     let options = [];
@@ -1377,7 +1380,7 @@ async function syncGoogleSheetData(sheetIdInput) {
                         pts: 11
                     };
 
-                    const storyPool = getPodQuizPoolForDate(dateKey, msId);
+                    const storyPool = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description });
                     questions = [primaryQuestion, ...storyPool.filter(q => q.title !== primaryQuestion.title)];
                 }
             } else if (module === 'immerse') {

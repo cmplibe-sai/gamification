@@ -8038,7 +8038,14 @@ function getPodQuestionsPool(dateKey) {
     if (window._podQuizPool50 && Array.isArray(window._podQuizPool50) && window._podQuizPool50.length > 0) {
         return window._podQuizPool50;
     }
-    return [];
+    // Reliable safety-net fallback for grading reconciliation / offline modal
+    return [
+        { id: "q_fallback_1", title: "What is the primary operational priority in high-density service execution?", options: ["Neighborhood cluster density and transit minimization", "Operating only between 2:00 AM and 4:00 AM", "Requiring customers to travel to warehouses", "Eliminating digital order tracking"], correctOption: 0, explanation: "Operational clustering minimizes transit friction and maximizes technician utilization.", category: "Operational Execution & Growth", pts: 11 },
+        { id: "q_fallback_2", title: "Why do sunrise businesses expand into adjacent recurring-service categories?", options: ["High customer overlap and zero incremental customer acquisition cost", "To deliberately increase customer churn", "Because government mandates forbid single-service operations", "To confuse existing customers"], correctOption: 0, explanation: "Cross-selling to an existing active base leverages trust and drastically lowers blended acquisition costs.", category: "Strategic Value Proposition", pts: 11 },
+        { id: "q_fallback_3", title: "What distinguishes disciplined unit economics from speculative venture growth?", options: ["Positive contribution margins and sustainable customer lifetime value", "Infinite customer acquisition spend without retention", "Operating with zero pricing strategy", "Relying exclusively on tokenized digital promises"], correctOption: 0, explanation: "Sustainable enterprises focus on positive gross margins, repeat engagement, and disciplined payback periods.", category: "Financial Economics & Unit Growth", pts: 11 },
+        { id: "q_fallback_4", title: "Why do institutional investors back asset-light service platforms?", options: ["Scalable capital efficiency coupled with defensive recurring demand", "High vulnerability to physical asset depreciation", "Zero requirement for governance or accountability", "Complete absence of regulatory oversight"], correctOption: 0, explanation: "Asset-light models avoid heavy real-estate debt while scaling margin-rich service delivery.", category: "Market Opportunity & Demographics", pts: 11 },
+        { id: "q_fallback_5", title: "What career takeaway distinguishes high-growth sunrise sectors for upcoming leaders?", options: ["Early entry into scaling niches accelerates executive ownership and equity creation", "Sticking strictly to crowded legacy corporate titles without upside", "Avoiding all operational responsibilities", "Waiting for multi-decade established playbooks"], correctOption: 0, explanation: "Entering high-velocity sectors early bypasses traditional corporate bottlenecks to fast-track leadership.", category: "Leadership & Strategic Careers", pts: 11 }
+    ];
 }
 window.getPodQuestionsPool = getPodQuestionsPool;
 
