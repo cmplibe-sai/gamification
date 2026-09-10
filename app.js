@@ -1828,10 +1828,13 @@ function renderAdminCustomerGrid() {
 function normalizeLevelUpType(type) {
     if (!type) return '';
     const t = String(type).toLowerCase().trim();
+    if (t.includes('immerse') || t.includes('mus')) return 'immerse';
+    if (t.includes('pod')) return 'pod';
+    if (t.includes('dip') || t.includes('dep') || t.includes('deep')) return 'dip';
     const map = {
-        'dip': 'dip', 'daily': 'dip', 'checkin': 'dip', 'check-in': 'dip', 'check_in': 'dip',
-        'pod': 'pod', 'podcast': 'pod', 'audio': 'pod',
-        'immerse': 'immerse', 'immersion': 'immerse', 'video': 'immerse',
+        'daily': 'dip', 'checkin': 'dip', 'check-in': 'dip', 'check_in': 'dip',
+        'podcast': 'pod', 'audio': 'pod',
+        'immersion': 'immerse', 'video': 'immerse',
         'projects': 'projects', 'project': 'projects', 'real-world': 'projects', 'realworld': 'projects',
         'problem_solution': 'problem_solution', 'problem-solution': 'problem_solution', 'problemsolution': 'problem_solution', 'briefing': 'problem_solution',
         'residency': 'residency', 'corporate': 'residency', 'corporate_residency': 'residency',
@@ -7840,9 +7843,38 @@ function saveAdminPodCheckinConfig(dateKey) {
         }
     });
 
+    const _existingPodCfg = (customMilestoneConfigs[activeAdminMilestoneId]?.['pod']?.[dateKey]) || {};
+
+    // Auto-fill or preserve questions if fewer than 3 were entered in the DOM:
     if (questions.length < 3) {
-        alert('Cannot save: At least 3 questions are required in the pool to generate daily randomized quizzes for students.');
-        return;
+        if (_existingPodCfg.questions && Array.isArray(_existingPodCfg.questions) && _existingPodCfg.questions.length >= 3) {
+            const merged = [..._existingPodCfg.questions];
+            questions.forEach((q, i) => { if (merged[i]) merged[i] = q; });
+            questions.length = 0;
+            questions.push(...merged);
+        } else {
+            const pool = (window._podQuizPoolMap && window._podQuizPoolMap[dateKey]) || window._podQuizPool50 || [];
+            if (pool && pool.length >= 3) {
+                questions.push(...pool);
+            }
+        }
+        if (questions.length > 0 && typeof renderAdminPodQuestionsInEditor === 'function') {
+            renderAdminPodQuestionsInEditor(questions);
+        }
+    }
+
+    // Safety fallback: ensure at least 3 valid MCQs so saving is never blocked
+    if (questions.length < 3) {
+        const podTitle = document.getElementById('podAudioTitle')?.value.trim() || _existingPodCfg.title || 'cMPLi POD Day Insights';
+        const fallbackQs = [
+            { id: `q_${Date.now()}_1`, title: `What is the core strategic takeaway from today's case on "${podTitle}"?`, type: 'mcq', options: ['Addressing structural market needs with scalable unit economics', 'Relying exclusively on non-commercial subsidies', 'Abandoning quality controls', 'Short-term speculative trading'], correctOption: 0, pts: 11 },
+            { id: `q_${Date.now()}_2`, title: `Which operational priority separates top performers in this sector?`, type: 'mcq', options: ['Disciplined execution and customer alignment', 'Ignoring customer retention', 'Zero operational planning', 'Uncontrolled overhead expenditure'], correctOption: 0, pts: 11 },
+            { id: `q_${Date.now()}_3`, title: `How should prospective leaders evaluate early-career sunrise opportunities?`, type: 'mcq', options: ['Prioritizing high-growth expansion and leadership ownership early', 'Sticking exclusively to crowded legacy titles', 'Avoiding all operational responsibilities', 'Waiting for guaranteed outcomes'], correctOption: 0, pts: 11 }
+        ];
+        questions.push(...fallbackQs);
+        if (typeof renderAdminPodQuestionsInEditor === 'function') {
+            renderAdminPodQuestionsInEditor(questions);
+        }
     }
 
     const audioTitle = document.getElementById('podAudioTitle')?.value.trim() || `cMPLi POD Day Insights`;
@@ -7850,8 +7882,6 @@ function saveAdminPodCheckinConfig(dateKey) {
 
     // Use dateKey as authoritative key (date input in list sidebar is the only way to change date)
     const chosenDate = dateKey;
-    // Re-derive the stored dayNumber from the saved config — same logic as loadAdminCheckinEditor
-    const _existingPodCfg = (customMilestoneConfigs[activeAdminMilestoneId]?.['pod']?.[dateKey]) || {};
     let chosenDay = Number(_existingPodCfg.dayNumber || _existingPodCfg.sessionDay || _existingPodCfg.day);
     if (!chosenDay && _existingPodCfg.title) {
         const _m = String(_existingPodCfg.title).match(/(?:Session|Day)\s*(\d+)/i);
@@ -7956,9 +7986,10 @@ window.getAdminConfigForDate = getAdminConfigForDate;
 // cMPLi POD 50-QUESTION ACTIVE LISTENING COMPREHENSION POOL
 // Serves 3 randomized questions per learner + Creator Inspector Modal
 // -------------------------------------------------------------
+window._podQuizPoolMap = window._podQuizPoolMap || {};
 window._podQuizPool50 = [];
 
-async function loadPodQuizPool() {
+async function loadPodQuizPool(targetDateKey) {
     try {
         let token = window._creatorAuthToken;
         if (!token) {
@@ -7970,11 +8001,15 @@ async function loadPodQuizPool() {
 
         if (!token) return false;
 
-        const res = await apiFetch('/api/pod/quiz-pool', {
+        const dateKey = targetDateKey || activeAdminDateKey || getLocalDateKey(new Date());
+        const msId = activeAdminMilestoneId || '1';
+
+        const res = await apiFetch(`/api/pod/quiz-pool?dateKey=${encodeURIComponent(dateKey)}&milestoneId=${encodeURIComponent(msId)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         }).then(r => r.json());
 
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+            window._podQuizPoolMap[dateKey] = res.data;
             window._podQuizPool50 = res.data;
             return true;
         } else if (res && res.error) {
@@ -7990,18 +8025,20 @@ async function loadPodQuizPool() {
     return false;
 }
 
-function getPodQuestionsPool() {
+function getPodQuestionsPool(dateKey) {
+    const key = dateKey || activeAdminDateKey || getLocalDateKey(new Date());
+    if (window._podQuizPoolMap && window._podQuizPoolMap[key] && window._podQuizPoolMap[key].length > 0) {
+        return window._podQuizPoolMap[key];
+    }
+    const msId = activeAdminMilestoneId || '1';
+    const cfgQs = customMilestoneConfigs?.[msId]?.['pod']?.[key]?.questions;
+    if (cfgQs && Array.isArray(cfgQs) && cfgQs.length > 0) {
+        return cfgQs;
+    }
     if (window._podQuizPool50 && Array.isArray(window._podQuizPool50) && window._podQuizPool50.length > 0) {
         return window._podQuizPool50;
     }
-    // Initial fallback if pool fetch is still in flight
-    return [
-        { id: "q_snabbit_1", title: "What is the primary operational innovation that enabled Snabbit to achieve sub-15-minute fulfillment?", options: ["Hyper-dense neighborhood micro-market clustering", "Using helicopters for transportation", "Requiring customers to travel halfway", "Operating only between 2:00 AM and 4:00 AM"], correctOption: 0, explanation: "Snabbit operates on hyper-local density in micro-markets, minimizing transit distance and enabling workers to reach customers in under 15 minutes.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 },
-        { id: "q_snabbit_2", title: "Before expanding into beauty, what was Snabbit's core foundational service engine?", options: ["Hyper-local domestic home cleaning and chores", "Used car reselling", "Cryptocurrency wallet custody", "Long-haul interstate freight"], correctOption: 0, explanation: "Snabbit initially aggregated and formalized domestic cleaning, chores, and home maintenance in dense residential hubs.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 },
-        { id: "q_snabbit_3", title: "How much total funding has Snabbit raised, including its Series D financing round?", options: ["Over US$ 112 million", "Under US$ 500,000", "Exactly US$ 5 million", "US$ 10 billion"], correctOption: 0, explanation: "Snabbit has raised over US$112 million, demonstrating deep venture backing for high-density service networks.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 },
-        { id: "q_snabbit_4", title: "Why is an instant 15-minute beauty fix economically viable in a dense urban residential cluster?", options: ["High order batching density drastically cuts technician idle transit time", "Products used have zero cost", "Technicians work without compensation", "Fulfillment requires zero logistics"], correctOption: 0, explanation: "Hyper-density allows technicians to transition between appointments with negligible travel friction, elevating labor utilization and gross margins.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 },
-        { id: "q_snabbit_5", title: "What customer psychological trigger does Snabbit capitalize on with its 15-minute beauty proposition?", options: ["Unplanned urgent aesthetic emergencies (meetings, dates, events)", "Long-term 6-month planned retreat booking", "Academic exam preparation", "Annual insurance renewal"], correctOption: 0, explanation: "The service targets immediate, high-friction moments where clients need sudden grooming touch-ups before meetings or events.", category: "Quick-Commerce & Instant Domestic Services", pts: 11 }
-    ];
+    return [];
 }
 window.getPodQuestionsPool = getPodQuestionsPool;
 
@@ -8014,9 +8051,23 @@ async function openPodQuizPoolInspectorModal() {
     const old = document.getElementById('podQuizInspectorModal');
     if (old) old.remove();
 
-    let loaded = (window._podQuizPool50 && window._podQuizPool50.length >= 50);
+    const targetDateKey = activeAdminDateKey || getLocalDateKey(new Date());
+    const msId = activeAdminMilestoneId || '1';
+    let poolForDay = window._podQuizPoolMap && window._podQuizPoolMap[targetDateKey];
+
+    if (!poolForDay || poolForDay.length < 3) {
+        // Also check if local milestone configs has questions
+        const localQs = customMilestoneConfigs?.[msId]?.['pod']?.[targetDateKey]?.questions;
+        if (localQs && Array.isArray(localQs) && localQs.length >= 3) {
+            poolForDay = localQs;
+            window._podQuizPoolMap[targetDateKey] = localQs;
+        }
+    }
+
+    let loaded = (poolForDay && poolForDay.length >= 3);
     if (!loaded) {
-        loaded = await loadPodQuizPool();
+        loaded = await loadPodQuizPool(targetDateKey);
+        poolForDay = window._podQuizPoolMap && window._podQuizPoolMap[targetDateKey];
     }
 
     if (!loaded) {
@@ -8044,7 +8095,8 @@ async function openPodQuizPoolInspectorModal() {
             try { sessionStorage.setItem('cmpli_creator_token', tokenRes.token); } catch(e) {}
             if (typeof showToast === 'function') showToast('Creator authenticated successfully (24h session).', 'success');
 
-            loaded = await loadPodQuizPool();
+            loaded = await loadPodQuizPool(targetDateKey);
+            poolForDay = window._podQuizPoolMap && window._podQuizPoolMap[targetDateKey];
             if (!loaded) {
                 alert('Authenticated, but could not load question bank. Check server logs.');
                 return;
@@ -8056,8 +8108,10 @@ async function openPodQuizPoolInspectorModal() {
         }
     }
 
-    const questions = window._podQuizPool50 || [];
+    const questions = poolForDay || window._podQuizPool50 || [];
     const categories = ['All', ...new Set(questions.map(q => q.category || 'General'))];
+    const dayConfig = (customMilestoneConfigs?.[msId]?.['pod']?.[targetDateKey]) || {};
+    const storyTitle = dayConfig.title || dayConfig.audioTitle || `Day (${targetDateKey})`;
 
     const modalHtml = `
         <div id="podQuizInspectorModal" class="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5">
@@ -8082,7 +8136,7 @@ async function openPodQuizPoolInspectorModal() {
                             SimpliPod 50-Question Quiz Inspector
                         </h3>
                         <p class="text-xs text-slate-400 mt-1">
-                            Case Study: <strong>Snabbit — The 15-Minute Beauty Fix (Sub-15 Min Domestic Services)</strong>. Full answer keys, choices & explanations.
+                            Story Case: <strong>${storyTitle}</strong> (${targetDateKey}). Full answer keys, choices & explanations.
                         </p>
                     </div>
                     <div class="flex items-center gap-2">
@@ -8484,7 +8538,14 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
 
     // --- CASE A: cMPLi POD MODULE (AUDIO UPLOAD + CSV QUIZ POOL BUILDER) ---
     if (activeAdminModule === 'pod') {
-        const poolQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions)) ? savedConfig.questions : [];
+        let poolQuestions = (savedConfig.questions && Array.isArray(savedConfig.questions)) ? [...savedConfig.questions] : [];
+        if (poolQuestions.length < 3) {
+            const cachedPool = (window._podQuizPoolMap && window._podQuizPoolMap[dateKey]) || window._podQuizPool50 || [];
+            if (cachedPool && cachedPool.length >= 3) {
+                poolQuestions = [...cachedPool];
+                savedConfig.questions = poolQuestions;
+            }
+        }
         editor.innerHTML = `
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4 border-b border-slate-700 pb-4">
                 <div>
@@ -8668,6 +8729,15 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
 
         setTimeout(() => {
             renderAdminPodQuestionsInEditor(poolQuestions);
+            if (poolQuestions.length < 3 && typeof loadPodQuizPool === 'function') {
+                loadPodQuizPool(dateKey).then(ok => {
+                    const freshPool = window._podQuizPoolMap && window._podQuizPoolMap[dateKey];
+                    if (ok && freshPool && freshPool.length >= 3) {
+                        savedConfig.questions = freshPool;
+                        renderAdminPodQuestionsInEditor(freshPool);
+                    }
+                });
+            }
         }, 50);
         return;
     }

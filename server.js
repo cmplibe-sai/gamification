@@ -74,6 +74,13 @@ try {
         fs.copyFileSync(trackedQuiz, targetQuiz);
         console.log('[Seed Asset] Copied pod_quiz_pool_snabbit.json to server_data directory');
     }
+
+    const trackedAthulyaQuiz = path.join(trackedDataDir, 'pod_quiz_pool_athulya.json');
+    const targetAthulyaQuiz = path.join(DATA_DIR, 'pod_quiz_pool_athulya.json');
+    if (fs.existsSync(trackedAthulyaQuiz) && !fs.existsSync(targetAthulyaQuiz)) {
+        fs.copyFileSync(trackedAthulyaQuiz, targetAthulyaQuiz);
+        console.log('[Seed Asset] Copied pod_quiz_pool_athulya.json to server_data directory');
+    }
 } catch (seedErr) {
     console.warn('[Seed Asset Warning]', seedErr.message);
 }
@@ -841,9 +848,9 @@ function normalizeDateKey(val) {
 
 function normalizeModule(val) {
     const s = String(val || '').toLowerCase().trim();
-    if (s.includes('immerse')) return 'immerse';
+    if (s.includes('immerse') || s.includes('mus')) return 'immerse';
     if (s.includes('pod')) return 'pod';
-    if (s.includes('dip')) return 'dip';
+    if (s.includes('dip') || s.includes('dep') || s.includes('deep')) return 'dip';
     return 'dip';
 }
 
@@ -971,6 +978,179 @@ function deriveDayNumber(module, dateKey, explicitDay) {
         }
         return 1;
     }
+}
+
+// -------------------------------------------------------------
+// SimpliPod Dynamic 50-Question Pool Generator
+// Synthesizes a structured 50-question bank from story article text
+// Categorized across 5 critical dimensions with varied distractors
+// -------------------------------------------------------------
+function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
+    if (!title && !articleText) return [];
+
+    const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').trim();
+    const rawText = String(articleText || '').trim();
+    
+    // Extract bullet points or distinct sentences
+    const sentences = rawText
+        .split(/(?:\r?\n|•|\. )+/)
+        .map(s => s.trim().replace(/^[-*•]\s*/, ''))
+        .filter(s => s.length > 25);
+
+    // Extract numbers / metrics / capitalized entities
+    const metricMatches = rawText.match(/(?:US\$|Rs\.?|\$)\s*[\d,.]+\s*(?:crore|lakh|cr|billion|million|k)?|\b\d+%\b|\b\d+,\d+\s*(?:beds|units|seats)?/gi) || [];
+    const uniqueMetrics = [...new Set(metricMatches.map(m => m.trim()))];
+
+    const categories = [
+        'Strategic Value Proposition & Business Model',
+        'Market Opportunity & Demographics',
+        'Financial Economics & Unit Growth',
+        'Operational Execution & Partnerships',
+        'Leadership, Human Capital & Strategic Careers'
+    ];
+
+    const questions = [];
+    const baseIdPrefix = `q_dyn_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    const makeQuestion = (idx, qTitle, correctAns, distractors, explanation, category) => {
+        const correctPos = idx % 4;
+        const options = [...distractors.slice(0, 3)];
+        while (options.length < 3) options.push(`General industry standard parameter ${options.length + 1}`);
+        options.splice(correctPos, 0, correctAns);
+        return {
+            id: `${baseIdPrefix}_${idx + 1}`,
+            title: qTitle,
+            options: options,
+            correctOption: correctPos,
+            explanation: explanation,
+            category: category,
+            pts: 11
+        };
+    };
+
+    for (let i = 0; i < 50; i++) {
+        const cat = categories[i % categories.length];
+        const sentence = sentences[i % Math.max(1, sentences.length)] || `Understanding the fundamental growth mechanics of ${cleanTitle}.`;
+        const metric = uniqueMetrics[i % Math.max(1, uniqueMetrics.length)] || 'targeted market metrics';
+
+        let qPrompt = '';
+        let correct = '';
+        let distractors = [];
+        let expl = '';
+
+        if (i < 10) {
+            qPrompt = `In the case of "${cleanTitle}", what is the primary customer friction or strategic gap addressed?`;
+            correct = sentence.length > 90 ? sentence.substring(0, 85) + '...' : sentence;
+            distractors = [
+                'Offering generic commodity services without localized alignment',
+                'Lowering service quality to minimize operational overhead',
+                'Exclusively relying on government subsidies without commercial viability'
+            ];
+            expl = `The core thesis of ${cleanTitle} centers on solving: ${sentence}`;
+        } else if (i < 20) {
+            qPrompt = `What demographic or macro tailwind underpins the expansion strategy in "${cleanTitle}"?`;
+            correct = sentence.includes('population') || sentence.includes('aging') || sentence.includes('market')
+                ? sentence
+                : `Rapidly scaling demand driven by structural shifts and ${metric}`;
+            distractors = [
+                'A temporary seasonal spike with no long-term demographic backing',
+                'Unregulated market conditions that prevent commercial competition',
+                'Mandatory consumer spending decrees enforced by global agencies'
+            ];
+            expl = `Demographic trends and demand drivers outlined in the case: ${sentence}`;
+        } else if (i < 30) {
+            qPrompt = `Regarding financial scale and operating targets in "${cleanTitle}", what metric or milestone is emphasized?`;
+            correct = sentence.includes('Rs.') || sentence.includes('US$') || sentence.includes('EBITDA') || sentence.includes('%')
+                ? sentence
+                : `Targeting scalable revenue expansion and high-margin unit economics around ${metric}`;
+            distractors = [
+                'Operating indefinitely at negative gross margins with zero monetization plan',
+                'Relying solely on speculative tokenized cryptocurrency fundraising',
+                'Eliminating all capital investments while freezing operational hiring'
+            ];
+            expl = `The financial scale and unit economic benchmarks are rooted in: ${sentence}`;
+        } else if (i < 40) {
+            qPrompt = `How does the operational playbook of "${cleanTitle}" balance capital efficiency and service quality?`;
+            correct = sentence.includes('model') || sentence.includes('partnership') || sentence.includes('MoU') || sentence.includes('asset-light')
+                ? sentence
+                : `Leveraging asset-light strategic partnerships coupled with specialized quality standardization`;
+            distractors = [
+                'Purchasing all physical real estate and infrastructure outright with short-term debt',
+                'Outsourcing 100% of core delivery to unregulated anonymous contractors',
+                'Standardizing operations to a bare-minimum baseline with zero training'
+            ];
+            expl = `The operational architecture is designed around: ${sentence}`;
+        } else {
+            qPrompt = `What strategic takeaway or career opportunity does "${cleanTitle}" highlight for upcoming business leaders?`;
+            correct = sentence.includes('opportunity') || sentence.includes('talent') || sentence.includes('graduates')
+                ? sentence
+                : `Early entry into high-growth sunrise sectors offers rapid leadership scaling over crowded mature industries`;
+            distractors = [
+                'Following legacy corporate titles in stagnant industries without growth upside',
+                'Avoiding sunrise sectors due to lack of established multi-decade playbooks',
+                'Limiting career specialization strictly to non-operational clerical tasks'
+            ];
+            expl = `Strategic leadership and market positioning takeaway: ${sentence}`;
+        }
+
+        questions.push(makeQuestion(i, qPrompt, correct, distractors, expl, cat));
+    }
+
+    return questions;
+}
+
+// -------------------------------------------------------------
+// SimpliPod Question Pool Resolver
+// Resolves 50-question pools per date/story (Athulya, Snabbit, dynamic)
+// -------------------------------------------------------------
+function getPodQuizPoolForDate(dateKey, msId = '1') {
+    const allConfigs = getMilestoneConfigsFromDb();
+    const dayConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
+
+    // 1. If dayConfig already has a rich questions array (length >= 3), return it
+    if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
+        return dayConfig.questions;
+    }
+
+    const title = String(dayConfig?.title || '').toLowerCase();
+    const article = String(dayConfig?.articleText || dayConfig?.description || '').toLowerCase();
+
+    // 2. Check for Athulya case (date 2026-09-10 or matching keywords)
+    if (dateKey === '2026-09-10' || title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair')) {
+        const athulyaPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_athulya.json');
+        if (fs.existsSync(athulyaPath)) {
+            try { return JSON.parse(fs.readFileSync(athulyaPath, 'utf8')); } catch(e) {}
+        }
+    }
+
+    // 3. Check for Snabbit case (date 2026-09-09 or matching keywords)
+    if (dateKey === '2026-09-09' || title.includes('snabbit') || article.includes('snabbit')) {
+        const snabbitPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+        if (fs.existsSync(snabbitPath)) {
+            try { return JSON.parse(fs.readFileSync(snabbitPath, 'utf8')); } catch(e) {}
+        }
+    }
+
+    // 4. Dynamic generation for any new story from sheet
+    if (dayConfig && (dayConfig.articleText || dayConfig.title)) {
+        const generated = generateDynamicQuizPoolFromContent(dayConfig.title, dayConfig.articleText || dayConfig.description, dateKey);
+        if (generated && generated.length >= 3) return generated;
+    }
+
+    // 5. Default fallback
+    const defaultPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
+        ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
+        : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json'));
+    if (fs.existsSync(defaultPath)) {
+        try { return JSON.parse(fs.readFileSync(defaultPath, 'utf8')); } catch(e) {}
+    }
+    return [];
 }
 
 let isGoogleSheetSyncing = false;
@@ -1143,10 +1323,13 @@ async function syncGoogleSheetData(sheetIdInput) {
                 const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
                 const hasExplicitOptions = Boolean(optionsStr || optA);
 
-                // If existing has a question pool (e.g. 50 MCQs) and sheet didn't supply explicit quiz questions/options:
-                if (existing.questions && existing.questions.length > 0 && !hasExplicitQuizQ && !hasExplicitOptions) {
+                // If existing has a valid question pool (at least 3 questions) and sheet didn't supply explicit quiz questions/options:
+                if (existing.questions && existing.questions.length >= 3 && !hasExplicitQuizQ && !hasExplicitOptions) {
                     // PRESERVE the entire question pool intact
                     questions = existing.questions;
+                } else if (!hasExplicitQuizQ && !hasExplicitOptions) {
+                    // Automatically assign the full question pool for this story/date
+                    questions = getPodQuizPoolForDate(dateKey, msId);
                 } else {
                     let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
                     let options = [];
@@ -1194,12 +1377,8 @@ async function syncGoogleSheetData(sheetIdInput) {
                         pts: 11
                     };
 
-                    // If existing had a rich question pool (e.g. 50 questions), keep questions 2..N
-                    if (existing.questions && existing.questions.length > 1) {
-                        questions = [primaryQuestion, ...existing.questions.slice(1)];
-                    } else {
-                        questions = [primaryQuestion];
-                    }
+                    const storyPool = getPodQuizPoolForDate(dateKey, msId);
+                    questions = [primaryQuestion, ...storyPool.filter(q => q.title !== primaryQuestion.title)];
                 }
             } else if (module === 'immerse') {
                 if (rawMainQ) {
@@ -2391,14 +2570,20 @@ app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) =>
             });
         }
 
-        const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+        const dateKey = String(req.query.dateKey || '').trim();
+        const msId = String(req.query.milestoneId || '1').trim();
 
-        if (fs.existsSync(poolPath)) {
-            const raw = fs.readFileSync(poolPath, 'utf8');
-            const data = JSON.parse(raw);
-            return res.json({ success: true, count: data.length, data });
+        let pool = [];
+        if (dateKey) {
+            pool = getPodQuizPoolForDate(dateKey, msId);
+        } else {
+            const todayKey = new Date().toISOString().split('T')[0];
+            pool = getPodQuizPoolForDate(todayKey, msId);
+            if (!pool || pool.length === 0) pool = getPodQuizPoolForDate('2026-09-10', msId);
+        }
+
+        if (Array.isArray(pool) && pool.length > 0) {
+            return res.json({ success: true, count: pool.length, dateKey: dateKey, data: pool });
         }
         return res.status(404).json({ success: false, error: 'Quiz pool file not found' });
     } catch (err) {
@@ -2622,24 +2807,7 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
     try {
         const dateKey = String(req.query.dateKey || '').trim();
         const msId = String(req.query.milestoneId || '1').trim();
-        const allConfigs = getMilestoneConfigsFromDb();
-        const dayConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
-
-        let pool = [];
-        if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) {
-            pool = dayConfig.questions;
-        } else {
-            const poolPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-                ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-                : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
-
-            if (fs.existsSync(poolPath)) {
-                try {
-                    const raw = fs.readFileSync(poolPath, 'utf8');
-                    pool = JSON.parse(raw);
-                } catch(e) {}
-            }
-        }
+        const pool = getPodQuizPoolForDate(dateKey, msId);
 
         if (!Array.isArray(pool) || pool.length === 0) {
             return res.status(404).json({ success: false, error: 'Quiz pool questions not found for this session' });
