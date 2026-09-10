@@ -1108,8 +1108,8 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
     const diskConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
     const dayConfig = context ? { ...diskConfig, ...context } : diskConfig;
 
-    // 1. If dayConfig already has a rich questions array (length >= 3), return it
-    if (dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
+    // 1. If not forcing regeneration and dayConfig already has a rich questions array (length >= 3), return it
+    if (!context?.forceRegenerate && dayConfig?.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length >= 3) {
         return dayConfig.questions;
     }
 
@@ -1328,13 +1328,19 @@ async function syncGoogleSheetData(sheetIdInput) {
                 const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
                 const hasExplicitOptions = Boolean(optionsStr || optA);
 
-                // If existing has a valid question pool (at least 3 questions) and sheet didn't supply explicit quiz questions/options:
-                if (existing.questions && existing.questions.length >= 3 && !hasExplicitQuizQ && !hasExplicitOptions) {
+                // Detect if story text or title has changed in the Google Sheet:
+                const storyChanged = Boolean(
+                    (rawTitle && rawTitle !== (existing.title || existing.audioTitle)) ||
+                    (rawDesc && rawDesc !== (existing.articleText || existing.description))
+                );
+
+                // If existing has a valid question pool (at least 3 questions), sheet didn't supply explicit quiz questions, and story has NOT changed:
+                if (existing.questions && existing.questions.length >= 3 && !hasExplicitQuizQ && !hasExplicitOptions && !storyChanged) {
                     // PRESERVE the entire question pool intact
                     questions = existing.questions;
                 } else if (!hasExplicitQuizQ && !hasExplicitOptions) {
-                    // Automatically assign the full question pool for this story/date using freshly parsed context
-                    questions = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description });
+                    // Automatically generate/assign the full 50-question pool for this story/date using freshly parsed context
+                    questions = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description, forceRegenerate: storyChanged });
                 } else {
                     let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
                     let options = [];
