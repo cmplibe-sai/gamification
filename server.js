@@ -1388,7 +1388,7 @@ async function syncGoogleSheetData(sheetIdInput) {
                         pts: 11
                     };
 
-                    const storyPool = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description });
+                    const storyPool = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description, forceRegenerate: storyChanged });
                     questions = [primaryQuestion, ...storyPool.filter(q => q.title !== primaryQuestion.title)];
                 }
             } else if (module === 'immerse') {
