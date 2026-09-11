@@ -1009,18 +1009,73 @@ function deriveDayNumber(module, dateKey, explicitDay) {
 function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     if (!title && !articleText) return [];
 
-    const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').trim();
+    const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').replace(/["']/g, '').trim();
     const rawText = String(articleText || '').trim();
     
-    // Extract bullet points or distinct sentences
-    const sentences = rawText
-        .split(/(?:\r?\n|•|\. )+/)
-        .map(s => s.trim().replace(/^[-*•]\s*/, ''))
-        .filter(s => s.length > 25);
+    // Extract distinct substantive sentences and clauses
+    const rawSentences = rawText
+        .split(/(?:\r?\n|•|\. |\? |; )+/)
+        .map(s => s.trim().replace(/^[-*•]\s*/, '').replace(/["']/g, ''))
+        .filter(s => s.length > 20 && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
 
-    // Extract numbers / metrics / capitalized entities
-    const metricMatches = rawText.match(/(?:US\$|Rs\.?|\$)\s*[\d,.]+\s*(?:crore|lakh|cr|billion|million|k)?|\b\d+%\b|\b\d+,\d+\s*(?:beds|units|seats)?/gi) || [];
-    const uniqueMetrics = [...new Set(metricMatches.map(m => m.trim()))];
+    const sentences = rawSentences.length > 0 ? rawSentences : [`The fundamental operational dynamics and business strategy of ${cleanTitle}`];
+
+    // Extract numbers / metrics / monetary figures
+    const metricMatches = rawText.match(/(?:US\$|Rs\.?|\$)\s*[\d,.]+\s*(?:crore|lakh|cr|billion|million|k)?|\b\d+%\b|\b\d+(?:,\d+)?\s*(?:sq(?:uare)?\s*ft|beds|units|seats|mins?|hours?|years?)?/gi) || [];
+    const uniqueMetrics = [...new Set(metricMatches.map(m => m.trim().replace(/["']/g, '')))];
+
+    const promptStems = [
+        `What core problem or customer friction does ${cleanTitle} primarily address?`,
+        `Which foundational operational capability enables ${cleanTitle} to scale?`,
+        `What primary business model or revenue mechanism underpins ${cleanTitle}?`,
+        `Regarding geographic rollout, which strategic launch market is emphasized for ${cleanTitle}?`,
+        `What key financial metric or funding milestone is highlighted for ${cleanTitle}?`,
+        `How does regulatory governance impact the business landscape described in ${cleanTitle}?`,
+        `What structural industry shift forms the core context of ${cleanTitle}?`,
+        `Which target consumer or enterprise tenant segment does ${cleanTitle} focus on?`,
+        `How does ${cleanTitle} maintain capital efficiency in its expansion strategy?`,
+        `What competitive moat or brand heritage does ${cleanTitle} leverage against rivals?`,
+        `Which consultative or operational capability is required to execute ${cleanTitle}'s strategy?`,
+        `What asset-light or partnership structure is utilized to expand ${cleanTitle}?`,
+        `What critical consumer behavioral shift supports the ongoing adoption of ${cleanTitle}?`,
+        `Which quantitative milestone illustrates the commercial scale of ${cleanTitle}?`,
+        `How does ${cleanTitle} balance high service quality with unit economic viability?`,
+        `What key supply-chain or distribution channel supports ${cleanTitle}'s operations?`,
+        `Which entry-level functional career role is highlighted in the context of ${cleanTitle}?`,
+        `How does frontline execution in regional markets build capabilities for ${cleanTitle}?`,
+        `What risk-mitigation strategy does ${cleanTitle} implement to safeguard capital?`,
+        `What specific asset class or service vertical does ${cleanTitle} concentrate on?`,
+        `How do institutional investor expectations influence the standards set in ${cleanTitle}?`,
+        `What distinguishing feature separates ${cleanTitle} from unorganized market players?`,
+        `What strategic takeaway regarding enterprise sales negotiation emerges from ${cleanTitle}?`,
+        `Which macro demographic or economic tailwind accelerates growth for ${cleanTitle}?`,
+        `How does key-account management protect the long-term revenue base in ${cleanTitle}?`,
+        `What role does site sourcing or micro-market selection play in ${cleanTitle}?`,
+        `What long-term monetization or exit vehicle is associated with assets like ${cleanTitle}?`,
+        `How does ${cleanTitle} adapt its offering to meet corporate enterprise expectations?`,
+        `What execution capability prevents project delays and capital lock-in for ${cleanTitle}?`,
+        `Which regional market example demonstrates foundational execution before scaling to ${cleanTitle}?`,
+        `How does brand equity influence customer acquisition and financing terms for ${cleanTitle}?`,
+        `What operational trade-off does ${cleanTitle} overcome through innovative structuring?`,
+        `Which technology, infrastructure, or operational standard is critical for ${cleanTitle}?`,
+        `What is the strategic rationale behind turning underutilized assets into platforms like ${cleanTitle}?`,
+        `How does consultative selling differentiate business development in ${cleanTitle}?`,
+        `What statutory or compliance benchmark protects stakeholder investments in ${cleanTitle}?`,
+        `Which early-stage professional pathway creates a launchpad toward leadership in ${cleanTitle}?`,
+        `How does density or cluster-based operations improve unit economics in ${cleanTitle}?`,
+        `What customer retention or platform stickiness driver is emphasized in ${cleanTitle}?`,
+        `Which stakeholder group exerts the strongest governance influence on ${cleanTitle}?`,
+        `What operational lesson regarding deal closures is drawn from regional developers in ${cleanTitle}?`,
+        `How does ${cleanTitle} structure its financing to support large-scale capital requirements?`,
+        `What type of multi-skilled capability or functional versatility is highlighted in ${cleanTitle}?`,
+        `How do enterprise requirements in ${cleanTitle} compare with retail market practices?`,
+        `What strategic partnership framework enables ${cleanTitle} to scale without direct land purchases?`,
+        `Which performance indicator best reflects sustainable operational health in ${cleanTitle}?`,
+        `How does ${cleanTitle} bridge the gap between legacy operations and modern institutional demands?`,
+        `What career capability enables professionals to transition from regional sales to ${cleanTitle}?`,
+        `What primary risk would arise if ${cleanTitle} neglected institutional governance standards?`,
+        `In summary, what overarching strategic principle defines the long-term value of ${cleanTitle}?`
+    ];
 
     const categories = [
         'Strategic Value Proposition & Business Model',
@@ -1033,88 +1088,58 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     const questions = [];
     const baseIdPrefix = `q_dyn_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}`;
 
-    const makeQuestion = (idx, qTitle, correctAns, distractors, explanation, category) => {
-        const correctPos = idx % 4;
-        const options = [...distractors.slice(0, 3)];
-        while (options.length < 3) options.push(`General industry standard parameter ${options.length + 1}`);
-        options.splice(correctPos, 0, correctAns);
-        return {
-            id: `${baseIdPrefix}_${idx + 1}`,
-            title: qTitle,
-            options: options,
-            correctOption: correctPos,
-            explanation: explanation,
-            category: category,
-            pts: 11
-        };
-    };
-
     for (let i = 0; i < 50; i++) {
         const cat = categories[i % categories.length];
-        const sentence = sentences[i % Math.max(1, sentences.length)] || `Understanding the fundamental growth mechanics of ${cleanTitle}.`;
-        const metric = uniqueMetrics[i % Math.max(1, uniqueMetrics.length)] || 'targeted market metrics';
+        const sentence = sentences[i % sentences.length];
+        const qPrompt = promptStems[i];
 
-        let qPrompt = '';
-        let correct = '';
-        let distractors = [];
-        let expl = '';
+        // Ensure clean text without quotes
+        const cleanSentence = sentence.replace(/["']/g, '').trim();
+        const correct = cleanSentence.length > 100 ? cleanSentence.substring(0, 95) + '...' : cleanSentence;
 
-        if (i < 10) {
-            qPrompt = `In the case of "${cleanTitle}", what is the primary customer friction or strategic gap addressed?`;
-            correct = sentence.length > 90 ? sentence.substring(0, 85) + '...' : sentence;
-            distractors = [
-                'Offering generic commodity services without localized alignment',
-                'Lowering service quality to minimize operational overhead',
+        // Context-aware plausible distractors
+        const distractorSets = [
+            [
+                'Operating with speculative high-leverage financing without capital reserves',
+                'Offering generic commodity services without localized market alignment',
                 'Exclusively relying on government subsidies without commercial viability'
-            ];
-            expl = `The core thesis of ${cleanTitle} centers on solving: ${sentence}`;
-        } else if (i < 20) {
-            qPrompt = `What demographic or macro tailwind underpins the expansion strategy in "${cleanTitle}"?`;
-            correct = sentence.includes('population') || sentence.includes('aging') || sentence.includes('market')
-                ? sentence
-                : `Rapidly scaling demand driven by structural shifts and ${metric}`;
-            distractors = [
+            ],
+            [
+                'Eliminating all capital investments while freezing operational hiring',
+                'Operating indefinitely at negative gross margins with zero monetization plan',
+                'Relying solely on speculative tokenized fundraising mechanisms'
+            ],
+            [
+                'Standardizing operations to a bare-minimum baseline without compliance oversight',
+                'Outsourcing 100% of core delivery to unregulated anonymous third parties',
+                'Purchasing all physical assets outright through high-interest short-term debt'
+            ],
+            [
+                'Limiting career specialization strictly to repetitive clerical tasks',
+                'Following legacy corporate titles in stagnant industries without growth upside',
+                'Avoiding high-growth sectors due to absence of multi-decade historical playbooks'
+            ],
+            [
                 'A temporary seasonal spike with no long-term demographic backing',
                 'Unregulated market conditions that prevent commercial competition',
                 'Mandatory consumer spending decrees enforced by global agencies'
-            ];
-            expl = `Demographic trends and demand drivers outlined in the case: ${sentence}`;
-        } else if (i < 30) {
-            qPrompt = `Regarding financial scale and operating targets in "${cleanTitle}", what metric or milestone is emphasized?`;
-            correct = sentence.includes('Rs.') || sentence.includes('US$') || sentence.includes('EBITDA') || sentence.includes('%')
-                ? sentence
-                : `Targeting scalable revenue expansion and high-margin unit economics around ${metric}`;
-            distractors = [
-                'Operating indefinitely at negative gross margins with zero monetization plan',
-                'Relying solely on speculative tokenized cryptocurrency fundraising',
-                'Eliminating all capital investments while freezing operational hiring'
-            ];
-            expl = `The financial scale and unit economic benchmarks are rooted in: ${sentence}`;
-        } else if (i < 40) {
-            qPrompt = `How does the operational playbook of "${cleanTitle}" balance capital efficiency and service quality?`;
-            correct = sentence.includes('model') || sentence.includes('partnership') || sentence.includes('MoU') || sentence.includes('asset-light')
-                ? sentence
-                : `Leveraging asset-light strategic partnerships coupled with specialized quality standardization`;
-            distractors = [
-                'Purchasing all physical real estate and infrastructure outright with short-term debt',
-                'Outsourcing 100% of core delivery to unregulated anonymous contractors',
-                'Standardizing operations to a bare-minimum baseline with zero training'
-            ];
-            expl = `The operational architecture is designed around: ${sentence}`;
-        } else {
-            qPrompt = `What strategic takeaway or career opportunity does "${cleanTitle}" highlight for upcoming business leaders?`;
-            correct = sentence.includes('opportunity') || sentence.includes('talent') || sentence.includes('graduates')
-                ? sentence
-                : `Early entry into high-growth sunrise sectors offers rapid leadership scaling over crowded mature industries`;
-            distractors = [
-                'Following legacy corporate titles in stagnant industries without growth upside',
-                'Avoiding sunrise sectors due to lack of established multi-decade playbooks',
-                'Limiting career specialization strictly to non-operational clerical tasks'
-            ];
-            expl = `Strategic leadership and market positioning takeaway: ${sentence}`;
-        }
+            ]
+        ];
 
-        questions.push(makeQuestion(i, qPrompt, correct, distractors, expl, cat));
+        const baseDistractors = distractorSets[i % distractorSets.length];
+        const targetPos = i % 4;
+        const options = [...baseDistractors];
+        options.splice(targetPos, 0, correct);
+
+        questions.push({
+            id: `${baseIdPrefix}_${i + 1}`,
+            title: qPrompt,
+            options: options,
+            correctOption: targetPos,
+            explanation: `Strategic concept: ${cleanSentence}`,
+            category: cat,
+            pts: 11
+        });
     }
 
     return questions;
@@ -1159,7 +1184,18 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         }
     }
 
-    // 4. Dynamic generation for any new story (from fresh context or disk)
+    // 4. Check for Kirloskar case (matching keywords, or default for 2026-09-11 if not overridden)
+    const isKirloskar = title.includes('kirloskar') || title.includes('avante') || article.includes('kirloskar') || article.includes('avante spaces');
+    if (isKirloskar || (dateKey === '2026-09-11' && (!title || isKirloskar))) {
+        const kirloskarPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_kirloskar.json');
+        if (fs.existsSync(kirloskarPath)) {
+            try { return JSON.parse(fs.readFileSync(kirloskarPath, 'utf8')); } catch(e) {}
+        }
+    }
+
+    // 5. Dynamic generation for any new story (from fresh context or disk)
     const effectiveTitle = dayConfig?.title || context?.title || '';
     const effectiveArticle = dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '';
     if (effectiveArticle || effectiveTitle) {
@@ -2869,13 +2905,32 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
         const requestedCount = parseInt(req.query.count, 10) || 3;
         const count = Math.min(Math.max(requestedCount, 1), Math.min(10, pool.length));
 
-        const shuffled = [...pool].sort(() => 0.5 - Math.random()).slice(0, count);
+        const shuffled = [...pool].sort(() => 0.5 - Math.random());
+        const selectedQuestions = [];
+        const seenTitles = new Set();
+        for (const q of shuffled) {
+            const normTitle = (q.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!seenTitles.has(normTitle)) {
+                seenTitles.add(normTitle);
+                selectedQuestions.push(q);
+                if (selectedQuestions.length === count) break;
+            }
+        }
+        if (selectedQuestions.length < count) {
+            for (const q of shuffled) {
+                if (!selectedQuestions.includes(q)) {
+                    selectedQuestions.push(q);
+                    if (selectedQuestions.length === count) break;
+                }
+            }
+        }
+
         const sessionId = `pod_sess_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         const sessionAnswers = {};
         const sessionExplanations = {};
         const sessionPts = {};
 
-        const learnerQuestions = shuffled.map(q => {
+        const learnerQuestions = selectedQuestions.map(q => {
             const originalOptions = [...(q.options || [])];
             const correctIdx = typeof q.correctOption === 'number' ? q.correctOption : 0;
             const tagged = originalOptions.map((opt, idx) => ({ text: opt, isCorrect: idx === correctIdx }));

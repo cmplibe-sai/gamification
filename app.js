@@ -7686,7 +7686,7 @@ function renderAdminPodQuestionsInEditor(questionsList) {
             </div>
             <div>
                 <label class="block text-[11px] font-bold text-slate-400 mb-1">Question Prompt</label>
-                <input type="text" value="${q.title || ''}" placeholder="Enter question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
+                <input type="text" value="${(q.title || '').replace(/"/g, '&quot;')}" placeholder="Enter question..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500 font-medium pod-q-title" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                 ${[0, 1, 2, 3].map(i => {
@@ -7696,7 +7696,7 @@ function renderAdminPodQuestionsInEditor(questionsList) {
                     return `
                     <div class="flex items-center gap-2 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
                         <input type="radio" name="correct_pod_q_${idx}" value="${i}" ${isChecked ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
-                        <input type="text" value="${optText}" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
+                        <input type="text" value="${String(optText || '').replace(/"/g, '&quot;')}" placeholder="Option ${letter}" class="w-full bg-transparent border-none text-xs text-slate-200 outline-none pod-q-opt" />
                     </div>`;
                 }).join('')}
             </div>
@@ -8881,7 +8881,7 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
                     ${immerseQuestions.map(q => `
                         <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
                             <i class="fas fa-grip-vertical text-slate-500 ${isEditable ? 'cursor-move' : ''}"></i>
-                            <input type="text" value="${q.title}" placeholder="Enter question prompt..." class="flex-1 bg-transparent border-none outline-none text-xs text-white font-medium focus:ring-1 ring-purple-500 rounded px-2 py-1" ${disableAttr}>
+                            <input type="text" value="${(q.title || '').replace(/"/g, '&quot;')}" placeholder="Enter question prompt..." class="flex-1 bg-transparent border-none outline-none text-xs text-white font-medium focus:ring-1 ring-purple-500 rounded px-2 py-1" ${disableAttr}>
                             <select class="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600 outline-none focus:border-purple-500" ${disableAttr}>
                                 <option value="video" ${q.type === 'video' ? 'selected' : ''}>Video File (.mp4 / Camera)</option>
                                 <option value="text" ${q.type === 'text' ? 'selected' : ''}>Text Box</option>
@@ -8990,7 +8990,7 @@ function loadAdminCheckinEditor(dateKey, preferredDayNum) {
             ${(savedConfig.questions || []).map(q => `
                 <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
                     <i class="fas fa-grip-vertical text-slate-500 ${isEditable ? 'cursor-move' : ''}"></i>
-                    <input type="text" value="${q.title}" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-indigo-500 rounded px-2 py-1" ${disableAttr}>
+                    <input type="text" value="${(q.title || '').replace(/"/g, '&quot;')}" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-indigo-500 rounded px-2 py-1" ${disableAttr}>
                     <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-indigo-500" ${disableAttr}>
                         <option value="text" ${q.type === 'text' ? 'selected' : ''}>Text Box</option>
                         <option value="audio" ${q.type === 'audio' ? 'selected' : ''}>Audio File (.mp3 / Voice)</option>
@@ -10255,7 +10255,26 @@ async function openPodSessionModal(dayNum, dateKey) {
             : getPodQuestionsPool();
 
         const shuffled = [...pool].sort(() => 0.5 - Math.random());
-        learnerQuestions = shuffled.slice(0, 3).map(q => {
+        const chosen = [];
+        const seenTitles = new Set();
+        for (const q of shuffled) {
+            const norm = (q.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!seenTitles.has(norm)) {
+                seenTitles.add(norm);
+                chosen.push(q);
+                if (chosen.length === 3) break;
+            }
+        }
+        if (chosen.length < 3) {
+            for (const q of shuffled) {
+                if (!chosen.includes(q)) {
+                    chosen.push(q);
+                    if (chosen.length === 3) break;
+                }
+            }
+        }
+
+        learnerQuestions = chosen.map(q => {
             const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
             const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
             const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
