@@ -6129,6 +6129,19 @@ function getEnabledModulesForMilestone(msId) {
     if (prereqs && prereqs.targetImmerse > 0 && !mods.includes('immerse')) {
         mods.push('immerse');
     }
+
+    // MANDATORY PLATFORM ORDER:
+    // 1. SimplyDeep (cMPLi Dip - 'dip')
+    // 2. SimplyPod (cMPLi POD - 'pod')
+    // 3. SimplyMy / Immerse (cMPLi Immerse - 'immerse')
+    // followed by any advanced capstone modules
+    const canonicalOrder = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+    mods.sort((a, b) => {
+        const idxA = canonicalOrder.indexOf(a);
+        const idxB = canonicalOrder.indexOf(b);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+
     return mods;
 }
 
@@ -6609,6 +6622,12 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     } else {
         current.push(moduleCode);
     }
+    const canonicalOrder = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+    current.sort((a, b) => {
+        const idxA = canonicalOrder.indexOf(a);
+        const idxB = canonicalOrder.indexOf(b);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
     saved[key] = current;
 
     // 1. Save locally immediately

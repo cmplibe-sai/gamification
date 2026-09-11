@@ -588,23 +588,44 @@ const MODULE_ACCESS_DEFAULTS = {
     "4": ["dip", "pod", "immerse", "projects", "residency"]
 };
 
+const CANONICAL_MODULE_ORDER = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+
+function sortModuleList(list) {
+    if (!Array.isArray(list)) return list;
+    return [...list].sort((a, b) => {
+        const idxA = CANONICAL_MODULE_ORDER.indexOf(a);
+        const idxB = CANONICAL_MODULE_ORDER.indexOf(b);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+}
+
 function getModuleAccessFromDb() {
+    let result = null;
     try {
         if (fs.existsSync(MODULE_ACCESS_FILE)) {
             const raw = fs.readFileSync(MODULE_ACCESS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed;
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) result = parsed;
         }
     } catch(e) {
         console.warn('Error reading module_access.json:', e);
     }
     // Fallback: check in-memory store, then return defaults
-    return store.customMilestoneModuleAccess || MODULE_ACCESS_DEFAULTS;
+    const source = result || store.customMilestoneModuleAccess || MODULE_ACCESS_DEFAULTS;
+    const sorted = {};
+    for (const k of Object.keys(source)) {
+        sorted[k] = sortModuleList(source[k]);
+    }
+    return sorted;
 }
 
 function saveModuleAccessToDb(moduleMap) {
     try {
-        const obj = (moduleMap && typeof moduleMap === 'object') ? moduleMap : MODULE_ACCESS_DEFAULTS;
+        const source = (moduleMap && typeof moduleMap === 'object') ? moduleMap : MODULE_ACCESS_DEFAULTS;
+        const obj = {};
+        for (const k of Object.keys(source)) {
+            obj[k] = sortModuleList(source[k]);
+        }
         fs.writeFileSync(MODULE_ACCESS_FILE, JSON.stringify(obj, null, 2), 'utf8');
         store.customMilestoneModuleAccess = obj;
         store.configsRevision = (store.configsRevision || 1000) + 1;
@@ -1219,7 +1240,7 @@ async function syncGoogleSheetData(sheetIdInput) {
         const modIdx = getIdx(['module']);
         const msIdx = getIdx(['milestone']);
         const titleIdx = getIdx(['title', 'topic']);
-        const descIdx = getIdx(['description', 'article']);
+        const descIdx = getIdx(['description / article', 'description/article', 'description', 'article']);
         const mainQIdx = getIdx(['main question', 'question']);
         const lcOnTimeIdx = getIdx(['on time', 'lc on time', 'lcs on time']);
         const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
@@ -1278,6 +1299,7 @@ async function syncGoogleSheetData(sheetIdInput) {
 
             const rawDesc = descIdx !== -1 ? String(row[descIdx] || '').trim() : '';
             const articleText = rawDesc || existing.articleText || existing.description || '';
+            const description = articleText;
 
             const rawMainQ = mainQIdx !== -1 ? String(row[mainQIdx] || '').trim() : '';
             const mainQuestion = rawMainQ || existing.mainQuestion || '';
@@ -1519,12 +1541,15 @@ app.post(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], asyn
 });
 
 // Periodic automatic background sync (every 10 minutes) & initial sync at server start
+const GOOGLE_SHEET_SYNC_INTERVAL_MS = parseInt(process.env.GOOGLE_SHEET_SYNC_INTERVAL_MS, 10) || (10 * 60 * 1000);
 setTimeout(() => {
     syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Initial GoogleSheetSync Notice]:', err.message));
 }, 3000);
 setInterval(() => {
+    console.log(`[Automated Sync Scheduler] Running scheduled Google Sheet sync (${new Date().toLocaleTimeString('en-GB')})...`);
     syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Periodic GoogleSheetSync Notice]:', err.message));
-}, 10 * 60 * 1000);
+}, GOOGLE_SHEET_SYNC_INTERVAL_MS);
+console.log(`[GoogleSheetSync] Automated background sync scheduler active (Interval: ${GOOGLE_SHEET_SYNC_INTERVAL_MS / 60000} mins)`);
 
 
 // ==============================================================
