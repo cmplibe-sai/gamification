@@ -10223,17 +10223,20 @@ function resolvePodAudioUrl(dayConfig, dateKey, msId = '1') {
     if (directUrl && typeof directUrl === 'string' && directUrl.trim()) {
         return directUrl.trim();
     }
+    const targetMs = String(msId || '1').trim();
     const cleanDate = String(dateKey || '').trim();
-    if (cleanDate === '2026-09-09') {
-        return '/gamification/uploads/snabbit_podcast_ep1.wav';
+    if (targetMs === '1') {
+        if (cleanDate === '2026-09-09') {
+            return '/gamification/uploads/snabbit_podcast_ep1.wav';
+        }
+        if (cleanDate === '2026-09-10') {
+            return '/gamification/uploads/pod_m1_2026_09_10.mp3';
+        }
+        if (cleanDate === '2026-09-11') {
+            return '/gamification/uploads/pod_m1_2026_09_11.mp3';
+        }
     }
-    if (cleanDate === '2026-09-10') {
-        return '/gamification/uploads/pod_m1_2026_09_10.mp3';
-    }
-    if (cleanDate === '2026-09-11') {
-        return '/gamification/uploads/pod_m1_2026_09_11.mp3';
-    }
-    // Return empty for unconfigured future dates so the user receives the proper "Audio not yet configured" state
+    // Return empty for unconfigured dates/milestones so the user receives the proper "Audio not yet configured" state
     return '';
 }
 window.resolvePodAudioUrl = resolvePodAudioUrl;
