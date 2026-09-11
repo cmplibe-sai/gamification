@@ -734,7 +734,25 @@ function getMilestoneConfigsFromDb() {
         if (fs.existsSync(MILESTONE_CONFIGS_FILE)) {
             const raw = fs.readFileSync(MILESTONE_CONFIGS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') return parsed;
+            if (parsed && typeof parsed === 'object') {
+                // Auto-detect audioUrl if blank on disk
+                for (const msId of Object.keys(parsed)) {
+                    const podDates = parsed[msId]?.pod;
+                    if (podDates && typeof podDates === 'object') {
+                        for (const dKey of Object.keys(podDates)) {
+                            const pObj = podDates[dKey];
+                            if (pObj && !pObj.audioUrl) {
+                                const safeDKey = String(dKey).replace(/[^a-zA-Z0-9_\-]/g, '_');
+                                const expectedFile = `pod_m${msId}_${safeDKey}.mp3`;
+                                if (fs.existsSync(path.join(UPLOADS_DIR, expectedFile))) {
+                                    pObj.audioUrl = `/gamification/uploads/${expectedFile}`;
+                                }
+                            }
+                        }
+                    }
+                }
+                return parsed;
+            }
         }
     } catch(e) {
         console.warn('Error reading milestone_configs.json:', e);
@@ -2858,6 +2876,24 @@ app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], as
         console.log(`[ElevenLabs Voice Generated] Saved ${buffer.length} bytes to ${fileName}`);
 
         const publicUrl = `/gamification/uploads/${fileName}`;
+
+        // Auto-persist audioUrl to milestone configs immediately so it is never lost or reverted
+        try {
+            const currentConfigs = getMilestoneConfigsFromDb();
+            const dateStr = String(dateKey || '').trim();
+            if (dateStr) {
+                if (!currentConfigs[String(safeMsId)]) currentConfigs[String(safeMsId)] = {};
+                if (!currentConfigs[String(safeMsId)]['pod']) currentConfigs[String(safeMsId)]['pod'] = {};
+                if (!currentConfigs[String(safeMsId)]['pod'][dateStr]) currentConfigs[String(safeMsId)]['pod'][dateStr] = {};
+                
+                currentConfigs[String(safeMsId)]['pod'][dateStr].audioUrl = publicUrl;
+                saveMilestoneConfigsToDb(currentConfigs);
+                console.log(`[ElevenLabs Voice Generated] Auto-persisted audioUrl to milestone_configs.json for pod ${dateStr}`);
+            }
+        } catch(cfgSaveErr) {
+            console.warn('[ElevenLabs Voice Generated] Warning auto-persisting audioUrl:', cfgSaveErr);
+        }
+
         return res.json({
             success: true,
             audioUrl: publicUrl,

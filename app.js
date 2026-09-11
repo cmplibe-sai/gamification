@@ -8166,7 +8166,7 @@ async function openPodQuizPoolInspectorModal() {
                         </p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="downloadPodQuizPoolCSV()" class="px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm" title="Download all 50 questions with choices & answer keys as CSV">
+                        <button type="button" onclick="downloadPodQuizPoolCSV('${targetDateKey}')" class="px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm" title="Download all 50 questions with choices & answer keys as CSV">
                             <i class="fas fa-file-csv text-emerald-400"></i> <span class="hidden sm:inline">Download</span> CSV
                         </button>
                         <button onclick="document.getElementById('podQuizInspectorModal').remove()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
@@ -8199,7 +8199,7 @@ async function openPodQuizPoolInspectorModal() {
                 <div class="pt-3 border-t border-slate-800 flex items-center justify-between shrink-0">
                     <span class="text-xs text-slate-400" id="podInspectorMatchCount">Showing ${questions.length} of ${questions.length} questions</span>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="downloadPodQuizPoolCSV()" class="btn-secondary py-2 px-4 text-xs font-bold text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/20 flex items-center gap-1.5">
+                        <button type="button" onclick="downloadPodQuizPoolCSV('${targetDateKey}')" class="btn-secondary py-2 px-4 text-xs font-bold text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/20 flex items-center gap-1.5">
                             <i class="fas fa-download text-emerald-400"></i> Export CSV
                         </button>
                         <button type="button" onclick="document.getElementById('podQuizInspectorModal').remove()" class="btn-primary py-2 px-5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500">
@@ -8213,18 +8213,40 @@ async function openPodQuizPoolInspectorModal() {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     window._podInspectorActiveCat = 'All';
+    window._podInspectorCurrentQuestions = questions;
+    window._podInspectorCurrentDateKey = targetDateKey;
     renderPodInspectorQuestions(questions);
 }
 window.openPodQuizPoolInspectorModal = openPodQuizPoolInspectorModal;
 
-function downloadPodQuizPoolCSV() {
-    const questions = window._podQuizPool50 || [];
+function downloadPodQuizPoolCSV(dateKey) {
+    const targetKey = dateKey || window._podInspectorCurrentDateKey || (typeof activeAdminDateKey !== 'undefined' ? activeAdminDateKey : null) || (typeof getLocalDateKey === 'function' ? getLocalDateKey(new Date()) : 'export');
+    
+    // Check in multiple places to guarantee questions are found
+    let questions = window._podInspectorCurrentQuestions;
     if (!questions || questions.length === 0) {
-        alert('No questions loaded to download.');
+        if (targetKey && window._podQuizPoolMap && Array.isArray(window._podQuizPoolMap[targetKey])) {
+            questions = window._podQuizPoolMap[targetKey];
+        }
+    }
+    if (!questions || questions.length === 0) {
+        const msId = (typeof activeAdminMilestoneId !== 'undefined' ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1));
+        const dayCfg = (typeof customMilestoneConfigs !== 'undefined' && customMilestoneConfigs?.[msId]?.['pod']?.[targetKey]) || {};
+        if (Array.isArray(dayCfg.questions) && dayCfg.questions.length > 0) {
+            questions = dayCfg.questions;
+        }
+    }
+    if (!questions || questions.length === 0) {
+        questions = window._podQuizPool50 || [];
+    }
+
+    if (!questions || questions.length === 0) {
+        alert('No questions loaded to download. Please click Inspect Question Bank first.');
         return;
     }
 
-    const headers = ['ID', 'Question', 'Category', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Option Index', 'Correct Answer', 'Explanation', 'Points'];
+    const headers = ['Question Number', 'Question Prompt', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Option (A/B/C/D)', 'Explanation', 'Category'];
+    const optLetters = ['A', 'B', 'C', 'D'];
     const escapeCsv = (val) => {
         if (val === null || val === undefined) return '""';
         const str = String(val).replace(/"/g, '""');
@@ -8237,35 +8259,32 @@ function downloadPodQuizPoolCSV() {
         const optB = opts[1] || '';
         const optC = opts[2] || '';
         const optD = opts[3] || '';
-        const cIdx = (q.correctOption !== undefined) ? q.correctOption : 0;
-        const cAns = opts[cIdx] || '';
+        const cIdx = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < 4) ? q.correctOption : 0;
+        const letter = optLetters[cIdx] || 'A';
         return [
-            escapeCsv(q.id || `q_${idx + 1}`),
+            idx + 1,
             escapeCsv(q.title || q.question || ''),
-            escapeCsv(q.category || 'General'),
             escapeCsv(optA),
             escapeCsv(optB),
             escapeCsv(optC),
             escapeCsv(optD),
-            escapeCsv(cIdx),
-            escapeCsv(cAns),
+            escapeCsv(letter),
             escapeCsv(q.explanation || ''),
-            escapeCsv(q.pts || 11)
+            escapeCsv(q.category || 'General')
         ].join(',');
     });
 
-    const csvContent = '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...rows].join('\r\n');
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const dateStr = (typeof getLocalDateKey === 'function') ? getLocalDateKey(new Date()) : 'export';
-    link.setAttribute('download', `simplipod_50_questions_bank_${dateStr}.csv`);
+    link.setAttribute('download', `simplipod_50_quiz_pool_${targetKey}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    if (typeof showToast === 'function') showToast('Downloaded 50 SimpliPod questions CSV', 'success');
+    if (typeof showToast === 'function') showToast(`Downloaded 50 SimpliPod questions for ${targetKey}`, 'success');
 }
 window.downloadPodQuizPoolCSV = downloadPodQuizPoolCSV;
 
@@ -10208,8 +10227,21 @@ async function openPodSessionModal(dayNum, dateKey) {
 
     const isTestMode = (typeof isTestUser === 'function') && isTestUser();
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
-    const defaultPodAudio = '/gamification/uploads/snabbit_podcast_ep1.wav';
-    const audioUrl = dayConfig.audioUrl || defaultPodAudio;
+    const safeMs = activeMilestoneId || '1';
+    const safeDate = String(activePodSessionDateKey || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    
+    // Resolve audioUrl specifically for this date/story — never leak previous day's audio
+    let audioUrl = dayConfig.audioUrl || '';
+    if (!audioUrl) {
+        if (activePodSessionDateKey === '2026-09-09') {
+            audioUrl = '/gamification/uploads/snabbit_podcast_ep1.wav';
+        } else if (activePodSessionDateKey === '2026-09-10') {
+            audioUrl = '/gamification/uploads/pod_m1_2026_09_10.mp3';
+        } else {
+            audioUrl = `/gamification/uploads/pod_m${safeMs}_${safeDate}.mp3`;
+        }
+    }
+
     const isConfigured = Boolean(
         isTestMode || audioUrl || (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
     );
@@ -10218,7 +10250,7 @@ async function openPodSessionModal(dayNum, dateKey) {
         return;
     }
 
-    const rawTitle = dayConfig.audioTitle || dayConfig.title || `Snabbit’s 15-Minute Beauty Fix`;
+    const rawTitle = dayConfig.audioTitle || dayConfig.title || `SimpliPod Audio Reflection`;
     // Clean any redundant "cMPLi POD Day X", "SimpliPod Day X", or leading "Day X:" prefixes
     let cleanStoryTitle = rawTitle
         .replace(/^cMPLi\s*POD\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
@@ -10311,9 +10343,9 @@ async function openPodSessionModal(dayNum, dateKey) {
                 </div>
 
                 <!-- Secure In-Browser Podcast Audio Player (No seekbar, forward/backward disabled, speed selector) -->
-                <div class="glass-card p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 space-y-4 shadow-lg">
+                <div class="glass-card p-4 sm:p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 space-y-4 shadow-lg">
                     <div class="flex items-center gap-4">
-                        <div class="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-2xl shrink-0 shadow-inner">
+                        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-xl sm:text-2xl shrink-0 shadow-inner">
                             <i class="fas fa-headphones-alt"></i>
                         </div>
                         <div class="overflow-hidden flex-1">
@@ -10321,8 +10353,8 @@ async function openPodSessionModal(dayNum, dateKey) {
                                 <span class="badge-pill badge-indigo text-[9px] uppercase tracking-widest">Active Listening Stream</span>
                                 <span id="podListeningBadge" class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">85% Required</span>
                             </div>
-                            <h4 class="text-sm font-bold text-white truncate mt-1">Audio Narration • ${cleanStoryTitle}</h4>
-                            <p class="text-[11px] text-slate-400 mt-0.5">Listen to at least 85% of this episode to unlock the 3 comprehension questions.</p>
+                            <h4 class="text-xs sm:text-sm font-bold text-white truncate mt-1">Audio Narration • ${cleanStoryTitle}</h4>
+                            <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Listen to at least 85% of this episode to unlock the 3 comprehension questions.</p>
                         </div>
                     </div>
 
@@ -10330,11 +10362,11 @@ async function openPodSessionModal(dayNum, dateKey) {
                         ${hasAudio ? `
                             <audio id="podAudioPlayerElement" preload="metadata" class="hidden" src="${audioUrl}"></audio>
                             
-                            <div class="p-4 bg-slate-950/90 rounded-2xl border border-indigo-500/30 space-y-3">
-                                <!-- Top controls: Play/Pause Button + Time + Speed selector -->
-                                <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="p-3 sm:p-4 bg-slate-950/90 rounded-2xl border border-indigo-500/30 space-y-3">
+                                <!-- Top controls: Play/Pause Button + Time + Speed selector (Mobile-Optimized) -->
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div class="flex items-center gap-3">
-                                        <button id="podPlayToggleBtn" type="button" class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 transition-transform active:scale-95">
+                                        <button id="podPlayToggleBtn" type="button" class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 transition-transform active:scale-95 shrink-0">
                                             <i id="podPlayIcon" class="fas fa-play ml-0.5"></i>
                                         </button>
                                         <div>
@@ -10349,11 +10381,11 @@ async function openPodSessionModal(dayNum, dateKey) {
                                         </div>
                                     </div>
 
-                                    <!-- Playback Speed Controls: 0.5x, 1x, 1.25x, 1.5x, 1.75x, 2x -->
-                                    <div class="flex items-center gap-1 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-                                        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase tracking-tight"><i class="fas fa-gauge-high mr-0.5"></i> Speed:</span>
+                                    <!-- Playback Speed Controls: 0.5x, 1x, 1.25x, 1.5x, 1.75x, 2x (Mobile Responsive) -->
+                                    <div class="flex items-center gap-1 bg-slate-900/90 p-1 sm:p-1.5 rounded-xl border border-slate-800/90 overflow-x-auto no-scrollbar max-w-full">
+                                        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase tracking-tight shrink-0"><i class="fas fa-gauge-high mr-0.5"></i> Speed:</span>
                                         ${['0.5', '1', '1.25', '1.5', '1.75', '2'].map(spd => `
-                                            <button type="button" onclick="setPodPlaybackSpeed(${spd}, this)" class="pod-speed-btn text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${spd === '1' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}">
+                                            <button type="button" onclick="setPodPlaybackSpeed(${spd}, this)" class="pod-speed-btn shrink-0 text-[10px] font-bold px-2 py-1 rounded-lg transition-all ${spd === '1' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}">
                                                 ${spd}x
                                             </button>
                                         `).join('')}
@@ -15466,6 +15498,43 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         `;
     }
 
+    // PODCAST AUDIO PLAYER IN SUBMISSION DETAIL (Learner & Creator can re-listen anytime)
+    let podAudioCardHtml = '';
+    if (isPod) {
+        const safeMs = sub.milestoneId || activeMilestoneId || '1';
+        const safeDate = String(cleanDateKey || 'ep1').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        let podAudioUrl = sub.audioUrl || dayCfg.audioUrl || '';
+        if (!podAudioUrl) {
+            if (cleanDateKey === '2026-09-09') podAudioUrl = '/gamification/uploads/snabbit_podcast_ep1.wav';
+            else if (cleanDateKey === '2026-09-10') podAudioUrl = '/gamification/uploads/pod_m1_2026_09_10.mp3';
+            else podAudioUrl = `/gamification/uploads/pod_m${safeMs}_${safeDate}.mp3`;
+        }
+
+        podAudioCardHtml = `
+            <!-- RETAINED PODCAST AUDIO PLAYER IN SUBMITTED VIEW -->
+            <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border border-indigo-500/40 shadow-xl space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-lg shrink-0 shadow-inner">
+                            <i class="fas fa-headphones"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="badge-pill badge-indigo text-[9px] uppercase font-bold tracking-wider"><i class="fas fa-podcast mr-1"></i> SimpliPod Narration</span>
+                                <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono font-bold">Listen Again Anytime</span>
+                            </div>
+                            <h4 class="text-xs sm:text-sm font-bold text-white truncate mt-0.5">${creatorTitle || 'Podcast Episode Audio'}</h4>
+                        </div>
+                    </div>
+                    <span class="badge-pill bg-slate-800 text-slate-400 text-[10px] font-mono shrink-0 hidden sm:inline-block">Full Episode</span>
+                </div>
+                <div class="pt-1">
+                    <audio controls class="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" src="${podAudioUrl}"></audio>
+                </div>
+            </div>
+        `;
+    }
+
     const fullModalHtml = `
         <div id="${modalId}" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animation-fade-in">
             <div class="glass-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 md:p-8 border-indigo-500/40 rounded-3xl shadow-2xl space-y-6 relative custom-scrollbar bg-[#0f172a]">
@@ -15496,33 +15565,36 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     </div>
                 ` : ''}
 
-                <!-- HEADER -->
-                <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="badge-pill ${isPod ? 'badge-indigo' : (isImmerse ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'badge-amber')} text-[10px] uppercase font-bold">${normalizedType} Check-in</span>
+                <!-- HEADER (Polished & Mobile-Responsive) -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                    <div class="space-y-1.5 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="badge-pill ${isPod ? 'badge-indigo' : (isImmerse ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40' : 'badge-amber')} text-[10px] uppercase font-bold tracking-wider">${normalizedType} Check-in</span>
                             <span class="badge-pill bg-slate-800 text-slate-300 text-[10px] font-mono">${formattedDatePill}</span>
                             ${isPod ? `
-                                <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>
+                                <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold"><i class="fas fa-check-circle mr-1"></i> Completed (+33 LCs)</span>
                             ` : isImmerse ? `
                                 <span class="badge-pill bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[10px] font-mono font-bold"><i class="fas fa-video mr-1"></i> MWF Session</span>
                             ` : `
                                 <span class="badge-pill ${isMismatch ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60' : (isLateSubmissionMode ? 'bg-amber-950/80 text-amber-300 border border-amber-800/60' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60')} text-[10px] font-mono font-bold"><i class="fas ${isLateSubmissionMode ? 'fa-clock' : 'fa-history'} mr-1"></i> Attempt #${attemptNum}</span>
                             `}
                         </div>
-                        <h3 class="text-xl font-extrabold text-white font-heading">${displayTitle}</h3>
+                        <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading leading-tight">${displayTitle}</h3>
                         ${exactSubmittedTimeStr ? `
-                            <p class="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                            <p class="text-xs text-slate-400 flex items-center gap-1.5 pt-0.5">
                                 <i class="fas fa-clock text-cyan-400 text-[11px]"></i>
                                 <span>Submitted: <strong class="font-mono text-slate-200">${exactSubmittedTimeStr}</strong></span>
                             </p>
                         ` : ''}
                     </div>
-                    <div class="text-right">
-                        <span class="text-xs font-bold text-slate-400 block">${isCreatorView ? 'Wallet Reward' : 'TagMango Wallet'}</span>
-                        <span class="text-base font-black ${isEvaluating ? 'text-indigo-400' : (isMismatch ? 'text-rose-400' : 'text-emerald-400')} font-mono">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</span>
+                    <div class="sm:text-right shrink-0 flex sm:flex-col items-center sm:items-end justify-between bg-slate-950/60 sm:bg-transparent p-2.5 sm:p-0 rounded-xl border sm:border-0 border-slate-800/80">
+                        <span class="text-[11px] font-bold text-slate-400 block">${isCreatorView ? 'Wallet Reward' : 'TagMango Wallet'}</span>
+                        <span class="text-lg sm:text-xl font-black ${isEvaluating ? 'text-indigo-400' : (isMismatch ? 'text-rose-400' : 'text-emerald-400')} font-mono drop-shadow-sm">${isEvaluating ? 'Evaluating...' : `+${lcReward} LCs`}</span>
                     </div>
                 </div>
+
+                <!-- RETAINED PODCAST AUDIO PLAYER (FOR POD SUBMISSIONS) -->
+                ${podAudioCardHtml}
 
                 <!-- AI EVALUATION CARD (ON TOP, DIRECTLY BELOW SUBMISSION TIME) -->
                 ${aiEvaluationCardHtml}
