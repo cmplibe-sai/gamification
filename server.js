@@ -337,8 +337,8 @@ console.log(`[TagMango Wallet Sync]: ${TAGMANGO_KEY ? 'ACTIVE (API Key loaded)' 
 const HOST_URL = process.env.HOST_URL || 'learn.cmplibe.com';
 
 // Dynamic configuration endpoint (Public config only - NEVER expose secrets)
-app.get('/api/config', (req, res) => {
-    const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
+app.get(['/api/config', '/gamification/api/config'], (req, res) => {
+    const defaultAdmins = ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 'saikumaryadiki@gmail.com', '6309764212', '9845421644', 'admin@cmplibe.com'];
     const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
     const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
 
@@ -1743,74 +1743,19 @@ app.post(['/api/milestone-prereqs', '/gamification/api/milestone-prereqs'], (req
 // ==============================================================
 const MODULE_PREREQS_FILE = path.join(DATA_DIR, 'module_prereqs.json');
 
-const DEFAULT_MODULE_PREREQS = {
-    "1": {
-        "pod": [
-            { id: "m1_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins & earn 50 LCs in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m1_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins & earn 100 LCs in cMPLi Dip" },
-            { id: "m1_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions & earn 50 LCs in cMPLi POD" }
-        ]
-    },
-    "2": {
-        "pod": [
-            { id: "m2_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m2_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m2_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m2_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ]
-    },
-    "3": {
-        "pod": [
-            { id: "m3_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m3_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m3_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m3_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ],
-        "problem_solution": [
-            { id: "m3_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
-        ]
-    },
-    "4": {
-        "pod": [
-            { id: "m4_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m4_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m4_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m4_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ],
-        "problem_solution": [
-            { id: "m4_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
-        ],
-        "residency": [
-            { id: "m4_residency_from_ps", prereqModule: "problem_solution", targetDays: 2, targetLCs: 30, label: "Complete 2 Problem-Solution Briefings" }
-        ]
-    }
-};
+const DEFAULT_MODULE_PREREQS = {};
 
 function getModulePrereqsFromDb() {
     try {
         if (fs.existsSync(MODULE_PREREQS_FILE)) {
             const raw = fs.readFileSync(MODULE_PREREQS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') return { ...DEFAULT_MODULE_PREREQS, ...parsed };
+            if (parsed && typeof parsed === 'object') return parsed;
         }
     } catch (e) {
         console.warn('Error reading module_prereqs.json:', e);
     }
-    return { ...DEFAULT_MODULE_PREREQS, ...(store.customModulePrereqs || {}) };
+    return store.customModulePrereqs || {};
 }
 
 function saveModulePrereqsToDb(configs) {

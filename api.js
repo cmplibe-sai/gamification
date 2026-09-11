@@ -12,7 +12,7 @@ window.APP_CONFIG = {
 
 window.ADMIN_EMAILS = [
     'cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 
-    'cmplifutureadi@gmail.com', '6309764212', '9845421644'
+    'saikumaryadiki@gmail.com', 'admin@cmplibe.com', '6309764212', '9845421644'
 ];
 
 // Asynchronously sync config from backend Web Service if available

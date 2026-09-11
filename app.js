@@ -6297,68 +6297,15 @@ window.saveMilestonePrereqConfig = saveMilestonePrereqConfig;
 // (Gating modules within a milestone until prior modules are achieved)
 // Self-efficacy progressive privilege model: sequential unlocking & dual criteria (Activities + LCs)
 // ==============================================================
-var DEFAULT_MODULE_PREREQS = {
-    "1": {
-        "pod": [
-            { id: "m1_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins & earn 50 LCs in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m1_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins & earn 100 LCs in cMPLi Dip" },
-            { id: "m1_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions & earn 50 LCs in cMPLi POD" }
-        ]
-    },
-    "2": {
-        "pod": [
-            { id: "m2_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m2_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m2_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m2_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ]
-    },
-    "3": {
-        "pod": [
-            { id: "m3_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m3_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m3_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m3_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ],
-        "problem_solution": [
-            { id: "m3_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
-        ]
-    },
-    "4": {
-        "pod": [
-            { id: "m4_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
-        ],
-        "immerse": [
-            { id: "m4_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
-            { id: "m4_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
-        ],
-        "projects": [
-            { id: "m4_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
-        ],
-        "problem_solution": [
-            { id: "m4_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
-        ],
-        "residency": [
-            { id: "m4_residency_from_ps", prereqModule: "problem_solution", targetDays: 2, targetLCs: 30, label: "Complete 2 Problem-Solution Briefings" }
-        ]
-    }
-};
+var DEFAULT_MODULE_PREREQS = {};
 window.DEFAULT_MODULE_PREREQS = DEFAULT_MODULE_PREREQS;
 
 function getModulePrereqsForMilestone(msId) {
     const key = String(msId || 1);
     const defaults = DEFAULT_MODULE_PREREQS[key] || {};
-    const custom = (typeof customModulePrereqs !== 'undefined' && customModulePrereqs[key]) ? customModulePrereqs[key] : {};
+    const custom = (typeof customModulePrereqs !== 'undefined' && customModulePrereqs && customModulePrereqs[key]) 
+        ? customModulePrereqs[key] 
+        : (typeof window !== 'undefined' && window.customModulePrereqs && window.customModulePrereqs[key] ? window.customModulePrereqs[key] : {});
     return { ...defaults, ...custom };
 }
 window.getModulePrereqsForMilestone = getModulePrereqsForMilestone;
@@ -6388,6 +6335,37 @@ async function saveModulePrereqsForMilestone(msId, moduleCode, rules) {
 }
 window.saveModulePrereqsForMilestone = saveModulePrereqsForMilestone;
 
+function isPlatformCreatorOrAdmin(user) {
+    const u = user || (typeof currentUser !== 'undefined' ? currentUser : null) || (typeof window !== 'undefined' && window.currentUser ? window.currentUser : null);
+    if (typeof isAdminLogin !== 'undefined' && isAdminLogin) return true;
+    if (typeof window !== 'undefined' && window.isAdminLogin) return true;
+    if (u && (u.role === 'creator' || u.isAdmin)) return true;
+
+    // Durable fallback: identity check against the admin allowlist
+    const adminEmails = (window.ADMIN_EMAILS && Array.isArray(window.ADMIN_EMAILS) && window.ADMIN_EMAILS.length > 0)
+        ? window.ADMIN_EMAILS
+        : ['cmplibesai@gmail.com', 'cmplifutureadi@gmail.com', 'cmplibecynthiya@gmail.com', 'saikumaryadiki@gmail.com', 'admin@cmplibe.com'];
+    const adminPhones = ['6309764212', '9845421644'];
+
+    const email = (u && u.email ? String(u.email) : '').toLowerCase().trim();
+    const phone = (u && (u.phone || u.phoneNumber) ? String(u.phone || u.phoneNumber) : '').replace(/\D/g, '').slice(-10);
+
+    if (email && adminEmails.some(e => String(e).toLowerCase().trim() === email)) return true;
+    if (phone && adminPhones.includes(phone)) return true;
+    return false;
+}
+window.isPlatformCreatorOrAdmin = isPlatformCreatorOrAdmin;
+
+function getModuleCompletionUnit(modCode) {
+    const m = normalizeLevelUpType(modCode);
+    if (m === 'dip') return 'check-in activities';
+    if (m === 'pod') return 'POD sessions';
+    if (m === 'immerse') return 'Immerse sessions';
+    if (m === 'projects') return 'Real-World Execution Projects';
+    return 'activities';
+}
+window.getModuleCompletionUnit = getModuleCompletionUnit;
+
 function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
     const normMod = normalizeLevelUpType(modCode || 'dip');
     // cMPLi Dip is the fundamental entry module: always open to everyone
@@ -6396,12 +6374,7 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
     }
 
     // Admins, creators, and test accounts bypass locking for testing convenience
-    const isAdmin = Boolean(
-        (typeof isAdminLogin !== 'undefined' && isAdminLogin) ||
-        (typeof window !== 'undefined' && window.isAdminLogin) ||
-        (currentUser && (currentUser.role === 'creator' || currentUser.isAdmin)) ||
-        (typeof window !== 'undefined' && window.currentUser && (window.currentUser.role === 'creator' || window.currentUser.isAdmin))
-    );
+    const isAdmin = isPlatformCreatorOrAdmin(user);
     const isTest = (typeof isTestUser === 'function' && isTestUser());
 
     if (isAdmin || isTest) {
@@ -6446,10 +6419,19 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
         const prereqMod = normalizeLevelUpType(rule.prereqModule || 'dip');
         const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === prereqMod)) || { name: prereqMod.toUpperCase(), icon: 'fa-cube' };
 
-        // Check days/activities target
-        const reqDays = Number(rule.targetDays !== undefined ? rule.targetDays : (rule.type === 'days' ? rule.targetValue : 0)) || 0;
-        // Check LCs target
-        const reqLCs = Number(rule.targetLCs !== undefined ? rule.targetLCs : (rule.type === 'lcs' ? rule.targetValue : 0)) || 0;
+        const ruleType = rule.type === 'lcs' ? 'lcs' : (rule.type === 'days' ? 'days' : null);
+        let reqDays = 0;
+        let reqLCs = 0;
+
+        if (ruleType === 'days') {
+            reqDays = Number(rule.targetValue !== undefined ? rule.targetValue : rule.targetDays) || 0;
+        } else if (ruleType === 'lcs') {
+            reqLCs = Number(rule.targetValue !== undefined ? rule.targetValue : rule.targetLCs) || 0;
+        } else {
+            // Untyped/legacy rule (old dual-field shape): honor both criteria
+            reqDays = Number(rule.targetDays) || 0;
+            reqLCs = Number(rule.targetLCs) || 0;
+        }
 
         // Only count valid, completed/approved submissions (exclude in-flight evaluation and rejected)
         const modSubs = msSubs.filter(s => {
@@ -6459,25 +6441,17 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
             return !isEvaluating && !isMismatch && (s.status === 'completed' || Number(s.matchPercentage) >= 50 || Number(s.lcReward) > 0);
         });
 
-        // Calculate completed days/activities
-        const seenDays = new Set();
-        modSubs.forEach(s => {
-            const dayId = String(s.day !== undefined && s.day !== null ? s.day : (s.dateKey || s.date || s.id));
-            seenDays.add(dayId);
-        });
-        const currentDays = seenDays.size;
-
-        // Calculate earned LCs in this module in this milestone using actual submission reward field
-        const currentLCs = modSubs.reduce((acc, s) => {
-            const reward = (s.lcReward !== undefined && s.lcReward !== null)
-                ? Number(s.lcReward)
-                : (Number(s.lcAwarded) || Number(s.points) || Number(s.score) || 0);
-            return acc + (isNaN(reward) ? 0 : reward);
-        }, 0);
-
         if (reqDays > 0) {
+            // Calculate completed days/activities
+            const seenDays = new Set();
+            modSubs.forEach(s => {
+                const dayId = String(s.day !== undefined && s.day !== null ? s.day : (s.dateKey || s.date || s.id));
+                seenDays.add(dayId);
+            });
+            const currentDays = seenDays.size;
             const daysPct = Math.min(100, Math.round((currentDays / reqDays) * 100));
             const isDaysMet = currentDays >= reqDays;
+            const unitText = getModuleCompletionUnit(prereqMod);
             const daysInfo = {
                 id: (rule.id || `rule_${rIdx}`) + '_days',
                 prereqModule: prereqMod,
@@ -6488,13 +6462,20 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
                 currentValue: currentDays,
                 percentage: daysPct,
                 isMet: isDaysMet,
-                label: `Complete ${reqDays} check-in activities in ${mObj.name}`
+                label: `Complete ${reqDays} ${unitText} in ${mObj.name}`
             };
             progress.push(daysInfo);
             if (!isDaysMet) unmetRules.push(daysInfo);
         }
 
         if (reqLCs > 0) {
+            // Calculate earned LCs in this module in this milestone using actual submission reward field
+            const currentLCs = modSubs.reduce((acc, s) => {
+                const reward = (s.lcReward !== undefined && s.lcReward !== null)
+                    ? Number(s.lcReward)
+                    : (Number(s.lcAwarded) || Number(s.points) || Number(s.score) || 0);
+                return acc + (isNaN(reward) ? 0 : reward);
+            }, 0);
             const lcsPct = Math.min(100, Math.round((currentLCs / reqLCs) * 100));
             const isLCsMet = currentLCs >= reqLCs;
             const lcsInfo = {
@@ -6511,26 +6492,6 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
             };
             progress.push(lcsInfo);
             if (!isLCsMet) unmetRules.push(lcsInfo);
-        }
-
-        // If neither was set, fallback to default 1 activity
-        if (reqDays === 0 && reqLCs === 0) {
-            const defaultDays = Number(rule.targetValue) || 1;
-            const isDefaultMet = currentDays >= defaultDays;
-            const dInfo = {
-                id: rule.id || `rule_${rIdx}`,
-                prereqModule: prereqMod,
-                prereqModuleName: mObj.name,
-                prereqModuleIcon: mObj.icon,
-                type: 'days',
-                targetValue: defaultDays,
-                currentValue: currentDays,
-                percentage: Math.min(100, Math.round((currentDays / defaultDays) * 100)),
-                isMet: isDefaultMet,
-                label: `Complete ${defaultDays} check-in activities in ${mObj.name}`
-            };
-            progress.push(dInfo);
-            if (!isDefaultMet) unmetRules.push(dInfo);
         }
     });
 
@@ -7287,6 +7248,10 @@ function switchAdminModuleTab(mod) {
     const btnModPrereqs = document.getElementById('btnTabModulePrereqs');
     const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === mod)) || { name: mod.toUpperCase() };
 
+    window._adminVisitedModulePrereqs = window._adminVisitedModulePrereqs || new Set();
+    const currentMsId = activeAdminMilestoneId || 1;
+    const sessionKey = `${currentMsId}_${mod}`;
+
     if (btnModPrereqs) {
         if (mod === 'dip') {
             btnModPrereqs.style.display = 'none';
@@ -7296,9 +7261,19 @@ function switchAdminModuleTab(mod) {
             }
         } else {
             btnModPrereqs.style.display = 'inline-block';
-            btnModPrereqs.innerHTML = `<i class="fas fa-lock text-amber-400 mr-1.5"></i> ${modObj.name} Prerequisites`;
-            // If currently on module prerequisites view, re-render for this module
-            if (!document.getElementById('adminModulePrereqsView')?.classList.contains('hidden')) {
+            const rules = getModulePrereqsRules(currentMsId, mod);
+            const hasRules = Array.isArray(rules) && rules.length > 0;
+            const badge = hasRules
+                ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono border border-amber-500/30">${rules.length} Rule${rules.length > 1 ? 's' : ''}</span>`
+                : `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-medium border border-emerald-500/30">Open</span>`;
+            btnModPrereqs.innerHTML = `<i class="fas fa-sliders-h text-indigo-400 mr-1.5"></i> ${modObj.name} Access Settings ${badge}`;
+
+            // Auto-navigate to module access settings on first selection of this module in this session
+            const isFirstVisit = !window._adminVisitedModulePrereqs.has(sessionKey);
+            if (isFirstVisit) {
+                window._adminVisitedModulePrereqs.add(sessionKey);
+                switchAdminMilestoneTab('modulePrereqs');
+            } else if (!document.getElementById('adminModulePrereqsView')?.classList.contains('hidden')) {
                 renderAdminModulePrereqsView();
             }
         }
@@ -7418,35 +7393,15 @@ function renderAdminModulePrereqsView() {
                             targetValue: lcsVal
                         });
                     }
-                    if (daysVal === 0 && lcsVal === 0) {
-                        normalized.push({
-                            id: r.id || `modrule_${idx}`,
-                            prereqModule: pMod,
-                            type: 'days',
-                            targetValue: Number(r.targetValue) || 1
-                        });
-                    }
                 }
             });
         }
 
-        if (normalized.length === 0) {
-            normalized.push({
-                id: `modrule_${Date.now()}_1`,
-                prereqModule: defaultPrereqMod,
-                type: 'days',
-                targetValue: 4
-            });
-            normalized.push({
-                id: `modrule_${Date.now()}_2`,
-                prereqModule: defaultPrereqMod,
-                type: 'lcs',
-                targetValue: 50
-            });
-        }
+        // Keep empty if unconfigured - no artificial fallback rules!
         window._adminModulePrereqsWorkingMap[workingKey] = normalized;
     }
 
+    const rulesList = window._adminModulePrereqsWorkingMap[workingKey] || [];
     window._adminModulePrereqsClamped = window._adminModulePrereqsClamped || {};
 
     // Sanitize any rule pointing to invalid preceding module
@@ -7461,14 +7416,14 @@ function renderAdminModulePrereqsView() {
 
     const itemsHtml = rulesList.map((item, idx) => {
         const itemModCode = normalizeLevelUpType(item.prereqModule || defaultPrereqMod);
-        const unitText = (typeof getModuleCompletionUnit === 'function') ? getModuleCompletionUnit(itemModCode) : 'Days';
-        const criterionDaysLabel = `${unitText} / Activities Completed`;
+        const unitText = getModuleCompletionUnit(itemModCode);
+        const criterionDaysLabel = `${unitText.charAt(0).toUpperCase() + unitText.slice(1)} Completed`;
 
         return `
             <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3 relative group" data-mod-prereq-id="${item.id}">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-amber-400 font-heading">
-                        <i class="fas fa-lock mr-1"></i> Rule #${idx + 1}
+                    <span class="text-xs font-bold text-indigo-400 font-heading">
+                        <i class="fas fa-sliders-h mr-1"></i> Rule #${idx + 1}
                     </span>
                     <button type="button" onclick="removeAdminModulePrereqRule('${item.id}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors" title="Delete rule">
                         <i class="fas fa-trash-alt"></i>
@@ -7477,20 +7432,20 @@ function renderAdminModulePrereqsView() {
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                         <label class="block text-[11px] text-slate-400 font-bold mb-1">Preceding Module</label>
-                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'prereqModule', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-medium">
+                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'prereqModule', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-medium">
                             ${availablePrecedingModules.map(m => `<option value="${m.code}" ${m.code === item.prereqModule ? 'selected' : ''}>${m.name}</option>`).join('')}
                         </select>
                     </div>
                     <div>
                         <label class="block text-[11px] text-slate-400 font-bold mb-1">Criterion</label>
-                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'type', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-medium">
+                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'type', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-medium">
                             <option value="days" ${item.type === 'days' ? 'selected' : ''}>${criterionDaysLabel}</option>
                             <option value="lcs" ${item.type === 'lcs' ? 'selected' : ''}>Minimum LCs in Module</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-[11px] text-slate-400 font-bold mb-1">Target Value</label>
-                        <input type="number" min="0" value="${item.targetValue}" oninput="updateAdminModulePrereqRuleField('${item.id}', 'targetValue', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-mono font-bold">
+                        <input type="number" min="0" value="${item.targetValue}" oninput="updateAdminModulePrereqRuleField('${item.id}', 'targetValue', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono font-bold">
                     </div>
                 </div>
             </div>
@@ -7501,7 +7456,7 @@ function renderAdminModulePrereqsView() {
         <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
             <div>
                 <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center text-sm">
+                    <span class="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-sm">
                         <i class="fas ${modObj.icon || 'fa-cube'}"></i>
                     </span>
                     <div>
@@ -7525,18 +7480,18 @@ function renderAdminModulePrereqsView() {
             <div class="space-y-3">
                 <div class="flex items-center justify-between">
                     <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Access Requirements for ${modObj.name}</label>
-                    <button type="button" onclick="addAdminModulePrereqRule()" class="btn-secondary py-1 px-3 text-xs font-bold text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 shadow-sm flex items-center gap-1.5">
+                    <button type="button" onclick="addAdminModulePrereqRule()" class="btn-secondary py-1 px-3 text-xs font-bold text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/20 shadow-sm flex items-center gap-1.5">
                         <i class="fas fa-plus-circle"></i> Add Rule
                     </button>
                 </div>
                 <div id="adminModulePrereqsListContainer" class="space-y-3">
-                    ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites configured. Module will be open to all learners. Click &quot;Add Rule&quot; to require prerequisites.</div>'}
+                    ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites configured. Module will be open to all learners once unlocked sequentially. Click &quot;Add Rule&quot; to require prerequisites.</div>'}
                 </div>
             </div>
 
             <div id="modPrereqSaveStatus" class="hidden text-xs font-bold text-emerald-400"><i class="fas fa-check-circle mr-1"></i> Saved &amp; synced to all learners immediately.</div>
 
-            <button onclick="saveAdminModulePrereqsForm()" class="btn-primary w-full py-3 text-sm bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500">
+            <button onclick="saveAdminModulePrereqsForm()" class="btn-primary w-full py-3 text-sm">
                 <i class="fas fa-save mr-1.5"></i> Save Prerequisites for ${modObj.name}
             </button>
         </div>
@@ -7631,6 +7586,16 @@ async function saveAdminModulePrereqsForm() {
     }
     if (window._adminModulePrereqsClamped) {
         delete window._adminModulePrereqsClamped[workingKey];
+    }
+
+    const btnModPrereqs = document.getElementById('btnTabModulePrereqs');
+    if (btnModPrereqs) {
+        const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: modCode.toUpperCase() };
+        const hasRules = formattedRules.length > 0;
+        const badge = hasRules
+            ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono border border-amber-500/30">${formattedRules.length} Rule${formattedRules.length > 1 ? 's' : ''}</span>`
+            : `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-medium border border-emerald-500/30">Open</span>`;
+        btnModPrereqs.innerHTML = `<i class="fas fa-sliders-h text-indigo-400 mr-1.5"></i> ${modObj.name} Access Settings ${badge}`;
     }
 
     const statusEl = document.getElementById('modPrereqSaveStatus');
