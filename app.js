@@ -6356,7 +6356,7 @@ function isPlatformCreatorOrAdmin(user) {
 }
 window.isPlatformCreatorOrAdmin = isPlatformCreatorOrAdmin;
 
-function getModuleCompletionUnit(modCode) {
+function getModulePrereqUnitLabel(modCode) {
     const m = normalizeLevelUpType(modCode);
     if (m === 'dip') return 'check-in activities';
     if (m === 'pod') return 'POD sessions';
@@ -6364,7 +6364,7 @@ function getModuleCompletionUnit(modCode) {
     if (m === 'projects') return 'Real-World Execution Projects';
     return 'activities';
 }
-window.getModuleCompletionUnit = getModuleCompletionUnit;
+window.getModulePrereqUnitLabel = getModulePrereqUnitLabel;
 
 function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
     const normMod = normalizeLevelUpType(modCode || 'dip');
@@ -6451,7 +6451,7 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
             const currentDays = seenDays.size;
             const daysPct = Math.min(100, Math.round((currentDays / reqDays) * 100));
             const isDaysMet = currentDays >= reqDays;
-            const unitText = getModuleCompletionUnit(prereqMod);
+            const unitText = (typeof getModulePrereqUnitLabel === 'function') ? getModulePrereqUnitLabel(prereqMod) : 'activities';
             const daysInfo = {
                 id: (rule.id || `rule_${rIdx}`) + '_days',
                 prereqModule: prereqMod,
@@ -7416,7 +7416,7 @@ function renderAdminModulePrereqsView() {
 
     const itemsHtml = rulesList.map((item, idx) => {
         const itemModCode = normalizeLevelUpType(item.prereqModule || defaultPrereqMod);
-        const unitText = getModuleCompletionUnit(itemModCode);
+        const unitText = (typeof getModulePrereqUnitLabel === 'function') ? getModulePrereqUnitLabel(itemModCode) : 'activities';
         const criterionDaysLabel = `${unitText.charAt(0).toUpperCase() + unitText.slice(1)} Completed`;
 
         return `
