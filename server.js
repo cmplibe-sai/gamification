@@ -735,7 +735,8 @@ function getMilestoneConfigsFromDb() {
             const raw = fs.readFileSync(MILESTONE_CONFIGS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
-                // Auto-detect audioUrl if blank on disk
+                // Auto-detect audioUrl if blank on disk, and write back once to prevent repeated fs.stat calls
+                let newlyDetected = false;
                 for (const msId of Object.keys(parsed)) {
                     const podDates = parsed[msId]?.pod;
                     if (podDates && typeof podDates === 'object') {
@@ -746,10 +747,17 @@ function getMilestoneConfigsFromDb() {
                                 const expectedFile = `pod_m${msId}_${safeDKey}.mp3`;
                                 if (fs.existsSync(path.join(UPLOADS_DIR, expectedFile))) {
                                     pObj.audioUrl = `/gamification/uploads/${expectedFile}`;
+                                    newlyDetected = true;
                                 }
                             }
                         }
                     }
+                }
+                if (newlyDetected) {
+                    try {
+                        fs.writeFileSync(MILESTONE_CONFIGS_FILE, JSON.stringify(parsed, null, 2), 'utf8');
+                        store.customMilestoneConfigs = parsed;
+                    } catch(writeErr) {}
                 }
                 return parsed;
             }

@@ -10218,6 +10218,26 @@ window.setPodPlaybackSpeed = function(speed, btn) {
     }
 };
 
+function resolvePodAudioUrl(dayConfig, dateKey, msId = '1') {
+    const directUrl = dayConfig?.audioUrl;
+    if (directUrl && typeof directUrl === 'string' && directUrl.trim()) {
+        return directUrl.trim();
+    }
+    const cleanDate = String(dateKey || '').trim();
+    if (cleanDate === '2026-09-09') {
+        return '/gamification/uploads/snabbit_podcast_ep1.wav';
+    }
+    if (cleanDate === '2026-09-10') {
+        return '/gamification/uploads/pod_m1_2026_09_10.mp3';
+    }
+    if (cleanDate === '2026-09-11') {
+        return '/gamification/uploads/pod_m1_2026_09_11.mp3';
+    }
+    // Return empty for unconfigured future dates so the user receives the proper "Audio not yet configured" state
+    return '';
+}
+window.resolvePodAudioUrl = resolvePodAudioUrl;
+
 async function openPodSessionModal(dayNum, dateKey) {
     activePodSessionDay = dayNum;
     activePodSessionDateKey = dateKey || getLocalDateKey(new Date());
@@ -10228,19 +10248,9 @@ async function openPodSessionModal(dayNum, dateKey) {
     const isTestMode = (typeof isTestUser === 'function') && isTestUser();
     const dayConfig = getAdminConfigForDate(activePodSessionDateKey, 'pod') || {};
     const safeMs = activeMilestoneId || '1';
-    const safeDate = String(activePodSessionDateKey || '').replace(/[^a-zA-Z0-9_\-]/g, '_');
     
-    // Resolve audioUrl specifically for this date/story — never leak previous day's audio
-    let audioUrl = dayConfig.audioUrl || '';
-    if (!audioUrl) {
-        if (activePodSessionDateKey === '2026-09-09') {
-            audioUrl = '/gamification/uploads/snabbit_podcast_ep1.wav';
-        } else if (activePodSessionDateKey === '2026-09-10') {
-            audioUrl = '/gamification/uploads/pod_m1_2026_09_10.mp3';
-        } else {
-            audioUrl = `/gamification/uploads/pod_m${safeMs}_${safeDate}.mp3`;
-        }
-    }
+    // Resolve audioUrl specifically for this date/story via shared resolver
+    const audioUrl = resolvePodAudioUrl(dayConfig, activePodSessionDateKey, safeMs);
 
     const isConfigured = Boolean(
         isTestMode || audioUrl || (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0)
@@ -10526,9 +10536,19 @@ async function openPodSessionModal(dayNum, dateKey) {
             });
 
             player.addEventListener('error', (e) => {
-                console.error('POD Audio player error:', e);
+                console.warn('POD Audio player error, unlocking quiz fallback:', e);
                 if (statusText) {
-                    statusText.innerHTML = `<span class="text-rose-400 font-semibold"><i class="fas fa-exclamation-triangle mr-1"></i> Audio load failed. Please check audio file or format.</span>`;
+                    statusText.innerHTML = `<span class="text-amber-400 font-semibold"><i class="fas fa-info-circle mr-1"></i> Audio stream unavailable. Comprehension quiz unlocked.</span>`;
+                }
+                if (lockedNotice) lockedNotice.classList.add('hidden');
+                if (questionsArea) questionsArea.classList.remove('hidden');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                if (badge) {
+                    badge.className = 'badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold';
+                    badge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Audio Bypassed';
                 }
             });
 
@@ -15502,15 +15522,10 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
     let podAudioCardHtml = '';
     if (isPod) {
         const safeMs = sub.milestoneId || activeMilestoneId || '1';
-        const safeDate = String(cleanDateKey || 'ep1').replace(/[^a-zA-Z0-9_\-]/g, '_');
-        let podAudioUrl = sub.audioUrl || dayCfg.audioUrl || '';
-        if (!podAudioUrl) {
-            if (cleanDateKey === '2026-09-09') podAudioUrl = '/gamification/uploads/snabbit_podcast_ep1.wav';
-            else if (cleanDateKey === '2026-09-10') podAudioUrl = '/gamification/uploads/pod_m1_2026_09_10.mp3';
-            else podAudioUrl = `/gamification/uploads/pod_m${safeMs}_${safeDate}.mp3`;
-        }
+        let podAudioUrl = (typeof sub.audioUrl === 'string' && sub.audioUrl.trim()) ? sub.audioUrl.trim() : resolvePodAudioUrl(dayCfg, cleanDateKey, safeMs);
 
-        podAudioCardHtml = `
+        if (podAudioUrl) {
+            podAudioCardHtml = `
             <!-- RETAINED PODCAST AUDIO PLAYER IN SUBMITTED VIEW -->
             <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-indigo-950/40 border border-indigo-500/40 shadow-xl space-y-3">
                 <div class="flex items-center justify-between gap-3">
@@ -15532,7 +15547,8 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                     <audio controls class="w-full h-10 rounded-xl bg-slate-950 border border-slate-800" src="${podAudioUrl}"></audio>
                 </div>
             </div>
-        `;
+            `;
+        }
     }
 
     const fullModalHtml = `
