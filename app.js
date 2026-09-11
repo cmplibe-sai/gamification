@@ -2473,8 +2473,18 @@ async function syncGlobalServerData() {
             if (JSON.stringify(customModulePrereqs) !== JSON.stringify(serverModulePrereqs)) {
                 customModulePrereqs = serverModulePrereqs;
                 try { localStorage.setItem('customModulePrereqs', JSON.stringify(customModulePrereqs)); } catch(e) {}
-                if (activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
-                    if (typeof renderAdminPrereqsView === 'function') renderAdminPrereqsView();
+                
+                // Real-time multi-admin sync: invalidate non-dirty cached snapshots so fresh server data flows in
+                if (typeof window !== 'undefined' && window._adminModulePrereqsWorkingMap) {
+                    Object.keys(window._adminModulePrereqsWorkingMap).forEach(k => {
+                        if (!window._adminModulePrereqsDirty || !window._adminModulePrereqsDirty[k]) {
+                            delete window._adminModulePrereqsWorkingMap[k];
+                        }
+                    });
+                }
+                
+                if (activeAdminMilestoneId && document.getElementById('adminModulePrereqsView') && !document.getElementById('adminModulePrereqsView').classList.contains('hidden')) {
+                    if (typeof renderAdminModulePrereqsView === 'function') renderAdminModulePrereqsView();
                 }
             }
         }
@@ -7032,6 +7042,9 @@ function openAdminMilestone(id) {
     const btnInspect = document.getElementById('btnInspectPodQuizPool');
     if (btnInspect) btnInspect.style.display = (activeAdminModule === 'pod') ? 'inline-flex' : 'none';
 
+    const btnModPrereqs = document.getElementById('btnTabModulePrereqs');
+    if (btnModPrereqs) btnModPrereqs.style.display = 'none';
+
     const btnCheckins = document.getElementById('btnTabCheckins');
     if (isCampusPartner) {
         if (btnCheckins) btnCheckins.style.display = 'none';
@@ -7053,20 +7066,33 @@ function switchAdminMilestoneTab(tabName) {
     const btns = {
         checkins: document.getElementById('btnTabCheckins'),
         completion: document.getElementById('btnTabCompletion'),
-        prereqs: document.getElementById('btnTabPrereqs')
+        modulePrereqs: document.getElementById('btnTabModulePrereqs')
     };
+    const headerBtn = document.getElementById('btnHeaderMilestonePrereqs');
     const views = {
         checkins: document.getElementById('adminCheckinsConfigView'),
         completion: document.getElementById('adminCompletionView'),
-        prereqs: document.getElementById('adminPrereqsView')
+        prereqs: document.getElementById('adminPrereqsView'),
+        modulePrereqs: document.getElementById('adminModulePrereqsView')
     };
-    const activeClass = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md';
-    const inactiveClass = 'flex-1 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+    const activeTabClass = 'shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md whitespace-nowrap';
+    const inactiveTabClass = 'shrink-0 sm:flex-1 py-2 px-3 sm:px-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white whitespace-nowrap';
 
     Object.keys(btns).forEach(key => {
-        if (btns[key]) btns[key].className = (key === tabName) ? activeClass : inactiveClass;
+        if (btns[key]) btns[key].className = (key === tabName) ? activeTabClass : inactiveTabClass;
+    });
+
+    if (headerBtn) {
+        if (tabName === 'prereqs') {
+            headerBtn.className = 'py-2 px-3 text-xs font-bold text-white bg-indigo-600 border border-indigo-500 shadow-md flex items-center gap-1.5 rounded-lg';
+        } else {
+            headerBtn.className = 'btn-secondary py-2 px-3 text-xs font-bold text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/20 shadow-sm flex items-center gap-1.5 rounded-lg';
+        }
+    }
+
+    Object.keys(views).forEach(key => {
         if (views[key]) {
-            const isActive = key === tabName;
+            const isActive = (key === tabName);
             views[key].classList.toggle('hidden', !isActive);
             views[key].style.display = isActive ? 'block' : 'none';
         }
@@ -7079,6 +7105,8 @@ function switchAdminMilestoneTab(tabName) {
         loadAdminCheckinEditor(todayKey);
     } else if (tabName === 'prereqs') {
         renderAdminPrereqsView();
+    } else if (tabName === 'modulePrereqs') {
+        renderAdminModulePrereqsView();
     } else {
         renderAdminCohortSubmissions();
     }
@@ -7152,72 +7180,11 @@ function renderAdminPrereqsView() {
         `;
     }).join('');
 
-    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
-    const targetGatedMods = enabledMods.filter(m => m !== 'dip');
-    const activeModulePrereqs = (typeof getModulePrereqsForMilestone === 'function') ? getModulePrereqsForMilestone(msId) : {};
-
-    const modulePrereqCardsHtml = targetGatedMods.map((modCode, modIdx) => {
-        const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: modCode.toUpperCase(), icon: 'fa-cube' };
-        let rules = activeModulePrereqs[modCode] || (DEFAULT_MODULE_PREREQS[String(msId)] && DEFAULT_MODULE_PREREQS[String(msId)][modCode]) || [];
-        if (!Array.isArray(rules) || rules.length === 0) {
-            const prevMod = enabledMods[modIdx] || 'dip';
-            rules = [{
-                id: `m${msId}_${modCode}_from_${prevMod}`,
-                prereqModule: prevMod,
-                targetDays: 4,
-                targetLCs: 50,
-                label: `Complete 4 activities & earn 50 LCs in ${prevMod}`
-            }];
-        }
-
-        const rulesHtml = rules.map((r, rIdx) => {
-            const pMod = normalizeLevelUpType(r.prereqModule || 'dip');
-            const pObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === pMod)) || { name: pMod.toUpperCase(), icon: 'fa-cube' };
-            const tDays = r.targetDays ?? (r.type === 'days' ? r.targetValue : 0);
-            const tLCs = r.targetLCs ?? (r.type === 'lcs' ? r.targetValue : 0);
-
-            return `
-                <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="font-bold text-indigo-300 flex items-center gap-1.5">
-                            <i class="fas ${pObj.icon}"></i> Depends on ${pObj.name}
-                        </span>
-                        <span class="text-[10px] text-slate-400 font-mono">Rule #${rIdx + 1}</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">Required Days / Activities:</label>
-                            <input type="number" min="0" id="modPrereq_${modCode}_${rIdx}_days" value="${tDays}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs font-mono font-bold focus:border-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] text-slate-400 font-bold mb-1">Required Learning Currencies (LCs):</label>
-                            <input type="number" min="0" id="modPrereq_${modCode}_${rIdx}_lcs" value="${tLCs}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs font-mono font-bold focus:border-indigo-500">
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        return `
-            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3" data-gated-module="${modCode}">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                        <i class="fas ${modObj.icon} text-amber-400"></i> ${modObj.name} Unlock Privilege
-                    </span>
-                    <span class="badge-pill bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Stage ${modIdx + 2} Gate</span>
-                </div>
-                <div class="space-y-2">
-                    ${rulesHtml}
-                </div>
-            </div>
-        `;
-    }).join('');
-
     view.innerHTML = `
         <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
             <div>
                 <h4 class="text-sm font-bold text-white font-heading">Milestone ${msId}: ${cleanName} — Credential Prerequisites</h4>
-                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days, projects, or minimum LCs) required for learners to claim their credential and advance. Changes apply immediately to every learner in this milestone.</p>
+                <p class="text-xs text-slate-400 mt-1">Configure prerequisite criteria (completed check-in days, projects, or minimum LCs) required for learners to claim their credential and unlock the next milestone. Changes apply immediately to all learners.</p>
             </div>
 
             <!-- DYNAMIC PREREQUISITES LIST -->
@@ -7233,25 +7200,11 @@ function renderAdminPrereqsView() {
                 </div>
             </div>
 
-            <!-- INTRA-MILESTONE MODULE GATING (Sequential Progressive Privilege Model) -->
-            <div class="space-y-3 pt-4 border-t border-slate-800">
-                <div>
-                    <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <i class="fas fa-lock text-amber-400"></i> Intra-Milestone Module Access Rules (Self-Efficacy Privilege)
-                    </label>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Define prerequisite completions required for learners to unlock subsequent modules inside Milestone ${msId}. Modules unlock sequentially; learners must earn access through both activities and LCs.</p>
-                </div>
-
-                <div class="space-y-3">
-                    ${modulePrereqCardsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">Only cMPLi Dip is enabled in this milestone. No intra-milestone prerequisites required.</div>'}
-                </div>
-            </div>
-
             <!-- AUTO-UNLOCK GATE -->
             <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between gap-4">
                 <div>
                     <p class="text-xs font-bold text-white">Milestone ${msId + 1} Unlock Gate</p>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Auto-unlock issues the credential and advances the learner the instant they meet every target above. Admin approval requires you to review and click "Approve" in the Completion Grid Matrix first.</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Auto-unlock automatically issues the credential and unlocks Milestone ${msId + 1} the instant a learner satisfies every prerequisite above.</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                     <input type="checkbox" id="prereqAutoUnlock" class="sr-only peer" ${cfg.autoUnlockNext ? 'checked' : ''}>
@@ -7315,43 +7268,6 @@ async function saveAdminPrereqsForm() {
     };
     await saveMilestonePrereqConfig(msId, patch);
 
-    // Save Intra-Milestone Module Prerequisites dynamically for all enabled modules
-    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
-    const targetGatedMods = enabledMods.filter(m => m !== 'dip');
-    const activeModulePrereqs = (typeof getModulePrereqsForMilestone === 'function') ? getModulePrereqsForMilestone(msId) : {};
-
-    for (const modCode of targetGatedMods) {
-        let baseRules = activeModulePrereqs[modCode] || (DEFAULT_MODULE_PREREQS[String(msId)] && DEFAULT_MODULE_PREREQS[String(msId)][modCode]) || [];
-        if (!Array.isArray(baseRules) || baseRules.length === 0) {
-            const prevMod = enabledMods[enabledMods.indexOf(modCode) - 1] || 'dip';
-            baseRules = [{
-                id: `m${msId}_${modCode}_from_${prevMod}`,
-                prereqModule: prevMod,
-                targetDays: 4,
-                targetLCs: 50
-            }];
-        }
-
-        const updatedRules = baseRules.map((r, rIdx) => {
-            const daysInput = document.getElementById(`modPrereq_${modCode}_${rIdx}_days`);
-            const lcsInput = document.getElementById(`modPrereq_${modCode}_${rIdx}_lcs`);
-            const daysVal = daysInput ? Math.max(0, Number(daysInput.value) || 0) : (r.targetDays || 0);
-            const lcsVal = lcsInput ? Math.max(0, Number(lcsInput.value) || 0) : (r.targetLCs || 0);
-            const pMod = normalizeLevelUpType(r.prereqModule || 'dip');
-            const pObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === pMod)) || { name: pMod.toUpperCase() };
-
-            return {
-                id: r.id || `m${msId}_${modCode}_from_${pMod}`,
-                prereqModule: pMod,
-                targetDays: daysVal,
-                targetLCs: lcsVal,
-                label: `Complete ${daysVal} check-ins & earn ${lcsVal} LCs in ${pObj.name}`
-            };
-        });
-
-        await saveModulePrereqsForMilestone(msId, modCode, updatedRules);
-    }
-
     const statusEl = document.getElementById('prereqSaveStatus');
     if (statusEl) {
         statusEl.classList.remove('hidden');
@@ -7361,12 +7277,31 @@ async function saveAdminPrereqsForm() {
 }
 window.saveAdminPrereqsForm = saveAdminPrereqsForm;
 
-
 function switchAdminModuleTab(mod) {
     activeAdminModule = mod;
     const btnInspect = document.getElementById('btnInspectPodQuizPool');
     if (btnInspect) {
         btnInspect.style.display = (mod === 'pod') ? 'inline-flex' : 'none';
+    }
+
+    const btnModPrereqs = document.getElementById('btnTabModulePrereqs');
+    const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === mod)) || { name: mod.toUpperCase() };
+
+    if (btnModPrereqs) {
+        if (mod === 'dip') {
+            btnModPrereqs.style.display = 'none';
+            // If creator is currently viewing module prerequisites and clicks Dip (which has none), route to checkins
+            if (!document.getElementById('adminModulePrereqsView')?.classList.contains('hidden')) {
+                switchAdminMilestoneTab('checkins');
+            }
+        } else {
+            btnModPrereqs.style.display = 'inline-block';
+            btnModPrereqs.innerHTML = `<i class="fas fa-lock text-amber-400 mr-1.5"></i> ${modObj.name} Prerequisites`;
+            // If currently on module prerequisites view, re-render for this module
+            if (!document.getElementById('adminModulePrereqsView')?.classList.contains('hidden')) {
+                renderAdminModulePrereqsView();
+            }
+        }
     }
 
     document.querySelectorAll('[id^="adminModuleWrapper_"]').forEach(el => {
@@ -7387,11 +7322,333 @@ function switchAdminModuleTab(mod) {
         if (mod !== 'projects' && typeof loadAdminCheckinEditor === 'function') {
             loadAdminCheckinEditor(activeAdminDateKey);
         }
-    } else {
+    } else if (!document.getElementById('adminCompletionView')?.classList.contains('hidden')) {
         renderAdminCohortSubmissions();
     }
 }
 window.switchAdminModuleTab = switchAdminModuleTab;
+
+// ==============================================================
+// ADMIN PANEL — INTRA-MILESTONE MODULE ACCESS PREREQUISITES
+// ==============================================================
+window._adminModulePrereqsWorkingMap = window._adminModulePrereqsWorkingMap || {};
+
+function getAvailablePrecedingModules(modCode) {
+    const allMods = (typeof ALL_PLATFORM_MODULES !== 'undefined' ? ALL_PLATFORM_MODULES : [
+        { code: 'dip', name: 'cMPLi Dip' },
+        { code: 'pod', name: 'cMPLi POD' },
+        { code: 'immerse', name: 'cMPLi Immerse' },
+        { code: 'projects', name: 'Real-World Execution' }
+    ]);
+    const currentModIdx = allMods.findIndex(m => m.code === modCode);
+    // Strict canonical ordering: only modules appearing prior to the current module can be prerequisites
+    return (currentModIdx > 0 ? allMods.slice(0, currentModIdx) : allMods.filter(m => m.code !== modCode));
+}
+
+function renderAdminModulePrereqsView() {
+    const view = document.getElementById('adminModulePrereqsView');
+    if (!view) return;
+
+    const msId = activeAdminMilestoneId || 1;
+    const modCode = activeAdminModule || 'pod';
+    const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: modCode.toUpperCase(), icon: 'fa-cube' };
+
+    if (modCode === 'dip') {
+        view.innerHTML = `
+            <div class="glass-card p-8 border-slate-800 text-center max-w-xl mx-auto space-y-4">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center mx-auto text-2xl border border-indigo-500/30">
+                    <i class="fas fa-door-open"></i>
+                </div>
+                <h4 class="text-base font-bold text-white font-heading">cMPLi Dip Has No Prerequisites</h4>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    cMPLi Dip is the constant, foundational entry module open to every learner entering Milestone ${msId}. Prerequisite rules apply to subsequent modules (cMPLi POD, cMPLi Immerse, Real-World Execution).
+                </p>
+                <div class="pt-2">
+                    <button onclick="switchAdminMilestoneTab('checkins')" class="btn-primary py-2 px-5 text-xs font-bold">
+                        Configure Dip Check-ins
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const workingKey = `${msId}_${modCode}`;
+    const availablePrecedingModules = getAvailablePrecedingModules(modCode);
+    const defaultPrereqMod = (availablePrecedingModules.length > 0)
+        ? availablePrecedingModules[availablePrecedingModules.length - 1].code
+        : 'dip';
+
+    // Preserve in-progress edits in session map so switching between modules doesn't discard unsaved work
+    if (!window._adminModulePrereqsWorkingMap[workingKey]) {
+        const existingRules = getModulePrereqsRules(msId, modCode);
+        const normalized = [];
+
+        if (Array.isArray(existingRules) && existingRules.length > 0) {
+            existingRules.forEach((r, idx) => {
+                let pMod = normalizeLevelUpType(r.prereqModule || 'dip');
+                // Enforce ordering validation: if an old rule depended on a subsequent module, clamp to valid predecessor
+                if (!availablePrecedingModules.some(m => m.code === pMod)) {
+                    pMod = defaultPrereqMod;
+                }
+
+                if (r.type && r.targetValue !== undefined) {
+                    normalized.push({
+                        id: r.id || `modrule_${idx}`,
+                        prereqModule: pMod,
+                        type: r.type,
+                        targetValue: Number(r.targetValue) || 0
+                    });
+                } else {
+                    const daysVal = Number(r.targetDays !== undefined ? r.targetDays : (r.type === 'days' ? r.targetValue : 0)) || 0;
+                    const lcsVal = Number(r.targetLCs !== undefined ? r.targetLCs : (r.type === 'lcs' ? r.targetValue : 0)) || 0;
+                    if (daysVal > 0) {
+                        normalized.push({
+                            id: (r.id || `modrule_${idx}`) + '_days',
+                            prereqModule: pMod,
+                            type: 'days',
+                            targetValue: daysVal
+                        });
+                    }
+                    if (lcsVal > 0) {
+                        normalized.push({
+                            id: (r.id || `modrule_${idx}`) + '_lcs',
+                            prereqModule: pMod,
+                            type: 'lcs',
+                            targetValue: lcsVal
+                        });
+                    }
+                    if (daysVal === 0 && lcsVal === 0) {
+                        normalized.push({
+                            id: r.id || `modrule_${idx}`,
+                            prereqModule: pMod,
+                            type: 'days',
+                            targetValue: Number(r.targetValue) || 1
+                        });
+                    }
+                }
+            });
+        }
+
+        if (normalized.length === 0) {
+            normalized.push({
+                id: `modrule_${Date.now()}_1`,
+                prereqModule: defaultPrereqMod,
+                type: 'days',
+                targetValue: 4
+            });
+            normalized.push({
+                id: `modrule_${Date.now()}_2`,
+                prereqModule: defaultPrereqMod,
+                type: 'lcs',
+                targetValue: 50
+            });
+        }
+        window._adminModulePrereqsWorkingMap[workingKey] = normalized;
+    }
+
+    window._adminModulePrereqsClamped = window._adminModulePrereqsClamped || {};
+
+    // Sanitize any rule pointing to invalid preceding module
+    rulesList.forEach(item => {
+        if (!availablePrecedingModules.some(m => m.code === item.prereqModule)) {
+            item.prereqModule = defaultPrereqMod;
+            window._adminModulePrereqsClamped[workingKey] = true;
+        }
+    });
+
+    const isClamped = Boolean(window._adminModulePrereqsClamped[workingKey]);
+
+    const itemsHtml = rulesList.map((item, idx) => {
+        const itemModCode = normalizeLevelUpType(item.prereqModule || defaultPrereqMod);
+        const unitText = (typeof getModuleCompletionUnit === 'function') ? getModuleCompletionUnit(itemModCode) : 'Days';
+        const criterionDaysLabel = `${unitText} / Activities Completed`;
+
+        return `
+            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3 relative group" data-mod-prereq-id="${item.id}">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-amber-400 font-heading">
+                        <i class="fas fa-lock mr-1"></i> Rule #${idx + 1}
+                    </span>
+                    <button type="button" onclick="removeAdminModulePrereqRule('${item.id}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition-colors" title="Delete rule">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Preceding Module</label>
+                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'prereqModule', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-medium">
+                            ${availablePrecedingModules.map(m => `<option value="${m.code}" ${m.code === item.prereqModule ? 'selected' : ''}>${m.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Criterion</label>
+                        <select onchange="updateAdminModulePrereqRuleField('${item.id}', 'type', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-medium">
+                            <option value="days" ${item.type === 'days' ? 'selected' : ''}>${criterionDaysLabel}</option>
+                            <option value="lcs" ${item.type === 'lcs' ? 'selected' : ''}>Minimum LCs in Module</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 font-bold mb-1">Target Value</label>
+                        <input type="number" min="0" value="${item.targetValue}" oninput="updateAdminModulePrereqRuleField('${item.id}', 'targetValue', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500 font-mono font-bold">
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    view.innerHTML = `
+        <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center text-sm">
+                        <i class="fas ${modObj.icon || 'fa-cube'}"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-sm font-bold text-white font-heading">${modObj.name} — Access Prerequisites</h4>
+                        <p class="text-xs text-slate-400">Configure the criteria learners must complete in preceding modules to unlock ${modObj.name} in Milestone ${msId}.</p>
+                    </div>
+                </div>
+            </div>
+
+            ${isClamped ? `
+                <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Notice: Out-of-order prerequisite rules were automatically adjusted to valid preceding module (${defaultPrereqMod.toUpperCase()}).</span>
+                    </div>
+                    <button type="button" onclick="dismissAdminModuleClampNotice('${workingKey}')" class="text-amber-400 hover:text-white text-sm font-bold px-2 py-0.5" title="Dismiss notice">&times;</button>
+                </div>
+            ` : ''}
+
+            <!-- DYNAMIC MODULE PREREQUISITES LIST -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Access Requirements for ${modObj.name}</label>
+                    <button type="button" onclick="addAdminModulePrereqRule()" class="btn-secondary py-1 px-3 text-xs font-bold text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 shadow-sm flex items-center gap-1.5">
+                        <i class="fas fa-plus-circle"></i> Add Rule
+                    </button>
+                </div>
+                <div id="adminModulePrereqsListContainer" class="space-y-3">
+                    ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites configured. Module will be open to all learners. Click &quot;Add Rule&quot; to require prerequisites.</div>'}
+                </div>
+            </div>
+
+            <div id="modPrereqSaveStatus" class="hidden text-xs font-bold text-emerald-400"><i class="fas fa-check-circle mr-1"></i> Saved &amp; synced to all learners immediately.</div>
+
+            <button onclick="saveAdminModulePrereqsForm()" class="btn-primary w-full py-3 text-sm bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500">
+                <i class="fas fa-save mr-1.5"></i> Save Prerequisites for ${modObj.name}
+            </button>
+        </div>
+    `;
+}
+window.renderAdminModulePrereqsView = renderAdminModulePrereqsView;
+
+function addAdminModulePrereqRule() {
+    const msId = activeAdminMilestoneId || 1;
+    const modCode = activeAdminModule || 'pod';
+    const workingKey = `${msId}_${modCode}`;
+    if (!window._adminModulePrereqsWorkingMap[workingKey]) window._adminModulePrereqsWorkingMap[workingKey] = [];
+
+    const availablePrecedingModules = getAvailablePrecedingModules(modCode);
+    const defaultPrereqMod = (availablePrecedingModules.length > 0)
+        ? availablePrecedingModules[availablePrecedingModules.length - 1].code
+        : 'dip';
+
+    const newId = 'modrule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+    window._adminModulePrereqsWorkingMap[workingKey].push({
+        id: newId,
+        prereqModule: defaultPrereqMod,
+        type: 'days',
+        targetValue: 4
+    });
+    window._adminModulePrereqsDirty = window._adminModulePrereqsDirty || {};
+    window._adminModulePrereqsDirty[workingKey] = true;
+    renderAdminModulePrereqsView();
+}
+window.addAdminModulePrereqRule = addAdminModulePrereqRule;
+
+function removeAdminModulePrereqRule(id) {
+    const msId = activeAdminMilestoneId || 1;
+    const modCode = activeAdminModule || 'pod';
+    const workingKey = `${msId}_${modCode}`;
+    if (!window._adminModulePrereqsWorkingMap[workingKey]) return;
+    window._adminModulePrereqsWorkingMap[workingKey] = window._adminModulePrereqsWorkingMap[workingKey].filter(item => String(item.id) !== String(id));
+    window._adminModulePrereqsDirty = window._adminModulePrereqsDirty || {};
+    window._adminModulePrereqsDirty[workingKey] = true;
+    renderAdminModulePrereqsView();
+}
+window.removeAdminModulePrereqRule = removeAdminModulePrereqRule;
+
+function updateAdminModulePrereqRuleField(id, field, value) {
+    const msId = activeAdminMilestoneId || 1;
+    const modCode = activeAdminModule || 'pod';
+    const workingKey = `${msId}_${modCode}`;
+    if (!window._adminModulePrereqsWorkingMap[workingKey]) return;
+    const item = window._adminModulePrereqsWorkingMap[workingKey].find(i => String(i.id) === String(id));
+    if (item) {
+        if (field === 'targetValue') item[field] = Math.max(0, Number(value) || 0);
+        else item[field] = value;
+        window._adminModulePrereqsDirty = window._adminModulePrereqsDirty || {};
+        window._adminModulePrereqsDirty[workingKey] = true;
+        if (field === 'prereqModule') {
+            renderAdminModulePrereqsView();
+        }
+    }
+}
+window.updateAdminModulePrereqRuleField = updateAdminModulePrereqRuleField;
+
+async function saveAdminModulePrereqsForm() {
+    const msId = activeAdminMilestoneId || 1;
+    const modCode = activeAdminModule || 'pod';
+    const workingKey = `${msId}_${modCode}`;
+    const rulesList = Array.isArray(window._adminModulePrereqsWorkingMap[workingKey]) ? window._adminModulePrereqsWorkingMap[workingKey] : [];
+
+    const formattedRules = rulesList.map((r, idx) => {
+        const pMod = normalizeLevelUpType(r.prereqModule || 'dip');
+        const pObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === pMod)) || { name: pMod.toUpperCase() };
+        const val = Math.max(0, Number(r.targetValue) || 0);
+        const tDays = (r.type === 'days') ? val : 0;
+        const tLCs = (r.type === 'lcs') ? val : 0;
+
+        return {
+            id: r.id || `m${msId}_${modCode}_${idx}`,
+            prereqModule: pMod,
+            type: r.type || 'days',
+            targetValue: val,
+            targetDays: tDays,
+            targetLCs: tLCs,
+            label: r.type === 'lcs'
+                ? `Earn ${val} LCs in ${pObj.name}`
+                : `Complete ${val} check-in activities in ${pObj.name}`
+        };
+    });
+
+    await saveModulePrereqsForMilestone(msId, modCode, formattedRules);
+
+    if (window._adminModulePrereqsDirty) {
+        delete window._adminModulePrereqsDirty[workingKey];
+    }
+    if (window._adminModulePrereqsClamped) {
+        delete window._adminModulePrereqsClamped[workingKey];
+    }
+
+    const statusEl = document.getElementById('modPrereqSaveStatus');
+    if (statusEl) {
+        statusEl.classList.remove('hidden');
+        setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    }
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.saveAdminModulePrereqsForm = saveAdminModulePrereqsForm;
+
+function dismissAdminModuleClampNotice(workingKey) {
+    if (window._adminModulePrereqsClamped) {
+        delete window._adminModulePrereqsClamped[workingKey];
+    }
+    renderAdminModulePrereqsView();
+}
+window.dismissAdminModuleClampNotice = dismissAdminModuleClampNotice;
 
 function renderAdminCheckinsList() {
     const list = document.getElementById('adminCheckinDaysList');
@@ -14725,31 +14982,31 @@ function switchMilestoneTab(moduleName, btnElement) {
         if (prereqEval.isDeepLocked) {
             container.innerHTML = `
                 <div class="glass-card p-6 sm:p-10 border-slate-700/80 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-slate-900/95 via-slate-950/95 to-slate-950/95 shadow-2xl relative overflow-hidden">
-                    <div class="w-20 h-20 bg-slate-800 text-slate-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-slate-700 shadow-inner">
+                    <div class="w-20 h-20 bg-slate-800/80 text-slate-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-slate-700 shadow-inner">
                         <i class="fas fa-lock"></i>
                     </div>
                     <div>
-                        <span class="badge-pill bg-slate-800 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-widest mb-2 inline-flex items-center gap-1.5">
-                            <i class="fas fa-layer-group"></i> Sequential Stage Gate • Milestone ${activeMilestoneId}
+                        <span class="badge-pill bg-slate-800 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-wider mb-2 inline-flex items-center gap-1.5">
+                            <i class="fas fa-lock text-amber-400"></i> Locked Module
                         </span>
                         <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading mt-1">${modObj.name} is Locked</h3>
                         <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-                            Learning privileges are earned progressively. You must first unlock and complete requirements for <strong>${prereqEval.deepLockedByName}</strong> before the challenges for <strong>${modObj.name}</strong> become accessible.
+                            First complete and unlock <strong>${prereqEval.deepLockedByName}</strong> to reveal the requirements for <strong>${modObj.name}</strong>.
                         </p>
                     </div>
 
                     <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
                         <div class="flex items-center gap-2.5 text-left">
-                            <span class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center text-sm">
+                            <span class="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-sm">
                                 <i class="fas ${prereqEval.deepLockedByIcon || 'fa-cube'}"></i>
                             </span>
                             <div>
                                 <p class="font-bold text-white">${prereqEval.deepLockedByName}</p>
-                                <p class="text-[10px] text-slate-400">Current required stage in sequence</p>
+                                <p class="text-[10px] text-slate-400">Complete this module first to reveal next steps</p>
                             </div>
                         </div>
-                        <button onclick="switchMilestoneTab('${prereqEval.deepLockedByModule}')" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-sm">
-                            Go to Stage <i class="fas fa-arrow-right ml-1"></i>
+                        <button onclick="switchMilestoneTab('${prereqEval.deepLockedByModule}')" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-sm flex items-center gap-1.5">
+                            Go to ${prereqEval.deepLockedByName} <i class="fas fa-arrow-right ml-1"></i>
                         </button>
                     </div>
 
@@ -14767,15 +15024,15 @@ function switchMilestoneTab(moduleName, btnElement) {
             <div class="glass-card p-6 sm:p-10 border-amber-500/40 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-amber-950/30 via-slate-900/90 to-slate-900/95 shadow-2xl relative overflow-hidden">
                 <div class="absolute -right-10 -top-10 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
                 <div class="w-20 h-20 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-amber-500/40 shadow-inner">
-                    <i class="fas fa-shield-alt"></i>
+                    <i class="fas fa-key"></i>
                 </div>
                 <div>
-                    <span class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold uppercase tracking-widest mb-2 inline-flex items-center gap-1.5">
-                        <i class="fas fa-award"></i> Earn Module Privilege • Milestone ${activeMilestoneId}
+                    <span class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold uppercase tracking-wider mb-2 inline-flex items-center gap-1.5">
+                        <i class="fas fa-key text-amber-400"></i> Module Unlock Requirements
                     </span>
-                    <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading mt-1">${modObj.name} is Gated</h3>
+                    <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading mt-1">Unlock ${modObj.name}</h3>
                     <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-                        Earn access to <strong>${modObj.name}</strong> by fulfilling the required check-in activities and Learning Currencies (LCs) below:
+                        Complete the required activities and earn the target Learning Currencies (LCs) to unlock <strong>${modObj.name}</strong>:
                     </p>
                 </div>
 
@@ -14795,7 +15052,7 @@ function switchMilestoneTab(moduleName, btnElement) {
                                 <div class="h-full rounded-full transition-all ${p.isMet ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${p.percentage}%"></div>
                             </div>
                             <div class="flex justify-between items-center text-[10px] text-slate-400">
-                                <span>${p.isMet ? '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Privilege Earned</span>' : '<span class="text-amber-300 font-bold"><i class="fas fa-clock mr-1"></i> In Progress (Required)</span>'}</span>
+                                <span>${p.isMet ? '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Completed</span>' : '<span class="text-amber-300 font-bold"><i class="fas fa-clock mr-1"></i> In Progress (Required)</span>'}</span>
                                 <span class="font-bold">${p.percentage}% achieved</span>
                             </div>
                         </div>
