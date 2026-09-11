@@ -2251,6 +2251,7 @@ var tempLoginId = '';
 var levelUpAccessConfig = JSON.parse(localStorage.getItem('adminLevelUpConfig')) || [];
 var customMilestoneConfigs = JSON.parse(localStorage.getItem('customMilestoneConfigs')) || {};
 var customMilestonePrereqs = JSON.parse(localStorage.getItem('customMilestonePrereqs')) || {};
+var customModulePrereqs = JSON.parse(localStorage.getItem('customModulePrereqs')) || {};
 var localLedgers = JSON.parse(localStorage.getItem('tagmangoLocalLedgers')) || {};
 var userMilestoneState = JSON.parse(localStorage.getItem('mockUserMilestoneState')) || {};
 // allAdminMangos declared above
@@ -2301,7 +2302,7 @@ async function syncGlobalServerData() {
             return;
         }
 
-        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, moduleActivationDates: serverModuleActivationDates, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, moduleActivationDates: serverModuleActivationDates, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, modulePrereqs: serverModulePrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
 
@@ -2461,6 +2462,17 @@ async function syncGlobalServerData() {
             if (JSON.stringify(customMilestonePrereqs) !== JSON.stringify(serverPrereqs)) {
                 customMilestonePrereqs = serverPrereqs;
                 try { localStorage.setItem('customMilestonePrereqs', JSON.stringify(customMilestonePrereqs)); } catch(e) {}
+                if (activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
+                    if (typeof renderAdminPrereqsView === 'function') renderAdminPrereqsView();
+                }
+            }
+        }
+
+        // 4c-2. INTRA-MILESTONE MODULE PREREQUISITES SYNC (Within-milestone module gating)
+        if (serverModulePrereqs && typeof serverModulePrereqs === 'object') {
+            if (JSON.stringify(customModulePrereqs) !== JSON.stringify(serverModulePrereqs)) {
+                customModulePrereqs = serverModulePrereqs;
+                try { localStorage.setItem('customModulePrereqs', JSON.stringify(customModulePrereqs)); } catch(e) {}
                 if (activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
                     if (typeof renderAdminPrereqsView === 'function') renderAdminPrereqsView();
                 }
@@ -6131,9 +6143,9 @@ function getEnabledModulesForMilestone(msId) {
     }
 
     // MANDATORY PLATFORM ORDER:
-    // 1. SimplyDeep (cMPLi Dip - 'dip')
-    // 2. SimplyPod (cMPLi POD - 'pod')
-    // 3. SimplyMy / Immerse (cMPLi Immerse - 'immerse')
+    // 1. cMPLi Dip ('dip')
+    // 2. cMPLi POD ('pod')
+    // 3. cMPLi Immerse ('immerse')
     // followed by any advanced capstone modules
     const canonicalOrder = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
     mods.sort((a, b) => {
@@ -6269,6 +6281,257 @@ async function saveMilestonePrereqConfig(msId, patch) {
     return customMilestonePrereqs[key];
 }
 window.saveMilestonePrereqConfig = saveMilestonePrereqConfig;
+
+// ==============================================================
+// INTRA-MILESTONE MODULE PREREQUISITES HELPERS
+// (Gating modules within a milestone until prior modules are achieved)
+// Self-efficacy progressive privilege model: sequential unlocking & dual criteria (Activities + LCs)
+// ==============================================================
+var DEFAULT_MODULE_PREREQS = {
+    "1": {
+        "pod": [
+            { id: "m1_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins & earn 50 LCs in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m1_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins & earn 100 LCs in cMPLi Dip" },
+            { id: "m1_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions & earn 50 LCs in cMPLi POD" }
+        ]
+    },
+    "2": {
+        "pod": [
+            { id: "m2_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m2_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m2_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m2_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ]
+    },
+    "3": {
+        "pod": [
+            { id: "m3_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m3_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m3_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m3_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ],
+        "problem_solution": [
+            { id: "m3_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
+        ]
+    },
+    "4": {
+        "pod": [
+            { id: "m4_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m4_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m4_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m4_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ],
+        "problem_solution": [
+            { id: "m4_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
+        ],
+        "residency": [
+            { id: "m4_residency_from_ps", prereqModule: "problem_solution", targetDays: 2, targetLCs: 30, label: "Complete 2 Problem-Solution Briefings" }
+        ]
+    }
+};
+window.DEFAULT_MODULE_PREREQS = DEFAULT_MODULE_PREREQS;
+
+function getModulePrereqsForMilestone(msId) {
+    const key = String(msId || 1);
+    const defaults = DEFAULT_MODULE_PREREQS[key] || {};
+    const custom = (typeof customModulePrereqs !== 'undefined' && customModulePrereqs[key]) ? customModulePrereqs[key] : {};
+    return { ...defaults, ...custom };
+}
+window.getModulePrereqsForMilestone = getModulePrereqsForMilestone;
+
+function getModulePrereqsRules(msId, modCode) {
+    const all = getModulePrereqsForMilestone(msId);
+    const norm = normalizeLevelUpType(modCode || 'dip');
+    return Array.isArray(all[norm]) ? all[norm] : [];
+}
+window.getModulePrereqsRules = getModulePrereqsRules;
+
+async function saveModulePrereqsForMilestone(msId, moduleCode, rules) {
+    const key = String(msId || 1);
+    const norm = normalizeLevelUpType(moduleCode || 'pod');
+    if (typeof customModulePrereqs === 'undefined' || !customModulePrereqs) customModulePrereqs = {};
+    if (!customModulePrereqs[key]) customModulePrereqs[key] = { ...(DEFAULT_MODULE_PREREQS[key] || {}) };
+    customModulePrereqs[key][norm] = rules;
+    try { localStorage.setItem('customModulePrereqs', JSON.stringify(customModulePrereqs)); } catch(e) {}
+    try {
+        await apiFetch('/api/module-prereqs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ milestoneId: key, moduleCode: norm, rules })
+        });
+    } catch(e) { console.warn('Failed to sync module prereqs to server:', e); }
+    return customModulePrereqs[key];
+}
+window.saveModulePrereqsForMilestone = saveModulePrereqsForMilestone;
+
+function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
+    const normMod = normalizeLevelUpType(modCode || 'dip');
+    // cMPLi Dip is the fundamental entry module: always open to everyone
+    if (normMod === 'dip') {
+        return { isLocked: false, isDeepLocked: false, unmetRules: [], progress: [] };
+    }
+
+    // Admins, creators, and test accounts bypass locking for testing convenience
+    const isAdmin = Boolean(
+        (typeof isAdminLogin !== 'undefined' && isAdminLogin) ||
+        (typeof window !== 'undefined' && window.isAdminLogin) ||
+        (currentUser && (currentUser.role === 'creator' || currentUser.isAdmin)) ||
+        (typeof window !== 'undefined' && window.currentUser && (window.currentUser.role === 'creator' || window.currentUser.isAdmin))
+    );
+    const isTest = (typeof isTestUser === 'function' && isTestUser());
+
+    if (isAdmin || isTest) {
+        return { isLocked: false, isDeepLocked: false, unmetRules: [], progress: [], isBypassedForAdmin: true };
+    }
+
+    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
+    const myIdx = enabledMods.indexOf(normMod);
+
+    // Progressive Disclosure: Check if previous enabled module in sequence is already unlocked
+    if (checkSequential && myIdx > 0) {
+        const prevMod = enabledMods[myIdx - 1];
+        if (prevMod && prevMod !== 'dip') {
+            const prevEval = evaluateModulePrereqs(user, msId, prevMod, false);
+            if (prevEval.isLocked) {
+                const prevMObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === prevMod)) || { name: prevMod.toUpperCase(), icon: 'fa-cube' };
+                return {
+                    isLocked: true,
+                    isDeepLocked: true,
+                    deepLockedByModule: prevMod,
+                    deepLockedByName: prevMObj.name,
+                    deepLockedByIcon: prevMObj.icon,
+                    unmetRules: [],
+                    progress: []
+                };
+            }
+        }
+    }
+
+    const rules = getModulePrereqsRules(msId, normMod);
+    if (!rules || rules.length === 0) {
+        return { isLocked: false, isDeepLocked: false, unmetRules: [], progress: [] };
+    }
+
+    const allSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(user) : [];
+    const msSubs = allSubs.filter(s => String(s.milestoneId || 1) === String(msId || 1));
+
+    const progress = [];
+    const unmetRules = [];
+
+    rules.forEach((rule, rIdx) => {
+        const prereqMod = normalizeLevelUpType(rule.prereqModule || 'dip');
+        const mObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === prereqMod)) || { name: prereqMod.toUpperCase(), icon: 'fa-cube' };
+
+        // Check days/activities target
+        const reqDays = Number(rule.targetDays !== undefined ? rule.targetDays : (rule.type === 'days' ? rule.targetValue : 0)) || 0;
+        // Check LCs target
+        const reqLCs = Number(rule.targetLCs !== undefined ? rule.targetLCs : (rule.type === 'lcs' ? rule.targetValue : 0)) || 0;
+
+        // Only count valid, completed/approved submissions (exclude in-flight evaluation and rejected)
+        const modSubs = msSubs.filter(s => {
+            if (normalizeLevelUpType(s.type || s.moduleType) !== prereqMod) return false;
+            const isEvaluating = s.status === 'evaluating';
+            const isMismatch = !isEvaluating && (s.status === 'rejected_mismatch' || (s.status !== 'completed' && (Number(s.lcReward) === 0 || (s.matchPercentage !== undefined && Number(s.matchPercentage) < 50))));
+            return !isEvaluating && !isMismatch && (s.status === 'completed' || Number(s.matchPercentage) >= 50 || Number(s.lcReward) > 0);
+        });
+
+        // Calculate completed days/activities
+        const seenDays = new Set();
+        modSubs.forEach(s => {
+            const dayId = String(s.day !== undefined && s.day !== null ? s.day : (s.dateKey || s.date || s.id));
+            seenDays.add(dayId);
+        });
+        const currentDays = seenDays.size;
+
+        // Calculate earned LCs in this module in this milestone using actual submission reward field
+        const currentLCs = modSubs.reduce((acc, s) => {
+            const reward = (s.lcReward !== undefined && s.lcReward !== null)
+                ? Number(s.lcReward)
+                : (Number(s.lcAwarded) || Number(s.points) || Number(s.score) || 0);
+            return acc + (isNaN(reward) ? 0 : reward);
+        }, 0);
+
+        if (reqDays > 0) {
+            const daysPct = Math.min(100, Math.round((currentDays / reqDays) * 100));
+            const isDaysMet = currentDays >= reqDays;
+            const daysInfo = {
+                id: (rule.id || `rule_${rIdx}`) + '_days',
+                prereqModule: prereqMod,
+                prereqModuleName: mObj.name,
+                prereqModuleIcon: mObj.icon,
+                type: 'days',
+                targetValue: reqDays,
+                currentValue: currentDays,
+                percentage: daysPct,
+                isMet: isDaysMet,
+                label: `Complete ${reqDays} check-in activities in ${mObj.name}`
+            };
+            progress.push(daysInfo);
+            if (!isDaysMet) unmetRules.push(daysInfo);
+        }
+
+        if (reqLCs > 0) {
+            const lcsPct = Math.min(100, Math.round((currentLCs / reqLCs) * 100));
+            const isLCsMet = currentLCs >= reqLCs;
+            const lcsInfo = {
+                id: (rule.id || `rule_${rIdx}`) + '_lcs',
+                prereqModule: prereqMod,
+                prereqModuleName: mObj.name,
+                prereqModuleIcon: mObj.icon,
+                type: 'lcs',
+                targetValue: reqLCs,
+                currentValue: currentLCs,
+                percentage: lcsPct,
+                isMet: isLCsMet,
+                label: `Earn ${reqLCs} Learning Currencies (LCs) in ${mObj.name}`
+            };
+            progress.push(lcsInfo);
+            if (!isLCsMet) unmetRules.push(lcsInfo);
+        }
+
+        // If neither was set, fallback to default 1 activity
+        if (reqDays === 0 && reqLCs === 0) {
+            const defaultDays = Number(rule.targetValue) || 1;
+            const isDefaultMet = currentDays >= defaultDays;
+            const dInfo = {
+                id: rule.id || `rule_${rIdx}`,
+                prereqModule: prereqMod,
+                prereqModuleName: mObj.name,
+                prereqModuleIcon: mObj.icon,
+                type: 'days',
+                targetValue: defaultDays,
+                currentValue: currentDays,
+                percentage: Math.min(100, Math.round((currentDays / defaultDays) * 100)),
+                isMet: isDefaultMet,
+                label: `Complete ${defaultDays} check-in activities in ${mObj.name}`
+            };
+            progress.push(dInfo);
+            if (!isDefaultMet) unmetRules.push(dInfo);
+        }
+    });
+
+    return {
+        isLocked: unmetRules.length > 0,
+        isDeepLocked: false,
+        unmetRules: unmetRules,
+        progress: progress
+    };
+}
+window.evaluateModulePrereqs = evaluateModulePrereqs;
 
 // ==============================================================
 // SERVER-SYNCED PERSISTENCE HELPERS — user milestone state & credential approvals
@@ -6889,23 +7152,98 @@ function renderAdminPrereqsView() {
         `;
     }).join('');
 
+    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
+    const targetGatedMods = enabledMods.filter(m => m !== 'dip');
+    const activeModulePrereqs = (typeof getModulePrereqsForMilestone === 'function') ? getModulePrereqsForMilestone(msId) : {};
+
+    const modulePrereqCardsHtml = targetGatedMods.map((modCode, modIdx) => {
+        const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === modCode)) || { name: modCode.toUpperCase(), icon: 'fa-cube' };
+        let rules = activeModulePrereqs[modCode] || (DEFAULT_MODULE_PREREQS[String(msId)] && DEFAULT_MODULE_PREREQS[String(msId)][modCode]) || [];
+        if (!Array.isArray(rules) || rules.length === 0) {
+            const prevMod = enabledMods[modIdx] || 'dip';
+            rules = [{
+                id: `m${msId}_${modCode}_from_${prevMod}`,
+                prereqModule: prevMod,
+                targetDays: 4,
+                targetLCs: 50,
+                label: `Complete 4 activities & earn 50 LCs in ${prevMod}`
+            }];
+        }
+
+        const rulesHtml = rules.map((r, rIdx) => {
+            const pMod = normalizeLevelUpType(r.prereqModule || 'dip');
+            const pObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === pMod)) || { name: pMod.toUpperCase(), icon: 'fa-cube' };
+            const tDays = r.targetDays ?? (r.type === 'days' ? r.targetValue : 0);
+            const tLCs = r.targetLCs ?? (r.type === 'lcs' ? r.targetValue : 0);
+
+            return `
+                <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-indigo-300 flex items-center gap-1.5">
+                            <i class="fas ${pObj.icon}"></i> Depends on ${pObj.name}
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-mono">Rule #${rIdx + 1}</span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] text-slate-400 font-bold mb-1">Required Days / Activities:</label>
+                            <input type="number" min="0" id="modPrereq_${modCode}_${rIdx}_days" value="${tDays}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs font-mono font-bold focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] text-slate-400 font-bold mb-1">Required Learning Currencies (LCs):</label>
+                            <input type="number" min="0" id="modPrereq_${modCode}_${rIdx}_lcs" value="${tLCs}" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs font-mono font-bold focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="p-4 rounded-xl border border-slate-800 bg-slate-900/70 space-y-3" data-gated-module="${modCode}">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <i class="fas ${modObj.icon} text-amber-400"></i> ${modObj.name} Unlock Privilege
+                    </span>
+                    <span class="badge-pill bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Stage ${modIdx + 2} Gate</span>
+                </div>
+                <div class="space-y-2">
+                    ${rulesHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
     view.innerHTML = `
         <div class="glass-card p-6 border-slate-800 space-y-5 max-w-2xl">
             <div>
                 <h4 class="text-sm font-bold text-white font-heading">Milestone ${msId}: ${cleanName} — Credential Prerequisites</h4>
-                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days, projects, or minimum LCs) required for learners to claim their credential. Changes apply immediately to every learner in this milestone.</p>
+                <p class="text-xs text-slate-400 mt-1">Configure flexible criteria (completed check-in days, projects, or minimum LCs) required for learners to claim their credential and advance. Changes apply immediately to every learner in this milestone.</p>
             </div>
 
             <!-- DYNAMIC PREREQUISITES LIST -->
             <div class="space-y-3">
                 <div class="flex items-center justify-between">
-                    <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Module Completion Rules</label>
+                    <label class="text-xs font-bold text-slate-300 uppercase tracking-wider">Milestone Credential Rules</label>
                     <button type="button" onclick="addAdminPrereqRule()" class="btn-secondary py-1 px-3 text-xs font-bold text-indigo-400 border border-indigo-500/40 hover:bg-indigo-500/20 shadow-sm flex items-center gap-1.5">
                         <i class="fas fa-plus-circle"></i> Add Prerequisite
                     </button>
                 </div>
                 <div id="adminPrereqsListContainer" class="space-y-3">
                     ${itemsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">No prerequisites added yet. Click &quot;Add Prerequisite&quot; above.</div>'}
+                </div>
+            </div>
+
+            <!-- INTRA-MILESTONE MODULE GATING (Sequential Progressive Privilege Model) -->
+            <div class="space-y-3 pt-4 border-t border-slate-800">
+                <div>
+                    <label class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fas fa-lock text-amber-400"></i> Intra-Milestone Module Access Rules (Self-Efficacy Privilege)
+                    </label>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Define prerequisite completions required for learners to unlock subsequent modules inside Milestone ${msId}. Modules unlock sequentially; learners must earn access through both activities and LCs.</p>
+                </div>
+
+                <div class="space-y-3">
+                    ${modulePrereqCardsHtml || '<div class="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">Only cMPLi Dip is enabled in this milestone. No intra-milestone prerequisites required.</div>'}
                 </div>
             </div>
 
@@ -6976,6 +7314,43 @@ async function saveAdminPrereqsForm() {
         autoUnlockNext: autoUnlockNext
     };
     await saveMilestonePrereqConfig(msId, patch);
+
+    // Save Intra-Milestone Module Prerequisites dynamically for all enabled modules
+    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
+    const targetGatedMods = enabledMods.filter(m => m !== 'dip');
+    const activeModulePrereqs = (typeof getModulePrereqsForMilestone === 'function') ? getModulePrereqsForMilestone(msId) : {};
+
+    for (const modCode of targetGatedMods) {
+        let baseRules = activeModulePrereqs[modCode] || (DEFAULT_MODULE_PREREQS[String(msId)] && DEFAULT_MODULE_PREREQS[String(msId)][modCode]) || [];
+        if (!Array.isArray(baseRules) || baseRules.length === 0) {
+            const prevMod = enabledMods[enabledMods.indexOf(modCode) - 1] || 'dip';
+            baseRules = [{
+                id: `m${msId}_${modCode}_from_${prevMod}`,
+                prereqModule: prevMod,
+                targetDays: 4,
+                targetLCs: 50
+            }];
+        }
+
+        const updatedRules = baseRules.map((r, rIdx) => {
+            const daysInput = document.getElementById(`modPrereq_${modCode}_${rIdx}_days`);
+            const lcsInput = document.getElementById(`modPrereq_${modCode}_${rIdx}_lcs`);
+            const daysVal = daysInput ? Math.max(0, Number(daysInput.value) || 0) : (r.targetDays || 0);
+            const lcsVal = lcsInput ? Math.max(0, Number(lcsInput.value) || 0) : (r.targetLCs || 0);
+            const pMod = normalizeLevelUpType(r.prereqModule || 'dip');
+            const pObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === pMod)) || { name: pMod.toUpperCase() };
+
+            return {
+                id: r.id || `m${msId}_${modCode}_from_${pMod}`,
+                prereqModule: pMod,
+                targetDays: daysVal,
+                targetLCs: lcsVal,
+                label: `Complete ${daysVal} check-ins & earn ${lcsVal} LCs in ${pObj.name}`
+            };
+        });
+
+        await saveModulePrereqsForMilestone(msId, modCode, updatedRules);
+    }
 
     const statusEl = document.getElementById('prereqSaveStatus');
     if (statusEl) {
@@ -8097,7 +8472,7 @@ async function openPodQuizPoolInspectorModal() {
     }
 
     if (!loaded) {
-        const enteredSecret = prompt('🔐 SimpliPod Creator Authentication:\n\nEnter Creator Security Key to inspect the 50-question bank and answer keys:');
+        const enteredSecret = prompt('🔐 cMPLi POD Creator Authentication:\n\nEnter Creator Security Key to inspect the 50-question bank and answer keys:');
         if (!enteredSecret || !enteredSecret.trim()) {
             if (typeof showToast === 'function') showToast('Creator Security Key required to inspect answer keys.', 'warning');
             return;
@@ -8149,7 +8524,7 @@ async function openPodQuizPoolInspectorModal() {
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <span class="badge-pill badge-indigo text-[10px] font-bold uppercase tracking-wider">
-                                <i class="fas fa-podcast text-indigo-400 mr-1"></i> SimpliPod Question Bank
+                                <i class="fas fa-podcast text-indigo-400 mr-1"></i> cMPLi POD Question Bank
                             </span>
                             <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[10px] font-mono font-bold">
                                 ${questions.length} Questions Loaded
@@ -8159,7 +8534,7 @@ async function openPodQuizPoolInspectorModal() {
                             </span>
                         </div>
                         <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading">
-                            SimpliPod 50-Question Quiz Inspector
+                            cMPLi POD 50-Question Quiz Inspector
                         </h3>
                         <p class="text-xs text-slate-400 mt-1">
                             Story Case: <strong>${storyTitle}</strong> (${targetDateKey}). Full answer keys, choices & explanations.
@@ -8279,12 +8654,12 @@ function downloadPodQuizPoolCSV(dateKey) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `simplipod_50_quiz_pool_${targetKey}.csv`);
+    link.setAttribute('download', `cmpli_pod_50_quiz_pool_${targetKey}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    if (typeof showToast === 'function') showToast(`Downloaded 50 SimpliPod questions for ${targetKey}`, 'success');
+    if (typeof showToast === 'function') showToast(`Downloaded 50 cMPLi POD questions for ${targetKey}`, 'success');
 }
 window.downloadPodQuizPoolCSV = downloadPodQuizPoolCSV;
 
@@ -8401,7 +8776,7 @@ async function synthesizePodElevenLabsAudio(dateKey) {
     }
 
     if (!token) {
-        const enteredSecret = prompt('🔐 SimpliPod Creator Authentication:\n\nEnter Creator Security Key to synthesize ElevenLabs podcast audio:');
+        const enteredSecret = prompt('🔐 cMPLi POD Creator Authentication:\n\nEnter Creator Security Key to synthesize ElevenLabs podcast audio:');
         if (!enteredSecret || !enteredSecret.trim()) {
             if (typeof showToast === 'function') showToast('Creator Security Key required.', 'warning');
             return;
@@ -10263,11 +10638,10 @@ async function openPodSessionModal(dayNum, dateKey) {
         return;
     }
 
-    const rawTitle = dayConfig.audioTitle || dayConfig.title || `SimpliPod Audio Reflection`;
+    const rawTitle = dayConfig.audioTitle || dayConfig.title || `cMPLi POD Audio Reflection`;
     // Clean any redundant "cMPLi POD Day X", "SimpliPod Day X", or leading "Day X:" prefixes
     let cleanStoryTitle = rawTitle
-        .replace(/^cMPLi\s*POD\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
-        .replace(/^SimpliPod\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
+        .replace(/^(?:cMPLi\s*POD|SimpliPod)\s*(?:Day\s*\d+\s*)?[-:•]?\s*/i, '')
         .replace(/^Day\s*\d+\s*[-:•]?\s*/i, '')
         .trim();
 
@@ -10346,7 +10720,7 @@ async function openPodSessionModal(dayNum, dateKey) {
                 
                 <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
                     <div>
-                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> SimpliPod</span>
+                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> cMPLi POD</span>
                         <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading">Day ${dayNum}: ${cleanStoryTitle}</h3>
                         <p class="text-xs text-slate-400 mt-1">Date: <strong class="text-slate-200 font-mono">${indianDate}</strong></p>
                     </div>
@@ -13312,7 +13686,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                         const qTitle = q.title || `Question ${idx + 1}`;
                         const qType = (q.type || 'text').toLowerCase();
 
-                        // For SimpliDip, audio question is already situated at top with teleprompter!
+                        // For cMPLi Dip, audio question is already situated at top with teleprompter!
                         if (!isImmerse && (qType === 'audio' || qType === 'voice' || qType === 'audio/voice')) {
                             return '';
                         }
@@ -14339,6 +14713,110 @@ function switchMilestoneTab(moduleName, btnElement) {
     }
 
     const normalizedMod = normalizeLevelUpType(moduleName || 'dip');
+
+    // INTRA-MILESTONE MODULE PREREQUISITE GATE
+    const prereqEval = (typeof evaluateModulePrereqs === 'function')
+        ? evaluateModulePrereqs(currentUser, activeMilestoneId, normalizedMod)
+        : { isLocked: false };
+
+    if (prereqEval.isLocked && !isTestMode) {
+        const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normalizedMod)) || { name: (moduleName || '').toUpperCase(), icon: 'fa-cube text-slate-300' };
+        
+        if (prereqEval.isDeepLocked) {
+            container.innerHTML = `
+                <div class="glass-card p-6 sm:p-10 border-slate-700/80 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-slate-900/95 via-slate-950/95 to-slate-950/95 shadow-2xl relative overflow-hidden">
+                    <div class="w-20 h-20 bg-slate-800 text-slate-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-slate-700 shadow-inner">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <div>
+                        <span class="badge-pill bg-slate-800 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-widest mb-2 inline-flex items-center gap-1.5">
+                            <i class="fas fa-layer-group"></i> Sequential Stage Gate • Milestone ${activeMilestoneId}
+                        </span>
+                        <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading mt-1">${modObj.name} is Locked</h3>
+                        <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                            Learning privileges are earned progressively. You must first unlock and complete requirements for <strong>${prereqEval.deepLockedByName}</strong> before the challenges for <strong>${modObj.name}</strong> become accessible.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2.5 text-left">
+                            <span class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center text-sm">
+                                <i class="fas ${prereqEval.deepLockedByIcon || 'fa-cube'}"></i>
+                            </span>
+                            <div>
+                                <p class="font-bold text-white">${prereqEval.deepLockedByName}</p>
+                                <p class="text-[10px] text-slate-400">Current required stage in sequence</p>
+                            </div>
+                        </div>
+                        <button onclick="switchMilestoneTab('${prereqEval.deepLockedByModule}')" class="btn-primary py-2 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-sm">
+                            Go to Stage <i class="fas fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+
+                    <div class="pt-2">
+                        <button onclick="renderMilestoneGrid()" class="btn-secondary py-2.5 px-6 text-xs font-bold text-slate-300 hover:text-white border border-slate-700">
+                            Milestone Overview
+                        </button>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="glass-card p-6 sm:p-10 border-amber-500/40 rounded-3xl text-center max-w-xl mx-auto space-y-6 animate-fade-in my-6 bg-gradient-to-b from-amber-950/30 via-slate-900/90 to-slate-900/95 shadow-2xl relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="w-20 h-20 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center mx-auto text-3xl border border-amber-500/40 shadow-inner">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <span class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold uppercase tracking-widest mb-2 inline-flex items-center gap-1.5">
+                        <i class="fas fa-award"></i> Earn Module Privilege • Milestone ${activeMilestoneId}
+                    </span>
+                    <h3 class="text-2xl md:text-3xl font-extrabold text-white font-heading mt-1">${modObj.name} is Gated</h3>
+                    <p class="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                        Earn access to <strong>${modObj.name}</strong> by fulfilling the required check-in activities and Learning Currencies (LCs) below:
+                    </p>
+                </div>
+
+                <!-- Prerequisite Progress List -->
+                <div class="space-y-3 text-left">
+                    ${(prereqEval.progress || []).map(p => `
+                        <div class="p-4 rounded-2xl bg-slate-950/70 border ${p.isMet ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-slate-800'} space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-white flex items-center gap-2">
+                                    <i class="fas ${p.prereqModuleIcon}"></i> ${p.label}
+                                </span>
+                                <span class="font-mono font-bold ${p.isMet ? 'text-emerald-400' : 'text-amber-400'}">
+                                    ${p.currentValue} / ${p.targetValue} ${p.type === 'lcs' ? 'LCs' : 'Check-ins'}
+                                </span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full transition-all ${p.isMet ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${p.percentage}%"></div>
+                            </div>
+                            <div class="flex justify-between items-center text-[10px] text-slate-400">
+                                <span>${p.isMet ? '<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Privilege Earned</span>' : '<span class="text-amber-300 font-bold"><i class="fas fa-clock mr-1"></i> In Progress (Required)</span>'}</span>
+                                <span class="font-bold">${p.percentage}% achieved</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- Action button to guide them directly to the first unmet prerequisite -->
+                <div class="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    ${prereqEval.unmetRules && prereqEval.unmetRules[0] ? `
+                        <button onclick="switchMilestoneTab('${prereqEval.unmetRules[0].prereqModule}')" class="btn-primary py-3 px-6 text-xs font-extrabold bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-xl w-full sm:w-auto flex items-center justify-center gap-2">
+                            <i class="fas fa-arrow-right"></i> Practice in ${prereqEval.unmetRules[0].prereqModuleName}
+                        </button>
+                    ` : ''}
+                    <button onclick="renderMilestoneGrid()" class="btn-secondary py-3 px-6 text-xs font-bold text-slate-300 hover:text-white border border-slate-700 w-full sm:w-auto">
+                        Milestone Overview
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
     
@@ -15538,7 +16016,7 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
                         </div>
                         <div class="min-w-0">
                             <div class="flex items-center gap-1.5 flex-wrap">
-                                <span class="badge-pill badge-indigo text-[9px] uppercase font-bold tracking-wider"><i class="fas fa-podcast mr-1"></i> SimpliPod Narration</span>
+                                <span class="badge-pill badge-indigo text-[9px] uppercase font-bold tracking-wider"><i class="fas fa-podcast mr-1"></i> cMPLi POD Narration</span>
                                 <span class="badge-pill bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 text-[9px] font-mono font-bold">Listen Again Anytime</span>
                             </div>
                             <h4 class="text-xs sm:text-sm font-bold text-white truncate mt-0.5">${creatorTitle || 'Podcast Episode Audio'}</h4>
@@ -16199,9 +16677,14 @@ function renderMilestoneModulesUI(msId) {
     if (subNav) {
         subNav.innerHTML = enabledMods.map((modCode, i) => {
             const modObj = ALL_PLATFORM_MODULES.find(m => m.code === modCode) || { name: modCode.toUpperCase(), icon: 'fa-cube text-slate-300' };
+            const prereqEval = (typeof evaluateModulePrereqs === 'function')
+                ? evaluateModulePrereqs(currentUser, msId, modCode)
+                : { isLocked: false };
+            const isLocked = prereqEval.isLocked;
+            const lockIcon = isLocked ? `<i class="fas fa-lock text-amber-400 text-[10px] ml-1.5 opacity-90" title="Prerequisite required to unlock"></i>` : '';
             const activeClass = i === 0 ? 'bg-indigo-600/20 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-400 hover:bg-slate-800 hover:text-white';
-            return `<button data-module="${modCode}" onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-t-xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all ${activeClass} flex items-center gap-1.5 sm:gap-2">
-                <i class="fas ${modObj.icon}"></i> ${modObj.name}
+            return `<button data-module="${modCode}" data-locked="${isLocked ? 'true' : 'false'}" onclick="switchMilestoneTab('${modCode}', this)" class="milestone-nav-btn px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-t-xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all ${activeClass} flex items-center gap-1.5 sm:gap-2">
+                <i class="fas ${modObj.icon}"></i> ${modObj.name} ${lockIcon}
             </button>`;
         }).join('');
     }

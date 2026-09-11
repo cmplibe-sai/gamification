@@ -81,6 +81,13 @@ try {
         fs.copyFileSync(trackedAthulyaQuiz, targetAthulyaQuiz);
         console.log('[Seed Asset] Copied pod_quiz_pool_athulya.json to server_data directory');
     }
+
+    const trackedModulePrereqs = path.join(trackedDataDir, 'module_prereqs.json');
+    const targetModulePrereqs = path.join(DATA_DIR, 'module_prereqs.json');
+    if (fs.existsSync(trackedModulePrereqs) && !fs.existsSync(targetModulePrereqs)) {
+        fs.copyFileSync(trackedModulePrereqs, targetModulePrereqs);
+        console.log('[Seed Asset] Copied module_prereqs.json to server_data directory');
+    }
 } catch (seedErr) {
     console.warn('[Seed Asset Warning]', seedErr.message);
 }
@@ -1426,7 +1433,7 @@ async function syncGoogleSheetData(sheetIdInput) {
                     // Automatically generate/assign the full 50-question pool for this story/date using freshly parsed context
                     questions = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description, forceRegenerate: storyChanged });
                 } else {
-                    let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'SimpliPod Reflection Quiz';
+                    let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'cMPLi POD Reflection Quiz';
                     let options = [];
                     if (optionsStr) {
                         options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
@@ -1731,6 +1738,124 @@ app.post(['/api/milestone-prereqs', '/gamification/api/milestone-prereqs'], (req
 });
 
 // ==============================================================
+// INTRA-MILESTONE MODULE PREREQUISITES DATABASE ENGINE
+// (Controls unlocking of modules like pod, immerse within milestone)
+// ==============================================================
+const MODULE_PREREQS_FILE = path.join(DATA_DIR, 'module_prereqs.json');
+
+const DEFAULT_MODULE_PREREQS = {
+    "1": {
+        "pod": [
+            { id: "m1_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins & earn 50 LCs in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m1_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins & earn 100 LCs in cMPLi Dip" },
+            { id: "m1_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions & earn 50 LCs in cMPLi POD" }
+        ]
+    },
+    "2": {
+        "pod": [
+            { id: "m2_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m2_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m2_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m2_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ]
+    },
+    "3": {
+        "pod": [
+            { id: "m3_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m3_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m3_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m3_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ],
+        "problem_solution": [
+            { id: "m3_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
+        ]
+    },
+    "4": {
+        "pod": [
+            { id: "m4_pod_from_dip", prereqModule: "dip", targetDays: 5, targetLCs: 50, label: "Complete 5 check-ins in cMPLi Dip" }
+        ],
+        "immerse": [
+            { id: "m4_immerse_from_dip", prereqModule: "dip", targetDays: 10, targetLCs: 100, label: "Complete 10 check-ins in cMPLi Dip" },
+            { id: "m4_immerse_from_pod", prereqModule: "pod", targetDays: 5, targetLCs: 50, label: "Complete 5 sessions in cMPLi POD" }
+        ],
+        "projects": [
+            { id: "m4_projects_from_immerse", prereqModule: "immerse", targetDays: 4, targetLCs: 50, label: "Complete 4 sessions in cMPLi Immerse" }
+        ],
+        "problem_solution": [
+            { id: "m4_ps_from_projects", prereqModule: "projects", targetDays: 2, targetLCs: 30, label: "Complete 2 Real-World Execution Projects" }
+        ],
+        "residency": [
+            { id: "m4_residency_from_ps", prereqModule: "problem_solution", targetDays: 2, targetLCs: 30, label: "Complete 2 Problem-Solution Briefings" }
+        ]
+    }
+};
+
+function getModulePrereqsFromDb() {
+    try {
+        if (fs.existsSync(MODULE_PREREQS_FILE)) {
+            const raw = fs.readFileSync(MODULE_PREREQS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return { ...DEFAULT_MODULE_PREREQS, ...parsed };
+        }
+    } catch (e) {
+        console.warn('Error reading module_prereqs.json:', e);
+    }
+    return { ...DEFAULT_MODULE_PREREQS, ...(store.customModulePrereqs || {}) };
+}
+
+function saveModulePrereqsToDb(configs) {
+    try {
+        const obj = (configs && typeof configs === 'object') ? configs : {};
+        fs.writeFileSync(MODULE_PREREQS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+        store.customModulePrereqs = obj;
+        saveStore();
+        console.log(`[Module Prereqs DB] Saved to ${MODULE_PREREQS_FILE}`);
+        return obj;
+    } catch (e) {
+        console.error('Error writing module_prereqs.json:', e);
+        return store.customModulePrereqs || {};
+    }
+}
+
+app.get(['/api/module-prereqs', '/gamification/api/module-prereqs'], (req, res) => {
+    const data = getModulePrereqsFromDb();
+    res.json({ success: true, data });
+});
+
+app.post(['/api/module-prereqs', '/gamification/api/module-prereqs'], (req, res) => {
+    try {
+        const { milestoneId, moduleCode, rules, allConfigs } = req.body;
+        const current = getModulePrereqsFromDb();
+
+        if (allConfigs && typeof allConfigs === 'object') {
+            for (const msId of Object.keys(allConfigs)) {
+                current[String(msId)] = { ...(current[String(msId)] || {}), ...allConfigs[msId] };
+            }
+        } else if (milestoneId && moduleCode && Array.isArray(rules)) {
+            if (!current[String(milestoneId)]) current[String(milestoneId)] = {};
+            current[String(milestoneId)][String(moduleCode)] = rules;
+        } else if (milestoneId && typeof rules === 'object') {
+            current[String(milestoneId)] = { ...(current[String(milestoneId)] || {}), ...rules };
+        }
+
+        const saved = saveModulePrereqsToDb(current);
+        res.json({ success: true, data: saved });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==============================================================
 // DEDICATED CREDENTIAL APPROVALS DATABASE ENGINE
 // (server-synced replacement for the old localStorage-only
 //  mockApprovedCertificates map, keyed "<userId>_MS<milestoneId>")
@@ -2002,6 +2127,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             levelUpAccess: liveLevelUpAccess,
             milestoneStartDates: store.milestoneStartDates || {},
             milestonePrereqs: getMilestonePrereqsFromDb(),
+            modulePrereqs: getModulePrereqsFromDb(),
             certificateApprovals: getCertificateApprovalsFromDb(),
             userMilestoneStates: getUserMilestoneStateFromDb()
         }
