@@ -1541,7 +1541,7 @@ app.post(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], asyn
 });
 
 // Periodic automatic background sync (every 10 minutes) & initial sync at server start
-const GOOGLE_SHEET_SYNC_INTERVAL_MS = parseInt(process.env.GOOGLE_SHEET_SYNC_INTERVAL_MS, 10) || (10 * 60 * 1000);
+const GOOGLE_SHEET_SYNC_INTERVAL_MS = Math.max(60000, parseInt(process.env.GOOGLE_SHEET_SYNC_INTERVAL_MS, 10) || (10 * 60 * 1000));
 setTimeout(() => {
     syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Initial GoogleSheetSync Notice]:', err.message));
 }, 3000);
