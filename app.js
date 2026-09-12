@@ -2280,6 +2280,39 @@ window.isTestUser = isTestUser;
 
 var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
 
+// High-Performance In-Memory Cache for Submissions DB
+let _cachedAllUserSubmissionsDB = null;
+let _cachedAllUserSubmissionsDBRaw = null;
+
+function getAllUserSubmissions() {
+    try {
+        const raw = localStorage.getItem('allUserSubmissionsDB');
+        if (!raw) {
+            _cachedAllUserSubmissionsDB = [];
+            _cachedAllUserSubmissionsDBRaw = null;
+            return _cachedAllUserSubmissionsDB;
+        }
+        if (raw === _cachedAllUserSubmissionsDBRaw && _cachedAllUserSubmissionsDB) {
+            return _cachedAllUserSubmissionsDB;
+        }
+        _cachedAllUserSubmissionsDBRaw = raw;
+        _cachedAllUserSubmissionsDB = JSON.parse(raw) || [];
+        return _cachedAllUserSubmissionsDB;
+    } catch(e) {
+        return _cachedAllUserSubmissionsDB || [];
+    }
+}
+window.getAllUserSubmissions = getAllUserSubmissions;
+
+function setAllUserSubmissions(data) {
+    try {
+        _cachedAllUserSubmissionsDB = Array.isArray(data) ? data : [];
+        const raw = JSON.stringify(_cachedAllUserSubmissionsDB);
+        _cachedAllUserSubmissionsDBRaw = raw;
+        localStorage.setItem('allUserSubmissionsDB', raw);
+    } catch(e) {}
+}
+window.setAllUserSubmissions = setAllUserSubmissions;
 
 let lastSyncSignature = '';
 let isSyncInProgress = false;
@@ -2293,8 +2326,7 @@ async function syncGlobalServerData() {
     _syncLockExpiry = Date.now() + 8000; // Auto-release lock after 8s if fetch hangs
 
     try {
-        let localData = [];
-        try { localData = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
+        let localData = getAllUserSubmissions();
 
         const response = await apiFetch('/api/sync').then(r => r.json()).catch(() => null);
         if (!response || !response.success || !response.data) {
@@ -2405,7 +2437,7 @@ async function syncGlobalServerData() {
             });
 
             if (hasLocalSubmissionsChanged) {
-                try { localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localData)); } catch(e) {}
+                setAllUserSubmissions(localData);
             }
         }
 
@@ -2462,7 +2494,8 @@ async function syncGlobalServerData() {
             if (JSON.stringify(customMilestonePrereqs) !== JSON.stringify(serverPrereqs)) {
                 customMilestonePrereqs = serverPrereqs;
                 try { localStorage.setItem('customMilestonePrereqs', JSON.stringify(customMilestonePrereqs)); } catch(e) {}
-                if (activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
+                const isUserTyping = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+                if (!isUserTyping && activeAdminMilestoneId && document.getElementById('adminPrereqsView') && !document.getElementById('adminPrereqsView').classList.contains('hidden')) {
                     if (typeof renderAdminPrereqsView === 'function') renderAdminPrereqsView();
                 }
             }
@@ -2483,7 +2516,8 @@ async function syncGlobalServerData() {
                     });
                 }
                 
-                if (activeAdminMilestoneId && document.getElementById('adminModulePrereqsView') && !document.getElementById('adminModulePrereqsView').classList.contains('hidden')) {
+                const isUserTyping = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+                if (!isUserTyping && activeAdminMilestoneId && document.getElementById('adminModulePrereqsView') && !document.getElementById('adminModulePrereqsView').classList.contains('hidden')) {
                     if (typeof renderAdminModulePrereqsView === 'function') renderAdminModulePrereqsView();
                 }
             }
@@ -2567,7 +2601,9 @@ async function syncGlobalServerData() {
         const isAdminLevelUpVisible = adminLevelUpTab && !adminLevelUpTab.classList.contains('hidden');
 
         if (isAdminLevelUpVisible) {
-            if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            const compView = document.getElementById('adminCompletionView');
+            const isCompVisible = compView && !compView.classList.contains('hidden') && compView.style.display !== 'none';
+            if (isCompVisible && typeof renderAdminCohortSubmissions === 'function') {
                 renderAdminCohortSubmissions();
             }
         } else if (isAdminMainVisible) {
@@ -10110,10 +10146,7 @@ function getSubmissionBucketForUser(user) {
 }
 
 function getUserSubmissionsByUserId(userIdentifier) {
-    let localDB = [];
-    try {
-        localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
-    } catch(e) {}
+    const localDB = getAllUserSubmissions();
 
     if (!userIdentifier) return [];
 
@@ -10723,7 +10756,7 @@ async function loadGlobalSettings(forceSync = false) {
 }
 
 async function approveSubmissionManually(userId, day, type) {
-    const subs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+    const subs = getAllUserSubmissions();
     const idx = subs.findIndex(s => 
         String(s.userId) === String(userId) && 
         (String(s.day) === String(day) || String(s.date) === String(day)) &&
@@ -10731,7 +10764,7 @@ async function approveSubmissionManually(userId, day, type) {
     );
     if (idx > -1) {
         subs[idx].status = 'completed';
-        localStorage.setItem('allUserSubmissionsDB', JSON.stringify(subs));
+        setAllUserSubmissions(subs);
     }
     await apiFetch('/api/submissions/update-status', {
         method: 'POST',
@@ -11383,7 +11416,7 @@ async function submitPodSessionQuiz() {
 
         // 2. Save locally safely (never let localStorage quota error crash the flow)
         try {
-            let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            let localDB = getAllUserSubmissions();
             localDB = localDB.filter(s => !(
                 (s.userId === currentUser._id || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) &&
                 String(s.milestoneId || 1) === String(activeMilestoneId || 1) &&
@@ -11391,7 +11424,7 @@ async function submitPodSessionQuiz() {
                 String(s.day) === String(activePodSessionDay)
             ));
             localDB.push(finalServerData);
-            localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+            setAllUserSubmissions(localDB);
         } catch(storageErr) {
             console.warn('LocalStorage save skipped (quota limit):', storageErr);
         }
@@ -14645,7 +14678,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             if (finalData) {
                 // Save submission record to client DB so card immediately reflects status (completed vs retry)
                 try {
-                    let localDB = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+                    let localDB = getAllUserSubmissions();
                     localDB = localDB.filter(s => !(
                         (
                             (s.userId && userIdStr && String(s.userId) === userIdStr) ||
@@ -14656,7 +14689,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
                         (String(s.day) === String(finalData.day) || (s.dateKey && finalData.dateKey && s.dateKey === finalData.dateKey))
                     ));
                     localDB.push(finalData);
-                    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(localDB));
+                    setAllUserSubmissions(localDB);
                 } catch(e) {}
 
                 if (!isMismatch && currentUser && pts > 0) {
@@ -15441,7 +15474,7 @@ function viewSubmissionById(subId, userId, dayLabel, moduleType) {
     }
     if (!sub) {
         try {
-            const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            const allSubs = getAllUserSubmissions();
             sub = allSubs.find(s => (String(s.id || s._id) === String(subId)) || ((String(s.userId) === String(userId) || (s.userEmail && s.userEmail.toLowerCase() === String(userId).toLowerCase())) && String(s.day) === String(dayLabel)));
         } catch(e) {}
     }
@@ -15502,7 +15535,7 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleNameOrD
 
     if (!sub) {
         try {
-            const allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || [];
+            const allSubs = getAllUserSubmissions();
             sub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod && ((cardDateKey && (s.dateKey === cardDateKey || s.date === cardDateKey)) || String(s.day) === String(dayNumber)));
         } catch(e) {}
     }
@@ -16628,6 +16661,614 @@ function logout() {
 }
 window.logout = logout;
 
+// ==============================================================
+// 3. GAMIFIED LEADERBOARD ENGINE (Cohort & All-Platform Ranks)
+// ==============================================================
+let currentLbTimeframe = 'all'; // 'all' | 'month' | 'week'
+let currentLbScope = 'cohort';   // 'cohort' | 'all'
+let currentLbSelectedCohort = null; // Mango ID
+let currentLbSearchQuery = '';
+let lbShowAll = false;
+
+function getCohortTitle(mangoId) {
+    if (!mangoId) return 'All Learners';
+    const cleanId = String(mangoId).trim();
+    if (typeof allAdminMangos !== 'undefined' && Array.isArray(allAdminMangos)) {
+        const m = allAdminMangos.find(x => String(x._id) === cleanId);
+        if (m && m.title) return m.title;
+    }
+    if (typeof coursesData !== 'undefined' && coursesData?.result?.subscriptions) {
+        const c = coursesData.result.subscriptions.find(x => String(x.mangoId) === cleanId);
+        if (c && c.mangoTitle) return c.mangoTitle;
+    }
+    const fallbackMap = {
+        '6a168e4213e4e9a10984b164': 'MSNIM Collaboration (2025-27)',
+        '688c4827f83e075e455125d0': 'cMPLi Be - MSNIM Collaboration (2024_26)',
+        '68a7fd3dbe0f6845799c12ce': 'cMPLiBe - MSNIM Collaboration (2024-26)',
+        '68be879e8ce56ad627efcc7c': 'cMPLiBe Community',
+        '68a4415a0f3292df01159b1b': 'MSNIM Potential Group-1',
+        '6714e7d8eb97f72e99e3316c': 'cMPLi Be Webinar Community',
+        '69b7e5a9eba54d35b695d805': 'Clarity on Journey',
+        '6774e8f11576209b5ea26867': 'cMPLi Yellow Circle Call',
+        '67d13beeec34e7c90dccb6a3': 'cMPLi VIP Coaching',
+        '677299bd355fae9bfce8d65f': 'cMPLi Be Masterclass'
+    };
+    return fallbackMap[cleanId] || `Cohort (${cleanId.slice(-6)})`;
+}
+window.getCohortTitle = getCohortTitle;
+
+function getAllPlatformCohorts() {
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+    const counts = {};
+    pool.forEach(u => {
+        if (u.subscribedMangoes && Array.isArray(u.subscribedMangoes)) {
+            u.subscribedMangoes.forEach(m => {
+                if (m) counts[m] = (counts[m] || 0) + 1;
+            });
+        }
+    });
+    return Object.keys(counts)
+        .filter(id => counts[id] > 0)
+        .map(id => ({
+            id,
+            title: getCohortTitle(id),
+            count: counts[id]
+        }))
+        .sort((a, b) => b.count - a.count);
+}
+window.getAllPlatformCohorts = getAllPlatformCohorts;
+
+function isSubmissionInLbTimeframe(sub, timeframe) {
+    if (!timeframe || timeframe === 'all') return true;
+    if (!sub) return false;
+    const dateStr = sub.submittedAt || sub.updatedAt || sub.dateKey;
+    if (!dateStr) return false;
+    const subDate = new Date(dateStr);
+    if (isNaN(subDate.getTime())) return false;
+    
+    const now = new Date();
+    if (timeframe === 'week') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return subDate >= weekAgo;
+    }
+    if (timeframe === 'month') {
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        return subDate >= monthStart;
+    }
+    return true;
+}
+
+function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+    
+    // Fast single-pass indexed submission lookup using in-memory cache
+    const allSubs = getAllUserSubmissions();
+    
+    const subsById = new Map();
+    const subsByEmail = new Map();
+    const subsByPhone = new Map();
+
+    for (let i = 0; i < allSubs.length; i++) {
+        const s = allSubs[i];
+        if (!s) continue;
+        if (!isSubmissionInLbTimeframe(s, timeframe)) continue;
+
+        const uid = s.userId ? String(s.userId).trim() : '';
+        const uemail = s.userEmail ? String(s.userEmail).toLowerCase().trim() : '';
+        const uphone = s.userPhone ? String(s.userPhone).replace(/\D/g, '') : '';
+
+        if (uid) {
+            if (!subsById.has(uid)) subsById.set(uid, []);
+            subsById.get(uid).push(s);
+        }
+        if (uemail) {
+            if (!subsByEmail.has(uemail)) subsByEmail.set(uemail, []);
+            subsByEmail.get(uemail).push(s);
+        }
+        if (uphone) {
+            if (!subsByPhone.has(uphone)) subsByPhone.set(uphone, []);
+            subsByPhone.get(uphone).push(s);
+        }
+    }
+
+    // Determine candidate cohort filter
+    let candidateUsers = pool;
+    if (scope === 'cohort' && targetCohortId && targetCohortId !== 'all') {
+        candidateUsers = pool.filter(u => {
+            const isTestUser = (typeof TEST_EMAILS !== 'undefined' && (TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone))));
+            const inCohort = u.subscribedMangoes && Array.isArray(u.subscribedMangoes) && u.subscribedMangoes.includes(targetCohortId);
+            return inCohort || isTestUser;
+        });
+    }
+
+    // Calculate score for each candidate user
+    const rankings = candidateUsers.map(user => {
+        const uid = user._id ? String(user._id).trim() : (user.id ? String(user.id).trim() : '');
+        const uemail = user.email ? String(user.email).toLowerCase().trim() : '';
+        const uphone = user.phone ? String(user.phone).replace(/\D/g, '') : '';
+
+        // Gather all matching submissions without duplicates
+        const matchedSubs = [];
+        const seenSubIds = new Set();
+        const addSubs = (list) => {
+            if (!list) return;
+            for (let j = 0; j < list.length; j++) {
+                const sub = list[j];
+                const key = sub.id || `${sub.milestoneId}_${sub.type}_${sub.day}_${sub.submittedAt}`;
+                if (!seenSubIds.has(key)) {
+                    seenSubIds.add(key);
+                    matchedSubs.push(sub);
+                }
+            }
+        };
+
+        if (uid && subsById.has(uid)) addSubs(subsById.get(uid));
+        if (uemail && subsByEmail.has(uemail)) addSubs(subsByEmail.get(uemail));
+        if (uphone && subsByPhone.has(uphone)) addSubs(subsByPhone.get(uphone));
+
+        let earnedLcs = 0;
+        let completedCount = 0;
+        matchedSubs.forEach(s => {
+            const reward = Number(s.lcReward) || 0;
+            if (s.status === 'completed' || reward > 0 || Number(s.matchPercentage || 0) >= 50) {
+                earnedLcs += reward;
+                completedCount++;
+            }
+        });
+
+        // Resolve primary cohort name for badge
+        let primaryCohortId = (user.subscribedMangoes && user.subscribedMangoes[0]) || '';
+        let primaryCohortTitle = getCohortTitle(primaryCohortId);
+
+        const isCurrentUser = (typeof currentUser !== 'undefined' && currentUser) && (
+            (uid && String(currentUser._id) === uid) ||
+            (uemail && currentUser.email && currentUser.email.toLowerCase().trim() === uemail) ||
+            (uphone && currentUser.phone && String(currentUser.phone).replace(/\D/g, '') === uphone)
+        );
+
+        return {
+            id: uid || user.id || Math.random().toString(),
+            name: user.name || 'Anonymous Learner',
+            email: user.email || '',
+            phone: user.phone || '',
+            profilePicUrl: user.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png',
+            primaryCohortId,
+            primaryCohortTitle,
+            subscribedMangoes: user.subscribedMangoes || [],
+            earnedLcs,
+            completedCount,
+            isCurrentUser
+        };
+    });
+
+    // Sort descending by earnedLcs, then completedCount, then name
+    rankings.sort((a, b) => {
+        if (b.earnedLcs !== a.earnedLcs) return b.earnedLcs - a.earnedLcs;
+        if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount;
+        return a.name.localeCompare(b.name);
+    });
+
+    // Assign 1-indexed rank
+    rankings.forEach((item, idx) => {
+        item.rank = idx + 1;
+    });
+
+    return rankings;
+}
+
+function setLbTab(btn, timeframe) {
+    currentLbTimeframe = timeframe || 'all';
+    document.querySelectorAll('.lb-tab').forEach(b => {
+        b.classList.remove('active', 'bg-indigo-600', 'text-white');
+        b.classList.add('text-slate-400');
+    });
+    if (btn) {
+        btn.classList.add('active', 'bg-indigo-600', 'text-white');
+        btn.classList.remove('text-slate-400');
+    }
+    renderLeaderboard();
+}
+window.setLbTab = setLbTab;
+
+function setLbScope(scope) {
+    currentLbScope = scope || 'cohort';
+    const cohortBtn = document.getElementById('lbScopeCohortBtn');
+    const allBtn = document.getElementById('lbScopeAllBtn');
+    if (currentLbScope === 'cohort') {
+        if (cohortBtn) {
+            cohortBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm';
+        }
+        if (allBtn) {
+            allBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
+        }
+    } else {
+        if (allBtn) {
+            allBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm';
+        }
+        if (cohortBtn) {
+            cohortBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
+        }
+    }
+    renderLeaderboard();
+}
+window.setLbScope = setLbScope;
+
+function setLbCohort(cohortId) {
+    currentLbSelectedCohort = cohortId;
+    renderLeaderboard();
+}
+window.setLbCohort = setLbCohort;
+
+function filterLeaderboardSearch(val) {
+    currentLbSearchQuery = (val || '').toLowerCase().trim();
+    renderLeaderboardListOnly();
+}
+window.filterLeaderboardSearch = filterLeaderboardSearch;
+
+function viewAllLeaderboard() {
+    lbShowAll = !lbShowAll;
+    renderLeaderboardListOnly();
+}
+window.viewAllLeaderboard = viewAllLeaderboard;
+
+let _lastComputedRankings = [];
+
+function renderLeaderboard(timeframe, scope, cohortId) {
+    if (timeframe) currentLbTimeframe = timeframe;
+    if (scope) currentLbScope = scope;
+    if (cohortId !== undefined) currentLbSelectedCohort = cohortId;
+
+    const container = document.getElementById('leaderboardTab');
+    if (!container) return;
+
+    // 1. Resolve available cohorts
+    const allCohorts = getAllPlatformCohorts();
+    const userCohorts = (currentUser && Array.isArray(currentUser.subscribedMangoes)) ? currentUser.subscribedMangoes : [];
+
+    // 2. Resolve target cohort for cohort scope
+    if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all') {
+        if (userCohorts.length > 0) {
+            currentLbSelectedCohort = userCohorts[0];
+        } else if (allCohorts.length > 0) {
+            currentLbSelectedCohort = allCohorts[0].id;
+        }
+    }
+
+    // 3. Update Cohort Select Dropdown
+    const selectEl = document.getElementById('lbCohortSelect');
+    const selectWrapper = document.getElementById('lbCohortSelectWrapper');
+    if (selectEl) {
+        let cohortOptionsHtml = '';
+        if (isAdminLogin) {
+            cohortOptionsHtml += `<option value="all" ${currentLbScope === 'all' ? 'selected' : ''}>🌐 All Platform (${allCohorts.reduce((acc, c) => acc + c.count, 0)} Learners)</option>`;
+            allCohorts.forEach(c => {
+                const isSelected = (currentLbScope === 'cohort' && String(c.id) === String(currentLbSelectedCohort));
+                cohortOptionsHtml += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count})</option>`;
+            });
+            if (selectWrapper) selectWrapper.style.display = (currentLbScope === 'cohort') ? 'block' : 'none';
+        } else {
+            // Learner view
+            const enrolledCohorts = allCohorts.filter(c => userCohorts.includes(c.id));
+            if (enrolledCohorts.length > 1) {
+                enrolledCohorts.forEach(c => {
+                    const isSelected = String(c.id) === String(currentLbSelectedCohort);
+                    cohortOptionsHtml += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count})</option>`;
+                });
+                if (selectWrapper) selectWrapper.style.display = (currentLbScope === 'cohort') ? 'block' : 'none';
+            } else if (enrolledCohorts.length === 1) {
+                cohortOptionsHtml = `<option value="${enrolledCohorts[0].id}" selected>${enrolledCohorts[0].title}</option>`;
+                if (selectWrapper) selectWrapper.style.display = 'none'; // Only 1 cohort, no need to clutter with dropdown
+            } else {
+                cohortOptionsHtml = `<option value="all" selected>All Learners</option>`;
+                if (selectWrapper) selectWrapper.style.display = 'none';
+            }
+        }
+        selectEl.innerHTML = cohortOptionsHtml;
+    }
+
+    // 4. Update Header Badges & Scope Button Text
+    const scopeBadge = document.getElementById('lbActiveScopeBadge');
+    const scopeCohortBtn = document.getElementById('lbScopeCohortBtn');
+    const activeCohortName = getCohortTitle(currentLbSelectedCohort);
+
+    if (scopeBadge) {
+        if (currentLbScope === 'cohort') {
+            scopeBadge.className = 'badge-pill badge-indigo';
+            scopeBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${activeCohortName}`;
+        } else {
+            scopeBadge.className = 'badge-pill badge-emerald';
+            scopeBadge.innerHTML = `<i class="fas fa-globe mr-1"></i> All Platform Ranks`;
+        }
+    }
+    if (scopeCohortBtn && !isAdminLogin && userCohorts.length > 0) {
+        scopeCohortBtn.innerHTML = `<i class="fas fa-users text-[11px]"></i> <span>My Cohort</span>`;
+    }
+
+    // 5. Compute Rankings
+    _lastComputedRankings = computeLeaderboardRankings(currentLbTimeframe, currentLbScope, currentLbSelectedCohort);
+
+    // 6. Render User Standing Card
+    renderUserStandingCard(_lastComputedRankings);
+
+    // 7. Render Top 3 Podium
+    renderLeaderboardPodium(_lastComputedRankings);
+
+    // 8. Render Filterable List
+    renderLeaderboardListOnly();
+}
+window.renderLeaderboard = renderLeaderboard;
+
+function renderUserStandingCard(rankings) {
+    const standingCard = document.getElementById('lbUserStandingCard');
+    if (!standingCard) return;
+
+    if (!currentUser) {
+        standingCard.classList.add('hidden');
+        return;
+    }
+
+    const currentUserId = String(currentUser._id || currentUser.id || '');
+    const userRankItem = rankings.find(r => r.isCurrentUser || (currentUserId && String(r.id) === currentUserId));
+
+    const totalInView = rankings.length;
+    const scopeLabel = currentLbScope === 'cohort' ? getCohortTitle(currentLbSelectedCohort) : 'All Platform';
+
+    if (userRankItem) {
+        standingCard.classList.remove('hidden');
+        const rank = userRankItem.rank;
+        const percentile = totalInView > 0 ? Math.max(1, Math.round((rank / totalInView) * 100)) : 100;
+        
+        // Find points behind previous rank
+        let gapMsg = '';
+        if (rank > 1 && rankings[rank - 2]) {
+            const gap = (rankings[rank - 2].earnedLcs || 0) - (userRankItem.earnedLcs || 0);
+            gapMsg = `<span class="text-amber-400 font-semibold"><i class="fas fa-arrow-up text-xs mr-1"></i> ${gap > 0 ? gap + ' LCs behind #' + (rank - 1) : 'Tied with #' + (rank - 1)}</span>`;
+        } else if (rank === 1) {
+            gapMsg = `<span class="text-emerald-400 font-bold"><i class="fas fa-crown text-xs mr-1"></i> Currently in 1st Place!</span>`;
+        }
+
+        const avatarUrl = userRankItem.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png';
+
+        standingCard.innerHTML = `
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
+                <div class="flex items-center gap-3.5 sm:gap-4">
+                    <div class="relative">
+                        <img src="${avatarUrl}" alt="${userRankItem.name}" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-indigo-400/80 shadow-lg shadow-indigo-900/40" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                        <div class="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full border border-slate-900 shadow">
+                            #${rank}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-white font-extrabold text-base sm:text-lg">${userRankItem.name}</h3>
+                            <span class="badge-pill badge-indigo text-[10px] py-0.5 px-2">You</span>
+                        </div>
+                        <p class="text-slate-400 text-xs mt-0.5">
+                            <span class="text-indigo-300 font-bold">Rank #${rank}</span> of ${totalInView} in <span class="text-slate-300 font-semibold">${scopeLabel}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5 sm:gap-4 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-800">
+                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Standing</span>
+                        <span class="text-sm font-extrabold text-white">Top ${percentile}%</span>
+                    </div>
+                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Earned</span>
+                        <span class="text-sm font-extrabold text-amber-400">${userRankItem.earnedLcs} LCs</span>
+                    </div>
+                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Completed</span>
+                        <span class="text-sm font-extrabold text-indigo-300">${userRankItem.completedCount} Check-ins</span>
+                    </div>
+                    <div class="w-full text-right text-xs pt-0.5">
+                        ${gapMsg}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        standingCard.classList.add('hidden');
+    }
+}
+
+function renderLeaderboardPodium(rankings) {
+    const podiumContainer = document.getElementById('lbPodiumContainer');
+    if (!podiumContainer) return;
+
+    if (rankings.length === 0) {
+        podiumContainer.innerHTML = '';
+        return;
+    }
+
+    const first = rankings[0];
+    const second = rankings[1];
+    const third = rankings[2];
+
+    const renderPodiumCard = (user, place, medal, heightClass, bgGradient, ringColor) => {
+        if (!user) {
+            return `
+                <div class="flex-1 min-w-[100px] max-w-[220px] flex flex-col items-center opacity-30">
+                    <div class="w-12 h-12 rounded-full bg-slate-800 mb-2 border border-slate-700 flex items-center justify-center text-slate-600 text-xs">
+                        ${place}
+                    </div>
+                    <div class="w-full ${heightClass} bg-slate-900/40 rounded-t-2xl border border-slate-800/60"></div>
+                </div>
+            `;
+        }
+
+        const avatar = user.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png';
+        const isSelf = user.isCurrentUser;
+        const cardHighlight = isSelf ? 'ring-2 ring-indigo-500 shadow-indigo-500/20' : '';
+
+        return `
+            <div class="flex-1 min-w-[105px] max-w-[240px] flex flex-col items-center group transition-all duration-300 transform hover:-translate-y-1">
+                <!-- Avatar & Crown/Medal -->
+                <div class="relative mb-2 flex flex-col items-center">
+                    <div class="text-lg sm:text-2xl mb-1 filter drop-shadow-md animate-bounce" style="animation-duration: 2.5s;">${medal}</div>
+                    <div class="relative">
+                        <img src="${avatar}" alt="${user.name}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${ringColor} shadow-xl" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                        <div class="absolute -bottom-1 -right-1 bg-slate-950 text-white font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-slate-700 shadow">
+                            ${place}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Learner Name & Stats -->
+                <div class="text-center px-1 mb-2.5 w-full">
+                    <div class="text-xs sm:text-sm font-extrabold text-white truncate max-w-[140px] sm:max-w-[180px] mx-auto" title="${user.name}">
+                        ${user.name} ${isSelf ? '<span class="text-indigo-400 text-[10px]">(You)</span>' : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-400 truncate max-w-[130px] mx-auto mt-0.5">
+                        ${user.primaryCohortTitle}
+                    </div>
+                    <div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] sm:text-xs">
+                        <i class="fas fa-coins text-[10px]"></i> ${user.earnedLcs} LCs
+                    </div>
+                </div>
+
+                <!-- Pedestal Step -->
+                <div class="w-full ${heightClass} ${bgGradient} ${cardHighlight} rounded-t-2xl border-t border-x border-slate-700/60 p-2 flex flex-col items-center justify-start shadow-2xl relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+                    <span class="text-2xl sm:text-3xl font-black text-white/20 font-mono mt-1">${place}</span>
+                    <span class="text-[10px] font-semibold text-slate-400 mt-0.5 hidden sm:inline-block">${user.completedCount} check-ins</span>
+                </div>
+            </div>
+        `;
+    };
+
+    podiumContainer.innerHTML = `
+        <div class="flex items-end justify-center gap-2 sm:gap-4 md:gap-6 pt-4 px-2">
+            <!-- 2nd Place (Silver) -->
+            ${renderPodiumCard(second, 2, '🥈', 'h-28 sm:h-36', 'bg-gradient-to-t from-slate-900 via-slate-800 to-slate-700/50', 'border-slate-300 shadow-slate-400/20')}
+
+            <!-- 1st Place (Gold) -->
+            ${renderPodiumCard(first, 1, '👑', 'h-36 sm:h-48', 'bg-gradient-to-t from-slate-900 via-amber-950/40 to-amber-600/30', 'border-amber-400 shadow-amber-400/40 ring-2 ring-amber-400/40')}
+
+            <!-- 3rd Place (Bronze) -->
+            ${renderPodiumCard(third, 3, '🥉', 'h-24 sm:h-28', 'bg-gradient-to-t from-slate-900 via-orange-950/30 to-amber-800/30', 'border-amber-700 shadow-amber-900/30')}
+        </div>
+    `;
+}
+
+function renderLeaderboardListOnly() {
+    const listContainer = document.getElementById('leaderboardList');
+    const countEl = document.getElementById('lbParticipantsCount');
+    const viewAllBtn = document.getElementById('viewAllLbBtn');
+    if (!listContainer) return;
+
+    let filtered = _lastComputedRankings;
+    if (currentLbSearchQuery) {
+        filtered = filtered.filter(u => 
+            u.name.toLowerCase().includes(currentLbSearchQuery) ||
+            u.email.toLowerCase().includes(currentLbSearchQuery) ||
+            u.primaryCohortTitle.toLowerCase().includes(currentLbSearchQuery)
+        );
+    }
+
+    if (countEl) {
+        const total = _lastComputedRankings.length;
+        const scopeText = currentLbScope === 'cohort' ? 'in cohort' : 'across platform';
+        countEl.textContent = `Showing ${filtered.length} of ${total} learners ${scopeText}`;
+    }
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = `
+            <div class="glass-card p-8 text-center rounded-2xl border-slate-800 text-slate-400 space-y-2">
+                <i class="fas fa-search text-3xl text-slate-600"></i>
+                <p class="text-sm font-semibold text-slate-300">No participants found</p>
+                <p class="text-xs text-slate-500">Try adjusting your search query or switching between cohort and all platform tabs.</p>
+            </div>
+        `;
+        if (viewAllBtn) viewAllBtn.classList.add('hidden');
+        return;
+    }
+
+    const displayLimit = (!lbShowAll && !currentLbSearchQuery) ? 10 : filtered.length;
+    const slice = filtered.slice(0, displayLimit);
+
+    let html = '';
+    slice.forEach(item => {
+        const isSelf = item.isCurrentUser;
+        const rank = item.rank;
+
+        let rankBadge = `<span class="font-mono font-bold text-slate-400 text-xs w-6 text-center">#${rank}</span>`;
+        if (rank === 1) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center text-xs font-black"><i class="fas fa-crown text-[10px]"></i></span>`;
+        } else if (rank === 2) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-slate-300/20 text-slate-200 border border-slate-300/40 flex items-center justify-center text-xs font-black">2</span>`;
+        } else if (rank === 3) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-amber-700/20 text-amber-500 border border-amber-700/40 flex items-center justify-center text-xs font-black">3</span>`;
+        }
+
+        const selfRowStyles = isSelf 
+            ? 'border-indigo-500/60 bg-indigo-950/20 shadow-md shadow-indigo-950/30 ring-1 ring-indigo-500/30' 
+            : 'border-slate-800/80 hover:border-slate-700 bg-slate-900/50 hover:bg-slate-900/80';
+
+        const avatar = item.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png';
+
+        html += `
+            <div class="glass-card p-3 sm:p-4 rounded-xl border ${selfRowStyles} flex items-center justify-between gap-3 sm:gap-4 transition-all duration-200">
+                <!-- Left: Rank & Avatar & Name -->
+                <div class="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                    <div class="shrink-0 flex items-center justify-center">
+                        ${rankBadge}
+                    </div>
+
+                    <img src="${avatar}" alt="${item.name}" class="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-slate-700 shrink-0" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-xs sm:text-sm font-bold text-white truncate max-w-[150px] sm:max-w-xs" title="${item.name}">
+                                ${item.name}
+                            </span>
+                            ${isSelf ? '<span class="badge-pill badge-indigo text-[9px] py-0 px-1.5 font-bold">You</span>' : ''}
+                        </div>
+                        <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 truncate">
+                            <span class="truncate max-w-[140px] sm:max-w-[220px]" title="${item.primaryCohortTitle}">
+                                <i class="fas fa-graduation-cap text-[10px] text-slate-500 mr-1"></i>${item.primaryCohortTitle}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Activities & LCs -->
+                <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <div class="hidden sm:flex flex-col items-end text-right">
+                        <span class="text-xs font-semibold text-slate-300">${item.completedCount}</span>
+                        <span class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Activities</span>
+                    </div>
+
+                    <div class="bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
+                        <i class="fas fa-coins text-amber-400 text-xs"></i>
+                        <span class="text-amber-300 font-black text-xs sm:text-sm font-mono">${item.earnedLcs}</span>
+                        <span class="text-[9px] text-amber-400/80 font-bold uppercase hidden sm:inline">LCs</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    listContainer.innerHTML = html;
+
+    // View All button visibility
+    if (viewAllBtn) {
+        if (!currentLbSearchQuery && filtered.length > 10) {
+            viewAllBtn.classList.remove('hidden');
+            viewAllBtn.innerHTML = lbShowAll 
+                ? `<i class="fas fa-chevron-up mr-1.5"></i> Show Top 10 Only`
+                : `<i class="fas fa-list-ol mr-1.5"></i> View Complete Ranking (${filtered.length} Learners)`;
+        } else {
+            viewAllBtn.classList.add('hidden');
+        }
+    }
+}
+
 async function switchTab(tab) {
     if (typeof syncGlobalServerData === 'function') {
         syncGlobalServerData().catch(() => {});
@@ -17122,17 +17763,23 @@ if (typeof window !== 'undefined') {
         }
         if (e.key === 'allUserSubmissionsDB' && e.newValue) {
             try {
-                if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+                _cachedAllUserSubmissionsDBRaw = e.newValue;
+                _cachedAllUserSubmissionsDB = JSON.parse(e.newValue) || [];
+            } catch(err) {}
+            try {
+                const compView = document.getElementById('adminCompletionView');
+                const isCompVisible = compView && !compView.classList.contains('hidden') && compView.style.display !== 'none';
+                if (isCompVisible && typeof renderAdminCohortSubmissions === 'function') {
                     renderAdminCohortSubmissions();
                 }
-                if (typeof renderAdminCustomerGrid === 'function' && document.getElementById('adminCustomerGrid')) {
+                const adminMainTab = document.getElementById('adminTab');
+                if (adminMainTab && !adminMainTab.classList.contains('hidden') && typeof renderAdminCustomerGrid === 'function') {
                     renderAdminCustomerGrid();
                 }
-                const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
-                if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
-                    switchMilestoneTab(activeSubTab);
+                const lbTab = document.getElementById('leaderboardTab');
+                if (lbTab && !lbTab.classList.contains('hidden') && typeof renderLeaderboard === 'function') {
+                    renderLeaderboard();
                 }
-                if (typeof updateDashboardUI === 'function') updateDashboardUI();
             } catch(err) {}
         }
         if (e.key === 'customMilestoneConfigs' && e.newValue) {
