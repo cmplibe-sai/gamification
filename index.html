@@ -443,27 +443,27 @@
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 font-bold mb-1.5">2. Select Mango / Cohort</label>
-                        <select id="courseSelect" onchange="renderAdminCustomerGrid()" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
+                        <select id="courseSelect" onchange="renderAdminCustomerGrid(true)" class="w-full bg-slate-900 text-white p-3 rounded-xl border border-slate-700 text-xs font-semibold focus:outline-none focus:border-indigo-500">
                             <option value="">-- Select Mango / Solution --</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Customer Health Status Box -->
+                <!-- Customer Health / LearnAgiliti Status Box -->
                 <div class="glass-card p-5 border-slate-800 space-y-4">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-xs font-bold text-white uppercase tracking-wider"><i class="fas fa-heartbeat text-indigo-400 mr-2"></i> Student Compliance Health</h3>
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider"><i class="fas fa-gauge-high text-indigo-400 mr-2"></i> Student LearnAgiliti Quotient®</h3>
                         <span id="userCounter" class="text-xs font-bold text-slate-400 bg-slate-900 px-2.5 py-0.5 rounded-full border border-slate-800"></span>
                     </div>
                     <div class="flex flex-wrap gap-2" id="adminStatusFilters">
-                        <button onclick="filterAdminCustomersByStatus('All', this)" class="status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs">All Customers</button>
-                        <button onclick="filterAdminCustomersByStatus('High', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-emerald-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">High (>81%)</button>
-                        <button onclick="filterAdminCustomersByStatus('Moderate', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-amber-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Moderate (50-80%)</button>
-                        <button onclick="filterAdminCustomersByStatus('Low', this)" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-red-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Low (<50%)</button>
+                        <button onclick="filterAdminCustomersByStatus('All', this)" data-status="All" class="status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-md">All Customers</button>
+                        <button onclick="filterAdminCustomersByStatus('High', this)" data-status="High" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-emerald-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">High (>80%)</button>
+                        <button onclick="filterAdminCustomersByStatus('Moderate', this)" data-status="Moderate" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-amber-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Moderate (50-80%)</button>
+                        <button onclick="filterAdminCustomersByStatus('Low', this)" data-status="Low" class="status-btn px-4 py-2 rounded-lg bg-slate-800 text-red-400 hover:bg-slate-700 font-bold text-xs border border-slate-700">Low (<50%)</button>
                     </div>
                     <div class="relative">
                         <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                        <input type="text" id="adminCustomerSearch" onkeyup="renderAdminCustomerGrid()" placeholder="Search customer by name or email ID..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
+                        <input type="text" id="adminCustomerSearch" onkeyup="renderAdminCustomerGrid(true)" placeholder="Search customer by name or email ID..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-indigo-500">
                     </div>
                 </div>
 
@@ -474,7 +474,12 @@
                 <div id="adminReportContainer" class="hidden border-t border-slate-800 pt-8 space-y-6">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="glass-card p-6 border-slate-800">
-                            <h3 class="text-base font-bold text-indigo-400 mb-4 pb-2 border-b border-slate-800">Learner Overview</h3>
+                            <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+                                <h3 class="text-base font-bold text-indigo-400">Learner Overview</h3>
+                                <button onclick="document.getElementById('adminReportContainer').classList.add('hidden')" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors">
+                                    <i class="fas fa-times mr-1"></i> Close Details
+                                </button>
+                            </div>
                             <div id="adminUserDetailsContent" class="space-y-2 text-xs"></div>
                         </div>
                         <div class="glass-card p-6 border-slate-800">

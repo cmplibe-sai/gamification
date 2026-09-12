@@ -1649,69 +1649,84 @@ function renderAdminMangoToggles() {
 let currentAdminStatusFilter = 'All';
 
 function calculateCustomerHealth(user) {
-    const subs = getUserSubmissionsByUserId(user._id) || [];
-    let earnedLcs = 0;
-    
-    // Sum all earned points from their submission history
-    subs.forEach(s => { earnedLcs += (Number(s.lcReward) || 0); });
-    
-    // Add any legacy/manually assigned LCs if they exist in the DB
-    earnedLcs += (Number(user.lcs) || 0);
+    if (!user) return { lqPct: 0, label: 'Low', highestMs: 1, earnedLcs: 0, maxLcs: 0 };
+    const uId = user._id || user.id || user;
+    const uState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[uId]) 
+        ? userMilestoneState[uId] 
+        : { highestUnlocked: 1 };
+    const highestMs = Math.min(4, Math.max(1, Number(uState?.highestUnlocked || 1)));
 
-    const msState = userMilestoneState[user._id] || { highestUnlocked: 1 };
-    const highestMs = msState.highestUnlocked;
+    // Calculate live learnAgiliti Quotient for active milestone (matching speedometer needle)
+    let lq = { earned: 0, max: 0, pct: 0, zone: 'not_started' };
+    if (typeof computeLqStats === 'function') {
+        lq = computeLqStats(uId, highestMs, 'all');
+    }
+    const pct = Number(lq.pct) || 0;
 
-    // Define the realistic expected LC targets based on the user's current milestone journey.
-    // (You can adjust these exact target numbers based on your final point configurations)
-    const msExpectedMap = {
-        1: 693,         // Example: 21 days * 33 LCs
-        2: 2693,        // Cumulative: MS1 + MS2 expected points
-        3: 5193,        // Cumulative: MS1 + MS2 + MS3 expected points
-        4: 7693,
-        5: 10193,
-        6: 12693
-    };
-
-    let expectedLcs = msExpectedMap[highestMs] || 1;
-    if (expectedLcs === 0) expectedLcs = 1; // Failsafe to prevent division by zero
-
-    let pct = Math.round((earnedLcs / expectedLcs) * 100);
-    
-    // STRICT CAP: Prevent percentages from exceeding 100%
-    if (pct > 100) pct = 100; 
-    
+    // Standard standards specified by user:
+    // Low: < 50% (Red)
+    // Moderate: 50% - 80% (Yellow/Amber)
+    // High: > 80% (Green/Emerald)
     let label = 'Low';
-    if (pct >= 81) label = 'High';
-    else if (pct >= 50) label = 'Moderate';
+    if (pct > 80) {
+        label = 'High';
+    } else if (pct >= 50) {
+        label = 'Moderate';
+    } else {
+        label = 'Low';
+    }
 
     return { 
-        earnedLcs: earnedLcs, 
-        expectedLcs: expectedLcs, 
-        healthPct: pct, 
+        lqPct: pct, 
         label: label, 
-        highestMs: highestMs // Passed along for the UI badge!
+        highestMs: highestMs, 
+        earnedLcs: lq.earned || 0, 
+        maxLcs: lq.max || 0 
     };
 }
+window.calculateCustomerHealth = calculateCustomerHealth;
+
+function updateAdminStatusFilterUI() {
+    const filterContainer = document.getElementById('adminStatusFilters');
+    if (!filterContainer) return;
+    const btns = filterContainer.querySelectorAll('.status-btn');
+    btns.forEach(btn => {
+        const btnStatus = btn.getAttribute('data-status') || btn.innerText.split(' ')[0];
+        if (btnStatus.toLowerCase() === currentAdminStatusFilter.toLowerCase()) {
+            btn.className = 'status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-md border border-indigo-500/50';
+        } else {
+            let textColor = 'text-slate-300';
+            if (btnStatus === 'High') textColor = 'text-emerald-400';
+            else if (btnStatus === 'Moderate') textColor = 'text-amber-400';
+            else if (btnStatus === 'Low') textColor = 'text-red-400';
+            btn.className = `status-btn px-4 py-2 rounded-lg bg-slate-800 ${textColor} hover:bg-slate-700 font-bold text-xs border border-slate-700`;
+        }
+    });
+}
+window.updateAdminStatusFilterUI = updateAdminStatusFilterUI;
 
 function filterAdminCustomersByStatus(status, btnElement) {
-    currentAdminStatusFilter = status;
-    document.querySelectorAll('.status-btn').forEach(btn => {
-        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
-        btn.classList.add('bg-slate-700');
-    });
-    btnElement.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
-    btnElement.classList.remove('bg-slate-700');
-    renderAdminCustomerGrid();
+    currentAdminStatusFilter = status || 'All';
+    updateAdminStatusFilterUI();
+    renderAdminCustomerGrid(false);
 }
+window.filterAdminCustomersByStatus = filterAdminCustomersByStatus;
 
-function renderAdminCustomerGrid() {
+function renderAdminCustomerGrid(isManualFilterReset = false) {
     const selectedCourseId = document.getElementById('courseSelect') ? document.getElementById('courseSelect').value : '';
-    const searchVal = document.getElementById('adminCustomerSearch') ? document.getElementById('adminCustomerSearch').value.toLowerCase() : '';
+    const searchVal = document.getElementById('adminCustomerSearch') ? document.getElementById('adminCustomerSearch').value.toLowerCase().trim() : '';
     
     const grid = document.getElementById('adminCustomerGrid');
     if (!grid) return;
 
-    document.getElementById('adminReportContainer')?.classList.add('hidden');
+    // Only hide report container on explicit user action (e.g. search query changed or course selected),
+    // NEVER hide during background smart-sync intervals so inspected learner detail does not flash/disappear!
+    if (isManualFilterReset) {
+        document.getElementById('adminReportContainer')?.classList.add('hidden');
+    }
+
+    // Ensure status filter button styles stay in sync
+    updateAdminStatusFilterUI();
 
     let filteredUsers = adminRealtimeUsers;
 
@@ -1730,54 +1745,80 @@ function renderAdminCustomerGrid() {
     if (searchVal) {
         filteredUsers = filteredUsers.filter(u => 
             (u.name && u.name.toLowerCase().includes(searchVal)) || 
-            (u.email && u.email.toLowerCase().includes(searchVal))
+            (u.email && u.email.toLowerCase().includes(searchVal)) ||
+            (u.phone && u.phone.includes(searchVal))
         );
     }
 
-    // --- NEW: MILESTONE DISTRIBUTION METRICS WIDGET ---
-    const msCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    // --- 4-MILESTONE DISTRIBUTION METRICS WIDGET ---
+    // Platform challenge consists of 4 milestones (MS 1 - MS 4)
+    const msCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    let totalJoinedChallenge = 0;
+
     filteredUsers.forEach(u => {
-        const highest = (userMilestoneState[u._id] || { highestUnlocked: 1 }).highestUnlocked;
-        if (msCounts[highest] !== undefined) msCounts[highest]++;
+        const uid = u._id || u.id;
+        const uEmail = (u.email || '').toLowerCase().trim();
+        const uState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[uid]) ? userMilestoneState[uid] : null;
+
+        // Check if learner has joined the challenge
+        const hasJoinDate = (typeof getUserMilestoneJoinDate === 'function') && (
+            getUserMilestoneJoinDate(uid, 1) || 
+            (uEmail && getUserMilestoneJoinDate(uEmail, 1))
+        );
+        const userSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(uid) : [];
+        const hasSubs = userSubs && userSubs.length > 0;
+        const hasStateProgress = uState && (Number(uState.highestUnlocked) > 1 || uState.started);
+
+        const hasJoined = Boolean(hasJoinDate || hasSubs || hasStateProgress);
+
+        if (hasJoined) {
+            totalJoinedChallenge++;
+            const highest = Math.min(4, Math.max(1, Number(uState?.highestUnlocked || 1)));
+            if (msCounts[highest] !== undefined) {
+                msCounts[highest]++;
+            } else {
+                msCounts[1]++;
+            }
+        }
     });
 
     let statsBox = document.getElementById('dynamicMsStatsBox');
     if (!statsBox) {
         statsBox = document.createElement('div');
         statsBox.id = 'dynamicMsStatsBox';
-        statsBox.className = 'mt-6'; // Adds breathing room
+        statsBox.className = 'mt-6';
 
-        // EXACT PLACEMENT: Find the row with the dropdowns and insert right below it
         const filterSelect = document.getElementById('courseSelect');
         const filterRow = filterSelect ? (filterSelect.closest('.grid') || filterSelect.parentElement.parentElement) : null;
 
         if (filterRow && filterRow.parentNode) {
-            // Insert immediately AFTER the filter row
             filterRow.parentNode.insertBefore(statsBox, filterRow.nextSibling);
         } else {
-            // Fallback just in case
             grid.parentElement.insertBefore(statsBox, grid);
         }
     }
 
     statsBox.innerHTML = `
-        <div class="mb-6 p-5 glass border border-slate-700 rounded-xl shadow-inner">
+        <div class="mb-6 p-5 glass border border-slate-700/80 rounded-xl shadow-inner bg-slate-900/40">
             <h4 class="text-sm font-bold text-white uppercase tracking-wider mb-4 flex justify-between items-center">
                 <span><i class="fas fa-chart-pie text-indigo-400 mr-2"></i> Customers per Milestone</span>
-                <span class="text-xs text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-600">Filtered Total: ${filteredUsers.length}</span>
+                <span class="text-xs text-indigo-300 bg-indigo-950/80 border border-indigo-700/50 px-3 py-1 rounded-full font-bold">
+                    Active in Challenge: ${totalJoinedChallenge} of ${filteredUsers.length} Enrolled
+                </span>
             </h4>
-            <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
-                ${[1,2,3,4,5,6].map(i => `
-                    <div class="bg-slate-900/80 border border-slate-700 p-3 rounded-xl text-center transition-all ${msCounts[i] > 0 ? 'border-b-4 border-b-indigo-500 shadow-md' : 'opacity-60'}">
-                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Milestone ${i}</p>
-                        <p class="text-2xl font-black ${msCounts[i] > 0 ? 'text-indigo-400' : 'text-slate-600'}">${msCounts[i]}</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+                ${[1, 2, 3, 4].map(i => `
+                    <div class="bg-slate-900/80 border ${msCounts[i] > 0 ? 'border-indigo-500/50 shadow-md shadow-indigo-950/40' : 'border-slate-800 opacity-60'} p-3.5 rounded-xl text-center transition-all">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Milestone ${i}</p>
+                        <p class="text-2xl font-black ${msCounts[i] > 0 ? 'text-indigo-400' : 'text-slate-600'} font-mono">${msCounts[i]}</p>
+                        <p class="text-[9px] text-slate-500 mt-0.5">${totalJoinedChallenge > 0 ? Math.round((msCounts[i] / totalJoinedChallenge) * 100) : 0}% of active</p>
                     </div>
                 `).join('')}
             </div>
         </div>
     `;
-    // --------------------------------------------------
 
+    // Map each customer to their LearnAgiliti Quotient (LQ) profile
     const usersWithHealth = filteredUsers.map(user => ({ ...user, health: calculateCustomerHealth(user) }));
     
     const finalUsers = currentAdminStatusFilter === 'All' 
@@ -1788,40 +1829,48 @@ function renderAdminCustomerGrid() {
     if (counter) counter.innerText = `Total: ${finalUsers.length}`;
 
     if (finalUsers.length === 0) {
-        grid.innerHTML = '<div class="col-span-full p-6 text-center text-slate-500 glass rounded-xl border border-slate-700">No customers found matching these criteria.</div>';
+        grid.innerHTML = '<div class="col-span-full p-8 text-center text-slate-500 glass rounded-xl border border-slate-700">No customers found matching this LearnAgiliti Quotient filter.</div>';
         return;
     }
 
     grid.innerHTML = finalUsers.map(u => {
         const healthColor = u.health.label === 'High' ? 'text-emerald-400' : (u.health.label === 'Moderate' ? 'text-amber-400' : 'text-red-400');
-        const borderClass = u.health.label === 'High' ? 'border-emerald-500/50' : (u.health.label === 'Moderate' ? 'border-amber-500/50' : 'border-red-500/50');
-        const bgClass = u.health.label === 'High' ? 'bg-emerald-900/10' : (u.health.label === 'Moderate' ? 'bg-amber-900/10' : 'bg-red-900/10');
+        const borderClass = u.health.label === 'High' ? 'border-emerald-500/40' : (u.health.label === 'Moderate' ? 'border-amber-500/40' : 'border-red-500/40');
+        const bgClass = u.health.label === 'High' ? 'bg-emerald-950/10' : (u.health.label === 'Moderate' ? 'bg-amber-950/10' : 'bg-red-950/10');
+        const badgeBg = u.health.label === 'High' 
+            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+            : (u.health.label === 'Moderate' 
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
+                : 'bg-red-500/15 text-red-400 border-red-500/30');
+        const badgeIcon = u.health.label === 'High' ? 'fa-arrow-trend-up' : (u.health.label === 'Moderate' ? 'fa-arrows-left-right' : 'fa-arrow-trend-down');
         
         return `
-        <div onclick='displayAdminLearnerDataById("${u._id}")' class="glass ${bgClass} p-4 rounded-xl border ${borderClass} hover:border-indigo-500 cursor-pointer transition-all hover:-translate-y-1 shadow-lg relative">
+        <div onclick='displayAdminLearnerDataById("${u._id}")' class="glass ${bgClass} p-4 rounded-xl border ${borderClass} hover:border-indigo-500 cursor-pointer transition-all hover:-translate-y-1 shadow-lg relative group">
             
-            <!-- NEW: Milestone Status Badge -->
+            <!-- Milestone Status Badge -->
             <div class="absolute top-3 right-3 z-10">
                 <span class="text-[9px] font-black tracking-widest uppercase bg-indigo-900/80 text-indigo-300 px-2.5 py-1 rounded-md border border-indigo-700/50 shadow-sm shadow-indigo-900/20">
                     MS ${u.health.highestMs}
                 </span>
             </div>
 
-            <div class="flex items-center gap-3 mb-4 border-b border-slate-700/50 pb-3 pr-12">
-                <img src="${u.profilePicUrl || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-slate-600 object-cover">
-                <div class="overflow-hidden">
-                    <p class="text-sm font-bold text-white truncate">${u.name || 'Unknown User'}</p>
-                    <p class="text-[10px] text-slate-400 truncate">${u.email || u.phone}</p>
+            <div class="flex items-center gap-3 mb-4 border-b border-slate-700/50 pb-3 pr-14">
+                <img src="${u.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'}" class="w-10 h-10 rounded-full border border-slate-600 object-cover" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                <div class="overflow-hidden min-w-0 flex-1">
+                    <p class="text-sm font-bold text-white truncate" title="${u.name || 'Unknown User'}">${u.name || 'Unknown User'}</p>
+                    <p class="text-[10px] text-slate-400 truncate" title="${u.email || u.phone}">${u.email || u.phone}</p>
                 </div>
             </div>
+            
             <div class="flex justify-between items-end">
                 <div>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Health</p>
-                    <p class="text-lg font-black ${healthColor}">${u.health.healthPct}%</p>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">learnAgiliti Quotient</p>
+                    <p class="text-xl font-black ${healthColor} font-mono mt-0.5">${u.health.lqPct}%</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Earned / Expected</p>
-                    <p class="text-xs font-bold text-indigo-400">${u.health.earnedLcs} / ${u.health.expectedLcs}</p>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeBg}">
+                        <i class="fas ${badgeIcon} text-[10px]"></i> ${u.health.label}
+                    </span>
                 </div>
             </div>
         </div>`;
@@ -2015,6 +2064,8 @@ function filterMangosByPricing() {
     const courseSelect = document.getElementById('courseSelect');
     if (!courseSelect) return;
 
+    const previousCourse = courseSelect.value;
+
     courseSelect.innerHTML = '<option value="">-- Select Mango / Solution (Show All) --</option>';
 
     let availableMangos = allAdminMangos;
@@ -2038,12 +2089,16 @@ function filterMangosByPricing() {
         courseSelect.appendChild(option);
     });
 
+    if (previousCourse && filteredMangos.some(m => String(m._id) === String(previousCourse))) {
+        courseSelect.value = previousCourse;
+    }
+
     updateLearnerDropdown();
 }
 
 // 2. Filter Learners by Selected Mango (Redirected to New Grid)
 function updateLearnerDropdown() {
-    renderAdminCustomerGrid();
+    renderAdminCustomerGrid(false);
 }
 
 // ---------------------------------------------------------
@@ -2157,6 +2212,8 @@ async function displayAdminLearnerDataById(userId) {
 
     const reportContainer = document.getElementById('adminReportContainer');
     if (reportContainer) {
+        reportContainer.dataset.userId = String(learner._id);
+        window._adminSelectedLearnerId = String(learner._id);
         reportContainer.classList.remove('hidden');
         reportContainer.scrollIntoView({ behavior: 'smooth' });
     }
