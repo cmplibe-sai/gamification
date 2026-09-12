@@ -360,7 +360,14 @@ function getActualLearnerHighestMilestone(userId) {
     const recorded = Number(uState.highestUnlocked) || 1;
     if (recorded <= 1) return 1;
 
-    // A learner is truly past Milestone 1 only if they have approved certificates or higher milestone submissions
+    // If the user is NOT a test account, trust their legitimate recorded state progress
+    const isTest = (typeof isTestUser === 'function') && isTestUser(userId);
+    if (!isTest) {
+        return Math.min(4, Math.max(1, recorded));
+    }
+
+    // For test accounts (which previously had highestUnlocked=4 artificially stamped by testMode),
+    // re-validate against real evidence: higher milestone submissions or approved certificates
     const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(cleanId) : [];
     const hasHigherSubs = subs.some(s => Number(s.milestoneId || 1) >= recorded);
     const hasApprovedCert = (typeof mockApprovedCertificates !== 'undefined') && (
@@ -1803,13 +1810,14 @@ function renderAdminCustomerGrid(isManualFilterReset = false) {
         );
         const userSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(uid) : [];
         const hasSubs = userSubs && userSubs.length > 0;
-        const hasStateProgress = uState && (Number(uState.highestUnlocked) > 1 || uState.started);
+        const actualHighest = getActualLearnerHighestMilestone(uid);
+        const hasStateProgress = uState && (actualHighest > 1 || uState.started);
 
         const hasJoined = Boolean(hasJoinDate || hasSubs || hasStateProgress);
 
         if (hasJoined) {
             totalJoinedChallenge++;
-            const highest = Math.min(4, Math.max(1, Number(uState?.highestUnlocked || 1)));
+            const highest = actualHighest;
             if (msCounts[highest] !== undefined) {
                 msCounts[highest]++;
             } else {
@@ -2256,7 +2264,6 @@ async function displayAdminLearnerDataById(userId, shouldScroll = true) {
         }
     }
 
-    const userState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[learner._id]) ? userMilestoneState[learner._id] : { highestUnlocked: 1 };
     const uSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(learner._id || learner) : [];
     const ms1Subs = uSubs.filter(s => String(s.milestoneId || 1) === '1' && (typeof normalizeLevelUpType === 'function' ? normalizeLevelUpType(s.type) : s.type) === 'dip').length;
     const ms1Pct = Math.min(100, Math.round((ms1Subs / 21) * 100));
@@ -2278,7 +2285,7 @@ async function displayAdminLearnerDataById(userId, shouldScroll = true) {
                 <p><span class="text-slate-400">Phone:</span> <span class="text-white font-semibold">${learner.dialCode || ''} ${learner.phone || 'N/A'}</span></p>
             </div>
             <div class="space-y-2 pt-3 text-xs border-t border-slate-800">
-                <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${userState.highestUnlocked || 1}</strong></p>
+                <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${getActualLearnerHighestMilestone(learner._id || learner)}</strong></p>
                 <p><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></p>
             </div>
         `;
@@ -15223,7 +15230,7 @@ function switchMilestoneTab(moduleName, btnElement) {
     const baseTargetSessions = modDaysRule ? (Number(modDaysRule.targetValue) || (isImmerse ? 9 : 21)) : (isImmerse ? (activeMilestoneId === 1 ? 9 : 12) : ((activeMilestoneId === 1) ? 21 : 30));
 
     // Check if this milestone is already completed/claimed by the learner
-    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
+    const highestUnlocked = (currentUser && getActualLearnerHighestMilestone(currentUser._id)) || 1;
     const isPastMilestone = (Number(activeMilestoneId) < Number(highestUnlocked));
     const hasClaimedCredential = (currentUser && currentUser._id && typeof isCertificateApproved === 'function' && isCertificateApproved(currentUser._id, activeMilestoneId));
     const isCompletedMilestone = isPastMilestone || hasClaimedCredential;
@@ -17699,7 +17706,7 @@ function renderAdminMilestoneGrid() {
     const gridCards = milestoneConfig.map(ms => {
         const enabledMods = getEnabledModulesForMilestone(ms.id);
         const studentCount = (typeof adminRealtimeUsers !== 'undefined' ? adminRealtimeUsers : []).filter(u => {
-            const highest = (userMilestoneState[u._id]?.highestUnlocked) || 1;
+            const highest = getActualLearnerHighestMilestone(u._id || u);
             return highest >= ms.id;
         }).length;
 
