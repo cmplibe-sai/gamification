@@ -360,15 +360,17 @@ function getActualLearnerHighestMilestone(userId) {
     const recorded = Number(uState.highestUnlocked) || 1;
     if (recorded <= 1) return 1;
 
+    const userRef = (typeof userId === 'object' && userId) ? userId : cleanId;
+
     // If the user is NOT a test account, trust their legitimate recorded state progress
-    const isTest = (typeof isTestUser === 'function') && isTestUser(userId);
+    const isTest = (typeof isTestUser === 'function') && isTestUser(userRef);
     if (!isTest) {
         return Math.min(4, Math.max(1, recorded));
     }
 
     // For test accounts (which previously had highestUnlocked=4 artificially stamped by testMode),
     // re-validate against real evidence: higher milestone submissions or approved certificates
-    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(cleanId) : [];
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userRef) : [];
     const hasHigherSubs = subs.some(s => Number(s.milestoneId || 1) >= recorded);
     const hasApprovedCert = (typeof mockApprovedCertificates !== 'undefined') && (
         mockApprovedCertificates[`${cleanId}_1`] || 
@@ -2373,8 +2375,19 @@ var activePodSessionDateKey = '';
 var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
 function isTestUser(u) {
-    const usr = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+    let usr = u || (typeof currentUser !== 'undefined' ? currentUser : null);
     if (!usr) return false;
+    if (typeof usr === 'string') {
+        const uStr = usr.toLowerCase().trim();
+        const found = (typeof actualUsers !== 'undefined' ? actualUsers : []).find(x => (x._id === usr || x.id === usr || (x.email || '').toLowerCase() === uStr)) ||
+                      (typeof adminRealtimeUsers !== 'undefined' ? adminRealtimeUsers : []).find(x => (x._id === usr || x.id === usr || (x.email || '').toLowerCase() === uStr)) ||
+                      (typeof currentUser !== 'undefined' && currentUser && (currentUser._id === usr || currentUser.id === usr || (currentUser.email || '').toLowerCase() === uStr) ? currentUser : null);
+        if (found) {
+            usr = found;
+        } else {
+            usr = { _id: usr, email: uStr.includes('@') ? uStr : '' };
+        }
+    }
     const email = (usr.email || '').toLowerCase().trim();
     const phone = String(usr.phone || '').replace(/\D/g, '').slice(-10);
     const id = String(usr._id || usr.id || '').toLowerCase().trim();
