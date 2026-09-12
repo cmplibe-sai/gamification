@@ -427,6 +427,11 @@ function loadTagMangoPointsFromFile() {
     }
 }
 loadTagMangoPointsFromFile();
+if (!tagMangoCollectivePointsCache.points || Object.keys(tagMangoCollectivePointsCache.points).length === 0) {
+    setTimeout(() => {
+        refreshAllTagMangoPointsInBackground().catch(() => {});
+    }, 2500);
+}
 
 let isRefreshingTagMangoPoints = false;
 async function refreshAllTagMangoPointsInBackground() {

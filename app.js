@@ -16858,6 +16858,12 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
             }
         });
 
+        const isCurrentUser = Boolean((typeof currentUser !== 'undefined' && currentUser) && (
+            (uid && String(currentUser._id) === uid) ||
+            (uemail && currentUser.email && currentUser.email.toLowerCase().trim() === uemail) ||
+            (uphone && currentUser.phone && String(currentUser.phone).replace(/\D/g, '') === uphone)
+        ));
+
         // TagMango Authoritative Wallet Points
         const tmPoints = (window._tagMangoCollectivePointsMap && uid && window._tagMangoCollectivePointsMap[uid])
             ? Number(window._tagMangoCollectivePointsMap[uid])
@@ -16866,19 +16872,13 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
         let earnedLcs = 0;
         if (timeframe === 'all') {
             earnedLcs = tmPoints > 0 ? tmPoints : subEarnedLcs;
+            // Only apply lifetime local XP override on 'all' timeframe
+            if (isCurrentUser && Number(currentUser?.lcs) > earnedLcs) {
+                earnedLcs = Number(currentUser.lcs);
+            }
         } else {
+            // For 'week' or 'month', score is strictly earned within that timeframe
             earnedLcs = subEarnedLcs;
-            if (earnedLcs === 0 && tmPoints > 0) earnedLcs = tmPoints;
-        }
-
-        const isCurrentUser = Boolean((typeof currentUser !== 'undefined' && currentUser) && (
-            (uid && String(currentUser._id) === uid) ||
-            (uemail && currentUser.email && currentUser.email.toLowerCase().trim() === uemail) ||
-            (uphone && currentUser.phone && String(currentUser.phone).replace(/\D/g, '') === uphone)
-        ));
-
-        if (isCurrentUser && Number(currentUser?.lcs) > earnedLcs) {
-            earnedLcs = Number(currentUser.lcs);
         }
 
         const userSubscribed = (user.subscribedMangoes && Array.isArray(user.subscribedMangoes)) ? user.subscribedMangoes : [];
@@ -16940,6 +16940,12 @@ function setLbScope(scope) {
         if (allBtn) {
             allBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
         }
+        if (!isAdminLogin) {
+            const userCohorts = (currentUser && Array.isArray(currentUser.subscribedMangoes)) ? currentUser.subscribedMangoes : [];
+            if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all' || !userCohorts.includes(currentLbSelectedCohort)) {
+                currentLbSelectedCohort = userCohorts[0] || null;
+            }
+        }
     } else {
         if (allBtn) {
             allBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm';
@@ -16947,6 +16953,7 @@ function setLbScope(scope) {
         if (cohortBtn) {
             cohortBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
         }
+        currentLbSelectedCohort = 'all';
     }
     renderLeaderboard();
 }
@@ -17008,6 +17015,12 @@ async function renderLeaderboard(timeframe, scope, cohortId) {
     const standingCard = document.getElementById('lbUserStandingCard');
 
     if (isAdminLogin) {
+        // Default Creator to "all" (All Platform Solutions) on initial entry
+        if (currentLbSelectedCohort === null) {
+            currentLbScope = 'all';
+            currentLbSelectedCohort = 'all';
+        }
+
         // CREATOR: Hide My Cohort/Everyone buttons. Show Solution filter dropdown.
         if (scopeSwitcher) scopeSwitcher.style.display = 'none';
         if (selectWrapper) selectWrapper.style.display = 'block';
@@ -17023,19 +17036,45 @@ async function renderLeaderboard(timeframe, scope, cohortId) {
             selectEl.innerHTML = opts;
         }
 
-        if (!currentLbSelectedCohort && allCohorts.length > 0) {
-            currentLbSelectedCohort = allCohorts[0].id;
+        if (currentLbScope === 'cohort' && (!currentLbSelectedCohort || currentLbSelectedCohort === 'all')) {
+            if (allCohorts.length > 0) {
+                currentLbSelectedCohort = allCohorts[0].id;
+            }
         }
     } else {
-        // CUSTOMER: Show My Cohort/Everyone toggle. Hide creator dropdown.
+        // CUSTOMER: Show My Cohort/Everyone toggle
         if (scopeSwitcher) scopeSwitcher.style.display = 'flex';
-        if (selectWrapper) selectWrapper.style.display = 'none';
 
-        if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all') {
-            if (userCohorts.length > 0) {
-                currentLbSelectedCohort = userCohorts[0];
-            } else if (allCohorts.length > 0) {
-                currentLbSelectedCohort = allCohorts[0].id;
+        // Check enrolled cohorts for this learner
+        const enrolledCohorts = allCohorts.filter(c => userCohorts.includes(c.id));
+
+        if (currentLbScope === 'all') {
+            // Viewing Everyone platform-wide -> hide dropdown
+            if (selectWrapper) selectWrapper.style.display = 'none';
+        } else {
+            // Viewing Cohort
+            if (enrolledCohorts.length > 1) {
+                // Multi-cohort learner: provide dropdown to pick which enrolled cohort to view
+                if (selectWrapper) selectWrapper.style.display = 'block';
+                if (selectEl) {
+                    let opts = '';
+                    enrolledCohorts.forEach(c => {
+                        const isSelected = String(c.id) === String(currentLbSelectedCohort);
+                        opts += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title}</option>`;
+                    });
+                    selectEl.innerHTML = opts;
+                }
+                if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all' || !userCohorts.includes(currentLbSelectedCohort)) {
+                    currentLbSelectedCohort = enrolledCohorts[0].id;
+                }
+            } else {
+                // Single cohort (or none): hide dropdown, pin to primary cohort
+                if (selectWrapper) selectWrapper.style.display = 'none';
+                if (userCohorts.length > 0) {
+                    currentLbSelectedCohort = userCohorts[0];
+                } else if (allCohorts.length > 0) {
+                    currentLbSelectedCohort = allCohorts[0].id;
+                }
             }
         }
     }
@@ -17300,7 +17339,7 @@ function renderLeaderboardListOnly() {
                         <div class="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-400">
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300 text-[10px] font-medium truncate max-w-[220px] sm:max-w-md" title="${item.allSolutionsTitles || item.primaryCohortTitle}">
                                 <i class="fas fa-layer-group text-[9px] text-indigo-400 shrink-0"></i>
-                                <span class="truncate">${item.primaryCohortTitle}</span>
+                                <span class="truncate">${item.primaryCohortTitle}${item.subscribedMangoes && item.subscribedMangoes.length > 1 ? ` (+${item.subscribedMangoes.length - 1})` : ''}</span>
                             </span>
                         </div>
                     </div>
