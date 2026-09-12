@@ -1666,9 +1666,9 @@ function calculateCustomerHealth(user) {
     // Standard standards specified by user:
     // Low: < 50% (Red)
     // Moderate: 50% - 80% (Yellow/Amber)
-    // High: > 80% (Green/Emerald)
+    // High: >= 80% (Green/Emerald, matching computeLqStats 'strong' zone)
     let label = 'Low';
-    if (pct > 80) {
+    if (pct >= 80) {
         label = 'High';
     } else if (pct >= 50) {
         label = 'Moderate';
@@ -2204,7 +2204,7 @@ function buildPointsHtml(scoreObject) {
 }
 window.buildPointsHtml = buildPointsHtml;
 
-async function displayAdminLearnerDataById(userId) {
+async function displayAdminLearnerDataById(userId, shouldScroll = true) {
     const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
     const learner = allUsersPool.find(u => String(u._id) === String(userId) || (u.email && String(u.email).toLowerCase() === String(userId).toLowerCase()));
 
@@ -2215,7 +2215,9 @@ async function displayAdminLearnerDataById(userId) {
         reportContainer.dataset.userId = String(learner._id);
         window._adminSelectedLearnerId = String(learner._id);
         reportContainer.classList.remove('hidden');
-        reportContainer.scrollIntoView({ behavior: 'smooth' });
+        if (shouldScroll) {
+            reportContainer.scrollIntoView({ behavior: 'smooth' });
+        }
     }
 
     const userState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[learner._id]) ? userMilestoneState[learner._id] : { highestUnlocked: 1 };
@@ -2678,7 +2680,7 @@ async function syncGlobalServerData() {
             if (reportContainer && !reportContainer.classList.contains('hidden')) {
                 const curId = reportContainer.dataset?.userId;
                 if (curId && typeof displayAdminLearnerDataById === 'function') {
-                    displayAdminLearnerDataById(curId);
+                    displayAdminLearnerDataById(curId, false);
                 }
             }
         } else {
