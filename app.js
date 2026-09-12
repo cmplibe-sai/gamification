@@ -2638,6 +2638,11 @@ async function syncGlobalServerData() {
             }
             if (typeof updateDashboardUI === 'function') updateDashboardUI();
         }
+
+        const lbTab = document.getElementById('leaderboardTab');
+        if (lbTab && !lbTab.classList.contains('hidden') && typeof renderLeaderboard === 'function') {
+            renderLeaderboard();
+        }
     } catch(err) {
         console.error('Sync Error:', err);
     } finally {
@@ -16893,13 +16898,24 @@ function setLbScope(scope) {
             cohortBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
         }
     }
+    const selectEl = document.getElementById('lbCohortSelect');
+    if (selectEl) {
+        if (currentLbScope === 'all') {
+            selectEl.value = 'all';
+        } else if (currentLbSelectedCohort && currentLbSelectedCohort !== 'all') {
+            selectEl.value = currentLbSelectedCohort;
+        }
+    }
     renderLeaderboard();
 }
 window.setLbScope = setLbScope;
 
 function setLbCohort(cohortId) {
+    if (cohortId === 'all') {
+        return setLbScope('all');
+    }
     currentLbSelectedCohort = cohortId;
-    renderLeaderboard();
+    setLbScope('cohort');
 }
 window.setLbCohort = setLbCohort;
 
@@ -16949,7 +16965,7 @@ function renderLeaderboard(timeframe, scope, cohortId) {
                 const isSelected = (currentLbScope === 'cohort' && String(c.id) === String(currentLbSelectedCohort));
                 cohortOptionsHtml += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count})</option>`;
             });
-            if (selectWrapper) selectWrapper.style.display = (currentLbScope === 'cohort') ? 'block' : 'none';
+            if (selectWrapper) selectWrapper.style.display = 'block';
         } else {
             // Learner view
             const enrolledCohorts = allCohorts.filter(c => userCohorts.includes(c.id));
@@ -17767,19 +17783,33 @@ if (typeof window !== 'undefined') {
                 _cachedAllUserSubmissionsDB = JSON.parse(e.newValue) || [];
             } catch(err) {}
             try {
-                const compView = document.getElementById('adminCompletionView');
-                const isCompVisible = compView && !compView.classList.contains('hidden') && compView.style.display !== 'none';
-                if (isCompVisible && typeof renderAdminCohortSubmissions === 'function') {
-                    renderAdminCohortSubmissions();
-                }
-                const adminMainTab = document.getElementById('adminTab');
-                if (adminMainTab && !adminMainTab.classList.contains('hidden') && typeof renderAdminCustomerGrid === 'function') {
-                    renderAdminCustomerGrid();
-                }
-                const lbTab = document.getElementById('leaderboardTab');
-                if (lbTab && !lbTab.classList.contains('hidden') && typeof renderLeaderboard === 'function') {
-                    renderLeaderboard();
-                }
+                if (window._storageSubmissionsDebounce) clearTimeout(window._storageSubmissionsDebounce);
+                window._storageSubmissionsDebounce = setTimeout(() => {
+                    const compView = document.getElementById('adminCompletionView');
+                    const isCompVisible = compView && !compView.classList.contains('hidden') && compView.style.display !== 'none';
+                    if (isCompVisible && typeof renderAdminCohortSubmissions === 'function') {
+                        renderAdminCohortSubmissions();
+                    }
+                    const adminMainTab = document.getElementById('adminTab');
+                    if (adminMainTab && !adminMainTab.classList.contains('hidden') && typeof renderAdminCustomerGrid === 'function') {
+                        renderAdminCustomerGrid();
+                    }
+                    const lbTab = document.getElementById('leaderboardTab');
+                    if (lbTab && !lbTab.classList.contains('hidden') && typeof renderLeaderboard === 'function') {
+                        renderLeaderboard();
+                    }
+                    const levelUpTab = document.getElementById('levelUpTab');
+                    if (levelUpTab && !levelUpTab.classList.contains('hidden')) {
+                        const activeSubTab = document.querySelector('.milestone-nav-btn.border-indigo-500')?.dataset?.module || 'dip';
+                        if (typeof switchMilestoneTab === 'function' && activeMilestoneId) {
+                            switchMilestoneTab(activeSubTab);
+                        }
+                    }
+                    const dashTab = document.getElementById('dashboardTab');
+                    if (dashTab && !dashTab.classList.contains('hidden') && typeof updateDashboardUI === 'function') {
+                        updateDashboardUI();
+                    }
+                }, 100);
             } catch(err) {}
         }
         if (e.key === 'customMilestoneConfigs' && e.newValue) {
