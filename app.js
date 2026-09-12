@@ -102,9 +102,16 @@ function updateDashboardUI() {
                         currentUser.lcs = liveTotal;
                         try { localStorage.setItem('currentUser', JSON.stringify(currentUser)); } catch(e) {}
                     }
+                    if (typeof renderDashboardLeaderboardWidget === 'function') {
+                        renderDashboardLeaderboardWidget();
+                    }
                 }
             }
         }).catch(err => console.warn('Dashboard live points sync note:', err));
+    }
+
+    if (typeof renderDashboardLeaderboardWidget === 'function') {
+        renderDashboardLeaderboardWidget();
     }
 
     const welcomeEl = document.getElementById('dashWelcomeName');
@@ -16667,16 +16674,46 @@ function logout() {
 window.logout = logout;
 
 // ==============================================================
-// 3. GAMIFIED LEADERBOARD ENGINE (Cohort & All-Platform Ranks)
+// 3. GAMIFIED LEADERBOARD ENGINE (TagMango Wallet Points & Cohorts)
 // ==============================================================
 let currentLbTimeframe = 'all'; // 'all' | 'month' | 'week'
 let currentLbScope = 'cohort';   // 'cohort' | 'all'
 let currentLbSelectedCohort = null; // Mango ID
 let currentLbSearchQuery = '';
 let lbShowAll = false;
+window._tagMangoCollectivePointsMap = window._tagMangoCollectivePointsMap || {};
+
+let _tagMangoPointsFetchPromise = null;
+async function fetchTagMangoLeaderboardPoints(force = false) {
+    if (window._tagMangoCollectivePointsMap && Object.keys(window._tagMangoCollectivePointsMap).length > 0 && !force) {
+        return window._tagMangoCollectivePointsMap;
+    }
+    if (_tagMangoPointsFetchPromise) return _tagMangoPointsFetchPromise;
+
+    _tagMangoPointsFetchPromise = (async () => {
+        try {
+            const res = await apiFetch('/api/tagmango/leaderboard-points');
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.points) {
+                    window._tagMangoCollectivePointsMap = data.points;
+                    return data.points;
+                }
+            }
+        } catch(e) {
+            console.warn('TagMango points fetch warning:', e);
+        } finally {
+            _tagMangoPointsFetchPromise = null;
+        }
+        return window._tagMangoCollectivePointsMap || {};
+    })();
+
+    return _tagMangoPointsFetchPromise;
+}
+window.fetchTagMangoLeaderboardPoints = fetchTagMangoLeaderboardPoints;
 
 function getCohortTitle(mangoId) {
-    if (!mangoId) return 'All Learners';
+    if (!mangoId) return 'All Solutions';
     const cleanId = String(mangoId).trim();
     if (typeof allAdminMangos !== 'undefined' && Array.isArray(allAdminMangos)) {
         const m = allAdminMangos.find(x => String(x._id) === cleanId);
@@ -16750,9 +16787,7 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
         ? adminRealtimeUsers 
         : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
     
-    // Fast single-pass indexed submission lookup using in-memory cache
     const allSubs = getAllUserSubmissions();
-    
     const subsById = new Map();
     const subsByEmail = new Map();
     const subsByPhone = new Map();
@@ -16796,7 +16831,7 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
         const uemail = user.email ? String(user.email).toLowerCase().trim() : '';
         const uphone = user.phone ? String(user.phone).replace(/\D/g, '') : '';
 
-        // Gather all matching submissions without duplicates
+        // Gather check-in rewards
         const matchedSubs = [];
         const seenSubIds = new Set();
         const addSubs = (list) => {
@@ -16815,25 +16850,41 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
         if (uemail && subsByEmail.has(uemail)) addSubs(subsByEmail.get(uemail));
         if (uphone && subsByPhone.has(uphone)) addSubs(subsByPhone.get(uphone));
 
-        let earnedLcs = 0;
-        let completedCount = 0;
+        let subEarnedLcs = 0;
         matchedSubs.forEach(s => {
             const reward = Number(s.lcReward) || 0;
             if (s.status === 'completed' || reward > 0 || Number(s.matchPercentage || 0) >= 50) {
-                earnedLcs += reward;
-                completedCount++;
+                subEarnedLcs += reward;
             }
         });
 
-        // Resolve primary cohort name for badge
-        let primaryCohortId = (user.subscribedMangoes && user.subscribedMangoes[0]) || '';
-        let primaryCohortTitle = getCohortTitle(primaryCohortId);
+        // TagMango Authoritative Wallet Points
+        const tmPoints = (window._tagMangoCollectivePointsMap && uid && window._tagMangoCollectivePointsMap[uid])
+            ? Number(window._tagMangoCollectivePointsMap[uid])
+            : 0;
 
-        const isCurrentUser = (typeof currentUser !== 'undefined' && currentUser) && (
+        let earnedLcs = 0;
+        if (timeframe === 'all') {
+            earnedLcs = tmPoints > 0 ? tmPoints : subEarnedLcs;
+        } else {
+            earnedLcs = subEarnedLcs;
+            if (earnedLcs === 0 && tmPoints > 0) earnedLcs = tmPoints;
+        }
+
+        const isCurrentUser = Boolean((typeof currentUser !== 'undefined' && currentUser) && (
             (uid && String(currentUser._id) === uid) ||
             (uemail && currentUser.email && currentUser.email.toLowerCase().trim() === uemail) ||
             (uphone && currentUser.phone && String(currentUser.phone).replace(/\D/g, '') === uphone)
-        );
+        ));
+
+        if (isCurrentUser && Number(currentUser?.lcs) > earnedLcs) {
+            earnedLcs = Number(currentUser.lcs);
+        }
+
+        const userSubscribed = (user.subscribedMangoes && Array.isArray(user.subscribedMangoes)) ? user.subscribedMangoes : [];
+        const primaryCohortId = userSubscribed[0] || '';
+        const primaryCohortTitle = getCohortTitle(primaryCohortId);
+        const allSolutionsTitles = userSubscribed.map(m => getCohortTitle(m)).filter(Boolean).join(', ') || primaryCohortTitle;
 
         return {
             id: uid || user.id || Math.random().toString(),
@@ -16843,17 +16894,16 @@ function computeLeaderboardRankings(timeframe, scope, targetCohortId) {
             profilePicUrl: user.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png',
             primaryCohortId,
             primaryCohortTitle,
-            subscribedMangoes: user.subscribedMangoes || [],
+            allSolutionsTitles,
+            subscribedMangoes: userSubscribed,
             earnedLcs,
-            completedCount,
             isCurrentUser
         };
     });
 
-    // Sort descending by earnedLcs, then completedCount, then name
+    // Sort descending by earnedLcs, tie breaker name
     rankings.sort((a, b) => {
         if (b.earnedLcs !== a.earnedLcs) return b.earnedLcs - a.earnedLcs;
-        if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount;
         return a.name.localeCompare(b.name);
     });
 
@@ -16898,24 +16948,18 @@ function setLbScope(scope) {
             cohortBtn.className = 'lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-slate-400 font-bold text-xs hover:text-white transition-all flex items-center justify-center gap-1.5';
         }
     }
-    const selectEl = document.getElementById('lbCohortSelect');
-    if (selectEl) {
-        if (currentLbScope === 'all') {
-            selectEl.value = 'all';
-        } else if (currentLbSelectedCohort && currentLbSelectedCohort !== 'all') {
-            selectEl.value = currentLbSelectedCohort;
-        }
-    }
     renderLeaderboard();
 }
 window.setLbScope = setLbScope;
 
 function setLbCohort(cohortId) {
-    if (cohortId === 'all') {
-        return setLbScope('all');
-    }
     currentLbSelectedCohort = cohortId;
-    setLbScope('cohort');
+    if (cohortId === 'all') {
+        currentLbScope = 'all';
+    } else {
+        currentLbScope = 'cohort';
+    }
+    renderLeaderboard();
 }
 window.setLbCohort = setLbCohort;
 
@@ -16933,7 +16977,7 @@ window.viewAllLeaderboard = viewAllLeaderboard;
 
 let _lastComputedRankings = [];
 
-function renderLeaderboard(timeframe, scope, cohortId) {
+async function renderLeaderboard(timeframe, scope, cohortId) {
     if (timeframe) currentLbTimeframe = timeframe;
     if (scope) currentLbScope = scope;
     if (cohortId !== undefined) currentLbSelectedCohort = cohortId;
@@ -16941,52 +16985,62 @@ function renderLeaderboard(timeframe, scope, cohortId) {
     const container = document.getElementById('leaderboardTab');
     if (!container) return;
 
+    // Fetch TagMango points in background
+    if (typeof fetchTagMangoLeaderboardPoints === 'function') {
+        fetchTagMangoLeaderboardPoints().then(pts => {
+            if (pts && Object.keys(pts).length > 0) {
+                _lastComputedRankings = computeLeaderboardRankings(currentLbTimeframe, currentLbScope, currentLbSelectedCohort);
+                if (!isAdminLogin) renderUserStandingCard(_lastComputedRankings);
+                renderLeaderboardPodium(_lastComputedRankings);
+                renderLeaderboardListOnly();
+            }
+        }).catch(() => {});
+    }
+
     // 1. Resolve available cohorts
     const allCohorts = getAllPlatformCohorts();
     const userCohorts = (currentUser && Array.isArray(currentUser.subscribedMangoes)) ? currentUser.subscribedMangoes : [];
 
-    // 2. Resolve target cohort for cohort scope
-    if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all') {
-        if (userCohorts.length > 0) {
-            currentLbSelectedCohort = userCohorts[0];
-        } else if (allCohorts.length > 0) {
-            currentLbSelectedCohort = allCohorts[0].id;
-        }
-    }
-
-    // 3. Update Cohort Select Dropdown
-    const selectEl = document.getElementById('lbCohortSelect');
+    // 2. Resolve Creator vs Customer UI controls
+    const scopeSwitcher = document.getElementById('lbScopeSwitcherWrapper');
     const selectWrapper = document.getElementById('lbCohortSelectWrapper');
-    if (selectEl) {
-        let cohortOptionsHtml = '';
-        if (isAdminLogin) {
-            cohortOptionsHtml += `<option value="all" ${currentLbScope === 'all' ? 'selected' : ''}>🌐 All Platform (${allCohorts.reduce((acc, c) => acc + c.count, 0)} Learners)</option>`;
+    const selectEl = document.getElementById('lbCohortSelect');
+    const standingCard = document.getElementById('lbUserStandingCard');
+
+    if (isAdminLogin) {
+        // CREATOR: Hide My Cohort/Everyone buttons. Show Solution filter dropdown.
+        if (scopeSwitcher) scopeSwitcher.style.display = 'none';
+        if (selectWrapper) selectWrapper.style.display = 'block';
+        if (standingCard) standingCard.classList.add('hidden');
+
+        if (selectEl) {
+            const totalCount = allCohorts.reduce((acc, c) => acc + c.count, 0);
+            let opts = `<option value="all" ${currentLbScope === 'all' ? 'selected' : ''}>🌐 All Platform Solutions (${totalCount} Learners)</option>`;
             allCohorts.forEach(c => {
                 const isSelected = (currentLbScope === 'cohort' && String(c.id) === String(currentLbSelectedCohort));
-                cohortOptionsHtml += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count})</option>`;
+                opts += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count} Learners)</option>`;
             });
-            if (selectWrapper) selectWrapper.style.display = 'block';
-        } else {
-            // Learner view
-            const enrolledCohorts = allCohorts.filter(c => userCohorts.includes(c.id));
-            if (enrolledCohorts.length > 1) {
-                enrolledCohorts.forEach(c => {
-                    const isSelected = String(c.id) === String(currentLbSelectedCohort);
-                    cohortOptionsHtml += `<option value="${c.id}" ${isSelected ? 'selected' : ''}>${c.title} (${c.count})</option>`;
-                });
-                if (selectWrapper) selectWrapper.style.display = (currentLbScope === 'cohort') ? 'block' : 'none';
-            } else if (enrolledCohorts.length === 1) {
-                cohortOptionsHtml = `<option value="${enrolledCohorts[0].id}" selected>${enrolledCohorts[0].title}</option>`;
-                if (selectWrapper) selectWrapper.style.display = 'none'; // Only 1 cohort, no need to clutter with dropdown
-            } else {
-                cohortOptionsHtml = `<option value="all" selected>All Learners</option>`;
-                if (selectWrapper) selectWrapper.style.display = 'none';
+            selectEl.innerHTML = opts;
+        }
+
+        if (!currentLbSelectedCohort && allCohorts.length > 0) {
+            currentLbSelectedCohort = allCohorts[0].id;
+        }
+    } else {
+        // CUSTOMER: Show My Cohort/Everyone toggle. Hide creator dropdown.
+        if (scopeSwitcher) scopeSwitcher.style.display = 'flex';
+        if (selectWrapper) selectWrapper.style.display = 'none';
+
+        if (!currentLbSelectedCohort || currentLbSelectedCohort === 'all') {
+            if (userCohorts.length > 0) {
+                currentLbSelectedCohort = userCohorts[0];
+            } else if (allCohorts.length > 0) {
+                currentLbSelectedCohort = allCohorts[0].id;
             }
         }
-        selectEl.innerHTML = cohortOptionsHtml;
     }
 
-    // 4. Update Header Badges & Scope Button Text
+    // 3. Update Header Badges
     const scopeBadge = document.getElementById('lbActiveScopeBadge');
     const scopeCohortBtn = document.getElementById('lbScopeCohortBtn');
     const activeCohortName = getCohortTitle(currentLbSelectedCohort);
@@ -16997,23 +17051,25 @@ function renderLeaderboard(timeframe, scope, cohortId) {
             scopeBadge.innerHTML = `<i class="fas fa-users mr-1"></i> ${activeCohortName}`;
         } else {
             scopeBadge.className = 'badge-pill badge-emerald';
-            scopeBadge.innerHTML = `<i class="fas fa-globe mr-1"></i> All Platform Ranks`;
+            scopeBadge.innerHTML = `<i class="fas fa-globe mr-1"></i> All Platform Solutions`;
         }
     }
-    if (scopeCohortBtn && !isAdminLogin && userCohorts.length > 0) {
+    if (scopeCohortBtn && !isAdminLogin) {
         scopeCohortBtn.innerHTML = `<i class="fas fa-users text-[11px]"></i> <span>My Cohort</span>`;
     }
 
-    // 5. Compute Rankings
+    // 4. Compute Rankings
     _lastComputedRankings = computeLeaderboardRankings(currentLbTimeframe, currentLbScope, currentLbSelectedCohort);
 
-    // 6. Render User Standing Card
-    renderUserStandingCard(_lastComputedRankings);
+    // 5. Render User Standing Card (only for learners)
+    if (!isAdminLogin) {
+        renderUserStandingCard(_lastComputedRankings);
+    }
 
-    // 7. Render Top 3 Podium
+    // 6. Render Top 3 Podium
     renderLeaderboardPodium(_lastComputedRankings);
 
-    // 8. Render Filterable List
+    // 7. Render Filterable List
     renderLeaderboardListOnly();
 }
 window.renderLeaderboard = renderLeaderboard;
@@ -17022,7 +17078,7 @@ function renderUserStandingCard(rankings) {
     const standingCard = document.getElementById('lbUserStandingCard');
     if (!standingCard) return;
 
-    if (!currentUser) {
+    if (!currentUser || isAdminLogin) {
         standingCard.classList.add('hidden');
         return;
     }
@@ -17038,11 +17094,10 @@ function renderUserStandingCard(rankings) {
         const rank = userRankItem.rank;
         const percentile = totalInView > 0 ? Math.max(1, Math.round((rank / totalInView) * 100)) : 100;
         
-        // Find points behind previous rank
         let gapMsg = '';
         if (rank > 1 && rankings[rank - 2]) {
             const gap = (rankings[rank - 2].earnedLcs || 0) - (userRankItem.earnedLcs || 0);
-            gapMsg = `<span class="text-amber-400 font-semibold"><i class="fas fa-arrow-up text-xs mr-1"></i> ${gap > 0 ? gap + ' LCs behind #' + (rank - 1) : 'Tied with #' + (rank - 1)}</span>`;
+            gapMsg = `<span class="text-amber-400 font-semibold"><i class="fas fa-arrow-up text-xs mr-1"></i> ${gap > 0 ? gap.toLocaleString() + ' LCs behind #' + (rank - 1) : 'Tied with #' + (rank - 1)}</span>`;
         } else if (rank === 1) {
             gapMsg = `<span class="text-emerald-400 font-bold"><i class="fas fa-crown text-xs mr-1"></i> Currently in 1st Place!</span>`;
         }
@@ -17070,17 +17125,13 @@ function renderUserStandingCard(rankings) {
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2.5 sm:gap-4 self-stretch md:self-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 border-slate-800">
-                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
+                    <div class="bg-slate-900/90 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
                         <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Standing</span>
                         <span class="text-sm font-extrabold text-white">Top ${percentile}%</span>
                     </div>
-                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
-                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Earned</span>
-                        <span class="text-sm font-extrabold text-amber-400">${userRankItem.earnedLcs} LCs</span>
-                    </div>
-                    <div class="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-center">
-                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Completed</span>
-                        <span class="text-sm font-extrabold text-indigo-300">${userRankItem.completedCount} Check-ins</span>
+                    <div class="bg-slate-900/90 border border-slate-800 px-3.5 py-2 rounded-xl text-center">
+                        <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">TagMango Wallet</span>
+                        <span class="text-sm font-extrabold text-amber-400">${userRankItem.earnedLcs.toLocaleString()} LCs</span>
                     </div>
                     <div class="w-full text-right text-xs pt-0.5">
                         ${gapMsg}
@@ -17140,11 +17191,11 @@ function renderLeaderboardPodium(rankings) {
                     <div class="text-xs sm:text-sm font-extrabold text-white truncate max-w-[140px] sm:max-w-[180px] mx-auto" title="${user.name}">
                         ${user.name} ${isSelf ? '<span class="text-indigo-400 text-[10px]">(You)</span>' : ''}
                     </div>
-                    <div class="text-[10px] text-slate-400 truncate max-w-[130px] mx-auto mt-0.5">
+                    <div class="text-[10px] text-slate-400 truncate max-w-[130px] mx-auto mt-0.5" title="${user.primaryCohortTitle}">
                         ${user.primaryCohortTitle}
                     </div>
-                    <div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] sm:text-xs">
-                        <i class="fas fa-coins text-[10px]"></i> ${user.earnedLcs} LCs
+                    <div class="mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold text-[11px] sm:text-xs">
+                        <i class="fas fa-coins text-[10px]"></i> ${user.earnedLcs.toLocaleString()} LCs
                     </div>
                 </div>
 
@@ -17152,7 +17203,7 @@ function renderLeaderboardPodium(rankings) {
                 <div class="w-full ${heightClass} ${bgGradient} ${cardHighlight} rounded-t-2xl border-t border-x border-slate-700/60 p-2 flex flex-col items-center justify-start shadow-2xl relative overflow-hidden">
                     <div class="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
                     <span class="text-2xl sm:text-3xl font-black text-white/20 font-mono mt-1">${place}</span>
-                    <span class="text-[10px] font-semibold text-slate-400 mt-0.5 hidden sm:inline-block">${user.completedCount} check-ins</span>
+                    <span class="text-[10px] font-semibold text-slate-400 mt-0.5 hidden sm:inline-block">Rank #${place}</span>
                 </div>
             </div>
         `;
@@ -17183,13 +17234,14 @@ function renderLeaderboardListOnly() {
         filtered = filtered.filter(u => 
             u.name.toLowerCase().includes(currentLbSearchQuery) ||
             u.email.toLowerCase().includes(currentLbSearchQuery) ||
-            u.primaryCohortTitle.toLowerCase().includes(currentLbSearchQuery)
+            u.primaryCohortTitle.toLowerCase().includes(currentLbSearchQuery) ||
+            (u.allSolutionsTitles && u.allSolutionsTitles.toLowerCase().includes(currentLbSearchQuery))
         );
     }
 
     if (countEl) {
         const total = _lastComputedRankings.length;
-        const scopeText = currentLbScope === 'cohort' ? 'in cohort' : 'across platform';
+        const scopeText = currentLbScope === 'cohort' ? 'in solution' : 'across all solutions';
         countEl.textContent = `Showing ${filtered.length} of ${total} learners ${scopeText}`;
     }
 
@@ -17198,7 +17250,7 @@ function renderLeaderboardListOnly() {
             <div class="glass-card p-8 text-center rounded-2xl border-slate-800 text-slate-400 space-y-2">
                 <i class="fas fa-search text-3xl text-slate-600"></i>
                 <p class="text-sm font-semibold text-slate-300">No participants found</p>
-                <p class="text-xs text-slate-500">Try adjusting your search query or switching between cohort and all platform tabs.</p>
+                <p class="text-xs text-slate-500">Try adjusting your search query or selecting another solution.</p>
             </div>
         `;
         if (viewAllBtn) viewAllBtn.classList.add('hidden');
@@ -17230,7 +17282,7 @@ function renderLeaderboardListOnly() {
 
         html += `
             <div class="glass-card p-3 sm:p-4 rounded-xl border ${selfRowStyles} flex items-center justify-between gap-3 sm:gap-4 transition-all duration-200">
-                <!-- Left: Rank & Avatar & Name -->
+                <!-- Left: Rank & Avatar & Name & Solution Access -->
                 <div class="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
                     <div class="shrink-0 flex items-center justify-center">
                         ${rankBadge}
@@ -17240,29 +17292,25 @@ function renderLeaderboardListOnly() {
 
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="text-xs sm:text-sm font-bold text-white truncate max-w-[150px] sm:max-w-xs" title="${item.name}">
+                            <span class="text-xs sm:text-sm font-bold text-white truncate max-w-[160px] sm:max-w-xs" title="${item.name}">
                                 ${item.name}
                             </span>
                             ${isSelf ? '<span class="badge-pill badge-indigo text-[9px] py-0 px-1.5 font-bold">You</span>' : ''}
                         </div>
-                        <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 truncate">
-                            <span class="truncate max-w-[140px] sm:max-w-[220px]" title="${item.primaryCohortTitle}">
-                                <i class="fas fa-graduation-cap text-[10px] text-slate-500 mr-1"></i>${item.primaryCohortTitle}
+                        <div class="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-400">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-300 text-[10px] font-medium truncate max-w-[220px] sm:max-w-md" title="${item.allSolutionsTitles || item.primaryCohortTitle}">
+                                <i class="fas fa-layer-group text-[9px] text-indigo-400 shrink-0"></i>
+                                <span class="truncate">${item.primaryCohortTitle}</span>
                             </span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right: Activities & LCs -->
+                <!-- Right: TagMango Wallet LCs -->
                 <div class="flex items-center gap-2 sm:gap-4 shrink-0">
-                    <div class="hidden sm:flex flex-col items-end text-right">
-                        <span class="text-xs font-semibold text-slate-300">${item.completedCount}</span>
-                        <span class="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Activities</span>
-                    </div>
-
-                    <div class="bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
+                    <div class="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm">
                         <i class="fas fa-coins text-amber-400 text-xs"></i>
-                        <span class="text-amber-300 font-black text-xs sm:text-sm font-mono">${item.earnedLcs}</span>
+                        <span class="text-amber-300 font-black text-xs sm:text-sm font-mono">${item.earnedLcs.toLocaleString()}</span>
                         <span class="text-[9px] text-amber-400/80 font-bold uppercase hidden sm:inline">LCs</span>
                     </div>
                 </div>
@@ -17284,6 +17332,106 @@ function renderLeaderboardListOnly() {
         }
     }
 }
+
+// --------------------------------------------------------------------
+// CUSTOMER DASHBOARD EMBEDDED COHORT LEADERBOARD WIDGET
+// --------------------------------------------------------------------
+async function renderDashboardLeaderboardWidget() {
+    const container = document.getElementById('dashCohortLeaderboardWidget');
+    const content = document.getElementById('dashLbStandingContent');
+    const badge = document.getElementById('dashLbCohortBadge');
+    if (!container || !content) return;
+
+    if (isAdminLogin) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    if (!currentUser) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+
+    if (typeof fetchTagMangoLeaderboardPoints === 'function') {
+        await fetchTagMangoLeaderboardPoints();
+    }
+
+    const userCohorts = Array.isArray(currentUser.subscribedMangoes) ? currentUser.subscribedMangoes : [];
+    const targetCohort = userCohorts.length > 0 ? userCohorts[0] : null;
+    const cohortTitle = targetCohort ? getCohortTitle(targetCohort) : 'My Cohort';
+
+    if (badge) {
+        badge.innerHTML = `<i class="fas fa-users mr-1"></i> ${cohortTitle}`;
+    }
+
+    const rankings = computeLeaderboardRankings('all', 'cohort', targetCohort);
+    const currentUserId = String(currentUser._id || currentUser.id || '');
+    const userRankItem = rankings.find(r => r.isCurrentUser || (currentUserId && String(r.id) === currentUserId));
+
+    const totalInCohort = rankings.length;
+    const rank = userRankItem ? userRankItem.rank : 1;
+    const earnedLcs = userRankItem ? userRankItem.earnedLcs : (Number(currentUser.lcs) || 0);
+    const percentile = totalInCohort > 0 ? Math.max(1, Math.round((rank / totalInCohort) * 100)) : 100;
+
+    const top3 = rankings.slice(0, 3);
+
+    let top3Html = '';
+    top3.forEach(p => {
+        const medal = p.rank === 1 ? '👑' : (p.rank === 2 ? '🥈' : '🥉');
+        const isSelf = p.isCurrentUser;
+        top3Html += `
+            <div class="flex items-center justify-between p-2 rounded-xl ${isSelf ? 'bg-indigo-900/40 border border-indigo-500/40' : 'bg-slate-900/60 border border-slate-800'} text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-sm">${medal}</span>
+                    <img src="${p.profilePicUrl}" alt="${p.name}" class="w-6 h-6 rounded-full object-cover border border-slate-700 shrink-0" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                    <span class="text-white font-bold truncate max-w-[130px]">${p.name} ${isSelf ? '<span class="text-indigo-400 text-[10px]">(You)</span>' : ''}</span>
+                </div>
+                <div class="text-amber-300 font-extrabold font-mono text-xs shrink-0">
+                    ${p.earnedLcs.toLocaleString()} LCs
+                </div>
+            </div>
+        `;
+    });
+
+    content.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+            <!-- Left: Learner Cohort Rank Card -->
+            <div class="lg:col-span-7 flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-xl bg-slate-900/80 border border-slate-800/80 shadow-inner">
+                <div class="relative shrink-0">
+                    <img src="${currentUser.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'}" class="w-14 h-14 rounded-full border-2 border-indigo-400/80 shadow-md object-cover" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                    <div class="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full border border-slate-900 shadow">
+                        #${rank}
+                    </div>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <h4 class="text-white font-bold text-sm sm:text-base truncate">${currentUser.name || 'Learner'}</h4>
+                        <span class="badge-pill badge-indigo text-[9px] py-0 px-1.5">Top ${percentile}%</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                        Standing: <span class="text-indigo-300 font-bold">Rank #${rank}</span> of ${totalInCohort} learners in <span class="text-slate-300 font-semibold">${cohortTitle}</span>
+                    </p>
+                    <div class="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-extrabold text-xs">
+                        <i class="fas fa-wallet text-[11px] text-amber-400"></i>
+                        <span>TagMango Wallet: <strong>${earnedLcs.toLocaleString()} LCs</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Top 3 Cohort Leaders Mini-Strip -->
+            <div class="lg:col-span-5 space-y-1.5">
+                <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1 flex items-center justify-between">
+                    <span>Cohort Top Peers</span>
+                    <span class="text-indigo-400 cursor-pointer hover:underline" onclick="switchTab('leaderboardTab')">View All &rarr;</span>
+                </div>
+                ${top3Html}
+            </div>
+        </div>
+    `;
+}
+window.renderDashboardLeaderboardWidget = renderDashboardLeaderboardWidget;
 
 async function switchTab(tab) {
     if (typeof syncGlobalServerData === 'function') {

@@ -151,6 +151,26 @@
                     </div>
                 </div>
 
+                <!-- Live Cohort Leaderboard Standing Card (Customer Dashboard) -->
+                <div id="dashCohortLeaderboardWidget" class="glass-card p-5 sm:p-7 border-indigo-500/40 bg-gradient-to-r from-indigo-950/40 via-slate-900/90 to-purple-950/30 rounded-2xl relative overflow-hidden shadow-xl shadow-indigo-950/20">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 pb-4 border-b border-slate-800/80">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <span class="badge-pill badge-amber text-[10px]"><i class="fas fa-trophy mr-1 text-amber-400"></i> Live Cohort Ranks</span>
+                                <span id="dashLbCohortBadge" class="badge-pill badge-indigo text-[10px]"><i class="fas fa-users mr-1"></i> My Cohort</span>
+                            </div>
+                            <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading tracking-tight">Your Cohort Standing</h3>
+                            <p class="text-slate-400 text-xs mt-0.5">Real-time ranking based on verified TagMango wallet learning currencies (LCs).</p>
+                        </div>
+                        <button onclick="switchTab('leaderboardTab')" class="px-4 py-2 rounded-xl bg-indigo-600/25 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 font-bold text-xs transition-all flex items-center gap-2 shadow-sm shrink-0">
+                            <span>Open Full Arena</span> <i class="fas fa-arrow-right text-[11px]"></i>
+                        </button>
+                    </div>
+                    <div id="dashLbStandingContent" class="space-y-4">
+                        <!-- Populated dynamically with user rank, TagMango wallet LCs, and top cohort peers -->
+                    </div>
+                </div>
+
                 <!-- learnAgiliti Quotient® and Future Readiness Gauge -->
                 <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 pb-3 border-b border-slate-800">
@@ -335,7 +355,7 @@
 
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                         <!-- Scope Switcher (Cohort vs Everyone) -->
-                        <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-inner">
+                        <div id="lbScopeSwitcherWrapper" class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-inner">
                             <button id="lbScopeCohortBtn" onclick="setLbScope('cohort')" class="lb-scope-btn flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm">
                                 <i class="fas fa-users text-[11px]"></i> <span>My Cohort</span>
                             </button>

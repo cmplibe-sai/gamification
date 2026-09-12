@@ -412,6 +412,86 @@ app.get('/api/tagmango/points/:userId', async (req, res) => {
     }
 });
 
+// 3b. Proxy: Get Bulk TagMango Wallet Collective Points for Leaderboard
+const TM_POINTS_FILE = path.join(__dirname, 'server_data', 'tagmango_collective_points.json');
+let tagMangoCollectivePointsCache = { timestamp: 0, points: {} };
+
+function loadTagMangoPointsFromFile() {
+    try {
+        if (fs.existsSync(TM_POINTS_FILE)) {
+            const raw = fs.readFileSync(TM_POINTS_FILE, 'utf8');
+            tagMangoCollectivePointsCache = JSON.parse(raw);
+        }
+    } catch(err) {
+        console.warn('Could not load tagmango_collective_points.json:', err.message);
+    }
+}
+loadTagMangoPointsFromFile();
+
+let isRefreshingTagMangoPoints = false;
+async function refreshAllTagMangoPointsInBackground() {
+    if (isRefreshingTagMangoPoints || !TAGMANGO_KEY) return;
+    isRefreshingTagMangoPoints = true;
+    try {
+        const subsData = await fetchTagMangoServer(`/external/subscriptions/subscribers-by-creator/${TM_CREATOR_ID}`);
+        const subs = (subsData && subsData.result) || [];
+        if (!Array.isArray(subs) || subs.length === 0) return;
+
+        const pointsMap = { ...(tagMangoCollectivePointsCache.points || {}) };
+        const batchSize = 15;
+        for (let i = 0; i < subs.length; i += batchSize) {
+            const batch = subs.slice(i, i + batchSize);
+            await Promise.all(batch.map(async u => {
+                try {
+                    const res = await fetchTagMangoServer(`/external/gamification/points/collective/${encodeURIComponent(u._id)}`);
+                    const resObj = (res && res.result) || {};
+                    let total = 0;
+                    for (const [k, v] of Object.entries(resObj)) {
+                        if (typeof v === 'number') total += v;
+                    }
+                    pointsMap[u._id] = { total, breakdown: resObj };
+                } catch(e) {}
+            }));
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        tagMangoCollectivePointsCache = {
+            timestamp: Date.now(),
+            points: pointsMap
+        };
+        fs.writeFileSync(TM_POINTS_FILE, JSON.stringify(tagMangoCollectivePointsCache, null, 2));
+        console.log(`[TagMango Points Cache] Refreshed ${Object.keys(pointsMap).length} subscriber wallet points.`);
+    } catch(err) {
+        console.warn('[TagMango Points Cache Error]:', err.message);
+    } finally {
+        isRefreshingTagMangoPoints = false;
+    }
+}
+
+app.get(['/api/tagmango/leaderboard-points', '/gamification/api/tagmango/leaderboard-points'], async (req, res) => {
+    try {
+        const now = Date.now();
+        const isStale = (now - (tagMangoCollectivePointsCache.timestamp || 0)) > (15 * 60 * 1000);
+        if (isStale && !isRefreshingTagMangoPoints) {
+            refreshAllTagMangoPointsInBackground();
+        }
+
+        const simpleMap = {};
+        const fullPoints = tagMangoCollectivePointsCache.points || {};
+        for (const [uid, data] of Object.entries(fullPoints)) {
+            simpleMap[uid] = (typeof data === 'number') ? data : (data?.total || 0);
+        }
+
+        res.json({
+            success: true,
+            timestamp: tagMangoCollectivePointsCache.timestamp,
+            points: simpleMap
+        });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message, points: {} });
+    }
+});
+
 // 4. Proxy: Get Full Points Ledger by User ID (Historical progression of all points earned since joining)
 const serverLedgerCache = new Map(); // userId -> { timestamp, data }
 
@@ -2606,6 +2686,11 @@ async function assignTagMangoPoints(fanId, score, description, type = 'levelup-c
                     if (u.email) serverLedgerCache.delete(String(u.email).toLowerCase().trim());
                 }
             }
+        }
+        if (typeof tagMangoCollectivePointsCache !== 'undefined' && tagMangoCollectivePointsCache.points) {
+            const cur = tagMangoCollectivePointsCache.points[String(fanId)] || { total: 0 };
+            cur.total = (cur.total || 0) + Number(score);
+            tagMangoCollectivePointsCache.points[String(fanId)] = cur;
         }
         return resData;
     } catch (err) {
