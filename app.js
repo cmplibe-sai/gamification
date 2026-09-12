@@ -352,6 +352,30 @@ function getLqEligibleDays(userId, msId, moduleCode) {
 }
 window.getLqEligibleDays = getLqEligibleDays;
 
+function getActualLearnerHighestMilestone(userId) {
+    if (!userId) return 1;
+    const cleanId = (typeof userId === 'object' && userId) ? (userId._id || userId.id) : String(userId);
+    if (!cleanId) return 1;
+    const uState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[cleanId]) || {};
+    const recorded = Number(uState.highestUnlocked) || 1;
+    if (recorded <= 1) return 1;
+
+    // A learner is truly past Milestone 1 only if they have approved certificates or higher milestone submissions
+    const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(cleanId) : [];
+    const hasHigherSubs = subs.some(s => Number(s.milestoneId || 1) >= recorded);
+    const hasApprovedCert = (typeof mockApprovedCertificates !== 'undefined') && (
+        mockApprovedCertificates[`${cleanId}_1`] || 
+        mockApprovedCertificates[`${cleanId}_2`] || 
+        mockApprovedCertificates[`${cleanId}_3`]
+    );
+
+    if (hasHigherSubs || hasApprovedCert) {
+        return Math.min(4, Math.max(1, recorded));
+    }
+    return 1;
+}
+window.getActualLearnerHighestMilestone = getActualLearnerHighestMilestone;
+
 // Max eligible LCs a learner could earn TILL DATE (not the whole future month)
 // for one module in one milestone, derived from elapsed session days since start.
 function getLqModuleMaxLcs(msId, moduleCode, userId) {
@@ -359,7 +383,7 @@ function getLqModuleMaxLcs(msId, moduleCode, userId) {
     const cfg = getMilestonePrereqConfig(msId);
     const perDay = getLqPerDayMaxLc(msId, cleanMod);
 
-    const highest = (userId && userMilestoneState && userMilestoneState[userId]?.highestUnlocked) || 1;
+    const highest = getActualLearnerHighestMilestone(userId);
     const isPastMilestone = Number(msId) < Number(highest);
     const isFutureMilestone = Number(msId) > Number(highest);
 
@@ -391,8 +415,9 @@ window.getLqModuleMaxLcs = getLqModuleMaxLcs;
 
 // Earned/eligible max LC totals for the selected milestone + module filter combination
 function computeLqStats(userId, msId, moduleFilter) {
+    const cleanId = (typeof userId === 'object' && userId) ? (userId._id || userId.id) : String(userId);
     const enabledMods = getEnabledModulesForMilestone(msId);
-    const lcModules = enabledMods.filter(m => getLqModuleMaxLcs(msId, m, userId) > 0);
+    const lcModules = enabledMods.filter(m => getLqModuleMaxLcs(msId, m, cleanId) > 0);
     const targetModules = (moduleFilter === 'all' || !moduleFilter) ? lcModules : [moduleFilter];
 
     const userSubs = getUserSubmissionsByUserId(userId).filter(s => String(s.milestoneId || 1) === String(msId));
@@ -402,7 +427,7 @@ function computeLqStats(userId, msId, moduleFilter) {
         const cleanMod = normalizeLevelUpType(mod);
         const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type || s.moduleType) === cleanMod);
         earned += modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-        max += getLqModuleMaxLcs(msId, mod, userId);
+        max += getLqModuleMaxLcs(msId, mod, cleanId);
         matchedSubs = matchedSubs.concat(modSubs);
     });
 
@@ -456,16 +481,17 @@ function renderLqMilestonePills(prefix = 'lq') {
     if (!el || typeof milestoneConfig === 'undefined') return;
 
     const user = (prefix === 'adminLq') ? (adminLqActiveUser || currentUser) : (lqActiveUser || currentUser);
-    const highest = (user && userMilestoneState && userMilestoneState[user._id]?.highestUnlocked) || 1;
+    const uId = user ? (user._id || user.id) : null;
+    const highest = getActualLearnerHighestMilestone(uId);
 
-    // QA Test Accounts on their own customer profile retain preview access to all milestones;
-    // Creator Hub strictly gates milestones to what the candidate has actually unlocked/completed.
-    const isGod = (prefix === 'lq') && (typeof isTestUser === 'function' && isTestUser());
+    // QA Test Accounts retain preview access to all milestones;
+    // Creator Hub gates milestones to what the candidate has actually unlocked/completed, or all for test accounts.
+    const isGod = (typeof isTestUser === 'function' && isTestUser(user));
     const allowedMilestones = milestoneConfig.filter(ms => isGod || ms.id <= highest);
 
     // Safeguard active milestone if selected milestone is beyond learner's highest unlocked
     if (prefix === 'adminLq') {
-        if (!adminLqSelectedMilestone || adminLqSelectedMilestone > highest) {
+        if (!adminLqSelectedMilestone || (!isGod && adminLqSelectedMilestone > highest)) {
             adminLqSelectedMilestone = highest;
         }
     } else {
@@ -498,7 +524,7 @@ function renderLqModulePills(prefix = 'lq') {
     const selectedMs = (prefix === 'adminLq') ? adminLqSelectedMilestone : lqSelectedMilestone;
     let selectedMod = (prefix === 'adminLq') ? adminLqSelectedModule : lqSelectedModule;
 
-    const enabledMods = getEnabledModulesForMilestone(selectedMs).filter(m => getLqModuleMaxLcs(selectedMs, m, user?._id) > 0);
+    const enabledMods = getEnabledModulesForMilestone(selectedMs);
     if (selectedMod !== 'all' && !enabledMods.includes(selectedMod)) {
         selectedMod = 'all';
         if (prefix === 'adminLq') adminLqSelectedModule = 'all';
@@ -705,7 +731,7 @@ async function refreshLearnabilityGauge(prefix = 'lq') {
 
     ensureLqGaugeSvg(prefix);
     const cfg = getMilestonePrereqConfig(msId);
-    const stats = computeLqStats(user._id || user, msId, modFilter);
+    const stats = computeLqStats(user, msId, modFilter);
 
     updateLqNeedle(stats.pct, stats.zone, prefix);
     updateLqCenterNumbers(stats.earned, stats.max, stats.pct, prefix);
@@ -718,17 +744,23 @@ function initLearnabilityGauge(displayUser, mode = 'student') {
     if (!displayUser) return;
     const prefix = (mode === 'admin' || mode === 'adminLq') ? 'adminLq' : 'lq';
 
-    const uState = (userMilestoneState && userMilestoneState[displayUser._id]) || { highestUnlocked: 1 };
-    const highest = uState.highestUnlocked || 1;
+    const cleanId = displayUser._id || displayUser.id;
+    const highest = getActualLearnerHighestMilestone(cleanId);
 
     if (prefix === 'adminLq') {
+        const isSameUser = adminLqActiveUser && String(adminLqActiveUser._id || adminLqActiveUser.id) === String(cleanId);
         adminLqActiveUser = displayUser;
-        adminLqSelectedMilestone = highest;
-        adminLqSelectedModule = 'all';
+        if (!isSameUser || !adminLqSelectedMilestone) {
+            adminLqSelectedMilestone = highest;
+            adminLqSelectedModule = 'all';
+        }
     } else {
+        const isSameUser = lqActiveUser && String(lqActiveUser._id || lqActiveUser.id) === String(cleanId);
         lqActiveUser = displayUser;
-        lqSelectedMilestone = highest;
-        lqSelectedModule = 'all';
+        if (!isSameUser || !lqSelectedMilestone) {
+            lqSelectedMilestone = highest;
+            lqSelectedModule = 'all';
+        }
     }
 
     renderLqMilestonePills(prefix);
@@ -1651,15 +1683,12 @@ let currentAdminStatusFilter = 'All';
 function calculateCustomerHealth(user) {
     if (!user) return { lqPct: 0, label: 'Low', highestMs: 1, earnedLcs: 0, maxLcs: 0 };
     const uId = user._id || user.id || user;
-    const uState = (typeof userMilestoneState !== 'undefined' && userMilestoneState[uId]) 
-        ? userMilestoneState[uId] 
-        : { highestUnlocked: 1 };
-    const highestMs = Math.min(4, Math.max(1, Number(uState?.highestUnlocked || 1)));
+    const highestMs = getActualLearnerHighestMilestone(uId);
 
     // Calculate live learnAgiliti Quotient for active milestone (matching speedometer needle)
     let lq = { earned: 0, max: 0, pct: 0, zone: 'not_started' };
     if (typeof computeLqStats === 'function') {
-        lq = computeLqStats(uId, highestMs, 'all');
+        lq = computeLqStats(user, highestMs, 'all');
     }
     const pct = Number(lq.pct) || 0;
 
@@ -1687,13 +1716,11 @@ function calculateCustomerHealth(user) {
 window.calculateCustomerHealth = calculateCustomerHealth;
 
 function updateAdminStatusFilterUI() {
-    const filterContainer = document.getElementById('adminStatusFilters');
-    if (!filterContainer) return;
-    const btns = filterContainer.querySelectorAll('.status-btn');
+    const btns = document.querySelectorAll('.status-btn');
     btns.forEach(btn => {
-        const btnStatus = btn.getAttribute('data-status') || btn.innerText.split(' ')[0];
-        if (btnStatus.toLowerCase() === currentAdminStatusFilter.toLowerCase()) {
-            btn.className = 'status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-md border border-indigo-500/50';
+        const btnStatus = btn.getAttribute('data-status');
+        if (btnStatus === currentAdminStatusFilter) {
+            btn.className = 'status-btn px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30';
         } else {
             let textColor = 'text-slate-300';
             if (btnStatus === 'High') textColor = 'text-emerald-400';
@@ -1728,7 +1755,7 @@ function renderAdminCustomerGrid(isManualFilterReset = false) {
     // Ensure status filter button styles stay in sync
     updateAdminStatusFilterUI();
 
-    let filteredUsers = adminRealtimeUsers;
+    let filteredUsers = (Array.isArray(adminRealtimeUsers) ? [...adminRealtimeUsers] : []);
 
     if (isCampusPartner) {
         filteredUsers = filteredUsers.filter(u => 
@@ -1743,12 +1770,21 @@ function renderAdminCustomerGrid(isManualFilterReset = false) {
     }
     
     if (searchVal) {
-        filteredUsers = filteredUsers.filter(u => 
-            (u.name && u.name.toLowerCase().includes(searchVal)) || 
-            (u.email && u.email.toLowerCase().includes(searchVal)) ||
-            (u.phone && u.phone.includes(searchVal))
-        );
+        filteredUsers = filteredUsers.filter(u => {
+            const name = (u.name || '').toLowerCase();
+            const email = (u.email || '').toLowerCase();
+            const phone = String(u.phone || '');
+            const id = String(u._id || u.id || '').toLowerCase();
+            return name.includes(searchVal) || email.includes(searchVal) || phone.includes(searchVal) || id.includes(searchVal);
+        });
     }
+
+    // MANDATORY ALPHABETICAL SORTING (A to Z) across all 500+ learners
+    filteredUsers.sort((a, b) => {
+        const nameA = (a.name || '').trim();
+        const nameB = (b.name || '').trim();
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
 
     // --- 4-MILESTONE DISTRIBUTION METRICS WIDGET ---
     // Platform challenge consists of 4 milestones (MS 1 - MS 4)
@@ -2329,11 +2365,12 @@ var activePodSessionDay = 1;
 var activePodSessionDateKey = '';
 var mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertificates')) || {};
 var campusPartnersDB = JSON.parse(localStorage.getItem('campusPartnersDB')) || { 'campus@partners.com': ['6a168e4213e4e9a10984b164'] };
-function isTestUser() {
-    if (!currentUser) return false;
-    const email = (currentUser.email || '').toLowerCase().trim();
-    const phone = String(currentUser.phone || '').replace(/\D/g, '').slice(-10);
-    const id = String(currentUser._id || '').toLowerCase().trim();
+function isTestUser(u) {
+    const usr = u || (typeof currentUser !== 'undefined' ? currentUser : null);
+    if (!usr) return false;
+    const email = (usr.email || '').toLowerCase().trim();
+    const phone = String(usr.phone || '').replace(/\D/g, '').slice(-10);
+    const id = String(usr._id || usr.id || '').toLowerCase().trim();
     const testAccounts = [
         'saiyedamala02@gmail.com',
         'engineersai02@gmail.com',
@@ -10219,22 +10256,14 @@ function getSubmissionBucketForUser(user) {
 function getUserSubmissionsByUserId(userIdentifier) {
     const localDB = getAllUserSubmissions();
 
+    if (!userIdentifier && typeof currentUser !== 'undefined' && currentUser) {
+        userIdentifier = currentUser;
+    }
     if (!userIdentifier) return [];
 
-    let targetId = (typeof userIdentifier === 'object' && userIdentifier) ? (userIdentifier._id || userIdentifier.id) : String(userIdentifier);
+    let targetId = (typeof userIdentifier === 'object' && userIdentifier) ? (userIdentifier._id || userIdentifier.id) : (String(userIdentifier).includes('@') ? null : String(userIdentifier));
     let targetEmail = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.email : (String(userIdentifier).includes('@') ? String(userIdentifier).toLowerCase().trim() : null);
-    let targetPhone = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.phone : (!String(userIdentifier).includes('@') && String(userIdentifier).length >= 10 ? String(userIdentifier).trim() : null);
-
-    // If currentUser exists in memory or localStorage, enrich matching
-    let cur = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
-    if (!cur) {
-        try { cur = JSON.parse(localStorage.getItem('currentUser')); } catch(e) {}
-    }
-    if (cur) {
-        if (!targetId && cur._id) targetId = cur._id;
-        if (!targetEmail && cur.email) targetEmail = cur.email.toLowerCase().trim();
-        if (!targetPhone && cur.phone) targetPhone = String(cur.phone).trim();
-    }
+    let targetPhone = (typeof userIdentifier === 'object' && userIdentifier) ? userIdentifier.phone : (!String(userIdentifier).includes('@') && String(userIdentifier).length >= 10 && !String(userIdentifier).startsWith('usr_') && String(userIdentifier).length <= 15 && !isNaN(Number(userIdentifier)) ? String(userIdentifier).trim() : null);
 
     const allKnownUsers = [
         ...(typeof actualUsers !== 'undefined' && Array.isArray(actualUsers) ? actualUsers : []),
@@ -10253,21 +10282,33 @@ function getUserSubmissionsByUserId(userIdentifier) {
         if (!targetPhone && matchedUser.phone) targetPhone = String(matchedUser.phone).trim();
     }
 
+    const cleanTargetEmail = targetEmail ? targetEmail.toLowerCase().trim() : null;
+    const cleanTargetId = targetId ? String(targetId) : null;
+    const cleanTargetPhone = targetPhone ? String(targetPhone).trim() : null;
+
+    // Also match test aliases for known test accounts (e.g. test_engineersai02 for engineersai02@gmail.com)
+    const aliases = [];
+    if (cleanTargetId) aliases.push(cleanTargetId);
+    if (cleanTargetEmail) {
+        const localPart = cleanTargetEmail.split('@')[0];
+        aliases.push(`test_${localPart}`);
+        aliases.push(localPart);
+    }
+
     return localDB.filter(sub => {
         if (!sub) return false;
         
-        // Direct ID match
-        if (targetId && (String(sub.userId) === String(targetId) || String(sub.fanId) === String(targetId) || (matchedUser && String(sub.userId) === String(matchedUser._id)))) return true;
+        // Direct ID match (including test aliases like test_engineersai02)
+        const subUid = sub.userId ? String(sub.userId) : null;
+        const subFid = sub.fanId ? String(sub.fanId) : null;
+        if (cleanTargetId && (subUid === cleanTargetId || subFid === cleanTargetId || (matchedUser && subUid === String(matchedUser._id)))) return true;
+        if (subUid && aliases.includes(subUid)) return true;
         
         // Email match (case-insensitive)
-        if (targetEmail && sub.userEmail && sub.userEmail.toLowerCase().trim() === String(targetEmail).toLowerCase().trim()) return true;
+        if (cleanTargetEmail && sub.userEmail && sub.userEmail.toLowerCase().trim() === cleanTargetEmail) return true;
         
         // Phone match
-        if (targetPhone && sub.userPhone && String(sub.userPhone).trim() === String(targetPhone).trim()) return true;
-
-        // Current user fallback match
-        if (cur && cur.email && sub.userEmail && cur.email.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()) return true;
-        if (cur && cur._id && sub.userId && String(cur._id) === String(sub.userId)) return true;
+        if (cleanTargetPhone && sub.userPhone && String(sub.userPhone).trim() === cleanTargetPhone) return true;
         
         return false;
     });
@@ -17701,7 +17742,7 @@ function renderMilestoneGrid() {
     
     gridContainer.classList.remove('hidden');
 
-    const highestUnlocked = (currentUser && userMilestoneState[currentUser._id]?.highestUnlocked) || 1;
+    const highestUnlocked = (currentUser && getActualLearnerHighestMilestone(currentUser._id)) || 1;
     const isGodMode = typeof isTestUser === 'function' ? isTestUser() : false;
 
     gridContainer.innerHTML = milestoneConfig.map(ms => {
@@ -17744,8 +17785,8 @@ function renderMilestoneGrid() {
 }
 window.renderMilestoneGrid = renderMilestoneGrid;
 
-async function openMilestone(id) {
-    if (typeof syncGlobalServerData === 'function') {
+async function openMilestone(id, skipSync = false) {
+    if (!skipSync) {
         try { await syncGlobalServerData(); } catch(e) {}
     }
     activeMilestoneId = Number(id);
@@ -17757,9 +17798,6 @@ async function openMilestone(id) {
     if (!userMilestoneState[currentUser._id].started) userMilestoneState[currentUser._id].started = {};
 
     const testMode = (typeof isTestUser === 'function') && isTestUser();
-    if (testMode) {
-        userMilestoneState[currentUser._id].highestUnlocked = 4;
-    }
 
     const uStart = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser._id, activeMilestoneId) : getLocalDateKey(new Date());
     userMilestoneState[currentUser._id].startDate = uStart;
