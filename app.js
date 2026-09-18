@@ -6,6 +6,12 @@ function apiFetch(endpoint, options = {}) {
     const opt = { ...options };
     opt.headers = { ...(options.headers || {}) };
 
+    const sessToken = (typeof localStorage !== 'undefined' ? localStorage.getItem('cmpli_session_token') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_session_token') : null);
+    if (sessToken && !opt.headers['x-session-token'] && !opt.headers['authorization']) {
+        opt.headers['authorization'] = `Bearer ${sessToken}`;
+        opt.headers['x-session-token'] = sessToken;
+    }
+
     const crtToken = window._creatorAuthToken || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_creator_token') : null);
     if (crtToken && !opt.headers['x-creator-token'] && !opt.headers['authorization']) {
         opt.headers['x-creator-token'] = crtToken;
@@ -10683,75 +10689,6 @@ function openPartnerManagementModal() {
     if (typeof switchManagementSubTab === 'function') {
         switchManagementSubTab('campuses');
     }
-    return;
-    const activeMangos = allAdminMangos.filter(m => levelUpAccessConfig.includes(m._id));
-    
-    let checkboxesHtml = activeMangos.length === 0 
-        ? '<p class="text-xs text-slate-500 italic p-2">No Level-Up solutions enabled yet. Enable them in the toggles above first.</p>'
-        : activeMangos.map(m => `
-            <label class="partner-mango-item flex items-center gap-3 text-sm text-slate-300 bg-slate-900/80 p-3 rounded-lg border border-slate-700 hover:border-indigo-500/50 cursor-pointer transition-colors">
-                <input type="checkbox" class="partner-mango-checkbox w-4 h-4 text-indigo-600 bg-slate-800 border-slate-600 rounded focus:ring-indigo-500 focus:ring-2" value="${m._id}">
-                <span class="truncate font-medium">${m.title}</span>
-            </label>
-        `).join('');
-
-    let existingHtml = '';
-    for (const [email, mangoIds] of Object.entries(campusPartnersDB)) {
-        const mangoNames = mangoIds.map(id => {
-            const found = allAdminMangos.find(m => m._id === id);
-            return found ? found.title : id;
-        }).join(', ');
-        
-        existingHtml += `
-            <div class="flex justify-between items-center p-4 bg-slate-900/80 border border-slate-700 rounded-xl mb-3 hover:border-indigo-500/30 transition-all shadow-sm">
-                <div class="overflow-hidden pr-4">
-                    <p class="text-sm font-bold text-white mb-1"><i class="fas fa-user-tie text-indigo-400 mr-2"></i>${email}</p>
-                    <p class="text-[10px] text-slate-400 leading-relaxed"><span class="font-bold text-slate-500 uppercase tracking-widest">Access:</span> ${mangoNames}</p>
-                </div>
-                <button onclick="deleteCampusPartner('${email}')" class="text-slate-500 hover:text-red-400 bg-slate-800 hover:bg-red-900/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 shadow-md"><i class="fas fa-trash"></i></button>
-            </div>
-        `;
-    }
-    if (existingHtml === '') existingHtml = '<p class="text-xs text-slate-500 italic p-2 text-center">No campus partners added yet.</p>';
-
-    const oldModal = document.getElementById('partnerManagementModal');
-    if (oldModal) oldModal.remove();
-
-    const modalHtml = `
-        <div id="partnerManagementModal" class="fixed inset-0 z-[100] flex items-center justify-center">
-            <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-sm" onclick="document.getElementById('partnerManagementModal').remove()"></div>
-            <div class="relative w-full max-w-2xl bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-8 m-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
-                <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-                    <h3 class="text-xl font-bold text-white"><i class="fas fa-university text-indigo-400 mr-2"></i> Campus Partner Access</h3>
-                    <button onclick="document.getElementById('partnerManagementModal').remove()" class="text-slate-400 hover:text-white bg-slate-700 hover:bg-red-500/80 w-8 h-8 rounded-full flex items-center justify-center transition-colors"><i class="fas fa-times"></i></button>
-                </div>
-                
-                <div class="mb-8 p-5 bg-slate-800/50 border border-indigo-500/20 rounded-xl shadow-inner">
-                    <h4 class="text-sm font-black text-indigo-400 mb-4 uppercase tracking-widest border-b border-indigo-500/20 pb-2"><i class="fas fa-plus-circle mr-1"></i> Add New Partner</h4>
-                    <label class="block text-xs font-bold text-slate-400 mb-1">Partner Email</label>
-                    <input type="email" id="newPartnerEmail" placeholder="partner@university.edu" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-indigo-500 mb-4 shadow-inner">
-                    
-                    <label class="block text-xs font-bold text-slate-400 mb-2">Select Permitted Solutions (Cohorts)</label>
-                    
-                    <!-- NEW SEARCH BAR FOR MODAL -->
-                    <input type="text" id="partnerModalSearch" onkeyup="filterPartnerModalMangos()" placeholder="Search solutions..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500 mb-3 transition-colors">
-                    
-                    <div id="partnerMangoList" class="space-y-2 max-h-40 overflow-y-auto mb-5 custom-scrollbar pr-2">
-                        ${checkboxesHtml}
-                    </div>
-                    <button onclick="saveCampusPartner()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg"><i class="fas fa-save mr-2"></i> Grant Access</button>
-                </div>
-
-                <div>
-                    <h4 class="text-sm font-black text-slate-400 mb-4 uppercase tracking-widest border-b border-slate-700 pb-2">Active Partners</h4>
-                    <div id="existingPartnersList">
-                        ${existingHtml}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
 }
 
 // NEW FILTERING LOGIC FOR THE MODAL SEARCH BAR
@@ -16908,6 +16845,28 @@ async function verifyOTP() {
         const role = window._pendingAuth.role;
         const authUser = window._pendingAuth.user;
 
+        // Obtain cryptographic session token from server
+        try {
+            const loginIdent = tempLoginId || authUser.email || (authUser.phone ? String(authUser.phone) : (authUser._id || authUser.id));
+            const sessRes = await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    role: role,
+                    loginId: loginIdent,
+                    otp: otpInput,
+                    employerKey: authUser.accessKey || ''
+                })
+            });
+            const sessData = await sessRes.json();
+            if (sessData && sessData.success && sessData.token) {
+                localStorage.setItem('cmpli_session_token', sessData.token);
+                sessionStorage.setItem('cmpli_session_token', sessData.token);
+            }
+        } catch (sessErr) {
+            console.warn('Session issuance notice:', sessErr.message);
+        }
+
         if (role === 'creator') {
             isAdminLogin = true;
             isCampusPartner = false;
@@ -17001,7 +16960,10 @@ function logout() {
     try {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('isAdminLogin');
+        localStorage.removeItem('isRecruiterLogin');
+        localStorage.removeItem('cmpli_session_token');
         sessionStorage.removeItem('isAdminLogin');
+        sessionStorage.removeItem('cmpli_session_token');
     } catch(e) {}
 
     const loginInp = document.getElementById('loginId');

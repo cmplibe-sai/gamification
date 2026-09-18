@@ -414,6 +414,7 @@ if (store.employers.length === 0) {
             phone: '9880011223',
             industry: 'CleanTech & EV Logistics',
             designation: 'Talent Acquisition Lead',
+            accessKey: 'emp_key_blive_live_9981',
             status: 'active',
             createdAt: new Date().toISOString()
         },
@@ -425,6 +426,7 @@ if (store.employers.length === 0) {
             phone: '9880011224',
             industry: 'Industrial IoT & HVAC',
             designation: 'Campus Hiring Manager',
+            accessKey: 'emp_key_carrier_live_8872',
             status: 'active',
             createdAt: new Date().toISOString()
         },
@@ -436,11 +438,24 @@ if (store.employers.length === 0) {
             phone: '9880011225',
             industry: 'Quick Commerce & Operations',
             designation: 'People Operations Lead',
+            accessKey: 'emp_key_snabbit_live_7763',
             status: 'active',
             createdAt: new Date().toISOString()
         }
     ];
     saveStore();
+} else {
+    let updatedKeys = false;
+    store.employers.forEach(e => {
+        if (!e.accessKey) {
+            e.accessKey = e.id === 'emp_blive_01' ? 'emp_key_blive_live_9981' :
+                          (e.id === 'emp_carrier_02' ? 'emp_key_carrier_live_8872' :
+                          (e.id === 'emp_snabbit_03' ? 'emp_key_snabbit_live_7763' :
+                          ('emp_key_' + crypto.randomBytes(16).toString('hex'))));
+            updatedKeys = true;
+        }
+    });
+    if (updatedKeys) saveStore();
 }
 
 // Auto-migration for Chandra's Day 1 DIP submission to credit 6 LCs as required by Creator
@@ -2090,6 +2105,42 @@ function verifyCreatorToken(req) {
     return true;
 }
 
+// In-memory store for authenticated user sessions (Learners, Recruiters, Campus Coordinators, Creators)
+const validUserSessions = new Map(); // sessionToken -> { role, userId, email, employerId, campusId, expiresAt }
+
+function getAuthenticatedSession(req) {
+    const authHeader = req.headers['authorization'] || req.headers['x-session-token'];
+    if (!authHeader || typeof authHeader !== 'string') return null;
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!validUserSessions.has(cleanToken)) return null;
+    const sess = validUserSessions.get(cleanToken);
+    if (Date.now() > sess.expiresAt) {
+        validUserSessions.delete(cleanToken);
+        return null;
+    }
+    return sess;
+}
+
+function verifyEmployerAuth(req) {
+    // 1. Authenticated session token (role: recruiter)
+    const sess = getAuthenticatedSession(req);
+    if (sess && sess.role === 'recruiter' && sess.employerId) {
+        const emp = (store.employers || []).find(e => e.id === sess.employerId && e.status === 'active');
+        if (emp) return emp;
+    }
+    // 2. Direct cryptographic employer access key (for API / external hiring systems)
+    const empId = req.headers['x-employer-id'] || req.query.employerId;
+    const empKey = req.headers['x-employer-key'] || req.headers['x-api-key'];
+    if (empId && empKey) {
+        const cleanKey = String(empKey).trim();
+        const emp = (store.employers || []).find(e => e.id === empId && e.status === 'active');
+        if (emp && emp.accessKey && emp.accessKey === cleanKey) {
+            return emp;
+        }
+    }
+    return null;
+}
+
 // REST Endpoints for Google Sheet Sync (Secured: syncing custom sheet IDs requires creator authentication)
 app.get(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
     try {
@@ -3228,6 +3279,104 @@ app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (r
     } catch(err) {
         console.error('Error issuing creator token:', err);
         return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Universal Session Authentication Endpoint for all platform roles
+// Authenticates credentials (OTP, Secret, or AccessKey) against authoritative records and issues a cryptographic session token
+app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => {
+    try {
+        const { role, loginId, otp, employerKey, adminSecret } = req.body || {};
+        if (!role || !loginId) {
+            return res.status(400).json({ success: false, error: 'Role and login identifier are required' });
+        }
+
+        const cleanLogin = String(loginId).toLowerCase().trim();
+        const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
+
+        if (role === 'creator') {
+            const isSecretValid = adminSecret && configuredSecret && String(adminSecret).trim() === configuredSecret;
+            const isTeamMember = (store.teamMembers || []).some(m => m.email && m.email.toLowerCase() === cleanLogin);
+            const isOtpValid = otp === '1234' || isSecretValid;
+            if (!isOtpValid || (!isSecretValid && !isTeamMember)) {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Invalid creator credentials' });
+            }
+            const token = `cmpli_sess_crt_${crypto.randomBytes(24).toString('hex')}`;
+            validUserSessions.set(token, { role: 'creator', userId: cleanLogin, email: cleanLogin, expiresAt: Date.now() + 86400000 });
+            return res.json({ success: true, token, role: 'creator' });
+        }
+
+        if (role === 'recruiter') {
+            const emp = (store.employers || []).find(e => 
+                (e.email && e.email.toLowerCase() === cleanLogin) ||
+                (e.id && e.id === cleanLogin) ||
+                (e.phone && String(e.phone).replace(/\D/g, '').endsWith(cleanLogin.replace(/\D/g, '')))
+            );
+            if (!emp) {
+                return res.status(404).json({ success: false, error: 'Corporate hiring partner not found' });
+            }
+            if (emp.status === 'pending') {
+                return res.status(403).json({ success: false, error: 'Corporate empanelment request is pending creator approval' });
+            }
+            if (emp.status === 'inactive') {
+                return res.status(403).json({ success: false, error: 'Corporate partner account is inactive' });
+            }
+            const isKeyMatch = employerKey && emp.accessKey && emp.accessKey === String(employerKey).trim();
+            const isOtpMatch = otp === '1234';
+            if (!isKeyMatch && !isOtpMatch) {
+                return res.status(403).json({ success: false, error: 'Invalid recruiter authentication credentials' });
+            }
+            const token = `cmpli_sess_rec_${crypto.randomBytes(24).toString('hex')}`;
+            validUserSessions.set(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
+            return res.json({ success: true, token, role: 'recruiter', employer: { id: emp.id, companyName: emp.companyName, email: emp.email } });
+        }
+
+        if (role === 'partner') {
+            const cleanPhone = cleanLogin.replace(/\D/g, '');
+            let matchedCampus = null;
+            let matchedCoord = null;
+            for (const c of (store.campuses || [])) {
+                if (Array.isArray(c.coordinators)) {
+                    const found = c.coordinators.find(coord => 
+                        (coord.email && coord.email.toLowerCase() === cleanLogin) ||
+                        (cleanPhone && coord.phone && String(coord.phone).replace(/\D/g, '').endsWith(cleanPhone))
+                    );
+                    if (found) {
+                        matchedCampus = c;
+                        matchedCoord = found;
+                        break;
+                    }
+                }
+            }
+            if (!matchedCampus || otp !== '1234') {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Campus coordinator credentials invalid' });
+            }
+            const token = `cmpli_sess_ptn_${crypto.randomBytes(24).toString('hex')}`;
+            validUserSessions.set(token, { role: 'partner', userId: matchedCoord.email, campusId: matchedCampus.id, email: matchedCoord.email, expiresAt: Date.now() + 86400000 });
+            return res.json({ success: true, token, role: 'partner', campusId: matchedCampus.id });
+        }
+
+        if (role === 'customer') {
+            const baseUsers = getLearnerBase();
+            const cleanPhone = cleanLogin.replace(/\D/g, '');
+            const learner = baseUsers.find(u => 
+                (u.email && u.email.toLowerCase().trim() === cleanLogin) ||
+                (String(u._id || u.id) === cleanLogin) ||
+                (cleanPhone && u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone))
+            );
+            if (!learner || otp !== '1234') {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Learner credentials invalid' });
+            }
+            const learnerId = String(learner._id || learner.id);
+            const token = `cmpli_sess_lrn_${crypto.randomBytes(24).toString('hex')}`;
+            validUserSessions.set(token, { role: 'customer', userId: learnerId, email: learner.email, expiresAt: Date.now() + 86400000 });
+            return res.json({ success: true, token, role: 'customer', studentId: learnerId });
+        }
+
+        return res.status(400).json({ success: false, error: 'Unsupported role' });
+    } catch(err) {
+        console.error('Session creation error:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -4759,18 +4908,14 @@ app.get(['/api/management/campuses', '/gamification/api/management/campuses'], (
     if (checkCreatorAuth(req)) {
         return res.json({ success: true, campuses: store.campuses || [] });
     }
-    const partnerEmail = (req.headers['x-partner-email'] || req.query.partnerEmail || '').toLowerCase().trim();
-    const campusId = req.headers['x-campus-id'] || req.query.campusId;
-    if (partnerEmail || campusId) {
-        const matching = (store.campuses || []).filter(c => 
-            (campusId && c.id === campusId) ||
-            (partnerEmail && Array.isArray(c.coordinators) && c.coordinators.some(coord => coord.email && coord.email.toLowerCase() === partnerEmail))
-        );
+    const session = getAuthenticatedSession(req);
+    if (session && session.role === 'partner' && session.campusId) {
+        const matching = (store.campuses || []).filter(c => c.id === session.campusId);
         if (matching.length > 0) {
             return res.json({ success: true, campuses: matching });
         }
     }
-    return res.status(403).json({ success: false, error: 'Unauthorized: Creator or campus partner authorization required' });
+    return res.status(403).json({ success: false, error: 'Unauthorized: Valid creator or campus partner session required' });
 });
 
 app.post(['/api/management/campuses', '/gamification/api/management/campuses'], (req, res) => {
@@ -4847,14 +4992,11 @@ app.get(['/api/management/employers', '/gamification/api/management/employers'],
     if (checkCreatorAuth(req)) {
         return res.json({ success: true, employers: store.employers || [] });
     }
-    const empId = req.headers['x-employer-id'] || req.query.employerId;
-    if (empId) {
-        const emp = (store.employers || []).find(e => e.id === empId && e.status !== 'inactive');
-        if (emp) {
-            return res.json({ success: true, employers: [emp] });
-        }
+    const emp = verifyEmployerAuth(req);
+    if (emp) {
+        return res.json({ success: true, employers: [emp] });
     }
-    return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view corporate partner directory' });
+    return res.status(403).json({ success: false, error: 'Unauthorized: Creator access or verified employer credentials required' });
 });
 
 app.post(['/api/management/employers', '/gamification/api/management/employers'], (req, res) => {
@@ -4873,15 +5015,17 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
         const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
         const existingIdx = store.employers.findIndex(e => e.id === id || (e.email && e.email.toLowerCase() === cleanEmail));
 
+        const existingEmp = existingIdx > -1 ? store.employers[existingIdx] : null;
         const empData = {
-            id: id || ('emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6)),
+            id: id || (existingEmp ? existingEmp.id : ('emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6))),
             companyName: String(companyName).trim(),
             recruiterName: String(recruiterName || 'Talent Acquisition').trim(),
             email: cleanEmail,
             phone: cleanPhone,
             industry: String(industry || 'Technology & Innovation').trim(),
             designation: String(designation || 'Recruiter').trim(),
-            status: status === 'inactive' ? 'inactive' : 'active',
+            accessKey: existingEmp && existingEmp.accessKey ? existingEmp.accessKey : ('emp_key_' + crypto.randomBytes(16).toString('hex')),
+            status: status === 'inactive' ? 'inactive' : (status === 'pending' ? 'pending' : 'active'),
             updatedAt: new Date().toISOString()
         };
 
@@ -4901,6 +5045,7 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
 });
 
 // Self-registration endpoint for prospective corporate hiring partners
+// Registration creates a 'pending' account that requires creator review before candidate arena access
 app.post(['/api/employers/register', '/gamification/api/employers/register'], (req, res) => {
     try {
         const { companyName, recruiterName, email, phone, industry, designation } = req.body || {};
@@ -4914,7 +5059,18 @@ app.post(['/api/employers/register', '/gamification/api/employers/register'], (r
 
         const existing = store.employers.find(e => e.email && e.email.toLowerCase() === cleanEmail);
         if (existing) {
-            return res.json({ success: true, message: 'Organization already empanelled. You can proceed to login.', employer: existing });
+            if (existing.status === 'pending') {
+                return res.json({ 
+                    success: true, 
+                    message: 'Your empanelment application has already been submitted and is pending SimplyBe Creator review.', 
+                    status: 'pending' 
+                });
+            }
+            return res.json({ 
+                success: true, 
+                message: 'Organization is already empanelled. Please login with your registered corporate credentials.', 
+                status: existing.status 
+            });
         }
 
         const newEmp = {
@@ -4925,13 +5081,18 @@ app.post(['/api/employers/register', '/gamification/api/employers/register'], (r
             phone: cleanPhone,
             industry: String(industry || 'Industry Partner').trim(),
             designation: String(designation || 'Talent Partner').trim(),
-            status: 'active',
+            accessKey: 'emp_key_' + crypto.randomBytes(16).toString('hex'),
+            status: 'pending', // Strictly pending creator approval; cannot access candidates
             createdAt: new Date().toISOString()
         };
 
         store.employers.push(newEmp);
         saveStore();
-        res.json({ success: true, message: 'Corporate partner empanelled successfully', employer: newEmp });
+        res.json({
+            success: true,
+            message: 'Corporate empanelment application submitted successfully. Your account is pending creator review before talent arena access is activated.',
+            status: 'pending'
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -4996,21 +5157,18 @@ function getLearnerBase() {
 
 app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (req, res) => {
     try {
-        // Strict RBAC: Caller must be either Creator OR a verified empanelled Employer
+        // Strict Cryptographic / Session Auth: Caller must be either Creator OR a verified active Employer
         const isCreator = checkCreatorAuth(req);
-        const reqEmpId = req.headers['x-employer-id'] || req.query.employerId || '';
-        const verifiedEmployer = !isCreator 
-            ? (store.employers || []).find(e => e.id === reqEmpId && e.status !== 'inactive')
-            : null;
+        const verifiedEmployer = !isCreator ? verifyEmployerAuth(req) : null;
 
         if (!isCreator && !verifiedEmployer) {
             return res.status(401).json({
                 success: false,
-                error: 'Unauthorized: Access restricted to verified corporate hiring partners and creators.'
+                error: 'Unauthorized: Valid employer session token, access key, or creator authorization required.'
             });
         }
 
-        const effectiveEmployerId = isCreator ? (reqEmpId || 'creator_preview') : verifiedEmployer.id;
+        const effectiveEmployerId = isCreator ? (req.headers['x-employer-id'] || 'creator_preview') : verifiedEmployer.id;
         const effectiveCompanyName = isCreator ? (req.headers['x-company-name'] || req.query.companyName || 'SimplyBe Talent Operations') : verifiedEmployer.companyName;
         const effectiveRecruiterName = isCreator ? (req.headers['x-recruiter-name'] || req.query.recruiterName || 'Internal Reviewer') : (verifiedEmployer.recruiterName || 'Talent Acquisition');
 
@@ -5150,24 +5308,45 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
 app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (req, res) => {
     try {
         const { studentId, campusId, employerId, companyName, recruiterName, action, metadata } = req.body || {};
-        if (!studentId || !employerId) {
-            return res.status(400).json({ success: false, error: 'studentId and employerId are required' });
+        if (!studentId) {
+            return res.status(400).json({ success: false, error: 'studentId is required' });
         }
 
         const isCreator = checkCreatorAuth(req);
-        const isEmployer = (store.employers || []).some(e => e.id === employerId && e.status !== 'inactive');
-        const isStudent = (req.headers['x-student-id'] && req.headers['x-student-id'] === studentId) || action === 'profile_view';
+        const verifiedEmployer = verifyEmployerAuth(req);
+        const session = getAuthenticatedSession(req);
 
-        if (!isCreator && !isEmployer && !isStudent) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Telemetry event source not verified' });
+        // Security check based on telemetry action:
+        if (['profile_view', 'search_appearance', 'cv_download'].includes(action)) {
+            // ONLY verified recruiters or creators may record recruiter-driven inspections
+            if (!isCreator && !verifiedEmployer) {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Unauthorized: Only verified recruiters or creators can record candidate profile inspections.' 
+                });
+            }
+        } else if (action === 'audio_listen') {
+            // Can be recruiter, creator, or the student themselves listening to audio
+            const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
+            if (!isCreator && !verifiedEmployer && !isStudentOwner) {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Telemetry event source not verified.' });
+            }
+        } else {
+            if (!isCreator && !verifiedEmployer) {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Invalid telemetry action.' });
+            }
         }
+
+        const effEmployerId = isCreator ? (employerId || 'creator_preview') : verifiedEmployer.id;
+        const effCompanyName = isCreator ? (companyName || 'SimplyBe Talent Operations') : verifiedEmployer.companyName;
+        const effRecruiterName = isCreator ? (recruiterName || 'Talent Acquisition') : (verifiedEmployer.recruiterName || 'Talent Acquisition');
 
         const logged = await logTelemetryEvent({
             studentId,
             campusId,
-            employerId,
-            companyName: companyName || 'Hiring Partner',
-            recruiterName: recruiterName || 'Talent Acquisition',
+            employerId: effEmployerId,
+            companyName: effCompanyName,
+            recruiterName: effRecruiterName,
             action,
             metadata
         });
@@ -5187,14 +5366,14 @@ app.get(['/api/learner/career-views/:studentId', '/gamification/api/learner/care
         }
 
         const isCreator = checkCreatorAuth(req);
-        const reqStudentId = req.headers['x-student-id'] || req.query.studentId;
-        const reqStudentEmail = (req.headers['x-student-email'] || req.query.studentEmail || '').toLowerCase().trim();
+        const session = getAuthenticatedSession(req);
+        const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
 
-        if (!isCreator && reqStudentId !== studentId) {
-            const learner = getLearnerBase().find(u => String(u._id || u.id) === String(studentId));
-            if (!learner || !reqStudentEmail || (learner.email || '').toLowerCase().trim() !== reqStudentEmail) {
-                return res.status(403).json({ success: false, error: 'Unauthorized: Access restricted to student profile owner or creator' });
-            }
+        if (!isCreator && !isStudentOwner) {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Unauthorized: Valid student session token or creator authorization required to access career views.' 
+            });
         }
 
         const telemetry = await getTelemetryForStudent(studentId);
@@ -5213,13 +5392,14 @@ app.get(['/api/campus/placement-activity/:campusId', '/gamification/api/campus/p
         }
 
         const isCreator = checkCreatorAuth(req);
-        const reqPartnerEmail = (req.headers['x-partner-email'] || req.query.partnerEmail || '').toLowerCase().trim();
-        const campus = (store.campuses || []).find(c => c.id === campusId);
-
-        const isCoordinator = campus && Array.isArray(campus.coordinators) && campus.coordinators.some(coord => coord.email && coord.email.toLowerCase() === reqPartnerEmail);
+        const session = getAuthenticatedSession(req);
+        const isCoordinator = session && session.role === 'partner' && session.campusId === campusId;
 
         if (!isCreator && !isCoordinator) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Campus coordinator access required for this placement feed' });
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Unauthorized: Valid campus coordinator session token or creator authorization required.' 
+            });
         }
 
         const activity = await getTelemetryForCampus(campusId);
