@@ -1,0 +1,702 @@
+[
+  {
+    "id": "q_blive_1",
+    "title": "Which smart electric mobility platform is highlighted for transforming clean last-mile logistics?",
+    "options": [
+      "Ola Cabs",
+      "BLive",
+      "Uber Freight",
+      "Bounce Share"
+    ],
+    "correctOption": 1,
+    "explanation": "BLive is driving the transition toward smart, electrified commercial fleet operations.",
+    "category": "Company Profile",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_2",
+    "title": "What quick-commerce delivery timeframe is cited at the beginning of the story?",
+    "options": [
+      "Under 10 minutes",
+      "Within 2 hours",
+      "Next-day delivery",
+      "4 to 6 hours"
+    ],
+    "correctOption": 0,
+    "explanation": "The story highlights quick-commerce orders arriving at doorsteps in under ten minutes.",
+    "category": "Market Context",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_3",
+    "title": "What business model does BLive operate to remain scalable?",
+    "options": [
+      "Asset-heavy manufacturing model",
+      "Government non-profit model",
+      "Franchise retail dealership",
+      "Asset-light model"
+    ],
+    "correctOption": 3,
+    "explanation": "BLive operates a highly scalable, asset-light business model.",
+    "category": "Business Model",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_4",
+    "title": "Which customer segments does BLive’s asset-light mobility platform serve?",
+    "options": [
+      "Only agricultural tractor operators",
+      "Only international airline pilots",
+      "Both consumer and enterprise mobility",
+      "Only individual luxury car buyers"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive is designed to serve both consumer and enterprise mobility segments.",
+    "category": "Target Market",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_5",
+    "title": "What type of solution does BLive’s B2B cargo division provide to enterprise clients?",
+    "options": [
+      "Crude oil refining",
+      "Full-stack fleet-as-a-service",
+      "Cardboard packaging sales",
+      "Vehicle insurance brokerage only"
+    ],
+    "correctOption": 1,
+    "explanation": "Concurrently, its B2B cargo division provides full-stack fleet-as-a-service solutions.",
+    "category": "Solutions",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_6",
+    "title": "Which enterprise client categories rely on BLive’s B2B cargo fleet solutions?",
+    "options": [
+      "E-commerce, quick-commerce, and logistics giants",
+      "Submarine research laboratories",
+      "Luxury ocean cruise lines",
+      "Space satellite launch centers"
+    ],
+    "correctOption": 0,
+    "explanation": "BLive serves e-commerce, quick-commerce, and logistics enterprise giants.",
+    "category": "Target Market",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_7",
+    "title": "What four integrated pillars does BLive consolidate to help fleets transition away from fossil fuels?",
+    "options": [
+      "Drilling, refining, pipelines, and petrol pumps",
+      "TV ads, radio commercials, PR, and billboards",
+      "Highway tolls, asphalt mixing, paving, and painting",
+      "Sourcing, green financing, charging, and maintenance"
+    ],
+    "correctOption": 3,
+    "explanation": "BLive consolidates multi-brand vehicle sourcing, tailored green financing, charging infrastructure, and dedicated maintenance.",
+    "category": "Platform Ecosystem",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_8",
+    "title": "What vehicle category is specifically targeted in BLive’s milestone collaboration?",
+    "options": [
+      "Heavy diesel freight trains",
+      "Autonomous aerial drones",
+      "High-payload four-wheeler cargo market",
+      "Deep-sea cargo vessels"
+    ],
+    "correctOption": 2,
+    "explanation": "This milestone collaboration targets the high-payload four-wheeler cargo market.",
+    "category": "Fleet Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_9",
+    "title": "How does BLive enable enterprise logistics providers to scale electric deliveries?",
+    "options": [
+      "By requiring multi-crore upfront purchases",
+      "Without high capital expenditures (CapEx)",
+      "By manufacturing custom battery cells",
+      "By building private petroleum refineries"
+    ],
+    "correctOption": 1,
+    "explanation": "Enterprise logistics providers can scale electric deliveries without high capital expenditures.",
+    "category": "Financial Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_10",
+    "title": "What anchors BLive’s physical electric fleet rollout?",
+    "options": [
+      "Proprietary one-stop AI fleet management software",
+      "Imported diesel combustion engines",
+      "Manual paper logbooks",
+      "Roadside print advertising"
+    ],
+    "correctOption": 0,
+    "explanation": "Anchoring this physical fleet rollout is BLive’s proprietary, one-stop AI fleet management software platform.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_11",
+    "title": "Which core technologies power BLive’s intelligent vehicle software platform?",
+    "options": [
+      "Cryptocurrency token mining",
+      "Analog shortwave radio",
+      "Thermal coal combustion sensors",
+      "Real-time telemetry, machine learning, and predictive analytics"
+    ],
+    "correctOption": 3,
+    "explanation": "The system leverages real-time vehicle telemetry, machine learning, and predictive data analytics.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_12",
+    "title": "Which automated tasks are executed by BLive’s AI fleet management software?",
+    "options": [
+      "Music video streaming",
+      "Automated credit card applications",
+      "Route optimization, battery health monitoring, and preventive maintenance",
+      "Vehicle exterior repainting"
+    ],
+    "correctOption": 2,
+    "explanation": "The system automates smart route optimization, battery health monitoring, and preventive maintenance.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_13",
+    "title": "What primary financial benefit does BLive’s technology stack deliver to fleet operators?",
+    "options": [
+      "Guarantees zero corporate income tax",
+      "Dramatically reduces total cost of ownership (TCO)",
+      "Eliminates all driver wages",
+      "Doubles vehicle curb weight"
+    ],
+    "correctOption": 1,
+    "explanation": "This intelligent technology stack dramatically reduces total cost of ownership.",
+    "category": "Value Proposition",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_14",
+    "title": "What operational guarantee does BLive provide through its predictive maintenance stack?",
+    "options": [
+      "Maximum fleet uptime",
+      "Unlimited vehicle maximum speed",
+      "Free lifetime fuel replacement",
+      "Immunity from local traffic rules"
+    ],
+    "correctOption": 0,
+    "explanation": "Predictive maintenance and telemetry guarantee maximum fleet uptime.",
+    "category": "Operations",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_15",
+    "title": "In what geographic tier is clean last-mile logistics expanding alongside metropolitan centers?",
+    "options": [
+      "Remote alpine valleys",
+      "Uninhabited island territories",
+      "Deep-sea shipping lanes",
+      "Expanding Tier-2 cities"
+    ],
+    "correctOption": 3,
+    "explanation": "Clean last-mile logistics is transforming across metropolitan centers and expanding Tier-2 cities.",
+    "category": "Market Geography",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_16",
+    "title": "For graduating business talent, which primary growth vectors are highlighted in this sector?",
+    "options": [
+      "Back-office data entry only",
+      "Filing routine clerical paperwork",
+      "B2B Sales, Key Account Management, and Client Acquisition",
+      "Warehouse security night watch"
+    ],
+    "correctOption": 2,
+    "explanation": "Primary growth vectors lie in high-impact, client-facing roles such as B2B Sales, Key Account Management, and Client Acquisition.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_17",
+    "title": "What key business activity do early-career professionals in BLive handle with enterprise clients?",
+    "options": [
+      "Changing vehicle motor oil manually",
+      "Pitching custom fleet electrification and structuring contracts",
+      "Driving delivery vans on highway routes",
+      "Creating consumer social media memes"
+    ],
+    "correctOption": 1,
+    "explanation": "Professionals directly engage with regional logistics partners, pitch custom fleet electrification, and structure contracts.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_18",
+    "title": "Who do client-facing professionals at BLive interface with directly?",
+    "options": [
+      "Regional logistics partners and enterprise clients",
+      "Individual retail bicycle shoppers",
+      "Traffic police constables",
+      "International holiday tourists"
+    ],
+    "correctOption": 0,
+    "explanation": "Professionals directly engage with regional logistics partners and enterprise logistics providers.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_19",
+    "title": "What is the primary environmental objective of BLive’s smart mobility platform?",
+    "options": [
+      "Increasing diesel engine exhaust volume",
+      "Promoting single-use plastic packaging",
+      "Building new offshore oil wells",
+      "Transitioning fleets seamlessly away from fossil fuels"
+    ],
+    "correctOption": 3,
+    "explanation": "BLive enables commercial operators to transition seamlessly away from fossil-fuel fleets.",
+    "category": "Sustainability",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_20",
+    "title": "How does BLive assist fleet operators with financing their electric transition?",
+    "options": [
+      "Through unregulated pawn shop loans",
+      "By requiring cash under the table",
+      "Through tailored green financing solutions",
+      "Through speculative cryptocurrency tokens"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive consolidates tailored green financing designed for clean energy fleets.",
+    "category": "Finance",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_21",
+    "title": "Why is high-payload four-wheeler cargo electrification crucial for commercial logistics?",
+    "options": [
+      "Four-wheelers are legally exempt from traffic signals",
+      "It handles larger cargo volumes with clean, lower operating costs",
+      "Four-wheelers never require battery recharging",
+      "Drivers do not need a commercial driving license"
+    ],
+    "correctOption": 1,
+    "explanation": "High-payload four-wheelers handle significant freight volumes while lowering per-km operating expenses.",
+    "category": "Fleet Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_22",
+    "title": "In BLive’s platform model, what does \"Fleet-as-a-Service\" (FaaS) mean?",
+    "options": [
+      "Turnkey vehicles, financing, charging, and AI management as a service",
+      "Selling individual mopeds at shopping malls",
+      "Renting office desks to IT software firms",
+      "Operating passenger airline flights"
+    ],
+    "correctOption": 0,
+    "explanation": "FaaS delivers turnkey electric vehicles, charging infrastructure, and software management on a subscription basis.",
+    "category": "Business Model",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_23",
+    "title": "How does BLive prevent sudden battery breakdowns across its fleet?",
+    "options": [
+      "Replacing batteries after every single trip",
+      "Operating only on cloudy days",
+      "Disconnecting all electronic telemetry",
+      "Continuous real-time battery health monitoring and analytics"
+    ],
+    "correctOption": 3,
+    "explanation": "Telemetry and machine learning automate continuous battery health monitoring and predictive maintenance.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_24",
+    "title": "What overarching commercial strategy defines BLive’s success?",
+    "options": [
+      "Exiting commercial logistics to sell petrol cars",
+      "Closing Tier-2 operations to focus on overseas shipping",
+      "Full-stack electric fleet-as-a-service enabled by AI and asset-light partnerships",
+      "Selling steel vehicle body panels"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive succeeds by combining asset-light vehicle sourcing, green financing, and proprietary AI fleet software.",
+    "category": "Strategic Vision",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_25",
+    "title": "Why are major e-commerce firms partnering with BLive rather than building EV fleets alone?",
+    "options": [
+      "E-commerce firms are legally prohibited from owning electric vehicles",
+      "BLive delivers an end-to-end ecosystem with charging, financing, and AI tracking",
+      "BLive receives 100% free vehicles from government",
+      "Independent electric fleets cannot run in Indian cities"
+    ],
+    "correctOption": 1,
+    "explanation": "BLive solves the complexity of vehicle procurement, financing, charging, and maintenance in one platform.",
+    "category": "Value Proposition",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_26",
+    "title": "Story Review: Which smart electric mobility platform is highlighted for transforming clean last-mile logistics?",
+    "options": [
+      "BLive",
+      "Ola Cabs",
+      "Uber Freight",
+      "Bounce Share"
+    ],
+    "correctOption": 0,
+    "explanation": "BLive is driving the transition toward smart, electrified commercial fleet operations.",
+    "category": "Company Profile",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_27",
+    "title": "Story Review: What quick-commerce delivery timeframe is cited at the beginning of the story?",
+    "options": [
+      "Within 2 hours",
+      "Next-day delivery",
+      "4 to 6 hours",
+      "Under 10 minutes"
+    ],
+    "correctOption": 3,
+    "explanation": "The story highlights quick-commerce orders arriving at doorsteps in under ten minutes.",
+    "category": "Market Context",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_28",
+    "title": "Story Review: What business model does BLive operate to remain scalable?",
+    "options": [
+      "Asset-heavy manufacturing model",
+      "Government non-profit model",
+      "Asset-light model",
+      "Franchise retail dealership"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive operates a highly scalable, asset-light business model.",
+    "category": "Business Model",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_29",
+    "title": "Story Review: Which customer segments does BLive’s asset-light mobility platform serve?",
+    "options": [
+      "Only agricultural tractor operators",
+      "Both consumer and enterprise mobility",
+      "Only international airline pilots",
+      "Only individual luxury car buyers"
+    ],
+    "correctOption": 1,
+    "explanation": "BLive is designed to serve both consumer and enterprise mobility segments.",
+    "category": "Target Market",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_30",
+    "title": "Story Review: What type of solution does BLive’s B2B cargo division provide to enterprise clients?",
+    "options": [
+      "Full-stack fleet-as-a-service",
+      "Crude oil refining",
+      "Cardboard packaging sales",
+      "Vehicle insurance brokerage only"
+    ],
+    "correctOption": 0,
+    "explanation": "Concurrently, its B2B cargo division provides full-stack fleet-as-a-service solutions.",
+    "category": "Solutions",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_31",
+    "title": "Story Review: Which enterprise client categories rely on BLive’s B2B cargo fleet solutions?",
+    "options": [
+      "Submarine research laboratories",
+      "Luxury ocean cruise lines",
+      "Space satellite launch centers",
+      "E-commerce, quick-commerce, and logistics giants"
+    ],
+    "correctOption": 3,
+    "explanation": "BLive serves e-commerce, quick-commerce, and logistics enterprise giants.",
+    "category": "Target Market",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_32",
+    "title": "Story Review: What four integrated pillars does BLive consolidate to help fleets transition away from fossil fuels?",
+    "options": [
+      "Drilling, refining, pipelines, and petrol pumps",
+      "TV ads, radio commercials, PR, and billboards",
+      "Sourcing, green financing, charging, and maintenance",
+      "Highway tolls, asphalt mixing, paving, and painting"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive consolidates multi-brand vehicle sourcing, tailored green financing, charging infrastructure, and dedicated maintenance.",
+    "category": "Platform Ecosystem",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_33",
+    "title": "Story Review: What vehicle category is specifically targeted in BLive’s milestone collaboration?",
+    "options": [
+      "Heavy diesel freight trains",
+      "High-payload four-wheeler cargo market",
+      "Autonomous aerial drones",
+      "Deep-sea cargo vessels"
+    ],
+    "correctOption": 1,
+    "explanation": "This milestone collaboration targets the high-payload four-wheeler cargo market.",
+    "category": "Fleet Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_34",
+    "title": "Story Review: How does BLive enable enterprise logistics providers to scale electric deliveries?",
+    "options": [
+      "Without high capital expenditures (CapEx)",
+      "By requiring multi-crore upfront purchases",
+      "By manufacturing custom battery cells",
+      "By building private petroleum refineries"
+    ],
+    "correctOption": 0,
+    "explanation": "Enterprise logistics providers can scale electric deliveries without high capital expenditures.",
+    "category": "Financial Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_35",
+    "title": "Story Review: What anchors BLive’s physical electric fleet rollout?",
+    "options": [
+      "Imported diesel combustion engines",
+      "Manual paper logbooks",
+      "Roadside print advertising",
+      "Proprietary one-stop AI fleet management software"
+    ],
+    "correctOption": 3,
+    "explanation": "Anchoring this physical fleet rollout is BLive’s proprietary, one-stop AI fleet management software platform.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_36",
+    "title": "Story Review: Which core technologies power BLive’s intelligent vehicle software platform?",
+    "options": [
+      "Cryptocurrency token mining",
+      "Analog shortwave radio",
+      "Real-time telemetry, machine learning, and predictive analytics",
+      "Thermal coal combustion sensors"
+    ],
+    "correctOption": 2,
+    "explanation": "The system leverages real-time vehicle telemetry, machine learning, and predictive data analytics.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_37",
+    "title": "Story Review: Which automated tasks are executed by BLive’s AI fleet management software?",
+    "options": [
+      "Music video streaming",
+      "Route optimization, battery health monitoring, and preventive maintenance",
+      "Automated credit card applications",
+      "Vehicle exterior repainting"
+    ],
+    "correctOption": 1,
+    "explanation": "The system automates smart route optimization, battery health monitoring, and preventive maintenance.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_38",
+    "title": "Story Review: What primary financial benefit does BLive’s technology stack deliver to fleet operators?",
+    "options": [
+      "Dramatically reduces total cost of ownership (TCO)",
+      "Guarantees zero corporate income tax",
+      "Eliminates all driver wages",
+      "Doubles vehicle curb weight"
+    ],
+    "correctOption": 0,
+    "explanation": "This intelligent technology stack dramatically reduces total cost of ownership.",
+    "category": "Value Proposition",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_39",
+    "title": "Story Review: What operational guarantee does BLive provide through its predictive maintenance stack?",
+    "options": [
+      "Unlimited vehicle maximum speed",
+      "Free lifetime fuel replacement",
+      "Immunity from local traffic rules",
+      "Maximum fleet uptime"
+    ],
+    "correctOption": 3,
+    "explanation": "Predictive maintenance and telemetry guarantee maximum fleet uptime.",
+    "category": "Operations",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_40",
+    "title": "Story Review: In what geographic tier is clean last-mile logistics expanding alongside metropolitan centers?",
+    "options": [
+      "Remote alpine valleys",
+      "Uninhabited island territories",
+      "Expanding Tier-2 cities",
+      "Deep-sea shipping lanes"
+    ],
+    "correctOption": 2,
+    "explanation": "Clean last-mile logistics is transforming across metropolitan centers and expanding Tier-2 cities.",
+    "category": "Market Geography",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_41",
+    "title": "Story Review: For graduating business talent, which primary growth vectors are highlighted in this sector?",
+    "options": [
+      "Back-office data entry only",
+      "B2B Sales, Key Account Management, and Client Acquisition",
+      "Filing routine clerical paperwork",
+      "Warehouse security night watch"
+    ],
+    "correctOption": 1,
+    "explanation": "Primary growth vectors lie in high-impact, client-facing roles such as B2B Sales, Key Account Management, and Client Acquisition.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_42",
+    "title": "Story Review: What key business activity do early-career professionals in BLive handle with enterprise clients?",
+    "options": [
+      "Pitching custom fleet electrification and structuring contracts",
+      "Changing vehicle motor oil manually",
+      "Driving delivery vans on highway routes",
+      "Creating consumer social media memes"
+    ],
+    "correctOption": 0,
+    "explanation": "Professionals directly engage with regional logistics partners, pitch custom fleet electrification, and structure contracts.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_43",
+    "title": "Story Review: Who do client-facing professionals at BLive interface with directly?",
+    "options": [
+      "Individual retail bicycle shoppers",
+      "Traffic police constables",
+      "International holiday tourists",
+      "Regional logistics partners and enterprise clients"
+    ],
+    "correctOption": 3,
+    "explanation": "Professionals directly engage with regional logistics partners and enterprise logistics providers.",
+    "category": "Career Pathways",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_44",
+    "title": "Story Review: What is the primary environmental objective of BLive’s smart mobility platform?",
+    "options": [
+      "Increasing diesel engine exhaust volume",
+      "Promoting single-use plastic packaging",
+      "Transitioning fleets seamlessly away from fossil fuels",
+      "Building new offshore oil wells"
+    ],
+    "correctOption": 2,
+    "explanation": "BLive enables commercial operators to transition seamlessly away from fossil-fuel fleets.",
+    "category": "Sustainability",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_45",
+    "title": "Story Review: How does BLive assist fleet operators with financing their electric transition?",
+    "options": [
+      "Through unregulated pawn shop loans",
+      "Through tailored green financing solutions",
+      "By requiring cash under the table",
+      "Through speculative cryptocurrency tokens"
+    ],
+    "correctOption": 1,
+    "explanation": "BLive consolidates tailored green financing designed for clean energy fleets.",
+    "category": "Finance",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_46",
+    "title": "Story Review: Why is high-payload four-wheeler cargo electrification crucial for commercial logistics?",
+    "options": [
+      "It handles larger cargo volumes with clean, lower operating costs",
+      "Four-wheelers are legally exempt from traffic signals",
+      "Four-wheelers never require battery recharging",
+      "Drivers do not need a commercial driving license"
+    ],
+    "correctOption": 0,
+    "explanation": "High-payload four-wheelers handle significant freight volumes while lowering per-km operating expenses.",
+    "category": "Fleet Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_47",
+    "title": "Story Review: In BLive’s platform model, what does \"Fleet-as-a-Service\" (FaaS) mean?",
+    "options": [
+      "Selling individual mopeds at shopping malls",
+      "Renting office desks to IT software firms",
+      "Operating passenger airline flights",
+      "Turnkey vehicles, financing, charging, and AI management as a service"
+    ],
+    "correctOption": 3,
+    "explanation": "FaaS delivers turnkey electric vehicles, charging infrastructure, and software management on a subscription basis.",
+    "category": "Business Model",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_48",
+    "title": "Story Review: How does BLive prevent sudden battery breakdowns across its fleet?",
+    "options": [
+      "Replacing batteries after every single trip",
+      "Operating only on cloudy days",
+      "Continuous real-time battery health monitoring and analytics",
+      "Disconnecting all electronic telemetry"
+    ],
+    "correctOption": 2,
+    "explanation": "Telemetry and machine learning automate continuous battery health monitoring and predictive maintenance.",
+    "category": "Technology",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_49",
+    "title": "Story Review: What overarching commercial strategy defines BLive’s success?",
+    "options": [
+      "Exiting commercial logistics to sell petrol cars",
+      "Full-stack electric fleet-as-a-service enabled by AI and asset-light partnerships",
+      "Closing Tier-2 operations to focus on overseas shipping",
+      "Selling steel vehicle body panels"
+    ],
+    "correctOption": 1,
+    "explanation": "BLive succeeds by combining asset-light vehicle sourcing, green financing, and proprietary AI fleet software.",
+    "category": "Strategic Vision",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_50",
+    "title": "Story Review: Why are major e-commerce firms partnering with BLive rather than building EV fleets alone?",
+    "options": [
+      "BLive delivers an end-to-end ecosystem with charging, financing, and AI tracking",
+      "E-commerce firms are legally prohibited from owning electric vehicles",
+      "BLive receives 100% free vehicles from government",
+      "Independent electric fleets cannot run in Indian cities"
+    ],
+    "correctOption": 0,
+    "explanation": "BLive solves the complexity of vehicle procurement, financing, charging, and maintenance in one platform.",
+    "category": "Value Proposition",
+    "pts": 11
+  }
+]

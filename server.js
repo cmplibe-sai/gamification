@@ -91,6 +91,20 @@ try {
         console.log('[Seed Asset] Copied pod_quiz_pool_athulya.json to server_data directory');
     }
 
+    const trackedBliveQuiz = path.join(trackedDataDir, 'pod_quiz_pool_blive.json');
+    const targetBliveQuiz = path.join(DATA_DIR, 'pod_quiz_pool_blive.json');
+    if (fs.existsSync(trackedBliveQuiz) && !fs.existsSync(targetBliveQuiz)) {
+        fs.copyFileSync(trackedBliveQuiz, targetBliveQuiz);
+        console.log('[Seed Asset] Copied pod_quiz_pool_blive.json to server_data directory');
+    }
+
+    const trackedCarrierQuiz = path.join(trackedDataDir, 'pod_quiz_pool_carrier.json');
+    const targetCarrierQuiz = path.join(DATA_DIR, 'pod_quiz_pool_carrier.json');
+    if (fs.existsSync(trackedCarrierQuiz) && !fs.existsSync(targetCarrierQuiz)) {
+        fs.copyFileSync(trackedCarrierQuiz, targetCarrierQuiz);
+        console.log('[Seed Asset] Copied pod_quiz_pool_carrier.json to server_data directory');
+    }
+
     const trackedModulePrereqs = path.join(trackedDataDir, 'module_prereqs.json');
     const targetModulePrereqs = path.join(DATA_DIR, 'module_prereqs.json');
     if (fs.existsSync(trackedModulePrereqs) && !fs.existsSync(targetModulePrereqs)) {
@@ -1133,17 +1147,23 @@ function deriveDayNumber(module, dateKey, explicitDay) {
 // Synthesizes a structured 50-question bank from story article text
 // Categorized across 5 critical dimensions with varied distractors
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// SimpliPod Dynamic 50-Question Pool Generator
+// Synthesizes a structured 50-question bank from story article text
+// Categorized across 5 critical dimensions with varied distractors
+// -------------------------------------------------------------
 function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     if (!title && !articleText) return [];
 
     const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').replace(/["']/g, '').trim();
     const rawText = String(articleText || '').trim();
     
-    // Extract distinct substantive factual sentences/points from the article
+    // Extract distinct substantive factual sentences/points from the article, stripping meta-chatter
+    const metaFilter = /^(happy to do|all these about|tell us|have you ever wondered|don't miss|click here|listen to|today's dip|welcome to)/i;
     const rawSentences = rawText
         .split(/(?:\r?\n|•|\. |\? |; )+/)
         .map(s => s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["']/g, ''))
-        .filter(s => s.length > 25 && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
+        .filter(s => s.length > 20 && !metaFilter.test(s) && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
 
     const keyPoints = rawSentences.length >= 4 
         ? rawSentences 
@@ -1160,7 +1180,7 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
         `Which key operational strategy enables ${cleanTitle} to scale?`,
         `What primary business model or service approach underpins ${cleanTitle}?`,
         `What key market or customer need is highlighted for ${cleanTitle}?`,
-        `What financial metric, milestone, or growth goal is emphasized?`,
+        `What strategic milestone or operational goal is emphasized?`,
         `Which capability is required to execute ${cleanTitle} successfully?`,
         `What key operational lesson emerges from this story?`,
         `What career path or functional role is discussed in the context of ${cleanTitle}?`,
@@ -1179,39 +1199,36 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     const questions = [];
     const baseIdPrefix = `q_dyn_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}`;
 
+    function cleanOptionText(text) {
+        let clean = text.replace(/\s+/g, ' ').replace(/[;,\.]+$/, '').trim();
+        // Keep options punchy without ugly ellipses
+        if (clean.length > 60) {
+            const words = clean.split(' ').slice(0, 7).join(' ');
+            clean = words.replace(/[,;]+$/, '');
+        }
+        return clean;
+    }
+
     for (let i = 0; i < 50; i++) {
         const cat = categories[i % categories.length];
         const stem = simpleStems[i % simpleStems.length];
         const correctPoint = keyPoints[i % keyPoints.length];
+        const correctText = cleanOptionText(correctPoint);
 
-        // Format correct answer as concise, readable sentence/clause
-        let correctText = correctPoint.replace(/\s+/g, ' ').trim();
-        if (correctText.length > 80) {
-            const cut = correctText.lastIndexOf(' ', 75);
-            correctText = (cut > 40 ? correctText.substring(0, cut) : correctText.substring(0, 75)) + '...';
-        }
-
-        // Draw distractors strictly from other distinct points in the same story
         const distractors = [];
         let offset = 1;
         while (distractors.length < 3) {
             const candidateIdx = (i + offset) % keyPoints.length;
-            const cand = keyPoints[candidateIdx].replace(/\s+/g, ' ').trim();
-            let distractorText = cand;
-            if (distractorText.length > 80) {
-                const cut = distractorText.lastIndexOf(' ', 75);
-                distractorText = (cut > 40 ? distractorText.substring(0, cut) : distractorText.substring(0, 75)) + '...';
-            }
-            if (distractorText !== correctText && !distractors.includes(distractorText)) {
+            const distractorText = cleanOptionText(keyPoints[candidateIdx]);
+            if (distractorText !== correctText && !distractors.includes(distractorText) && distractorText.length > 5) {
                 distractors.push(distractorText);
             }
             offset++;
             if (offset > keyPoints.length + 10) {
-                // Fallback in-story options if text was very short
                 const defaults = [
-                    `Standard regional expansion without specialized execution`,
-                    `Short-term operations without long-term scale planning`,
-                    `Generic market participation without brand differentiation`
+                    `Standard regional expansion`,
+                    `Short-term spot operations`,
+                    `Generic market participation`
                 ];
                 for (const d of defaults) {
                     if (distractors.length < 3 && !distractors.includes(d) && d !== correctText) {
@@ -1231,7 +1248,7 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
             title: stem,
             options: options,
             correctOption: targetPos,
-            explanation: `Based on the story: ${correctPoint.length > 120 ? correctPoint.substring(0, 115) + '...' : correctPoint}`,
+            explanation: `Based on the story: ${correctPoint.replace(/\s+/g, ' ').trim()}`,
             category: cat,
             pts: 11
         });
@@ -1242,7 +1259,7 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
 
 // -------------------------------------------------------------
 // SimpliPod Question Pool Resolver
-// Resolves 50-question pools per date/story (Athulya, Snabbit, dynamic)
+// Resolves 50-question pools per date/story (Athulya, Snabbit, BLive, Carrier, dynamic)
 // -------------------------------------------------------------
 function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
     const allConfigs = getMilestoneConfigsFromDb();
@@ -1257,7 +1274,29 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
     const title = String(dayConfig?.title || context?.title || '').toLowerCase();
     const article = String(dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '').toLowerCase();
 
-    // 2. Check for Athulya case (matching keywords, or default for 2026-09-10 if not overridden)
+    // 2. Check for BLive case (matching keywords, or day 549)
+    const isBlive = title.includes('blive') || article.includes('blive') || title.includes('smart mobility') || article.includes('smart mobility') || title.includes('549') || article.includes('549');
+    if (isBlive) {
+        const blivePath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_blive.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_blive.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_blive.json');
+        if (fs.existsSync(blivePath)) {
+            try { return JSON.parse(fs.readFileSync(blivePath, 'utf8')); } catch(e) {}
+        }
+    }
+
+    // 3. Check for Carrier India case (matching keywords, or default for 2026-09-07)
+    const isCarrier = title.includes('carrier') || article.includes('carrier') || title.includes('cooling ai') || article.includes('cooling ai') || title.includes('hvac');
+    if (isCarrier || (dateKey === '2026-09-07' && (!title || isCarrier))) {
+        const carrierPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_carrier.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_carrier.json')
+            : path.join(__dirname, 'data', 'pod_quiz_pool_carrier.json');
+        if (fs.existsSync(carrierPath)) {
+            try { return JSON.parse(fs.readFileSync(carrierPath, 'utf8')); } catch(e) {}
+        }
+    }
+
+    // 4. Check for Athulya case (matching keywords, or default for 2026-09-10 if not overridden)
     const isAthulya = title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair');
     if (isAthulya || (dateKey === '2026-09-10' && (!title || isAthulya))) {
         const athulyaPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
@@ -1268,7 +1307,7 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         }
     }
 
-    // 3. Check for Snabbit case (matching keywords, or default for 2026-09-09 if not overridden)
+    // 5. Check for Snabbit case (matching keywords, or default for 2026-09-09 if not overridden)
     const isSnabbit = title.includes('snabbit') || article.includes('snabbit') || article.includes('15-minute beauty');
     if (isSnabbit || (dateKey === '2026-09-09' && (!title || isSnabbit))) {
         const snabbitPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
@@ -1279,7 +1318,7 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         }
     }
 
-    // 4. Check for Kirloskar case (matching keywords, or default for 2026-09-11 if not overridden)
+    // 6. Check for Kirloskar case (matching keywords, or default for 2026-09-11 if not overridden)
     const isKirloskar = title.includes('kirloskar') || title.includes('avante') || article.includes('kirloskar') || article.includes('avante spaces');
     if (isKirloskar || (dateKey === '2026-09-11' && (!title || isKirloskar))) {
         const kirloskarPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json'))
@@ -1290,7 +1329,7 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         }
     }
 
-    // 5. Dynamic generation for any new story (from fresh context or disk)
+    // 7. Dynamic generation for any new story (from fresh context or disk)
     const effectiveTitle = dayConfig?.title || context?.title || '';
     const effectiveArticle = dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '';
     if (effectiveArticle || effectiveTitle) {
@@ -1298,12 +1337,14 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         if (generated && generated.length >= 3) return generated;
     }
 
-    // 5. Default fallback
-    const defaultPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
-        ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
-        : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json'));
+    // 8. Default fallback
+    const defaultPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_blive.json'))
+        ? path.join(DATA_DIR, 'pod_quiz_pool_blive.json')
+        : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
+            : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json')));
     if (fs.existsSync(defaultPath)) {
         try { return JSON.parse(fs.readFileSync(defaultPath, 'utf8')); } catch(e) {}
     }
