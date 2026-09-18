@@ -2939,7 +2939,6 @@ function cleanScriptForSpeech(text) {
     cleaned = cleaned.replace(/\bc-mpli\b/gi, 'Simply');
     // "BLive" / "blive" -> "B-Live" (forces ElevenLabs British voice to say "B-Live", never "blive")
     cleaned = cleaned.replace(/\bBLive\b/gi, 'B-Live');
-    cleaned = cleaned.replace(/\bB-Live\b/gi, 'B-Live');
 
     // Episode & Edition Numbers:
     // "#cD549" or "#cD 549" or "cD549" -> "Simply Dip story number 549"

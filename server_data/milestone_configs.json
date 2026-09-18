@@ -253,428 +253,162 @@
         "endTime": "23:59",
         "questions": [
           {
-            "id": "q_carrier_1",
+            "id": "q_carrier_0907_1",
             "title": "What is Carrier Global's targeted annual revenue from India by the decade's end?",
             "options": [
-              "$500 Million",
               "$1 Billion",
+              "$500 Million",
               "$10 Billion",
               "$100 Million"
             ],
-            "correctOption": 1,
-            "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-            "category": "Revenue Target",
+            "correctOption": 0,
+            "explanation": "Based on the story, Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
+            "category": "Finance & Scale",
             "pts": 11
           },
           {
-            "id": "q_carrier_2",
-            "title": "Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
+            "id": "q_carrier_0907_2",
+            "title": "How much is Carrier investing in its new Indian manufacturing facility?",
             "options": [
-              "Data Centres",
-              "Automobile Manufacturing",
-              "Food Processing",
-              "Consumer Electronics"
+              "$10 Million",
+              "$100 Million",
+              "$50 Million",
+              "$1 Billion"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, Carrier is investing US$100 million in a new manufacturing facility.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_3",
+            "title": "By what multiple is India's operational data centre capacity projected to expand?",
+            "options": [
+              "Twofold expansion",
+              "Fivefold expansion",
+              "Tenfold expansion",
+              "Twentyfold expansion"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, India’s operational data centre capacity is expanding tenfold.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_4",
+            "title": "Within how many kilometres of five sea ports is Carrier's Sri City plant located?",
+            "options": [
+              "Beyond 500 kilometres",
+              "Exactly 250 kilometres",
+              "Over 800 kilometres",
+              "Within 100 kilometres"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_5",
+            "title": "How many commercial sea ports are located within 100 kilometres of the Sri City plant?",
+            "options": [
+              "Five sea ports",
+              "Only two ports",
+              "Three sea ports",
+              "Eight sea ports"
             ],
             "correctOption": 0,
-            "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-            "category": "Market Drivers",
+            "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_carrier_3",
+            "id": "q_carrier_0907_6",
+            "title": "Which infrastructure surge is driving massive demand for Carrier's industrial cooling systems?",
+            "options": [
+              "Automobile manufacturing",
+              "Data centre expansion",
+              "Food processing",
+              "Consumer electronics"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, the rapid buildout of energy-dense data centres drives high-capacity cooling demand.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_7",
             "title": "What does HVAC stand for in the context of Carrier Global's expertise?",
             "options": [
               "Heavy Vehicles and Cargo",
               "High Voltage and Current",
-              "Housing, Valuation and Commerce",
-              "Heating, Ventilation & Air-Conditioning"
-            ],
-            "correctOption": 3,
-            "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-            "category": "Industry Terminology",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_4",
-            "title": "How much is Carrier investing in its new manufacturing facility in India?",
-            "options": [
-              "$10 million",
-              "$50 million",
-              "$100 million",
-              "$1 billion"
+              "Heating Ventilation Air-Conditioning",
+              "Housing Valuation and Commerce"
             ],
             "correctOption": 2,
-            "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-            "category": "Investment",
+            "explanation": "Based on the story, HVAC stands for Heating, Ventilation & Air-Conditioning.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_carrier_5",
-            "title": "Where is Carrier's new manufacturing facility situated?",
+            "id": "q_carrier_0907_8",
+            "title": "Where is Carrier's new manufacturing facility situated in India?",
             "options": [
-              "Bengaluru, Karnataka",
-              "Sri City, Andhra Pradesh",
-              "Pune, Maharashtra",
-              "Noida, Uttar Pradesh"
-            ],
-            "correctOption": 1,
-            "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-            "category": "Geography",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_6",
-            "title": "What is one strategic geographical advantage of Sri City mentioned in the text?",
-            "options": [
-              "It is within 100 kilometres of five sea ports",
-              "It has the largest airport in India",
-              "It is located in a cold climate zone",
-              "It borders three different countries"
-            ],
-            "correctOption": 0,
-            "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-            "category": "Supply Chain",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_7",
-            "title": "Which regions does Carrier plan to export to from its new Indian facility?",
-            "options": [
-              "Europe and North America",
-              "Southeast Asia and Australia",
-              "South America and Europe",
-              "West Asia and Africa"
+              "Bengaluru Karnataka",
+              "Pune Maharashtra",
+              "Noida Uttar Pradesh",
+              "Sri City Andhra Pradesh"
             ],
             "correctOption": 3,
-            "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-            "category": "Export Strategy",
+            "explanation": "Based on the story, Carrier's new manufacturing facility is located in Sri City, Andhra Pradesh.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_carrier_8",
-            "title": "What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
+            "id": "q_carrier_0907_9",
+            "title": "Which international export regions will Carrier supply from its new Indian facility?",
             "options": [
-              "Server racks",
-              "Silicon chips",
-              "High-capacity chillers",
-              "Fiber optic cables"
-            ],
-            "correctOption": 2,
-            "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-            "category": "Localization",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_9",
-            "title": "Beyond initial equipment sales, how is Carrier securing sustainable revenue?",
-            "options": [
-              "By selling consumer electronics",
-              "Through recurring maintenance agreements and digital platforms",
-              "By investing in real estate",
-              "Through cryptocurrency mining"
-            ],
-            "correctOption": 1,
-            "explanation": "Sustainable revenue comes from recurring maintenance agreements, digital platforms, and system retrofits.",
-            "category": "Business Model",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_10",
-            "title": "Which government framework is Carrier aligning with to optimize component procurement and lower import duties?",
-            "options": [
-              "Make in India",
-              "Digital India",
-              "Skill India",
-              "Startup India"
-            ],
-            "correctOption": 0,
-            "explanation": "Localizing production under the \"Make in India\" framework optimizes procurement and duties.",
-            "category": "Government Policy",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_11",
-            "title": "Who are the primary clients for Carrier's multi-year lifecycle contracts?",
-            "options": [
-              "Individual homeowners",
-              "Retail electronics stores",
-              "Educational institutions",
-              "Hyperscalers and industrial developers"
-            ],
-            "correctOption": 3,
-            "explanation": "Carrier embeds itself into multi-year contracts with hyperscalers, industrial developers, and commercial hubs.",
-            "category": "Client Segments",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_12",
-            "title": "What happens to server racks in energy-dense data centres when processing cloud applications?",
-            "options": [
-              "They shrink in size",
-              "They consume less electricity",
-              "They heat up significantly",
-              "They require more water"
-            ],
-            "correctOption": 2,
-            "explanation": "Vast networks of server racks heat up in energy-dense data centres.",
-            "category": "Technical Context",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_13",
-            "title": "By what factor is India’s operational data centre capacity expanding?",
-            "options": [
-              "Twofold",
-              "Tenfold",
-              "Fivefold",
-              "Twentyfold"
-            ],
-            "correctOption": 1,
-            "explanation": "India’s operational data centre capacity is expanding tenfold.",
-            "category": "Market Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_14",
-            "title": "According to the text, what helps build defensible market positions for B2B industrial giants?",
-            "options": [
-              "Embedding into multi-year lifecycle contracts",
-              "Focusing only on initial sales",
-              "Selling off manufacturing plants",
-              "Ignoring hyperscale infrastructure"
-            ],
-            "correctOption": 0,
-            "explanation": "Embedding into multi-year lifecycle contracts builds defensible market positions.",
-            "category": "Competitive Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_15",
-            "title": "For business and management graduates, what dynamic career pathway is highlighted as an alternative to tech startups?",
-            "options": [
-              "Fast-food management",
-              "Entertainment industry",
-              "Academic research",
-              "Industrial and capital goods conglomerates"
-            ],
-            "correctOption": 3,
-            "explanation": "Industrial and capital goods conglomerates provide dynamic career pathways beyond tech startups.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_16",
-            "title": "Which entry-level roles provide the highest career velocity for aspirants in this sector?",
-            "options": [
-              "Back-office administration",
-              "Software coding",
-              "Client Acquisition and B2B Sales",
-              "Human Resources"
-            ],
-            "correctOption": 2,
-            "explanation": "Real momentum comes from Client Acquisition, B2B Sales, and Client-Facing Partner Management.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_17",
-            "title": "What kind of interfaces are crucial for young professionals to negotiate high-value contracts?",
-            "options": [
-              "Internal company audits",
-              "Direct interface with facility developers and enterprise clients",
-              "Retail customer service",
-              "Social media management"
-            ],
-            "correctOption": 1,
-            "explanation": "Young professionals interface directly with facility developers, contractors, and enterprise clients.",
-            "category": "Sales Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_18",
-            "title": "What is the most effective starting point to position oneself for global capital goods leadership in the mid-to-long run?",
-            "options": [
-              "Cross-functional and cross-industry roles at the local level",
-              "Joining a top consumer tech startup",
-              "Moving abroad immediately",
-              "Focusing solely on B2C social marketing"
-            ],
-            "correctOption": 0,
-            "explanation": "The most effective starting point is cross-functional and cross-industry at the local level.",
-            "category": "Career Growth",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_19",
-            "title": "Which of the following is recommended as a starting point for early career development in this sector?",
-            "options": [
-              "Multinational consumer IT firms",
-              "Investment banks",
-              "E-commerce aggregators",
-              "Regional manufacturing companies or local dealerships"
-            ],
-            "correctOption": 3,
-            "explanation": "Begin by joining regional manufacturing companies, component suppliers, or local dealerships.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_20",
-            "title": "What type of expertise builds the ground-level credibility needed for enterprise leadership?",
-            "options": [
-              "Consumer app UI development",
-              "Graphic design",
-              "Localized supply chains and direct technical selling",
-              "Stock day trading"
-            ],
-            "correctOption": 2,
-            "explanation": "Developing early expertise in localized supply chains and direct technical selling builds leadership credibility.",
-            "category": "Core Competencies",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_21",
-            "title": "What is the overarching theme of Carrier's strategy in India?",
-            "options": [
-              "Exiting the Asian market",
-              "Capitalizing on the AI/data centre boom through localized cooling solutions",
-              "Transitioning from B2B to B2C retail",
-              "Reducing product lifecycles to drive fast sales"
-            ],
-            "correctOption": 1,
-            "explanation": "Carrier is capitalizing on the AI/data centre infrastructure boom through localized high-capacity cooling.",
-            "category": "Strategic Vision",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_22",
-            "title": "Story Review: What is Carrier Global's targeted annual revenue from India by the decade's end?",
-            "options": [
-              "$1 Billion",
-              "$500 Million",
-              "$10 Billion",
-              "$100 Million"
-            ],
-            "correctOption": 0,
-            "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-            "category": "Revenue Target",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_23",
-            "title": "Story Review: Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
-            "options": [
-              "Automobile Manufacturing",
-              "Food Processing",
-              "Consumer Electronics",
-              "Data Centres"
-            ],
-            "correctOption": 3,
-            "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-            "category": "Market Drivers",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_24",
-            "title": "Story Review: What does HVAC stand for in the context of Carrier Global's expertise?",
-            "options": [
-              "Heavy Vehicles and Cargo",
-              "High Voltage and Current",
-              "Heating, Ventilation & Air-Conditioning",
-              "Housing, Valuation and Commerce"
-            ],
-            "correctOption": 2,
-            "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-            "category": "Industry Terminology",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_25",
-            "title": "Story Review: How much is Carrier investing in its new manufacturing facility in India?",
-            "options": [
-              "$10 million",
-              "$100 million",
-              "$50 million",
-              "$1 billion"
-            ],
-            "correctOption": 1,
-            "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-            "category": "Investment",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_26",
-            "title": "Story Review: Where is Carrier's new manufacturing facility situated?",
-            "options": [
-              "Sri City, Andhra Pradesh",
-              "Bengaluru, Karnataka",
-              "Pune, Maharashtra",
-              "Noida, Uttar Pradesh"
-            ],
-            "correctOption": 0,
-            "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-            "category": "Geography",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_27",
-            "title": "Story Review: What is one strategic geographical advantage of Sri City mentioned in the text?",
-            "options": [
-              "It has the largest airport in India",
-              "It is located in a cold climate zone",
-              "It borders three different countries",
-              "It is within 100 kilometres of five sea ports"
-            ],
-            "correctOption": 3,
-            "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-            "category": "Supply Chain",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_28",
-            "title": "Story Review: Which regions does Carrier plan to export to from its new Indian facility?",
-            "options": [
-              "Europe and North America",
-              "Southeast Asia and Australia",
               "West Asia and Africa",
+              "Europe and North America",
+              "Southeast Asia and Australia",
               "South America and Europe"
             ],
-            "correctOption": 2,
-            "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-            "category": "Export Strategy",
+            "correctOption": 0,
+            "explanation": "Based on the story, the plant establishes an export engine for West Asia and Africa.",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_carrier_29",
-            "title": "Story Review: What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
+            "id": "q_carrier_0907_10",
+            "title": "What type of imported equipment is Carrier aiming to phase out through localization?",
             "options": [
-              "Server racks",
+              "Server computer racks",
               "High-capacity chillers",
-              "Silicon chips",
+              "Silicon microchips",
               "Fiber optic cables"
             ],
             "correctOption": 1,
-            "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-            "category": "Localization",
+            "explanation": "Based on the story, Carrier aims to phase out imported high-capacity chillers through supply chain localization.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_carrier_30",
-            "title": "Story Review: Beyond initial equipment sales, how is Carrier securing sustainable revenue?",
+            "id": "q_carrier_0907_11",
+            "title": "Beyond initial equipment sales, how does Carrier generate sustainable recurring revenue?",
             "options": [
-              "Through recurring maintenance agreements and digital platforms",
-              "By selling consumer electronics",
-              "By investing in real estate",
-              "Through cryptocurrency mining"
+              "Consumer mobile phones",
+              "Commercial real estate",
+              "Maintenance and digital platforms",
+              "Cryptocurrency mining"
             ],
-            "correctOption": 0,
-            "explanation": "Sustainable revenue comes from recurring maintenance agreements, digital platforms, and system retrofits.",
-            "category": "Business Model",
+            "correctOption": 2,
+            "explanation": "Based on the story, sustainable revenue comes from recurring maintenance agreements and digital platforms.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_carrier_31",
-            "title": "Story Review: Which government framework is Carrier aligning with to optimize component procurement and lower import duties?",
+            "id": "q_carrier_0907_12",
+            "title": "Which national initiative is Carrier aligning with to optimize procurement and lower duties?",
             "options": [
               "Digital India",
               "Skill India",
@@ -682,27 +416,27 @@
               "Make in India"
             ],
             "correctOption": 3,
-            "explanation": "Localizing production under the \"Make in India\" framework optimizes procurement and duties.",
-            "category": "Government Policy",
+            "explanation": "Based on the story, Carrier localizes production under the Make in India framework.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_carrier_32",
-            "title": "Story Review: Who are the primary clients for Carrier's multi-year lifecycle contracts?",
+            "id": "q_carrier_0907_13",
+            "title": "Who are the primary enterprise clients for Carrier's multi-year lifecycle contracts?",
             "options": [
+              "Hyperscalers and industrial developers",
               "Individual homeowners",
               "Retail electronics stores",
-              "Hyperscalers and industrial developers",
-              "Educational institutions"
+              "Educational primary schools"
             ],
-            "correctOption": 2,
-            "explanation": "Carrier embeds itself into multi-year contracts with hyperscalers, industrial developers, and commercial hubs.",
-            "category": "Client Segments",
+            "correctOption": 0,
+            "explanation": "Based on the story, Carrier embeds into multi-year lifecycle contracts with hyperscalers and developers.",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_carrier_33",
-            "title": "Story Review: What happens to server racks in energy-dense data centres when processing cloud applications?",
+            "id": "q_carrier_0907_14",
+            "title": "What happens to server racks in data centres when processing cloud workloads?",
             "options": [
               "They shrink in size",
               "They heat up significantly",
@@ -710,246 +444,512 @@
               "They require more water"
             ],
             "correctOption": 1,
-            "explanation": "Vast networks of server racks heat up in energy-dense data centres.",
-            "category": "Technical Context",
+            "explanation": "Based on the story, vast networks of server racks heat up in energy-dense data centres.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_carrier_34",
-            "title": "Story Review: By what factor is India’s operational data centre capacity expanding?",
+            "id": "q_carrier_0907_15",
+            "title": "What contractual strategy helps B2B industrial giants build defensible market positions?",
             "options": [
-              "Tenfold",
-              "Twofold",
-              "Fivefold",
-              "Twentyfold"
-            ],
-            "correctOption": 0,
-            "explanation": "India’s operational data centre capacity is expanding tenfold.",
-            "category": "Market Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_35",
-            "title": "Story Review: According to the text, what helps build defensible market positions for B2B industrial giants?",
-            "options": [
-              "Focusing only on initial sales",
-              "Selling off manufacturing plants",
-              "Ignoring hyperscale infrastructure",
-              "Embedding into multi-year lifecycle contracts"
-            ],
-            "correctOption": 3,
-            "explanation": "Embedding into multi-year lifecycle contracts builds defensible market positions.",
-            "category": "Competitive Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_36",
-            "title": "Story Review: For business and management graduates, what dynamic career pathway is highlighted as an alternative to tech startups?",
-            "options": [
-              "Fast-food management",
-              "Entertainment industry",
-              "Industrial and capital goods conglomerates",
-              "Academic research"
+              "Spot market sales only",
+              "Exiting manufacturing plants",
+              "Multi-year lifecycle contracts",
+              "Ignoring hyperscalers"
             ],
             "correctOption": 2,
-            "explanation": "Industrial and capital goods conglomerates provide dynamic career pathways beyond tech startups.",
-            "category": "Career Pathways",
+            "explanation": "Based on the story, embedding into multi-year lifecycle contracts builds defensible market positions.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_carrier_37",
-            "title": "Story Review: Which entry-level roles provide the highest career velocity for aspirants in this sector?",
+            "id": "q_carrier_0907_16",
+            "title": "For management graduates, what dynamic career sector is highlighted beyond tech startups?",
             "options": [
-              "Back-office administration",
+              "Fast-food franchising",
+              "Entertainment media",
+              "Academic publishing",
+              "Industrial capital goods"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, capital goods and industrial conglomerates offer dynamic career pathways.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_17",
+            "title": "Which entry-level roles provide the highest career velocity for young professionals?",
+            "options": [
               "Client Acquisition and B2B Sales",
-              "Software coding",
-              "Human Resources"
-            ],
-            "correctOption": 1,
-            "explanation": "Real momentum comes from Client Acquisition, B2B Sales, and Client-Facing Partner Management.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_38",
-            "title": "Story Review: What kind of interfaces are crucial for young professionals to negotiate high-value contracts?",
-            "options": [
-              "Direct interface with facility developers and enterprise clients",
-              "Internal company audits",
-              "Retail customer service",
-              "Social media management"
+              "Back-office record filing",
+              "Software algorithm coding",
+              "Human resources filing"
             ],
             "correctOption": 0,
-            "explanation": "Young professionals interface directly with facility developers, contractors, and enterprise clients.",
-            "category": "Sales Execution",
+            "explanation": "Based on the story, Client Acquisition and B2B Sales provide the highest career velocity.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_carrier_39",
-            "title": "Story Review: What is the most effective starting point to position oneself for global capital goods leadership in the mid-to-long run?",
+            "id": "q_carrier_0907_18",
+            "title": "Who do young B2B professionals directly interface with to negotiate high-value deals?",
             "options": [
-              "Joining a top consumer tech startup",
-              "Moving abroad immediately",
-              "Focusing solely on B2C social marketing",
-              "Cross-functional and cross-industry roles at the local level"
+              "Internal compliance clerks",
+              "Facility developers and contractors",
+              "Retail walk-in shoppers",
+              "Social media influencers"
             ],
-            "correctOption": 3,
-            "explanation": "The most effective starting point is cross-functional and cross-industry at the local level.",
-            "category": "Career Growth",
+            "correctOption": 1,
+            "explanation": "Based on the story, professionals interface directly with facility developers, contractors, and enterprise clients.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_carrier_40",
-            "title": "Story Review: Which of the following is recommended as a starting point for early career development in this sector?",
+            "id": "q_carrier_0907_19",
+            "title": "What is the most effective starting point for long-term capital goods enterprise leadership?",
             "options": [
-              "Multinational consumer IT firms",
-              "Investment banks",
-              "Regional manufacturing companies or local dealerships",
-              "E-commerce aggregators"
+              "Immediate overseas relocation",
+              "Consumer social media apps",
+              "Local cross-functional roles",
+              "Purely theoretical research"
             ],
             "correctOption": 2,
-            "explanation": "Begin by joining regional manufacturing companies, component suppliers, or local dealerships.",
-            "category": "Career Pathways",
+            "explanation": "Based on the story, the most effective starting point is cross-functional and cross-industry at the local level.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_carrier_41",
-            "title": "Story Review: What type of expertise builds the ground-level credibility needed for enterprise leadership?",
+            "id": "q_carrier_0907_20",
+            "title": "Which regional organization provides ideal ground-level exposure for early-career talent?",
             "options": [
-              "Consumer app UI development",
-              "Localized supply chains and direct technical selling",
-              "Graphic design",
-              "Stock day trading"
-            ],
-            "correctOption": 1,
-            "explanation": "Developing early expertise in localized supply chains and direct technical selling builds leadership credibility.",
-            "category": "Core Competencies",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_42",
-            "title": "Story Review: What is the overarching theme of Carrier's strategy in India?",
-            "options": [
-              "Capitalizing on the AI/data centre boom through localized cooling solutions",
-              "Exiting the Asian market",
-              "Transitioning from B2B to B2C retail",
-              "Reducing product lifecycles to drive fast sales"
-            ],
-            "correctOption": 0,
-            "explanation": "Carrier is capitalizing on the AI/data centre infrastructure boom through localized high-capacity cooling.",
-            "category": "Strategic Vision",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_43",
-            "title": "Story Review: What is Carrier Global's targeted annual revenue from India by the decade's end?",
-            "options": [
-              "$500 Million",
-              "$10 Billion",
-              "$100 Million",
-              "$1 Billion"
+              "Offshore investment banking",
+              "Consumer fashion outlets",
+              "Music record labels",
+              "Local industrial equipment dealerships"
             ],
             "correctOption": 3,
-            "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-            "category": "Revenue Target",
+            "explanation": "Based on the story, joining regional manufacturing companies or local dealerships builds ground credibility.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_carrier_44",
-            "title": "Story Review: Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
+            "id": "q_carrier_0907_21",
+            "title": "What type of expertise builds credibility required for multi-billion-dollar enterprise leadership?",
             "options": [
-              "Automobile Manufacturing",
-              "Food Processing",
-              "Data Centres",
-              "Consumer Electronics"
-            ],
-            "correctOption": 2,
-            "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-            "category": "Market Drivers",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_45",
-            "title": "Story Review: What does HVAC stand for in the context of Carrier Global's expertise?",
-            "options": [
-              "Heavy Vehicles and Cargo",
-              "Heating, Ventilation & Air-Conditioning",
-              "High Voltage and Current",
-              "Housing, Valuation and Commerce"
-            ],
-            "correctOption": 1,
-            "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-            "category": "Industry Terminology",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_46",
-            "title": "Story Review: How much is Carrier investing in its new manufacturing facility in India?",
-            "options": [
-              "$100 million",
-              "$10 million",
-              "$50 million",
-              "$1 billion"
+              "Supply chains and technical selling",
+              "Consumer game design",
+              "Graphic poster design",
+              "Day-trading equity stocks"
             ],
             "correctOption": 0,
-            "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-            "category": "Investment",
+            "explanation": "Based on the story, hands-on expertise in localized supply chains and direct technical selling builds leadership credibility.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_carrier_47",
-            "title": "Story Review: Where is Carrier's new manufacturing facility situated?",
+            "id": "q_carrier_0907_22",
+            "title": "What overarching theme defines Carrier's core growth strategy in India?",
             "options": [
-              "Bengaluru, Karnataka",
-              "Pune, Maharashtra",
-              "Noida, Uttar Pradesh",
-              "Sri City, Andhra Pradesh"
+              "Exiting the Asian continent",
+              "Localized cooling for data boom",
+              "Transitioning to retail fashion",
+              "Reducing equipment lifespan"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, Carrier is capitalizing on the AI and data centre boom through localized cooling solutions.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_23",
+            "title": "What digital capability enhances Carrier's recurring service contracts?",
+            "options": [
+              "Social video streaming",
+              "Online payment processing",
+              "Digital energy management",
+              "Cryptocurrency wallets"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, digital energy-management platforms generate recurring value across product lifecycles.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_24",
+            "title": "How does local manufacturing help Carrier respond to hyperscale facility buildouts?",
+            "options": [
+              "Longer international shipping",
+              "Higher ocean freight costs",
+              "Increased customs clearance delays",
+              "Faster supply chain response"
             ],
             "correctOption": 3,
-            "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-            "category": "Geography",
+            "explanation": "Based on the story, localizing production enables swift response to hyperscale infrastructure buildouts.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_carrier_48",
-            "title": "Story Review: What is one strategic geographical advantage of Sri City mentioned in the text?",
+            "id": "q_carrier_0907_25",
+            "title": "What digital activities trigger server rack heating in commercial data centres?",
             "options": [
-              "It has the largest airport in India",
-              "It is located in a cold climate zone",
-              "It is within 100 kilometres of five sea ports",
-              "It borders three different countries"
-            ],
-            "correctOption": 2,
-            "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-            "category": "Supply Chain",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_49",
-            "title": "Story Review: Which regions does Carrier plan to export to from its new Indian facility?",
-            "options": [
-              "Europe and North America",
-              "West Asia and Africa",
-              "Southeast Asia and Australia",
-              "South America and Europe"
-            ],
-            "correctOption": 1,
-            "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-            "category": "Export Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_carrier_50",
-            "title": "Story Review: What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
-            "options": [
-              "High-capacity chillers",
-              "Server racks",
-              "Silicon chips",
-              "Fiber optic cables"
+              "Video streaming and cloud apps",
+              "Reading physical paper books",
+              "Writing fountain pen letters",
+              "Analog wristwatch operation"
             ],
             "correctOption": 0,
-            "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-            "category": "Localization",
+            "explanation": "Based on the story, streaming videos, processing online payments, and cloud apps heat up server racks.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_26",
+            "title": "What system modifications provide recurring revenue over an equipment's lifecycle?",
+            "options": [
+              "Total equipment demolition",
+              "System retrofits and upgrades",
+              "Scrapping functioning units",
+              "Discarding warranty agreements"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, system retrofits and recurring maintenance provide sustainable revenue.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_27",
+            "title": "Which commercial facilities require Carrier's high-capacity climate control systems?",
+            "options": [
+              "Small residential bedrooms",
+              "Single-car garage stalls",
+              "Commercial hubs and data centres",
+              "Outdoor camping tents"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, hyperscalers, industrial developers, and commercial hubs require high-capacity climate control.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_28",
+            "title": "How does the 'Make in India' framework benefit Carrier's production economics?",
+            "options": [
+              "Higher export penalties",
+              "Mandatory import quotas",
+              "Increased overseas tariffs",
+              "Lower import duties"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, localizing production optimizes component procurement and lowers import duties.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_29",
+            "title": "What role focuses on managing long-term relationships with facility partners?",
+            "options": [
+              "Client-Facing Partner Management",
+              "Assembly forklift driver",
+              "Security perimeter guard",
+              "Cafeteria chef"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, Client-Facing Partner Management is a high-velocity career profile.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_30",
+            "title": "What makes data centre cooling systems specialized compared to standard air conditioning?",
+            "options": [
+              "Low electricity usage",
+              "High-density thermal loads",
+              "Decorative aesthetic styling",
+              "Fragrance diffusion features"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, energy-dense data centres require high-capacity, specialized industrial climate control.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_31",
+            "title": "What type of suppliers should young graduates consider joining to learn technical ecosystems?",
+            "options": [
+              "Fast-fashion textile mills",
+              "Luxury perfume boutiques",
+              "Component suppliers",
+              "Novelty toy distributors"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, joining regional manufacturing companies or component suppliers builds foundational expertise.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_32",
+            "title": "How do hyperscalers secure long-term thermal reliability for their server hardware?",
+            "options": [
+              "Annual spot market auctions",
+              "Unscheduled technician visits",
+              "Third-party consumer warranties",
+              "Lifecycle service contracts"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, hyperscalers embed into multi-year lifecycle contracts with industrial cooling partners.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_33",
+            "title": "What geographic trade gateway is Carrier developing from southern India?",
+            "options": [
+              "Middle East export hub",
+              "North American retail hub",
+              "Antarctic research station",
+              "Pacific island trading post"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, Carrier's Indian facility establishes an export engine for West Asia and Africa.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_34",
+            "title": "What enables Carrier to phase out expensive foreign imports in India?",
+            "options": [
+              "Importing cheaper foreign parts",
+              "Domestic supply chain localization",
+              "Shutting down local operations",
+              "Relying on air freight"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, Carrier localizes its supply chain to phase out imported high-capacity chillers.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_35",
+            "title": "Which cloud processing activity causes thermal buildup in data infrastructure?",
+            "options": [
+              "Offline battery storage",
+              "Printed ledger bookkeeping",
+              "Online payment processing",
+              "Manual cash counting"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, processing online payments and cloud applications drives energy density in servers.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_36",
+            "title": "What commercial advantage does Carrier gain by manufacturing chillers locally in Andhra Pradesh?",
+            "options": [
+              "Higher international shipping",
+              "Complex customs clearance",
+              "Longer delivery lead times",
+              "Optimized component procurement"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, localizing production optimizes component procurement and lowers duties.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_37",
+            "title": "What type of selling requires deep understanding of industrial specifications and client needs?",
+            "options": [
+              "Direct technical selling",
+              "Retail impulse merchandising",
+              "Supermarket cashiering",
+              "Door-to-door retail selling"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, developing expertise in direct technical selling builds enterprise leadership credibility.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_38",
+            "title": "What scale of contracts do front-line professionals negotiate with hyperscalers?",
+            "options": [
+              "Ten-dollar microtransactions",
+              "High-value enterprise contracts",
+              "Daily consumer spot sales",
+              "Weekly grocery receipts"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, young professionals negotiate high-value contracts with developers and enterprise clients.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_39",
+            "title": "Which customer engagement profile builds crucial client rapport in industrial B2B markets?",
+            "options": [
+              "Assembly robot welder",
+              "Warehouse carton packer",
+              "Customer Engagement Specialist",
+              "Office janitorial supervisor"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, Customer Engagement and Partner Management offer rapid career progression.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_40",
+            "title": "Why is India's data centre capacity requiring billions in cooling investments?",
+            "options": [
+              "Declining cloud usage",
+              "Closure of internet portals",
+              "Reduced power availability",
+              "Massive ten-fold expansion"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, India's operational data centre capacity is expanding tenfold, demanding billions in cooling.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_41",
+            "title": "What business model transition are industrial giants like Carrier executing?",
+            "options": [
+              "From equipment to lifecycle services",
+              "From B2B to consumer retail",
+              "From hardware to mobile games",
+              "From manufacturing to agriculture"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, giants build defensible positions by embedding into multi-year lifecycle contracts.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_42",
+            "title": "How do maintenance contracts protect industrial manufacturers from market volatility?",
+            "options": [
+              "Unpredictable spot pricing",
+              "Predictable recurring cash flow",
+              "Zero long-term commitment",
+              "Complete reliance on one-off sales"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, recurring maintenance agreements and digital platforms generate sustainable revenue.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_43",
+            "title": "What type of developers partner with Carrier for large-scale campus cooling?",
+            "options": [
+              "Residential home carpenters",
+              "Interior wallpaper decorators",
+              "Industrial facility developers",
+              "Landscape gardeners"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, Carrier partners with industrial developers, hyperscalers, and commercial hubs.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_44",
+            "title": "What foundational exposure should business graduates acquire early in their careers?",
+            "options": [
+              "Passive office bureaucracy",
+              "Pure theoretical modeling",
+              "Consumer entertainment blogging",
+              "Hands-on supply chain expertise"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, developing early, hands-on expertise in localized supply chains builds leadership credibility.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_45",
+            "title": "What role does Carrier Global play in the worldwide HVAC sector?",
+            "options": [
+              "Global HVAC market leader",
+              "Local regional auto shop",
+              "Residential plumbing contractor",
+              "Small component importer"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, US-based HVAC giant Carrier Global is a global leader in climate control.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_46",
+            "title": "Why are server racks described as 'digital engines' in the case study?",
+            "options": [
+              "They physically move vehicles",
+              "They power modern cloud computing",
+              "They burn diesel fuel directly",
+              "They rotate electrical dynamos"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, server racks act as critical digital engines powering streaming, payments, and apps.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_47",
+            "title": "What target timeline is set for Carrier's $1 billion India revenue goal?",
+            "options": [
+              "Within fifty years",
+              "By next month",
+              "By the decade's end",
+              "In the next quarter"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, Carrier targets US$1 billion in annual revenue from India by the decade's end (2030).",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_48",
+            "title": "How does Carrier support energy sustainability in large data centres?",
+            "options": [
+              "Switching off all servers",
+              "Disabling cooling fans",
+              "Operating servers without cooling",
+              "Digital energy management software"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, Carrier provides digital energy-management platforms to optimize thermal efficiency.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_49",
+            "title": "What credibility is essential before taking on multi-billion-dollar enterprise leadership?",
+            "options": [
+              "Ground-level commercial credibility",
+              "High social media following",
+              "Passive administrative tenure",
+              "Purely theoretical study"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, ground-level credibility in localized supply chains and technical selling is essential.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_carrier_0907_50",
+            "title": "What infrastructure connects Carrier's Sri City plant to overseas markets?",
+            "options": [
+              "Transcontinental railway only",
+              "Five nearby sea ports",
+              "River barge canal only",
+              "Inland mountain passes"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, proximity within 100 kilometres of five sea ports facilitates global exports.",
+            "category": "Operational Execution",
             "pts": 11
           }
         ]
@@ -3138,703 +3138,703 @@
         "endTime": "23:59",
         "questions": [
           {
-            "id": "q_blive_1",
-            "title": "Which smart electric mobility platform is highlighted for transforming clean last-mile logistics?",
+            "id": "q_blive_549_1",
+            "title": "What doorstep delivery arrival time is highlighted as the standard for quick-commerce?",
             "options": [
-              "Ola Cabs",
-              "BLive",
-              "Uber Freight",
-              "Bounce Share"
-            ],
-            "correctOption": 1,
-            "explanation": "BLive is driving the transition toward smart, electrified commercial fleet operations.",
-            "category": "Company Profile",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_2",
-            "title": "What quick-commerce delivery timeframe is cited at the beginning of the story?",
-            "options": [
-              "Under 10 minutes",
-              "Within 2 hours",
-              "Next-day delivery",
-              "4 to 6 hours"
+              "Under ten minutes",
+              "Within forty-five minutes",
+              "Two to three hours",
+              "Next business day"
             ],
             "correctOption": 0,
-            "explanation": "The story highlights quick-commerce orders arriving at doorsteps in under ten minutes.",
-            "category": "Market Context",
+            "explanation": "Based on the story, quick-commerce orders arrive at your doorstep in under ten minutes.",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_blive_3",
-            "title": "What business model does BLive operate to remain scalable?",
+            "id": "q_blive_549_2",
+            "title": "How many wheels define the high-payload cargo vehicle market targeted by BLive?",
             "options": [
-              "Asset-heavy manufacturing model",
-              "Government non-profit model",
-              "Franchise retail dealership",
-              "Asset-light model"
+              "Two-wheeler electric bikes",
+              "Four-wheeler cargo vehicles",
+              "Three-wheeler auto rickshaws",
+              "Six-wheeler heavy trucks"
             ],
-            "correctOption": 3,
-            "explanation": "BLive operates a highly scalable, asset-light business model.",
-            "category": "Business Model",
+            "correctOption": 1,
+            "explanation": "Based on the story, the collaboration targets the high-payload four-wheeler cargo market.",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_blive_4",
-            "title": "Which customer segments does BLive’s asset-light mobility platform serve?",
+            "id": "q_blive_549_3",
+            "title": "Which urban tier classification is specifically expanding alongside metropolitan centers for EV delivery?",
             "options": [
-              "Only agricultural tractor operators",
-              "Only international airline pilots",
-              "Both consumer and enterprise mobility",
-              "Only individual luxury car buyers"
+              "Tier-1 capitals only",
+              "Tier-4 rural hamlets",
+              "Expanding Tier-2 cities",
+              "Remote tribal territories"
             ],
             "correctOption": 2,
-            "explanation": "BLive is designed to serve both consumer and enterprise mobility segments.",
-            "category": "Target Market",
+            "explanation": "Based on the story, clean last-mile logistics is expanding rapidly across metropolitan centers and Tier-2 cities.",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_blive_5",
-            "title": "What type of solution does BLive’s B2B cargo division provide to enterprise clients?",
+            "id": "q_blive_549_4",
+            "title": "What milestone edition number marks today's featured cMPLi Dip story?",
             "options": [
-              "Crude oil refining",
-              "Full-stack fleet-as-a-service",
-              "Cardboard packaging sales",
-              "Vehicle insurance brokerage only"
-            ],
-            "correctOption": 1,
-            "explanation": "Concurrently, its B2B cargo division provides full-stack fleet-as-a-service solutions.",
-            "category": "Solutions",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_6",
-            "title": "Which enterprise client categories rely on BLive’s B2B cargo fleet solutions?",
-            "options": [
-              "E-commerce, quick-commerce, and logistics giants",
-              "Submarine research laboratories",
-              "Luxury ocean cruise lines",
-              "Space satellite launch centers"
-            ],
-            "correctOption": 0,
-            "explanation": "BLive serves e-commerce, quick-commerce, and logistics enterprise giants.",
-            "category": "Target Market",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_7",
-            "title": "What four integrated pillars does BLive consolidate to help fleets transition away from fossil fuels?",
-            "options": [
-              "Drilling, refining, pipelines, and petrol pumps",
-              "TV ads, radio commercials, PR, and billboards",
-              "Highway tolls, asphalt mixing, paving, and painting",
-              "Sourcing, green financing, charging, and maintenance"
+              "500th edition story",
+              "525th edition story",
+              "540th edition story",
+              "549th edition story"
             ],
             "correctOption": 3,
-            "explanation": "BLive consolidates multi-brand vehicle sourcing, tailored green financing, charging infrastructure, and dedicated maintenance.",
-            "category": "Platform Ecosystem",
+            "explanation": "Based on the story, today's feature marks the 549th cMPLi Dip story.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_blive_8",
-            "title": "What vehicle category is specifically targeted in BLive’s milestone collaboration?",
+            "id": "q_blive_549_5",
+            "title": "How many core operational pillars does BLive consolidate into its turnkey platform?",
             "options": [
-              "Heavy diesel freight trains",
-              "Autonomous aerial drones",
-              "High-payload four-wheeler cargo market",
-              "Deep-sea cargo vessels"
-            ],
-            "correctOption": 2,
-            "explanation": "This milestone collaboration targets the high-payload four-wheeler cargo market.",
-            "category": "Fleet Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_9",
-            "title": "How does BLive enable enterprise logistics providers to scale electric deliveries?",
-            "options": [
-              "By requiring multi-crore upfront purchases",
-              "Without high capital expenditures (CapEx)",
-              "By manufacturing custom battery cells",
-              "By building private petroleum refineries"
-            ],
-            "correctOption": 1,
-            "explanation": "Enterprise logistics providers can scale electric deliveries without high capital expenditures.",
-            "category": "Financial Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_10",
-            "title": "What anchors BLive’s physical electric fleet rollout?",
-            "options": [
-              "Proprietary one-stop AI fleet management software",
-              "Imported diesel combustion engines",
-              "Manual paper logbooks",
-              "Roadside print advertising"
+              "Four operational pillars",
+              "Only one pillar",
+              "Two separate pillars",
+              "Seven independent pillars"
             ],
             "correctOption": 0,
-            "explanation": "Anchoring this physical fleet rollout is BLive’s proprietary, one-stop AI fleet management software platform.",
-            "category": "Technology",
+            "explanation": "Based on the story, BLive consolidates 4 pillars: vehicle sourcing, green financing, charging, and maintenance.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_blive_11",
-            "title": "Which core technologies power BLive’s intelligent vehicle software platform?",
+            "id": "q_blive_549_6",
+            "title": "How many automated telemetry capabilities are powered by BLive's AI platform?",
             "options": [
-              "Cryptocurrency token mining",
-              "Analog shortwave radio",
-              "Thermal coal combustion sensors",
-              "Real-time telemetry, machine learning, and predictive analytics"
-            ],
-            "correctOption": 3,
-            "explanation": "The system leverages real-time vehicle telemetry, machine learning, and predictive data analytics.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_12",
-            "title": "Which automated tasks are executed by BLive’s AI fleet management software?",
-            "options": [
-              "Music video streaming",
-              "Automated credit card applications",
-              "Route optimization, battery health monitoring, and preventive maintenance",
-              "Vehicle exterior repainting"
-            ],
-            "correctOption": 2,
-            "explanation": "The system automates smart route optimization, battery health monitoring, and preventive maintenance.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_13",
-            "title": "What primary financial benefit does BLive’s technology stack deliver to fleet operators?",
-            "options": [
-              "Guarantees zero corporate income tax",
-              "Dramatically reduces total cost of ownership (TCO)",
-              "Eliminates all driver wages",
-              "Doubles vehicle curb weight"
+              "Only one task",
+              "Four automated functions",
+              "Twelve separate systems",
+              "Over twenty manual logs"
             ],
             "correctOption": 1,
-            "explanation": "This intelligent technology stack dramatically reduces total cost of ownership.",
-            "category": "Value Proposition",
+            "explanation": "Based on the story, the platform automates 4 functions: route planning, battery SoC tracking, driver monitoring, and maintenance scheduling.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_blive_14",
-            "title": "What operational guarantee does BLive provide through its predictive maintenance stack?",
+            "id": "q_blive_549_7",
+            "title": "What contract duration do early-career managers negotiate with quick-commerce aggregators?",
             "options": [
-              "Maximum fleet uptime",
-              "Unlimited vehicle maximum speed",
-              "Free lifetime fuel replacement",
-              "Immunity from local traffic rules"
-            ],
-            "correctOption": 0,
-            "explanation": "Predictive maintenance and telemetry guarantee maximum fleet uptime.",
-            "category": "Operations",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_15",
-            "title": "In what geographic tier is clean last-mile logistics expanding alongside metropolitan centers?",
-            "options": [
-              "Remote alpine valleys",
-              "Uninhabited island territories",
-              "Deep-sea shipping lanes",
-              "Expanding Tier-2 cities"
-            ],
-            "correctOption": 3,
-            "explanation": "Clean last-mile logistics is transforming across metropolitan centers and expanding Tier-2 cities.",
-            "category": "Market Geography",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_16",
-            "title": "For graduating business talent, which primary growth vectors are highlighted in this sector?",
-            "options": [
-              "Back-office data entry only",
-              "Filing routine clerical paperwork",
-              "B2B Sales, Key Account Management, and Client Acquisition",
-              "Warehouse security night watch"
+              "Single-month spot leases",
+              "Ninety-day trial permits",
+              "Multi-year service agreements",
+              "Ten-year government treaties"
             ],
             "correctOption": 2,
-            "explanation": "Primary growth vectors lie in high-impact, client-facing roles such as B2B Sales, Key Account Management, and Client Acquisition.",
-            "category": "Career Pathways",
+            "explanation": "Based on the story, professionals negotiate multi-year service level agreements with high-growth quick-commerce aggregators.",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_blive_17",
-            "title": "What key business activity do early-career professionals in BLive handle with enterprise clients?",
+            "id": "q_blive_549_8",
+            "title": "What target fleet availability level does BLive guarantee across commercial delivery routes?",
             "options": [
-              "Changing vehicle motor oil manually",
-              "Pitching custom fleet electrification and structuring contracts",
-              "Driving delivery vans on highway routes",
-              "Creating consumer social media memes"
-            ],
-            "correctOption": 1,
-            "explanation": "Professionals directly engage with regional logistics partners, pitch custom fleet electrification, and structure contracts.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_18",
-            "title": "Who do client-facing professionals at BLive interface with directly?",
-            "options": [
-              "Regional logistics partners and enterprise clients",
-              "Individual retail bicycle shoppers",
-              "Traffic police constables",
-              "International holiday tourists"
-            ],
-            "correctOption": 0,
-            "explanation": "Professionals directly engage with regional logistics partners and enterprise logistics providers.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_19",
-            "title": "What is the primary environmental objective of BLive’s smart mobility platform?",
-            "options": [
-              "Increasing diesel engine exhaust volume",
-              "Promoting single-use plastic packaging",
-              "Building new offshore oil wells",
-              "Transitioning fleets seamlessly away from fossil fuels"
-            ],
-            "correctOption": 3,
-            "explanation": "BLive enables commercial operators to transition seamlessly away from fossil-fuel fleets.",
-            "category": "Sustainability",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_20",
-            "title": "How does BLive assist fleet operators with financing their electric transition?",
-            "options": [
-              "Through unregulated pawn shop loans",
-              "By requiring cash under the table",
-              "Through tailored green financing solutions",
-              "Through speculative cryptocurrency tokens"
-            ],
-            "correctOption": 2,
-            "explanation": "BLive consolidates tailored green financing designed for clean energy fleets.",
-            "category": "Finance",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_21",
-            "title": "Why is high-payload four-wheeler cargo electrification crucial for commercial logistics?",
-            "options": [
-              "Four-wheelers are legally exempt from traffic signals",
-              "It handles larger cargo volumes with clean, lower operating costs",
-              "Four-wheelers never require battery recharging",
-              "Drivers do not need a commercial driving license"
-            ],
-            "correctOption": 1,
-            "explanation": "High-payload four-wheelers handle significant freight volumes while lowering per-km operating expenses.",
-            "category": "Fleet Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_22",
-            "title": "In BLive’s platform model, what does \"Fleet-as-a-Service\" (FaaS) mean?",
-            "options": [
-              "Turnkey vehicles, financing, charging, and AI management as a service",
-              "Selling individual mopeds at shopping malls",
-              "Renting office desks to IT software firms",
-              "Operating passenger airline flights"
-            ],
-            "correctOption": 0,
-            "explanation": "FaaS delivers turnkey electric vehicles, charging infrastructure, and software management on a subscription basis.",
-            "category": "Business Model",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_23",
-            "title": "How does BLive prevent sudden battery breakdowns across its fleet?",
-            "options": [
-              "Replacing batteries after every single trip",
-              "Operating only on cloudy days",
-              "Disconnecting all electronic telemetry",
-              "Continuous real-time battery health monitoring and analytics"
-            ],
-            "correctOption": 3,
-            "explanation": "Telemetry and machine learning automate continuous battery health monitoring and predictive maintenance.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_24",
-            "title": "What overarching commercial strategy defines BLive’s success?",
-            "options": [
-              "Exiting commercial logistics to sell petrol cars",
-              "Closing Tier-2 operations to focus on overseas shipping",
-              "Full-stack electric fleet-as-a-service enabled by AI and asset-light partnerships",
-              "Selling steel vehicle body panels"
-            ],
-            "correctOption": 2,
-            "explanation": "BLive succeeds by combining asset-light vehicle sourcing, green financing, and proprietary AI fleet software.",
-            "category": "Strategic Vision",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_25",
-            "title": "Why are major e-commerce firms partnering with BLive rather than building EV fleets alone?",
-            "options": [
-              "E-commerce firms are legally prohibited from owning electric vehicles",
-              "BLive delivers an end-to-end ecosystem with charging, financing, and AI tracking",
-              "BLive receives 100% free vehicles from government",
-              "Independent electric fleets cannot run in Indian cities"
-            ],
-            "correctOption": 1,
-            "explanation": "BLive solves the complexity of vehicle procurement, financing, charging, and maintenance in one platform.",
-            "category": "Value Proposition",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_26",
-            "title": "Story Review: Which smart electric mobility platform is highlighted for transforming clean last-mile logistics?",
-            "options": [
-              "BLive",
-              "Ola Cabs",
-              "Uber Freight",
-              "Bounce Share"
-            ],
-            "correctOption": 0,
-            "explanation": "BLive is driving the transition toward smart, electrified commercial fleet operations.",
-            "category": "Company Profile",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_27",
-            "title": "Story Review: What quick-commerce delivery timeframe is cited at the beginning of the story?",
-            "options": [
-              "Within 2 hours",
-              "Next-day delivery",
-              "4 to 6 hours",
-              "Under 10 minutes"
-            ],
-            "correctOption": 3,
-            "explanation": "The story highlights quick-commerce orders arriving at doorsteps in under ten minutes.",
-            "category": "Market Context",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_28",
-            "title": "Story Review: What business model does BLive operate to remain scalable?",
-            "options": [
-              "Asset-heavy manufacturing model",
-              "Government non-profit model",
-              "Asset-light model",
-              "Franchise retail dealership"
-            ],
-            "correctOption": 2,
-            "explanation": "BLive operates a highly scalable, asset-light business model.",
-            "category": "Business Model",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_29",
-            "title": "Story Review: Which customer segments does BLive’s asset-light mobility platform serve?",
-            "options": [
-              "Only agricultural tractor operators",
-              "Both consumer and enterprise mobility",
-              "Only international airline pilots",
-              "Only individual luxury car buyers"
-            ],
-            "correctOption": 1,
-            "explanation": "BLive is designed to serve both consumer and enterprise mobility segments.",
-            "category": "Target Market",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_30",
-            "title": "Story Review: What type of solution does BLive’s B2B cargo division provide to enterprise clients?",
-            "options": [
-              "Full-stack fleet-as-a-service",
-              "Crude oil refining",
-              "Cardboard packaging sales",
-              "Vehicle insurance brokerage only"
-            ],
-            "correctOption": 0,
-            "explanation": "Concurrently, its B2B cargo division provides full-stack fleet-as-a-service solutions.",
-            "category": "Solutions",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_31",
-            "title": "Story Review: Which enterprise client categories rely on BLive’s B2B cargo fleet solutions?",
-            "options": [
-              "Submarine research laboratories",
-              "Luxury ocean cruise lines",
-              "Space satellite launch centers",
-              "E-commerce, quick-commerce, and logistics giants"
-            ],
-            "correctOption": 3,
-            "explanation": "BLive serves e-commerce, quick-commerce, and logistics enterprise giants.",
-            "category": "Target Market",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_32",
-            "title": "Story Review: What four integrated pillars does BLive consolidate to help fleets transition away from fossil fuels?",
-            "options": [
-              "Drilling, refining, pipelines, and petrol pumps",
-              "TV ads, radio commercials, PR, and billboards",
-              "Sourcing, green financing, charging, and maintenance",
-              "Highway tolls, asphalt mixing, paving, and painting"
-            ],
-            "correctOption": 2,
-            "explanation": "BLive consolidates multi-brand vehicle sourcing, tailored green financing, charging infrastructure, and dedicated maintenance.",
-            "category": "Platform Ecosystem",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_33",
-            "title": "Story Review: What vehicle category is specifically targeted in BLive’s milestone collaboration?",
-            "options": [
-              "Heavy diesel freight trains",
-              "High-payload four-wheeler cargo market",
-              "Autonomous aerial drones",
-              "Deep-sea cargo vessels"
-            ],
-            "correctOption": 1,
-            "explanation": "This milestone collaboration targets the high-payload four-wheeler cargo market.",
-            "category": "Fleet Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_34",
-            "title": "Story Review: How does BLive enable enterprise logistics providers to scale electric deliveries?",
-            "options": [
-              "Without high capital expenditures (CapEx)",
-              "By requiring multi-crore upfront purchases",
-              "By manufacturing custom battery cells",
-              "By building private petroleum refineries"
-            ],
-            "correctOption": 0,
-            "explanation": "Enterprise logistics providers can scale electric deliveries without high capital expenditures.",
-            "category": "Financial Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_35",
-            "title": "Story Review: What anchors BLive’s physical electric fleet rollout?",
-            "options": [
-              "Imported diesel combustion engines",
-              "Manual paper logbooks",
-              "Roadside print advertising",
-              "Proprietary one-stop AI fleet management software"
-            ],
-            "correctOption": 3,
-            "explanation": "Anchoring this physical fleet rollout is BLive’s proprietary, one-stop AI fleet management software platform.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_36",
-            "title": "Story Review: Which core technologies power BLive’s intelligent vehicle software platform?",
-            "options": [
-              "Cryptocurrency token mining",
-              "Analog shortwave radio",
-              "Real-time telemetry, machine learning, and predictive analytics",
-              "Thermal coal combustion sensors"
-            ],
-            "correctOption": 2,
-            "explanation": "The system leverages real-time vehicle telemetry, machine learning, and predictive data analytics.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_37",
-            "title": "Story Review: Which automated tasks are executed by BLive’s AI fleet management software?",
-            "options": [
-              "Music video streaming",
-              "Route optimization, battery health monitoring, and preventive maintenance",
-              "Automated credit card applications",
-              "Vehicle exterior repainting"
-            ],
-            "correctOption": 1,
-            "explanation": "The system automates smart route optimization, battery health monitoring, and preventive maintenance.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_38",
-            "title": "Story Review: What primary financial benefit does BLive’s technology stack deliver to fleet operators?",
-            "options": [
-              "Dramatically reduces total cost of ownership (TCO)",
-              "Guarantees zero corporate income tax",
-              "Eliminates all driver wages",
-              "Doubles vehicle curb weight"
-            ],
-            "correctOption": 0,
-            "explanation": "This intelligent technology stack dramatically reduces total cost of ownership.",
-            "category": "Value Proposition",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_39",
-            "title": "Story Review: What operational guarantee does BLive provide through its predictive maintenance stack?",
-            "options": [
-              "Unlimited vehicle maximum speed",
-              "Free lifetime fuel replacement",
-              "Immunity from local traffic rules",
+              "50 percent availability",
+              "Weekend operation only",
+              "Standard seasonal operation",
               "Maximum fleet uptime"
             ],
             "correctOption": 3,
-            "explanation": "Predictive maintenance and telemetry guarantee maximum fleet uptime.",
-            "category": "Operations",
+            "explanation": "Based on the story, the intelligent technology stack guarantees maximum fleet uptime across nationwide commercial routes.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_blive_40",
-            "title": "Story Review: In what geographic tier is clean last-mile logistics expanding alongside metropolitan centers?",
+            "id": "q_blive_549_9",
+            "title": "Which company is highlighted as driving clean last-mile logistics across India?",
             "options": [
-              "Remote alpine valleys",
-              "Uninhabited island territories",
-              "Expanding Tier-2 cities",
-              "Deep-sea shipping lanes"
-            ],
-            "correctOption": 2,
-            "explanation": "Clean last-mile logistics is transforming across metropolitan centers and expanding Tier-2 cities.",
-            "category": "Market Geography",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_41",
-            "title": "Story Review: For graduating business talent, which primary growth vectors are highlighted in this sector?",
-            "options": [
-              "Back-office data entry only",
-              "B2B Sales, Key Account Management, and Client Acquisition",
-              "Filing routine clerical paperwork",
-              "Warehouse security night watch"
-            ],
-            "correctOption": 1,
-            "explanation": "Primary growth vectors lie in high-impact, client-facing roles such as B2B Sales, Key Account Management, and Client Acquisition.",
-            "category": "Career Pathways",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_42",
-            "title": "Story Review: What key business activity do early-career professionals in BLive handle with enterprise clients?",
-            "options": [
-              "Pitching custom fleet electrification and structuring contracts",
-              "Changing vehicle motor oil manually",
-              "Driving delivery vans on highway routes",
-              "Creating consumer social media memes"
+              "BLive",
+              "Ola Cabs",
+              "Uber Freight",
+              "Bounce Share"
             ],
             "correctOption": 0,
-            "explanation": "Professionals directly engage with regional logistics partners, pitch custom fleet electrification, and structure contracts.",
-            "category": "Career Pathways",
+            "explanation": "Based on the story, BLive is the integrated smart electric mobility platform driving clean last-mile logistics.",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_blive_43",
-            "title": "Story Review: Who do client-facing professionals at BLive interface with directly?",
+            "id": "q_blive_549_10",
+            "title": "What primary business model does BLive operate to remain scalable?",
             "options": [
-              "Individual retail bicycle shoppers",
-              "Traffic police constables",
-              "International holiday tourists",
-              "Regional logistics partners and enterprise clients"
+              "Heavy manufacturing model",
+              "Asset-light business model",
+              "Direct retail ownership",
+              "Government utility service"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive operates a highly scalable, asset-light business model.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_11",
+            "title": "What comprehensive solution does BLive's B2B cargo division provide to enterprise delivery giants?",
+            "options": [
+              "Software licensing only",
+              "Vehicle scrapping",
+              "Fleet-as-a-service",
+              "Third-party insurance"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, BLive's B2B cargo division provides full-stack fleet-as-a-service solutions.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_12",
+            "title": "What proprietary technology anchors BLive's physical fleet rollout?",
+            "options": [
+              "Manual spreadsheet tracking",
+              "Radio dispatch system",
+              "Blockchain ledger network",
+              "AI fleet management platform"
             ],
             "correctOption": 3,
-            "explanation": "Professionals directly engage with regional logistics partners and enterprise logistics providers.",
-            "category": "Career Pathways",
+            "explanation": "Based on the story, the physical rollout is anchored by BLive's proprietary, one-stop AI fleet management software platform.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_blive_44",
-            "title": "Story Review: What is the primary environmental objective of BLive’s smart mobility platform?",
+            "id": "q_blive_549_13",
+            "title": "Which route capability is automated using BLive's real-time vehicle telemetry?",
             "options": [
-              "Increasing diesel engine exhaust volume",
-              "Promoting single-use plastic packaging",
-              "Transitioning fleets seamlessly away from fossil fuels",
-              "Building new offshore oil wells"
-            ],
-            "correctOption": 2,
-            "explanation": "BLive enables commercial operators to transition seamlessly away from fossil-fuel fleets.",
-            "category": "Sustainability",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_45",
-            "title": "Story Review: How does BLive assist fleet operators with financing their electric transition?",
-            "options": [
-              "Through unregulated pawn shop loans",
-              "Through tailored green financing solutions",
-              "By requiring cash under the table",
-              "Through speculative cryptocurrency tokens"
-            ],
-            "correctOption": 1,
-            "explanation": "BLive consolidates tailored green financing designed for clean energy fleets.",
-            "category": "Finance",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_46",
-            "title": "Story Review: Why is high-payload four-wheeler cargo electrification crucial for commercial logistics?",
-            "options": [
-              "It handles larger cargo volumes with clean, lower operating costs",
-              "Four-wheelers are legally exempt from traffic signals",
-              "Four-wheelers never require battery recharging",
-              "Drivers do not need a commercial driving license"
+              "Smart route planning",
+              "Credit card billing",
+              "Social media marketing",
+              "Storefront retail leases"
             ],
             "correctOption": 0,
-            "explanation": "High-payload four-wheelers handle significant freight volumes while lowering per-km operating expenses.",
-            "category": "Fleet Strategy",
+            "explanation": "Based on the story, telemetry and analytics automate smart route planning.",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_blive_47",
-            "title": "Story Review: In BLive’s platform model, what does \"Fleet-as-a-Service\" (FaaS) mean?",
+            "id": "q_blive_549_14",
+            "title": "What critical battery metric is tracked live through BLive's intelligent platform?",
             "options": [
-              "Selling individual mopeds at shopping malls",
-              "Renting office desks to IT software firms",
-              "Operating passenger airline flights",
-              "Turnkey vehicles, financing, charging, and AI management as a service"
+              "Factory warranty claims",
+              "Battery state-of-charge",
+              "Vehicle retail resale price",
+              "Battery scrap weight"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive tracks live battery state-of-charge (SoC) in real time.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_15",
+            "title": "How does BLive prevent vehicle breakdowns across commercial delivery routes?",
+            "options": [
+              "Annual manual inspection",
+              "Unscheduled breakdown towing",
+              "Dynamic preventive maintenance",
+              "Driver self-repair"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, the platform automates dynamic preventive maintenance scheduling.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_16",
+            "title": "What financial hurdle does BLive eliminate for enterprise delivery fleets?",
+            "options": [
+              "Daily driver wage payouts",
+              "Goods and services tax",
+              "Warehouse property rent",
+              "Upfront capital expenditure"
             ],
             "correctOption": 3,
-            "explanation": "FaaS delivers turnkey electric vehicles, charging infrastructure, and software management on a subscription basis.",
-            "category": "Business Model",
+            "explanation": "Based on the story, BLive eliminates capital expenditure (CapEx) barriers by consolidating vehicle sourcing, financing, and charging.",
+            "category": "Finance & Scale",
             "pts": 11
           },
           {
-            "id": "q_blive_48",
-            "title": "Story Review: How does BLive prevent sudden battery breakdowns across its fleet?",
+            "id": "q_blive_549_17",
+            "title": "What key economic benefit does BLive's intelligent technology stack deliver to operators?",
             "options": [
-              "Replacing batteries after every single trip",
-              "Operating only on cloudy days",
-              "Continuous real-time battery health monitoring and analytics",
-              "Disconnecting all electronic telemetry"
-            ],
-            "correctOption": 2,
-            "explanation": "Telemetry and machine learning automate continuous battery health monitoring and predictive maintenance.",
-            "category": "Technology",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_49",
-            "title": "Story Review: What overarching commercial strategy defines BLive’s success?",
-            "options": [
-              "Exiting commercial logistics to sell petrol cars",
-              "Full-stack electric fleet-as-a-service enabled by AI and asset-light partnerships",
-              "Closing Tier-2 operations to focus on overseas shipping",
-              "Selling steel vehicle body panels"
-            ],
-            "correctOption": 1,
-            "explanation": "BLive succeeds by combining asset-light vehicle sourcing, green financing, and proprietary AI fleet software.",
-            "category": "Strategic Vision",
-            "pts": 11
-          },
-          {
-            "id": "q_blive_50",
-            "title": "Story Review: Why are major e-commerce firms partnering with BLive rather than building EV fleets alone?",
-            "options": [
-              "BLive delivers an end-to-end ecosystem with charging, financing, and AI tracking",
-              "E-commerce firms are legally prohibited from owning electric vehicles",
-              "BLive receives 100% free vehicles from government",
-              "Independent electric fleets cannot run in Indian cities"
+              "Lower total ownership cost",
+              "Higher vehicle export tariffs",
+              "Increased fuel consumption",
+              "Higher insurance premiums"
             ],
             "correctOption": 0,
-            "explanation": "BLive solves the complexity of vehicle procurement, financing, charging, and maintenance in one platform.",
-            "category": "Value Proposition",
+            "explanation": "Based on the story, the intelligent technology stack dramatically reduces total cost of ownership (TCO).",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_18",
+            "title": "Which enterprise customer segment relies heavily on BLive's clean delivery fleet?",
+            "options": [
+              "Luxury holiday resorts",
+              "Quick-commerce aggregators",
+              "Commercial airlines",
+              "Heavy mining contractors"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive provides fleet solutions to e-commerce, quick-commerce, and logistics giants.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_19",
+            "title": "Which front-line role offers high career velocity for graduating business talent at BLive?",
+            "options": [
+              "Assembly line manufacturing",
+              "Software kernel compilation",
+              "B2B Sales",
+              "Administrative filing"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, the primary growth vectors lie in high-impact, client-facing roles such as B2B Sales.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_20",
+            "title": "What strategic deliverable do professionals pitch to enterprise logistics accounts?",
+            "options": [
+              "Traditional diesel overhauls",
+              "Consumer advertising billboards",
+              "Cryptocurrency investments",
+              "Custom fleet electrification roadmaps"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, professionals pitch custom fleet electrification roadmaps to enterprise accounts.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_21",
+            "title": "What type of financing does BLive consolidate for delivery fleet operators?",
+            "options": [
+              "Tailored green financing",
+              "High-interest payday loans",
+              "Foreign sovereign bonds",
+              "Peer-to-peer microloans"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, BLive consolidates tailored green financing alongside charging infrastructure.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_22",
+            "title": "What vehicle sourcing approach does BLive employ to meet diverse customer requirements?",
+            "options": [
+              "Single-brand exclusive manufacturing",
+              "Multi-brand vehicle sourcing",
+              "Imported luxury vehicles",
+              "Second-hand vehicle auctions"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive consolidates multi-brand vehicle sourcing for commercial delivery fleets.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_23",
+            "title": "What operational infrastructure does BLive provide alongside electric vehicles?",
+            "options": [
+              "Highway petrol stations",
+              "Airport runway tarmac",
+              "Dedicated charging and maintenance",
+              "Automotive retail showrooms"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, BLive bundles charging infrastructure and dedicated maintenance operations.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_24",
+            "title": "Who are the regional partners that early-career professionals directly engage with?",
+            "options": [
+              "Maritime shipping lines",
+              "Individual retail homeowners",
+              "University athletic departments",
+              "Regional logistics partners"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, early-career professionals engage directly with regional logistics partners.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_25",
+            "title": "What analytical tool enables BLive to predict maintenance needs dynamically?",
+            "options": [
+              "Predictive data analytics",
+              "Printed workshop manuals",
+              "Manual odometer checks",
+              "Driver guesswork"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, predictive data analytics and machine learning schedule preventive maintenance dynamically.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_26",
+            "title": "What aspect of driver behavior is monitored by BLive's AI platform?",
+            "options": [
+              "Personal banking transactions",
+              "Driver performance monitoring",
+              "Off-duty social activities",
+              "Personal political preferences"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, the platform automates driver performance monitoring.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_27",
+            "title": "Which management role focuses on nurturing long-term relationships with large corporate clients?",
+            "options": [
+              "Mechanical grease technician",
+              "Assembly line welder",
+              "Key Account Management",
+              "Warehouse security guard"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, Key Account Management is a primary high-impact growth vector.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_28",
+            "title": "How does BLive expand its network without heavy vehicle manufacturing investments?",
+            "options": [
+              "Building giant steel factories",
+              "Government takeover decrees",
+              "Hostile corporate buyouts",
+              "Multi-stakeholder partnerships"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, BLive leverages innovative multi-stakeholder partnerships to scale with an asset-light model.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_29",
+            "title": "What payload capacity distinguishes BLive's cargo vehicle collaboration?",
+            "options": [
+              "High-payload capacity",
+              "Ultralight drone capacity",
+              "Micro passenger capacity",
+              "Zero-load bicycle capacity"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, the collaboration targets the high-payload four-wheeler cargo market.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_30",
+            "title": "What is the overarching mission of BLive's commercial mobility division?",
+            "options": [
+              "Diesel engine manufacturing",
+              "Emission-free delivery capacity",
+              "Private jet leasing",
+              "Coal freight logistics"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive enables providers to scale emission-free delivery capacity rapidly.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_31",
+            "title": "Which client-facing role drives new commercial accounts for BLive?",
+            "options": [
+              "Software documentation archivist",
+              "Inventory barcode scanner",
+              "Enterprise Client Acquisition",
+              "Facility cafeteria manager"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, Strategic Enterprise Client Acquisition is a core growth vector.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_32",
+            "title": "What geographic scope does BLive's fleet management software cover?",
+            "options": [
+              "Single-neighborhood pilot routes",
+              "Rural dirt pathways only",
+              "Overseas maritime lanes",
+              "Nationwide commercial delivery"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, BLive guarantees uptime across nationwide commercial delivery routes.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_33",
+            "title": "How are vehicle telemetry data processed within BLive's platform?",
+            "options": [
+              "Machine learning algorithms",
+              "Manual hand calculations",
+              "Punched card readers",
+              "Weekly paper mailings"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, machine learning and real-time telemetry automate fleet intelligence.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_34",
+            "title": "What makes clean last-mile logistics critical in modern Indian cities?",
+            "options": [
+              "Declining urban populations",
+              "Rapid quick-commerce growth",
+              "Phasing out online shopping",
+              "Reduced retail supply chains"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, rapid e-commerce and quick-commerce growth are transforming supply chains.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_35",
+            "title": "What barrier often prevents delivery providers from adopting electric vehicles independently?",
+            "options": [
+              "Excessive driver availability",
+              "Too many free chargers",
+              "High vehicle acquisition cost",
+              "Lack of delivery demand"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, capital expenditure barriers prevent rapid fleet electrification.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_36",
+            "title": "How does BLive remove upfront capital hurdles for commercial logistics providers?",
+            "options": [
+              "Selling second-hand diesel vans",
+              "Demanding 100% upfront cash",
+              "Subcontracting foreign fleets",
+              "Full-stack fleet bundling"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, BLive bundles vehicle sourcing, green financing, and maintenance into a single service.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_37",
+            "title": "What type of telemetry data is monitored for route optimization?",
+            "options": [
+              "Real-time vehicle location",
+              "Radio broadcast volume",
+              "Driver family history",
+              "Cabin air scent"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, real-time vehicle telemetry feeds smart route planning.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_38",
+            "title": "What role do early-career professionals play in client negotiations?",
+            "options": [
+              "Draft internal code compilers",
+              "Negotiate service contracts",
+              "Perform brake pad machining",
+              "Sweep warehouse loading docks"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, early-career professionals negotiate multi-year service level agreements.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_39",
+            "title": "What market need does BLive fulfill for e-commerce platforms?",
+            "options": [
+              "Used petrol motorbikes",
+              "Consumer personal auto loans",
+              "Reliable electrified fleets",
+              "Office furniture leasing"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, BLive fulfills the need for reliable, turnkey electrified fleets.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_40",
+            "title": "What primary technology component automates BLive's preventive maintenance?",
+            "options": [
+              "Analog pressure gauges",
+              "Paper punch cards",
+              "Magnetic tape drives",
+              "Predictive telemetry algorithms"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, predictive analytics and telemetry schedule maintenance before breakdowns occur.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_41",
+            "title": "What business advantage does an asset-light model provide to BLive?",
+            "options": [
+              "Rapid operational scalability",
+              "Heavy factory depreciation",
+              "High fixed property overhead",
+              "Slow geographic expansion"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, an asset-light model enables rapid, scalable nationwide expansion.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_42",
+            "title": "Which logistics sector is the primary beneficiary of BLive's four-wheeler rollout?",
+            "options": [
+              "Private passenger taxi fleets",
+              "Enterprise cargo delivery",
+              "Agricultural harvesting teams",
+              "Luxury limousine rentals"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, the collaboration targets enterprise cargo delivery providers.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_43",
+            "title": "What ensures battery health remains optimal across BLive's fleet?",
+            "options": [
+              "Occasional visual inspection",
+              "Replacing batteries monthly",
+              "Live state-of-charge tracking",
+              "Ignoring battery temperatures"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, live state-of-charge tracking protects battery longevity.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_44",
+            "title": "What type of contracts create recurring revenue stability for BLive?",
+            "options": [
+              "One-time vehicle auctions",
+              "Pay-per-minute rentals",
+              "Hourly parking tickets",
+              "Multi-year service agreements"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, multi-year service agreements create durable commercial partnerships.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_45",
+            "title": "What commercial skill is essential for early-career growth in EV fleet management?",
+            "options": [
+              "B2B client acquisition",
+              "Automotive body painting",
+              "Manual transmission assembly",
+              "Highway toll collection"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, B2B sales and enterprise client acquisition offer the highest velocity.",
+            "category": "Careers & Leadership",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_46",
+            "title": "How does BLive simplify charging for delivery drivers?",
+            "options": [
+              "Domestic household extension cords",
+              "Integrated charging network",
+              "Solar panels on roofs",
+              "Manual generator hand-cranks"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive consolidates dedicated charging infrastructure for delivery fleets.",
+            "category": "Operational Execution",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_47",
+            "title": "Which customer benefit directly results from reduced total cost of ownership?",
+            "options": [
+              "Higher maintenance downtime",
+              "Greater fuel dependency",
+              "Improved operating margins",
+              "Increased vehicle weight"
+            ],
+            "correctOption": 2,
+            "explanation": "Based on the story, lowering total cost of ownership improves fleet operating margins.",
+            "category": "Finance & Scale",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_48",
+            "title": "What makes BLive's platform a one-stop solution for delivery providers?",
+            "options": [
+              "Only supplying spare tires",
+              "Offering driver uniforms only",
+              "Providing road maps only",
+              "End-to-end service integration"
+            ],
+            "correctOption": 3,
+            "explanation": "Based on the story, BLive combines vehicles, financing, charging, and maintenance into one platform.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_49",
+            "title": "What strategic asset protects BLive from competitive commoditization?",
+            "options": [
+              "Proprietary AI fleet software",
+              "Third-party vehicle patents",
+              "Exclusive highway ownership",
+              "Imported diesel stock"
+            ],
+            "correctOption": 0,
+            "explanation": "Based on the story, BLive's proprietary AI fleet management platform anchors its market position.",
+            "category": "Business Strategy",
+            "pts": 11
+          },
+          {
+            "id": "q_blive_549_50",
+            "title": "What is the primary commercial identity of BLive presented in the case study?",
+            "options": [
+              "Traditional diesel dealership",
+              "Smart electric mobility platform",
+              "General roadside garage",
+              "Automotive scrap recycler"
+            ],
+            "correctOption": 1,
+            "explanation": "Based on the story, BLive is an integrated smart electric mobility platform.",
+            "category": "Business Strategy",
             "pts": 11
           }
         ],
