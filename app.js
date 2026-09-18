@@ -3,7 +3,19 @@ var APP_PATH_PREFIX = window.APP_PATH_PREFIX || ((typeof window !== 'undefined' 
 function apiFetch(endpoint, options = {}) {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : ('/' + endpoint);
     const url = APP_PATH_PREFIX + cleanEndpoint;
-    return fetch(url, options);
+    const opt = { ...options };
+    opt.headers = { ...(options.headers || {}) };
+
+    const crtToken = window._creatorAuthToken || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_creator_token') : null);
+    if (crtToken && !opt.headers['x-creator-token'] && !opt.headers['authorization']) {
+        opt.headers['x-creator-token'] = crtToken;
+    }
+    const crtSecret = window._creatorAdminSecret || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
+    if (crtSecret && !opt.headers['x-admin-secret']) {
+        opt.headers['x-admin-secret'] = crtSecret;
+    }
+
+    return fetch(url, opt);
 }
 window.apiFetch = apiFetch;
 window.APP_PATH_PREFIX = APP_PATH_PREFIX;
@@ -16668,31 +16680,86 @@ function resolvePlatformUserRole(rawInput) {
         return false;
     }) || (isValidPhone && defaultAdminPhones.includes(cleanPhone));
 
-    if (isAdmin) {
+    // Check cached/stored SimplyBe Team Members
+    const teamPool = (window._cachedTeamMembers && window._cachedTeamMembers.length > 0)
+        ? window._cachedTeamMembers
+        : (window.APP_CONFIG && Array.isArray(window.APP_CONFIG.teamMembers) ? window.APP_CONFIG.teamMembers : []);
+    const matchedTeam = teamPool.find(tm => 
+        (tm.email && tm.email.toLowerCase().trim() === loginId) ||
+        (isValidPhone && tm.phone && String(tm.phone).replace(/\D/g, '').endsWith(cleanPhone))
+    );
+
+    if (isAdmin || matchedTeam) {
         return {
             role: 'creator',
+            teamRole: matchedTeam ? matchedTeam.role : 'super_creator',
             user: {
-                _id: 'creator_' + (isEmail ? loginId.split('@')[0] : cleanPhone),
-                name: 'cMPLi Creator',
-                email: isEmail ? loginId : 'cmplibesai@gmail.com',
-                phone: isValidPhone ? cleanPhone : '6309764212',
+                _id: matchedTeam ? matchedTeam.id : ('creator_' + (isEmail ? loginId.split('@')[0] : cleanPhone)),
+                name: matchedTeam ? matchedTeam.name : 'cMPLi Creator',
+                email: isEmail ? loginId : (matchedTeam ? matchedTeam.email : 'cmplibesai@gmail.com'),
+                phone: isValidPhone ? cleanPhone : (matchedTeam ? matchedTeam.phone : '6309764212'),
+                employeeId: matchedTeam ? matchedTeam.employeeId : 'CMPLI-001',
                 isAdmin: true
             }
         };
     }
 
-    // 2. CAMPUS PARTNERS
+    // 2. CORPORATE HIRING PARTNERS (Recruiters)
+    const employerPool = (window._cachedEmployers && window._cachedEmployers.length > 0)
+        ? window._cachedEmployers
+        : (window.APP_CONFIG && Array.isArray(window.APP_CONFIG.employers) ? window.APP_CONFIG.employers : []);
+    const matchedEmployer = employerPool.find(emp => 
+        (emp.email && emp.email.toLowerCase().trim() === loginId) ||
+        (isValidPhone && emp.phone && String(emp.phone).replace(/\D/g, '').endsWith(cleanPhone))
+    );
+
+    if (matchedEmployer) {
+        return {
+            role: 'recruiter',
+            user: {
+                _id: matchedEmployer.id || ('emp_' + (isEmail ? loginId.split('@')[0] : cleanPhone)),
+                name: matchedEmployer.recruiterName || 'Talent Partner',
+                companyName: matchedEmployer.companyName || 'Corporate Partner',
+                email: isEmail ? loginId : matchedEmployer.email,
+                phone: isValidPhone ? cleanPhone : matchedEmployer.phone,
+                industry: matchedEmployer.industry || 'Technology & Innovation',
+                designation: matchedEmployer.designation || 'Talent Acquisition',
+                role: 'recruiter'
+            }
+        };
+    }
+
+    // 3. CAMPUS PARTNERS (Multi-Coordinator & Legacy DB)
+    const campusPool = (window._cachedCampuses && window._cachedCampuses.length > 0)
+        ? window._cachedCampuses
+        : (window.APP_CONFIG && Array.isArray(window.APP_CONFIG.campuses) ? window.APP_CONFIG.campuses : []);
+    const matchedCampus = campusPool.find(cmp => 
+        Array.isArray(cmp.coordinators) && cmp.coordinators.some(c => 
+            (c.email && c.email.toLowerCase().trim() === loginId) ||
+            (isValidPhone && c.phone && String(c.phone).replace(/\D/g, '').endsWith(cleanPhone))
+        )
+    );
+
     const partnersDB = (typeof campusPartnersDB !== 'undefined' && campusPartnersDB) ? campusPartnersDB : {};
-    const partnerMangoes = partnersDB[loginId] || (isValidPhone && partnersDB[cleanPhone]);
-    if (partnerMangoes) {
+    const partnerMangoes = matchedCampus ? (matchedCampus.mangoIds || []) : (partnersDB[loginId] || (isValidPhone && partnersDB[cleanPhone]));
+
+    if (matchedCampus || partnerMangoes) {
+        const coord = matchedCampus && Array.isArray(matchedCampus.coordinators)
+            ? matchedCampus.coordinators.find(c => (c.email && c.email.toLowerCase().trim() === loginId) || (isValidPhone && c.phone && String(c.phone).replace(/\D/g, '').endsWith(cleanPhone)))
+            : null;
+
         return {
             role: 'partner',
             partnerAllowedMangoes: Array.isArray(partnerMangoes) ? partnerMangoes : [],
+            campusId: matchedCampus ? matchedCampus.id : 'campus_partner',
+            campusName: matchedCampus ? matchedCampus.name : 'Partner College',
             user: {
                 _id: 'partner_' + (isEmail ? loginId.split('@')[0] : cleanPhone),
-                name: 'Campus Partner',
-                email: isEmail ? loginId : 'partner@cmplibe.com',
-                phone: isValidPhone ? cleanPhone : ''
+                name: coord ? coord.name : 'Campus Partner',
+                email: isEmail ? loginId : (coord ? coord.email : 'partner@cmplibe.com'),
+                phone: isValidPhone ? cleanPhone : (coord ? coord.phone : ''),
+                campusId: matchedCampus ? matchedCampus.id : '',
+                campusName: matchedCampus ? matchedCampus.name : 'Partner College'
             }
         };
     }
@@ -16868,9 +16935,31 @@ async function verifyOTP() {
             if (learnerNav) learnerNav.classList.add('hidden');
             if (adminNav) adminNav.classList.remove('hidden');
 
-            switchTab('adminTab');
-            if (typeof initAdminApp === 'function') {
-                initAdminApp().catch(e => console.warn('Partner init:', e));
+        } else if (role === 'recruiter') {
+            isAdminLogin = false;
+            isCampusPartner = false;
+            window.isRecruiterLogin = true;
+            currentUser = authUser;
+            try {
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.setItem('isRecruiterLogin', 'true');
+                localStorage.removeItem('isAdminLogin');
+                sessionStorage.removeItem('isAdminLogin');
+            } catch(e) {}
+
+            if (learnerNav) learnerNav.classList.add('hidden');
+            if (adminNav) adminNav.classList.add('hidden');
+            const recruiterNav = document.getElementById('recruiterNav');
+            if (recruiterNav) recruiterNav.classList.remove('hidden');
+
+            const badge = document.getElementById('recruiterHeaderBadge');
+            if (badge) badge.innerText = authUser.companyName || 'Hiring Partner';
+            const compName = document.getElementById('recruiterCompanyName');
+            if (compName) compName.innerText = authUser.companyName || 'Corporate Partner';
+
+            switchTab('recruiterTab');
+            if (typeof initRecruiterPortal === 'function') {
+                initRecruiterPortal();
             }
         } else {
             // Role is 'customer' or 'test_user' -> ONLY LEARNER ACCESS
@@ -17727,7 +17816,7 @@ async function switchTab(tab) {
         syncGlobalServerData().catch(() => {});
     }
 
-    const tabs = ['dashboardTab', 'levelUpTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab'];
+    const tabs = ['dashboardTab', 'levelUpTab', 'careerViewsTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab', 'managementTab', 'recruiterTab'];
     
     // 1. Hide all tab content sections
     tabs.forEach(t => {
@@ -17759,6 +17848,24 @@ async function switchTab(tab) {
         if (typeof updateDashboardUI === 'function') updateDashboardUI();
         if (currentUser && typeof renderSubmissionsAndReflections === 'function') {
             renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
+        }
+    }
+
+    if (tab === 'careerViewsTab') {
+        if (typeof renderLearnerCareerViews === 'function') {
+            renderLearnerCareerViews();
+        }
+    }
+
+    if (tab === 'managementTab') {
+        if (typeof initManagementConsole === 'function') {
+            initManagementConsole();
+        }
+    }
+
+    if (tab === 'recruiterTab') {
+        if (typeof initRecruiterPortal === 'function') {
+            initRecruiterPortal();
         }
     }
 
@@ -17832,19 +17939,13 @@ function renderAdminMilestoneGrid() {
     document.getElementById('adminMilestoneDetailContainer')?.classList.add('hidden');
     grid.classList.remove('hidden');
 
-    let partnerManageBtn = '';
-    if (!isCampusPartner) {
-        partnerManageBtn = `
-        <div class="col-span-1 md:col-span-2 mb-2 flex justify-between items-center">
-            <div>
-                <h3 class="text-lg font-bold text-white font-heading">Level-Up Milestones & Cohort Pathways</h3>
-                <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and learning objectives.</p>
-            </div>
-            <button onclick="openPartnerManagementModal()" class="btn-secondary py-2 px-4 text-xs">
-                <i class="fas fa-handshake text-emerald-400 mr-1.5"></i> Manage Campus Partners
-            </button>
-        </div>`;
-    }
+    const headerHtml = `
+    <div class="col-span-1 md:col-span-2 mb-2 flex justify-between items-center">
+        <div>
+            <h3 class="text-lg font-bold text-white font-heading">Level-Up Milestones & Cohort Pathways</h3>
+            <p class="text-xs text-slate-400">Configure daily reflections, randomized POD quizzes, and learning objectives.</p>
+        </div>
+    </div>`;
 
     const gridCards = milestoneConfig.map(ms => {
         const enabledMods = getEnabledModulesForMilestone(ms.id);
@@ -18257,3 +18358,900 @@ if (typeof window !== 'undefined') {
         }
     });
 }
+
+// =============================================================
+// SIMPLYBE MANAGEMENT HUB & CORPORATE TALENT ARENA ENGINE
+// =============================================================
+
+// In-memory state for Management console
+window._cachedTeamMembers = window._cachedTeamMembers || [];
+window._cachedEmployers = window._cachedEmployers || [];
+window._cachedCampuses = window._cachedCampuses || [];
+window._mgmtActiveSubTab = 'team';
+window._cachedGeoData = null;
+window._recruiterCandidatesCache = [];
+
+// Fallback authoritative geo dataset if network is lagging
+const LOCAL_FALLBACK_GEO = {
+    "Karnataka": [
+        "Bagalkote", "Ballari (Bellary)", "Belagavi (Belgaum)", "Bengaluru Rural", "Bengaluru Urban",
+        "Bidar", "Chamarajanagar", "Chikkaballapur", "Chikkamagaluru", "Chitradurga",
+        "Dakshina Kannada (Mangaluru)", "Davanagere", "Dharwad (Hubballi-Dharwad)", "Gadag", "Hassan",
+        "Haveri", "Kalaburagi (Gulbarga)", "Kodagu (Coorg)", "Kolar", "Koppal",
+        "Mandya", "Mysuru (Mysore)", "Raichur", "Ramanagara", "Shivamogga (Shimoga)",
+        "Tumakuru (Tumkur)", "Udupi", "Uttara Kannada (Karwar)", "Vijayanagara", "Vijayapura (Bijapur)", "Yadgir"
+    ],
+    "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tirunelveli", "Erode", "Vellore"],
+    "Telangana": ["Hyderabad", "Ranga Reddy", "Medchal-Malkajgiri", "Warangal", "Karimnagar", "Nizamabad"],
+    "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Tirupati", "Kurnool", "Nellore", "Ananthapuramu"],
+    "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad (Chhatrapati Sambhajinagar)", "Thane"],
+    "Kerala": ["Thiruvananthapuram", "Ernakulam (Kochi)", "Kozhikode", "Thrissur", "Kannur", "Kottayam"]
+};
+
+// -------------------------------------------------------------
+// 1. SUB-HUB SWITCHER
+// -------------------------------------------------------------
+function switchManagementSubTab(subTab) {
+    window._mgmtActiveSubTab = subTab;
+    const tabs = ['team', 'corporates', 'campuses'];
+    
+    tabs.forEach(t => {
+        const pane = document.getElementById(`mgmtSubTab-${t}`);
+        const btn = document.getElementById(`mgmtSubTabBtn-${t}`);
+        if (pane) {
+            if (t === subTab) {
+                pane.classList.remove('hidden');
+            } else {
+                pane.classList.add('hidden');
+            }
+        }
+        if (btn) {
+            if (t === subTab) {
+                btn.className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
+            } else {
+                btn.className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60";
+            }
+        }
+    });
+
+    if (subTab === 'team') renderManagementTeam();
+    if (subTab === 'corporates') renderManagementCorporates();
+    if (subTab === 'campuses') renderManagementCampuses();
+}
+window.switchManagementSubTab = switchManagementSubTab;
+
+// -------------------------------------------------------------
+// 2. CONSOLE INITIALIZATION
+// -------------------------------------------------------------
+async function initManagementConsole() {
+    try {
+        // Load Geo Dataset
+        if (!window._cachedGeoData) {
+            try {
+                const geoRes = await apiFetch('/api/config/geo');
+                const geoJson = await geoRes.json();
+                if (geoJson.success && geoJson.data) {
+                    window._cachedGeoData = geoJson.data;
+                }
+            } catch (e) {
+                window._cachedGeoData = LOCAL_FALLBACK_GEO;
+            }
+        }
+        populateMgmtDistrictOptions();
+
+        // Populate Solutions checkboxes for campus registration
+        const solContainer = document.getElementById('mgmtCampusSolutionsList');
+        if (solContainer && typeof allAdminMangos !== 'undefined' && Array.isArray(allAdminMangos)) {
+            solContainer.innerHTML = allAdminMangos.map(m => `
+                <label class="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer select-none">
+                    <input type="checkbox" value="${m.id || m._id}" class="campus-solution-check accent-emerald-500 rounded">
+                    <span class="truncate">${m.title || m.name || m.id}</span>
+                </label>
+            `).join('');
+        }
+
+        // Fetch Team, Employers, and Campuses in parallel
+        const [teamRes, empRes, cmpRes] = await Promise.all([
+            apiFetch('/api/management/team').then(r => r.json()).catch(() => ({ success: false })),
+            apiFetch('/api/management/employers').then(r => r.json()).catch(() => ({ success: false })),
+            apiFetch('/api/management/campuses').then(r => r.json()).catch(() => ({ success: false }))
+        ]);
+
+        if (teamRes.success && Array.isArray(teamRes.team)) {
+            window._cachedTeamMembers = teamRes.team;
+        }
+        if (empRes.success && Array.isArray(empRes.employers)) {
+            window._cachedEmployers = empRes.employers;
+        }
+        if (cmpRes.success && Array.isArray(cmpRes.campuses)) {
+            window._cachedCampuses = cmpRes.campuses;
+        }
+
+        switchManagementSubTab(window._mgmtActiveSubTab || 'team');
+    } catch (err) {
+        console.error("Management console init error:", err);
+    }
+}
+window.initManagementConsole = initManagementConsole;
+
+function populateMgmtDistrictOptions() {
+    const stateSelect = document.getElementById('mgmtCampusState');
+    const distSelect = document.getElementById('mgmtCampusDistrict');
+    if (!stateSelect || !distSelect) return;
+
+    const state = stateSelect.value || 'Karnataka';
+    const geo = window._cachedGeoData || LOCAL_FALLBACK_GEO;
+    const districts = geo[state] || geo['Karnataka'] || [];
+
+    distSelect.innerHTML = districts.map(d => `<option value="${d}">${d}</option>`).join('');
+}
+window.populateMgmtDistrictOptions = populateMgmtDistrictOptions;
+
+// -------------------------------------------------------------
+// 3. SIMPLYBE TEAM HUB OPERATIONS
+// -------------------------------------------------------------
+function renderManagementTeam() {
+    const tbody = document.getElementById('mgmtTeamTableBody');
+    const countEl = document.getElementById('mgmtTeamCount');
+    if (!tbody) return;
+
+    const members = window._cachedTeamMembers || [];
+    if (countEl) countEl.innerText = `${members.length} team members active`;
+
+    if (members.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="p-8 text-center text-slate-500 italic">No SimplyBe team members onboarded yet. Use the form to add staff.</td>
+            </tr>
+        `;
+        return;
+    }
+
+    const roleBadges = {
+        super_creator: '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/30">Super Creator</span>',
+        content_creator: '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Content Creator</span>',
+        evaluator: '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Evaluator</span>',
+        ops: '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/30">Operations & Liaison</span>'
+    };
+
+    tbody.innerHTML = members.map(m => `
+        <tr class="hover:bg-slate-800/40 transition-colors">
+            <td class="p-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-full bg-indigo-600/30 text-indigo-300 font-bold flex items-center justify-center text-xs border border-indigo-500/40">
+                        ${(m.name || 'T')[0].toUpperCase()}
+                    </div>
+                    <div>
+                        <span class="font-bold text-white block">${m.name || 'Team Member'}</span>
+                        <span class="text-[10px] text-slate-500">Joined ${m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'Active'}</span>
+                    </div>
+                </div>
+            </td>
+            <td class="p-4">${roleBadges[m.role] || roleBadges.content_creator}</td>
+            <td class="p-4 text-slate-300">
+                <div class="text-xs">${m.email || '—'}</div>
+                <div class="text-[11px] text-slate-500 font-mono">${m.phone ? ('+91 ' + m.phone) : 'No Phone'}</div>
+            </td>
+            <td class="p-4 font-mono font-bold text-slate-300 text-xs">${m.employeeId || 'CMPLI'}</td>
+            <td class="p-4 text-right">
+                <button onclick="deleteTeamMember('${m.id}')" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 inline-flex items-center justify-center transition-colors" title="Remove Member">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+window.renderManagementTeam = renderManagementTeam;
+
+async function saveTeamMember() {
+    const name = document.getElementById('newTeamName')?.value.trim();
+    const email = document.getElementById('newTeamEmail')?.value.trim();
+    const phone = document.getElementById('newTeamPhone')?.value.trim();
+    const empId = document.getElementById('newTeamEmpId')?.value.trim();
+    const role = document.getElementById('newTeamRole')?.value || 'content_creator';
+
+    if (!name || !email) {
+        alert("Please provide the full name and email for the team member.");
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/management/team', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, phone, employeeId: empId, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('newTeamName').value = '';
+            document.getElementById('newTeamEmail').value = '';
+            document.getElementById('newTeamPhone').value = '';
+            document.getElementById('newTeamEmpId').value = '';
+            
+            // Refresh list
+            const updated = await apiFetch('/api/management/team').then(r => r.json());
+            if (updated.success) window._cachedTeamMembers = updated.team;
+            renderManagementTeam();
+            alert("SimplyBe team member saved successfully!");
+        } else {
+            alert("Error saving team member: " + (data.error || 'Server error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.saveTeamMember = saveTeamMember;
+
+async function deleteTeamMember(id) {
+    if (!confirm("Are you sure you want to remove this team member's access?")) return;
+    try {
+        const res = await apiFetch(`/api/management/team/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            window._cachedTeamMembers = (window._cachedTeamMembers || []).filter(m => m.id !== id);
+            renderManagementTeam();
+        } else {
+            alert("Delete failed: " + (data.error || 'Error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.deleteTeamMember = deleteTeamMember;
+
+// -------------------------------------------------------------
+// 4. CORPORATE EMPANELMENT OPERATIONS
+// -------------------------------------------------------------
+function renderManagementCorporates() {
+    const list = document.getElementById('mgmtCorporateList');
+    if (!list) return;
+
+    const employers = window._cachedEmployers || [];
+    if (employers.length === 0) {
+        list.innerHTML = `
+            <div class="col-span-full p-8 text-center glass-card">
+                <i class="fas fa-building text-3xl text-slate-600 mb-2"></i>
+                <p class="text-sm text-slate-400">No corporate hiring partners empanelled yet. Use the form to register new partners.</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = employers.map(e => `
+        <div class="glass-card p-5 border-slate-800 space-y-3 relative group">
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-cyan-600/20 text-cyan-300 font-extrabold flex items-center justify-center text-sm border border-cyan-500/30">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-base font-extrabold text-white font-heading">${e.companyName || 'Corporate Partner'}</h4>
+                        <span class="text-[11px] text-cyan-400 font-semibold">${e.industry || 'Technology'}</span>
+                    </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Empanelled</span>
+            </div>
+
+            <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs space-y-1">
+                <div class="flex justify-between text-slate-400">
+                    <span>Recruiter Lead:</span>
+                    <span class="font-bold text-white">${e.recruiterName || 'Talent Acquisition'}</span>
+                </div>
+                <div class="flex justify-between text-slate-400">
+                    <span>Login Email:</span>
+                    <span class="font-mono text-cyan-300">${e.email || '—'}</span>
+                </div>
+                <div class="flex justify-between text-slate-400">
+                    <span>Direct Phone:</span>
+                    <span class="font-mono text-slate-300">${e.phone ? ('+91 ' + e.phone) : '—'}</span>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+                <button onclick="loginAsEmployerPreview('${e.id}')" class="flex-1 py-2 bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white rounded-xl text-xs font-bold transition-colors text-center border border-cyan-500/40">
+                    <i class="fas fa-arrow-right-to-bracket mr-1.5"></i> Launch Talent Arena
+                </button>
+                <button onclick="deleteCorporateEmployer('${e.id}')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors" title="Delete Empanelment">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+window.renderManagementCorporates = renderManagementCorporates;
+
+async function saveCorporateEmployer() {
+    const companyName = document.getElementById('newEmpCompanyName')?.value.trim();
+    const recruiterName = document.getElementById('newEmpRecruiterName')?.value.trim();
+    const email = document.getElementById('newEmpEmail')?.value.trim();
+    const phone = document.getElementById('newEmpPhone')?.value.trim();
+    const industry = document.getElementById('newEmpIndustry')?.value.trim();
+    const designation = document.getElementById('newEmpDesignation')?.value.trim();
+
+    if (!companyName || !email) {
+        alert("Please provide the company name and recruiter email.");
+        return;
+    }
+
+    try {
+        const res = await apiFetch('/api/management/employers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyName, recruiterName, email, phone, industry, designation })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('newEmpCompanyName').value = '';
+            document.getElementById('newEmpRecruiterName').value = '';
+            document.getElementById('newEmpEmail').value = '';
+            document.getElementById('newEmpPhone').value = '';
+            document.getElementById('newEmpIndustry').value = '';
+            document.getElementById('newEmpDesignation').value = '';
+
+            const updated = await apiFetch('/api/management/employers').then(r => r.json());
+            if (updated.success) window._cachedEmployers = updated.employers;
+            renderManagementCorporates();
+            alert("Corporate hiring partner empanelled and activated!");
+        } else {
+            alert("Error empanelling partner: " + (data.error || 'Server error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.saveCorporateEmployer = saveCorporateEmployer;
+
+async function deleteCorporateEmployer(id) {
+    if (!confirm("Remove this corporate hiring partner?")) return;
+    try {
+        const res = await apiFetch(`/api/management/employers/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            window._cachedEmployers = (window._cachedEmployers || []).filter(e => e.id !== id);
+            renderManagementCorporates();
+        } else {
+            alert("Delete failed: " + (data.error || 'Error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.deleteCorporateEmployer = deleteCorporateEmployer;
+
+function loginAsEmployerPreview(employerId) {
+    const emp = (window._cachedEmployers || []).find(e => e.id === employerId);
+    if (!emp) return;
+
+    window._pendingAuth = {
+        role: 'recruiter',
+        user: {
+            _id: emp.id,
+            name: emp.recruiterName || 'Talent Acquisition',
+            companyName: emp.companyName || 'Corporate Partner',
+            email: emp.email,
+            phone: emp.phone,
+            industry: emp.industry || 'Technology',
+            role: 'recruiter'
+        }
+    };
+    verifyOTP();
+}
+window.loginAsEmployerPreview = loginAsEmployerPreview;
+
+// -------------------------------------------------------------
+// 5. CAMPUS PARTNERSHIP OPERATIONS
+// -------------------------------------------------------------
+function renderManagementCampuses() {
+    const list = document.getElementById('mgmtCampusList');
+    const countEl = document.getElementById('mgmtCampusCount');
+    if (!list) return;
+
+    const campuses = window._cachedCampuses || [];
+    if (countEl) countEl.innerText = `${campuses.length} colleges empanelled`;
+
+    if (campuses.length === 0) {
+        list.innerHTML = `
+            <div class="p-8 text-center glass-card">
+                <i class="fas fa-university text-3xl text-slate-600 mb-2"></i>
+                <p class="text-sm text-slate-400">No campus partners registered yet. Use the form to onboard colleges.</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = campuses.map(c => {
+        const coords = Array.isArray(c.coordinators) ? c.coordinators : [];
+        const primaryCoord = coords[0] || {};
+        const mangoCount = Array.isArray(c.mangoIds) ? c.mangoIds.length : 0;
+
+        return `
+            <div class="glass-card p-5 border-slate-800 space-y-3">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="badge-pill badge-emerald text-[10px]"><i class="fas fa-location-dot"></i> ${c.district || 'District'}, ${c.state || 'Karnataka'}</span>
+                            <span class="badge-pill badge-indigo text-[10px]">${mangoCount} Cohorts</span>
+                        </div>
+                        <h4 class="text-base font-extrabold text-white font-heading">${c.name || 'Partner College'}</h4>
+                    </div>
+                    <button onclick="deleteCampusPartnerRecord('${c.id}')" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors self-end sm:self-auto" title="Delete Institution">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
+                </div>
+
+                <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 text-xs grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <span class="text-slate-500 text-[10px] block uppercase font-bold">PRIMARY COORDINATOR</span>
+                        <span class="font-bold text-white">${primaryCoord.name || 'Campus Coordinator'}</span>
+                        <span class="text-[11px] text-slate-400 block">${primaryCoord.designation || 'Principal / Placement Head'}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-[10px] block uppercase font-bold">CREDENTIALS</span>
+                        <span class="font-mono text-emerald-400 block">${primaryCoord.email || '—'}</span>
+                        <span class="font-mono text-slate-300 text-[11px]">${primaryCoord.phone ? ('+91 ' + primaryCoord.phone) : '—'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+window.renderManagementCampuses = renderManagementCampuses;
+
+async function saveCampusPartnerRecord() {
+    const state = document.getElementById('mgmtCampusState')?.value || 'Karnataka';
+    const district = document.getElementById('mgmtCampusDistrict')?.value || '';
+    const name = document.getElementById('mgmtCampusName')?.value.trim();
+    const coordName = document.getElementById('mgmtCoordName')?.value.trim();
+    const coordEmail = document.getElementById('mgmtCoordEmail')?.value.trim();
+    const coordPhone = document.getElementById('mgmtCoordPhone')?.value.trim();
+    const coordDesignation = document.getElementById('mgmtCoordDesignation')?.value.trim();
+
+    if (!name || !district) {
+        alert("Please provide the institution name and district.");
+        return;
+    }
+
+    const checkedMangos = Array.from(document.querySelectorAll('.campus-solution-check:checked')).map(cb => cb.value);
+
+    const coordinators = [{
+        name: coordName || 'Campus Coordinator',
+        email: coordEmail || '',
+        phone: coordPhone || '',
+        designation: coordDesignation || 'Campus Coordinator'
+    }];
+
+    try {
+        const res = await apiFetch('/api/management/campuses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state, district, name, coordinators, mangoIds: checkedMangos })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('mgmtCampusName').value = '';
+            document.getElementById('mgmtCoordName').value = '';
+            document.getElementById('mgmtCoordEmail').value = '';
+            document.getElementById('mgmtCoordPhone').value = '';
+            document.getElementById('mgmtCoordDesignation').value = '';
+            document.querySelectorAll('.campus-solution-check').forEach(cb => cb.checked = false);
+
+            const updated = await apiFetch('/api/management/campuses').then(r => r.json());
+            if (updated.success) window._cachedCampuses = updated.campuses;
+            renderManagementCampuses();
+            alert("Partner college registered and mapped to district hierarchy!");
+        } else {
+            alert("Error registering campus: " + (data.error || 'Server error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.saveCampusPartnerRecord = saveCampusPartnerRecord;
+
+async function deleteCampusPartnerRecord(id) {
+    if (!confirm("Are you sure you want to remove this campus partner?")) return;
+    try {
+        const res = await apiFetch(`/api/management/campuses/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            window._cachedCampuses = (window._cachedCampuses || []).filter(c => c.id !== id);
+            renderManagementCampuses();
+        } else {
+            alert("Delete failed: " + (data.error || 'Error'));
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+window.deleteCampusPartnerRecord = deleteCampusPartnerRecord;
+
+// -------------------------------------------------------------
+// 6. RECRUITER TALENT ARENA & CANDIDATE DISCOVERY
+// -------------------------------------------------------------
+async function initRecruiterPortal() {
+    try {
+        // Load Geo Dataset
+        if (!window._cachedGeoData) {
+            try {
+                const geoRes = await apiFetch('/api/config/geo');
+                const geoJson = await geoRes.json();
+                if (geoJson.success && geoJson.data) {
+                    window._cachedGeoData = geoJson.data;
+                }
+            } catch (e) {
+                window._cachedGeoData = LOCAL_FALLBACK_GEO;
+            }
+        }
+
+        // Fetch Campuses
+        if (!window._cachedCampuses || window._cachedCampuses.length === 0) {
+            const cmpRes = await apiFetch('/api/management/campuses').then(r => r.json()).catch(() => ({ success: false }));
+            if (cmpRes.success) window._cachedCampuses = cmpRes.campuses;
+        }
+
+        // Populate Campus dropdown
+        const campusSelect = document.getElementById('recruiterFilterCampus');
+        if (campusSelect && Array.isArray(window._cachedCampuses)) {
+            campusSelect.innerHTML = '<option value="all">All Partner Colleges</option>' + 
+                window._cachedCampuses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+
+        onRecruiterStateChange();
+        renderRecruiterCandidates();
+    } catch (e) {
+        console.error("Recruiter portal init error:", e);
+    }
+}
+window.initRecruiterPortal = initRecruiterPortal;
+
+function onRecruiterStateChange() {
+    const state = document.getElementById('recruiterFilterState')?.value || 'Karnataka';
+    const distSelect = document.getElementById('recruiterFilterDistrict');
+    if (!distSelect) return;
+
+    if (state === 'all') {
+        distSelect.innerHTML = '<option value="all">All Districts</option>';
+    } else {
+        const geo = window._cachedGeoData || LOCAL_FALLBACK_GEO;
+        const districts = geo[state] || geo['Karnataka'] || [];
+        distSelect.innerHTML = '<option value="all">All Districts</option>' + 
+            districts.map(d => `<option value="${d}">${d}</option>`).join('');
+    }
+    renderRecruiterCandidates();
+}
+window.onRecruiterStateChange = onRecruiterStateChange;
+
+async function renderRecruiterCandidates() {
+    const grid = document.getElementById('recruiterCandidateGrid');
+    const empty = document.getElementById('recruiterEmptyState');
+    const countEl = document.getElementById('recruiterCandidatesCount');
+    if (!grid) return;
+
+    const state = document.getElementById('recruiterFilterState')?.value || 'all';
+    const district = document.getElementById('recruiterFilterDistrict')?.value || 'all';
+    const campusId = document.getElementById('recruiterFilterCampus')?.value || 'all';
+    const minLq = document.getElementById('recruiterFilterMinLq')?.value || '0';
+    const search = document.getElementById('recruiterFilterSearch')?.value || '';
+
+    const employerId = currentUser?.role === 'recruiter' ? currentUser._id : 'emp_preview';
+    const companyName = currentUser?.companyName || 'Corporate Partner';
+    const recruiterName = currentUser?.name || 'Talent Acquisition';
+
+    try {
+        const queryParams = new URLSearchParams({
+            state,
+            district,
+            campusId,
+            minLq,
+            search,
+            employerId,
+            companyName,
+            recruiterName
+        });
+
+        const res = await apiFetch(`/api/employer/candidates?${queryParams.toString()}`, {
+            headers: {
+                'x-employer-id': employerId,
+                'x-company-name': companyName,
+                'x-recruiter-name': recruiterName
+            }
+        });
+        const data = await res.json();
+
+        if (!data.success || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+            grid.innerHTML = '';
+            if (empty) empty.classList.remove('hidden');
+            if (countEl) countEl.innerText = "0 Candidates";
+            return;
+        }
+
+        if (empty) empty.classList.add('hidden');
+        if (countEl) countEl.innerText = `${data.totalCount || data.candidates.length} Candidates Qualified`;
+        window._recruiterCandidatesCache = data.candidates;
+
+        grid.innerHTML = data.candidates.map(cand => {
+            const lqColor = cand.lqZone === 'strong' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 
+                            (cand.lqZone === 'average' ? 'text-indigo-400 border-indigo-500/40 bg-indigo-950/30' : 'text-amber-400 border-amber-500/40 bg-amber-950/30');
+
+            const hasAudio = Array.isArray(cand.audioRecordings) && cand.audioRecordings.length > 0;
+
+            return `
+                <div class="glass-card p-5 border-slate-800 space-y-4 relative group hover:border-cyan-500/40 transition-all flex flex-col justify-between">
+                    <div>
+                        <!-- Header / Agility Score -->
+                        <div class="flex justify-between items-start gap-3">
+                            <div class="flex items-center gap-3">
+                                <img src="${cand.profilePicUrl}" alt="${cand.name}" class="w-12 h-12 rounded-2xl object-cover border-2 border-slate-700 shrink-0" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                                <div>
+                                    <h4 class="text-base font-extrabold text-white font-heading">${cand.name}</h4>
+                                    <span class="text-xs text-slate-400 block truncate max-w-[160px]">${cand.campus}</span>
+                                    <span class="text-[10px] text-cyan-400 font-semibold"><i class="fas fa-location-dot mr-1"></i>${cand.district}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Learn Agility Quotient (LQ®) Pill -->
+                            <div class="px-2.5 py-1 rounded-xl border ${lqColor} text-center shrink-0">
+                                <span class="text-xs font-black block">${cand.lqScore}%</span>
+                                <span class="text-[9px] uppercase font-bold tracking-wider opacity-80">LQ®</span>
+                            </div>
+                        </div>
+
+                        <!-- Agility & Consistency Metrics -->
+                        <div class="grid grid-cols-2 gap-2 mt-4 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-center text-xs">
+                            <div>
+                                <span class="text-slate-400 text-[10px] block uppercase font-semibold">Streak</span>
+                                <span class="font-extrabold text-amber-400"><i class="fas fa-fire mr-1"></i>${cand.streakDays} Days</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 text-[10px] block uppercase font-semibold">LCs Earned</span>
+                                <span class="font-extrabold text-white">${cand.totalLcsEarned} LCs</span>
+                            </div>
+                        </div>
+
+                        <!-- Masked Credentials -->
+                        <div class="mt-3 text-[11px] text-slate-400 flex justify-between items-center px-1 font-mono">
+                            <span><i class="fas fa-envelope mr-1 text-slate-500"></i>${cand.maskedEmail}</span>
+                            <span><i class="fas fa-phone mr-1 text-slate-500"></i>${cand.maskedPhone}</span>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="space-y-2 pt-3 border-t border-slate-800/80">
+                        ${hasAudio ? `
+                            <div class="p-2 rounded-lg bg-cyan-950/20 border border-cyan-500/20 flex items-center justify-between text-xs text-cyan-300">
+                                <span class="text-[11px] font-semibold"><i class="fas fa-microphone mr-1.5"></i>Verified Voice Check-in</span>
+                                <button onclick="openCandidateDossier('${cand.id}')" class="text-[11px] font-bold text-cyan-400 hover:underline">Listen &rarr;</button>
+                            </div>
+                        ` : ''}
+
+                        <button onclick="openCandidateDossier('${cand.id}')" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-600/20">
+                            <i class="fas fa-id-card"></i> Inspect Full Dossier
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error("Candidate render error:", err);
+    }
+}
+window.renderRecruiterCandidates = renderRecruiterCandidates;
+
+function openCandidateDossier(candId) {
+    const candidate = (window._recruiterCandidatesCache || []).find(c => String(c.id) === String(candId));
+    if (!candidate) return;
+
+    window._activeDossierCandidate = candidate;
+
+    // Log Profile View telemetry
+    const employerId = currentUser?.role === 'recruiter' ? currentUser._id : 'emp_preview';
+    const companyName = currentUser?.companyName || 'Corporate Partner';
+    const recruiterName = currentUser?.name || 'Talent Acquisition';
+
+    apiFetch('/api/telemetry/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            studentId: candidate.id,
+            campusId: candidate.campusId,
+            employerId: employerId,
+            companyName: companyName,
+            recruiterName: recruiterName,
+            action: 'profile_view',
+            metadata: {
+                lqScore: candidate.lqScore,
+                district: candidate.district,
+                state: candidate.state
+            }
+        })
+    }).catch(() => {});
+
+    // Populate modal
+    document.getElementById('dossierCandidateName').innerText = candidate.name;
+    document.getElementById('dossierLqBadge').innerText = `${candidate.lqScore}% Learn Agility Quotient (LQ®)`;
+    document.getElementById('dossierCampus').innerText = candidate.campus;
+    document.getElementById('dossierDistrict').innerText = `${candidate.state} - ${candidate.district}`;
+    document.getElementById('dossierMilestone').innerText = `Milestone ${candidate.highestMilestone} Achieved`;
+    document.getElementById('dossierStreak').innerText = `${candidate.streakDays} Days Consistency Streak`;
+    document.getElementById('dossierEmail').innerText = candidate.maskedEmail;
+    document.getElementById('dossierPhone').innerText = candidate.maskedPhone;
+
+    const audioContainer = document.getElementById('dossierAudioContainer');
+    if (audioContainer) {
+        if (Array.isArray(candidate.audioRecordings) && candidate.audioRecordings.length > 0) {
+            const firstAudio = candidate.audioRecordings[0];
+            audioContainer.innerHTML = `
+                <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                    <span class="text-xs font-bold text-white block">${firstAudio.title}</span>
+                    <audio controls class="w-full h-8" src="${firstAudio.url}"></audio>
+                </div>
+            `;
+        } else {
+            audioContainer.innerHTML = `
+                <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center text-xs text-slate-500 italic">
+                    Candidate has completed text & quiz reflections. Audio reflection recording in progress.
+                </div>
+            `;
+        }
+    }
+
+    document.getElementById('recruiterDossierModal')?.classList.remove('hidden');
+}
+window.openCandidateDossier = openCandidateDossier;
+
+function closeRecruiterDossierModal() {
+    document.getElementById('recruiterDossierModal')?.classList.add('hidden');
+}
+window.closeRecruiterDossierModal = closeRecruiterDossierModal;
+
+function requestCandidateInterview() {
+    const cand = window._activeDossierCandidate;
+    if (!cand) return;
+
+    const employerId = currentUser?.role === 'recruiter' ? currentUser._id : 'emp_preview';
+    const companyName = currentUser?.companyName || 'Corporate Partner';
+    const recruiterName = currentUser?.name || 'Talent Acquisition';
+
+    // Log CV download / contact unlock event
+    apiFetch('/api/telemetry/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            studentId: cand.id,
+            campusId: cand.campusId,
+            employerId: employerId,
+            companyName: companyName,
+            recruiterName: recruiterName,
+            action: 'cv_download',
+            metadata: {
+                lqScore: cand.lqScore,
+                district: cand.district
+            }
+        })
+    }).catch(() => {});
+
+    alert(`Direct Candidate Connection Requested!\n\n${companyName} has requested an interview connect with ${cand.name}.\nBoth the learner and the campus placement coordinator at ${cand.campus} have been notified.`);
+    closeRecruiterDossierModal();
+}
+window.requestCandidateInterview = requestCandidateInterview;
+
+// -------------------------------------------------------------
+// 7. LEARNER "WHO VIEWED YOUR PROFILE" & CAREER VIEWS FEED
+// -------------------------------------------------------------
+async function renderLearnerCareerViews() {
+    if (!currentUser) return;
+    const studentId = currentUser._id || currentUser.id || 'current_user';
+
+    try {
+        const res = await apiFetch(`/api/learner/career-views/${studentId}`);
+        const data = await res.json();
+        const telemetry = data.success ? data.data : { searchAppearances7d: 0, searchAppearances30d: 0, profileViews: [] };
+
+        // 1. Update KPI numbers
+        const search7d = document.getElementById('careerViewsSearch7d');
+        const search30d = document.getElementById('careerViewsSearch30d');
+        const profileCount = document.getElementById('careerViewsProfileCount');
+        const lqScoreEl = document.getElementById('careerViewsLqScore');
+        const lqZoneEl = document.getElementById('careerViewsLqZone');
+
+        if (search7d) search7d.innerText = telemetry.searchAppearances7d || 0;
+        if (search30d) search30d.innerText = telemetry.searchAppearances30d || 0;
+        if (profileCount) profileCount.innerText = (telemetry.profileViews || []).length;
+
+        // Compute current student LQ®
+        let lqScore = 88;
+        if (typeof computeLqStats === 'function') {
+            try {
+                const lqStats = computeLqStats(currentUser, 1, 'all');
+                if (lqStats && lqStats.overallLq) lqScore = Math.round(lqStats.overallLq);
+            } catch(e) {}
+        }
+        if (lqScoreEl) lqScoreEl.innerText = `${lqScore}%`;
+        if (lqZoneEl) lqZoneEl.innerText = lqScore >= 80 ? "Strong Zone (High Recruiter Match)" : "Average Zone (Developing)";
+
+        // Update nav badge
+        const badge = document.getElementById('careerViewsBadge');
+        if (badge) {
+            const totalActivity = (telemetry.searchAppearances7d || 0) + (telemetry.profileViews || []).length;
+            if (totalActivity > 0) {
+                badge.innerText = totalActivity;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // Render Activity stream
+        const feedList = document.getElementById('careerViewsActivityList');
+        if (!feedList) return;
+
+        const views = telemetry.profileViews || [];
+        if (views.length === 0) {
+            feedList.innerHTML = `
+                <div class="text-center py-10 glass-card">
+                    <i class="fas fa-radar text-4xl text-slate-600 mb-3 animate-pulse"></i>
+                    <p class="text-sm font-bold text-white">Active Recruiter Matching In Progress</p>
+                    <p class="text-xs text-slate-400 mt-1">Your profile is currently featured in hiring searches across Karnataka and partner regions.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const actionTextMap = {
+            profile_view: "inspected your Learn Agility Quotient (LQ®) candidate profile",
+            audio_listen: "listened to your verified daily voice reflection",
+            cv_download: "requested your candidate summary dossier",
+            search_appearance: "discovered your profile in a regional talent query"
+        };
+
+        const actionBadgeMap = {
+            profile_view: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Profile Inspected</span>',
+            audio_listen: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Voice Listened</span>',
+            cv_download: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Dossier Connect</span>',
+            search_appearance: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Search Match</span>'
+        };
+
+        feedList.innerHTML = views.map(v => `
+            <div class="glass-card p-4 border-slate-800 flex items-center justify-between gap-4 hover:border-emerald-500/40 transition-colors">
+                <div class="flex items-center gap-3.5 min-w-0">
+                    <div class="w-10 h-10 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-cyan-400 shrink-0 font-bold">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-extrabold text-white text-xs sm:text-sm truncate">${v.companyName || 'Corporate Hiring Partner'}</span>
+                            ${actionBadgeMap[v.action] || actionBadgeMap.profile_view}
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            <strong class="text-slate-300">${v.recruiterName || 'Talent Acquisition'}</strong> ${actionTextMap[v.action] || actionTextMap.profile_view}.
+                        </p>
+                    </div>
+                </div>
+                <span class="text-[10px] text-slate-500 whitespace-nowrap shrink-0">
+                    ${v.createdAt ? new Date(v.createdAt).toLocaleDateString() : 'Recent'}
+                </span>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error("Career views render error:", err);
+    }
+}
+window.renderLearnerCareerViews = renderLearnerCareerViews;
+
+// Check if user reloaded page with Recruiter role active
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const isRecruiter = localStorage.getItem('isRecruiterLogin') === 'true' || sessionStorage.getItem('isRecruiterLogin') === 'true';
+        if (isRecruiter) {
+            const raw = localStorage.getItem('currentUser');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.role === 'recruiter') {
+                    window._pendingAuth = { role: 'recruiter', user: parsed };
+                    verifyOTP();
+                }
+            }
+        }
+    } catch(e) {}
+});
+

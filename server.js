@@ -268,6 +268,9 @@ function loadStore() {
         levelUpAccessConfig: [],
         milestoneStartDates: { 1: '2026-07-31', 2: '2026-08-21', 3: '2026-11-21' },
         campusPartnersDB: {},
+        teamMembers: [],
+        campuses: [],
+        employers: [],
         coachingSessions: [],
         coachingActionItems: [],
         courseProgress: {}
@@ -277,6 +280,166 @@ function loadStore() {
 let store = loadStore();
 if (!store.submissionsRevision) {
     store.submissionsRevision = Date.now();
+    saveStore();
+}
+
+if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
+if (!Array.isArray(store.campuses)) store.campuses = [];
+if (!Array.isArray(store.employers)) store.employers = [];
+
+// Helper to keep legacy campusPartnersDB in sync with multi-coordinator campuses
+function syncCampusPartnersDB() {
+    if (!store.campusPartnersDB) store.campusPartnersDB = {};
+    if (Array.isArray(store.campuses)) {
+        store.campuses.forEach(campus => {
+            const mangoes = Array.isArray(campus.mangoIds) ? campus.mangoIds : [];
+            if (Array.isArray(campus.coordinators)) {
+                campus.coordinators.forEach(coord => {
+                    if (coord && coord.email) {
+                        store.campusPartnersDB[coord.email.toLowerCase().trim()] = mangoes;
+                    }
+                    if (coord && coord.phone) {
+                        const cleanP = String(coord.phone).replace(/\D/g, '');
+                        if (cleanP) store.campusPartnersDB[cleanP] = mangoes;
+                    }
+                });
+            }
+        });
+    }
+}
+
+// Seed default SimplyBe team members if empty
+if (store.teamMembers.length === 0) {
+    store.teamMembers = [
+        {
+            id: 'tm_001',
+            name: 'Sai Kumar Yadiki',
+            email: 'cmplibesai@gmail.com',
+            phone: '6309764212',
+            employeeId: 'CMPLI-001',
+            role: 'super_creator',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'tm_002',
+            name: 'Aditya Future',
+            email: 'cmplifutureadi@gmail.com',
+            phone: '9845421644',
+            employeeId: 'CMPLI-002',
+            role: 'content_creator',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'tm_003',
+            name: 'Cynthiya',
+            email: 'cmplibecynthiya@gmail.com',
+            phone: '9845421645',
+            employeeId: 'CMPLI-003',
+            role: 'evaluator',
+            createdAt: new Date().toISOString()
+        }
+    ];
+}
+
+// Seed default institutional campus partners with official Karnataka districts if empty
+if (store.campuses.length === 0) {
+    store.campuses = [
+        {
+            id: 'cmp_sjec_mngl',
+            name: "St. Joseph Engineering College",
+            state: "Karnataka",
+            district: "Dakshina Kannada (Mangaluru)",
+            coordinators: [
+                {
+                    name: "Dr. Rio D'Souza",
+                    email: "principal@sjec.ac.in",
+                    phone: "9845012345",
+                    designation: "Principal / Academic Head"
+                },
+                {
+                    name: "Prof. Diana Roche",
+                    email: "diana.roche@sjec.ac.in",
+                    phone: "9845012348",
+                    designation: "Head of Training & Placement"
+                }
+            ],
+            mangoIds: ['6714e7d8eb97f72e99e3316c'],
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'cmp_kletech_hubli',
+            name: "KLE Technological University",
+            state: "Karnataka",
+            district: "Dharwad (Hubballi-Dharwad)",
+            coordinators: [
+                {
+                    name: "Prof. Arun Patil",
+                    email: "placements@kletech.ac.in",
+                    phone: "9845012346",
+                    designation: "Dean - Industry Relations"
+                }
+            ],
+            mangoIds: ['6714e7d8eb97f72e99e3316c'],
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'cmp_msrit_bengaluru',
+            name: "Ramaiah Institute of Technology",
+            state: "Karnataka",
+            district: "Bengaluru Urban",
+            coordinators: [
+                {
+                    name: "Dr. Savitha K.",
+                    email: "placement@msrit.edu",
+                    phone: "9845012347",
+                    designation: "Chief Placement Officer"
+                }
+            ],
+            mangoIds: ['6714e7d8eb97f72e99e3316c'],
+            createdAt: new Date().toISOString()
+        }
+    ];
+    syncCampusPartnersDB();
+    saveStore();
+}
+
+// Seed corporate hiring partners (BLive, Carrier, Snabbit) if empty
+if (store.employers.length === 0) {
+    store.employers = [
+        {
+            id: 'emp_blive_01',
+            companyName: 'BLive Electric Mobility',
+            recruiterName: 'Rohit Verma',
+            email: 'talent@blive.co.in',
+            phone: '9880011223',
+            industry: 'CleanTech & EV Logistics',
+            designation: 'Talent Acquisition Lead',
+            status: 'active',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'emp_carrier_02',
+            companyName: 'Carrier Commercial Refrigeration',
+            recruiterName: 'Priya Sharma',
+            email: 'careers@carrier.com',
+            phone: '9880011224',
+            industry: 'Industrial IoT & HVAC',
+            designation: 'Campus Hiring Manager',
+            status: 'active',
+            createdAt: new Date().toISOString()
+        },
+        {
+            id: 'emp_snabbit_03',
+            companyName: 'Snabbit Hyperlocal',
+            recruiterName: 'Karan Singhal',
+            email: 'hr@snabbit.in',
+            phone: '9880011225',
+            industry: 'Quick Commerce & Operations',
+            designation: 'People Operations Lead',
+            status: 'active',
+            createdAt: new Date().toISOString()
+        }
+    ];
     saveStore();
 }
 
@@ -322,6 +485,154 @@ function saveStore() {
 let isDbConnected = false;
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// Dedicated Mongoose Schema for High-Frequency Profile Views & Search Appearances
+let ProfileView = null;
+try {
+    const profileViewSchema = new mongoose.Schema({
+        studentId: { type: String, required: true, index: true },
+        campusId: { type: String, index: true },
+        employerId: { type: String, required: true },
+        companyName: { type: String, required: true },
+        recruiterName: { type: String, default: 'Talent Acquisition' },
+        action: { 
+            type: String, 
+            required: true, 
+            enum: ['search_appearance', 'profile_view', 'cv_download', 'audio_listen'] 
+        },
+        metadata: {
+            lqScore: Number,
+            milestoneId: Number,
+            state: String,
+            district: String,
+            searchedQuery: String
+        },
+        createdAt: { type: Date, default: Date.now }
+    });
+
+    profileViewSchema.index({ studentId: 1, createdAt: -1 });
+    profileViewSchema.index({ campusId: 1, createdAt: -1 });
+    // 90-day auto-expiry TTL index: 90 * 24 * 3600 = 7,776,000 seconds
+    profileViewSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+
+    ProfileView = mongoose.models.ProfileView || mongoose.model('ProfileView', profileViewSchema);
+} catch (e) {
+    console.warn('[Telemetry Schema Warning]:', e.message);
+}
+
+// Resilient in-memory fallback buffer (prevents lag and synchronous disk freezes)
+const inMemoryTelemetryBuffer = [];
+
+async function logTelemetryEvent(data) {
+    const eventData = {
+        studentId: String(data.studentId || '').trim(),
+        campusId: String(data.campusId || '').trim(),
+        employerId: String(data.employerId || '').trim(),
+        companyName: String(data.companyName || 'Corporate Partner').trim(),
+        recruiterName: String(data.recruiterName || 'Talent Acquisition').trim(),
+        action: ['search_appearance', 'profile_view', 'cv_download', 'audio_listen'].includes(data.action) ? data.action : 'profile_view',
+        metadata: data.metadata || {},
+        createdAt: new Date()
+    };
+
+    if (isDbConnected && ProfileView) {
+        try {
+            const created = await ProfileView.create(eventData);
+            return created.toObject();
+        } catch (err) {
+            console.warn('[Telemetry DB Write Error]:', err.message);
+            eventData._id = 'view_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+            inMemoryTelemetryBuffer.unshift(eventData);
+            if (inMemoryTelemetryBuffer.length > 5000) inMemoryTelemetryBuffer.pop();
+            return eventData;
+        }
+    } else {
+        eventData._id = 'view_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        inMemoryTelemetryBuffer.unshift(eventData);
+        if (inMemoryTelemetryBuffer.length > 5000) inMemoryTelemetryBuffer.pop();
+        return eventData;
+    }
+}
+
+async function getTelemetryForStudent(studentId) {
+    const cleanId = String(studentId).trim();
+    if (isDbConnected && ProfileView) {
+        try {
+            const sevenDaysAgo = new Date(Date.now() - (7 * 24 * 3600 * 1000));
+            const [searchCount7d, searchCount30d, recentViews] = await Promise.all([
+                ProfileView.countDocuments({ studentId: cleanId, action: 'search_appearance', createdAt: { $gte: sevenDaysAgo } }),
+                ProfileView.countDocuments({ studentId: cleanId, action: 'search_appearance' }),
+                ProfileView.find({ studentId: cleanId, action: { $ne: 'search_appearance' } }).sort({ createdAt: -1 }).limit(30).lean()
+            ]);
+            return {
+                searchAppearances7d: searchCount7d,
+                searchAppearances30d: searchCount30d,
+                profileViews: recentViews
+            };
+        } catch (e) {
+            console.warn('[Telemetry Query Warning]:', e.message);
+        }
+    }
+
+    const sevenDaysAgo = Date.now() - (7 * 24 * 3600 * 1000);
+    const matched = inMemoryTelemetryBuffer.filter(t => t.studentId === cleanId);
+    const searchEvents = matched.filter(t => t.action === 'search_appearance');
+    const search7d = searchEvents.filter(t => new Date(t.createdAt).getTime() >= sevenDaysAgo).length;
+    const views = matched.filter(t => t.action !== 'search_appearance').slice(0, 30);
+
+    return {
+        searchAppearances7d: search7d,
+        searchAppearances30d: searchEvents.length,
+        profileViews: views
+    };
+}
+
+async function getTelemetryForCampus(campusId) {
+    const cleanId = String(campusId).trim();
+    if (isDbConnected && ProfileView) {
+        try {
+            const [totalSearches, totalViews, recentViews] = await Promise.all([
+                ProfileView.countDocuments({ campusId: cleanId, action: 'search_appearance' }),
+                ProfileView.countDocuments({ campusId: cleanId, action: { $ne: 'search_appearance' } }),
+                ProfileView.find({ campusId: cleanId, action: { $ne: 'search_appearance' } }).sort({ createdAt: -1 }).limit(50).lean()
+            ]);
+            const partnerCounts = {};
+            recentViews.forEach(v => {
+                partnerCounts[v.companyName] = (partnerCounts[v.companyName] || 0) + 1;
+            });
+            const topPartners = Object.entries(partnerCounts)
+                .map(([company, count]) => ({ company, count }))
+                .sort((a, b) => b.count - a.count);
+
+            return {
+                totalSearches,
+                totalViews,
+                topPartners,
+                recentViews
+            };
+        } catch (e) {
+            console.warn('[Campus Telemetry Query Warning]:', e.message);
+        }
+    }
+
+    const matched = inMemoryTelemetryBuffer.filter(t => t.campusId === cleanId);
+    const searches = matched.filter(t => t.action === 'search_appearance').length;
+    const views = matched.filter(t => t.action !== 'search_appearance');
+    const partnerCounts = {};
+    views.forEach(v => {
+        partnerCounts[v.companyName] = (partnerCounts[v.companyName] || 0) + 1;
+    });
+    const topPartners = Object.entries(partnerCounts)
+        .map(([company, count]) => ({ company, count }))
+        .sort((a, b) => b.count - a.count);
+
+    return {
+        totalSearches: searches,
+        totalViews: views.length,
+        topPartners,
+        recentViews: views.slice(0, 50)
+    };
+}
+
 if (MONGODB_URI) {
     mongoose.connect(MONGODB_URI)
         .then(() => {
@@ -330,7 +641,7 @@ if (MONGODB_URI) {
         })
         .catch(err => {
             console.error('⚠️ Database connection warning:', err.message);
-            console.log('ℹ️ Running with persistent JSON store.');
+            console.log('ℹ️ Running with persistent JSON store and memory-safe telemetry.');
         });
 } else {
     console.log('ℹ️ No MONGODB_URI provided. Running with server-side persistent store.');
@@ -355,6 +666,7 @@ app.get('/api/health', (req, res) => {
         status: 'ok',
         database: isDbConnected ? 'connected' : 'file_store',
         submissionsCount: store.submissions ? store.submissions.length : 0,
+        telemetryBufferSize: inMemoryTelemetryBuffer.length,
         timestamp: new Date().toISOString()
     });
 });
@@ -372,11 +684,29 @@ app.get(['/api/config', '/gamification/api/config'], (req, res) => {
     const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
     const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
 
+    // Enforce inclusion of SimplyBe team members in recognized admin identifiers
+    if (Array.isArray(store.teamMembers)) {
+        store.teamMembers.forEach(tm => {
+            if (tm.email && !adminEmails.includes(tm.email.toLowerCase().trim())) {
+                adminEmails.push(tm.email.toLowerCase().trim());
+            }
+            if (tm.phone) {
+                const pClean = String(tm.phone).replace(/\D/g, '');
+                if (pClean && !adminEmails.includes(pClean)) {
+                    adminEmails.push(pClean);
+                }
+            }
+        });
+    }
+
     res.status(200).json({
         hostUrl: HOST_URL,
         baseUrl: process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1',
         creatorId: process.env.CREATOR_ID || '6682734e120c766a6e5af59c',
         adminEmails: adminEmails,
+        teamMembers: (store.teamMembers || []).map(m => ({ id: m.id, name: m.name, email: m.email, phone: m.phone, role: m.role, employeeId: m.employeeId })),
+        campuses: (store.campuses || []).map(c => ({ id: c.id, name: c.name, state: c.state, district: c.district, coordinators: c.coordinators, mangoIds: c.mangoIds })),
+        employers: (store.employers || []).map(e => ({ id: e.id, companyName: e.companyName, recruiterName: e.recruiterName, email: e.email, phone: e.phone, industry: e.industry, designation: e.designation, status: e.status })),
         databaseConnected: isDbConnected
     });
 });
@@ -4245,6 +4575,586 @@ app.post('/api/courses/progress', (req, res) => {
         store.courseProgress[key][courseId].lastUpdated = new Date().toISOString();
         saveStore();
         res.json({ success: true, message: 'Course progress saved', data: store.courseProgress[key][courseId] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// =============================================================
+// AUTHORITATIVE INDIA GEO-DATASET & MANAGEMENT PLATFORM ENGINE
+// =============================================================
+
+const INDIA_GEO_DATA = {
+    "Karnataka": [
+        "Bagalkote",
+        "Ballari (Bellary)",
+        "Belagavi (Belgaum)",
+        "Bengaluru Rural",
+        "Bengaluru Urban",
+        "Bidar",
+        "Chamarajanagar",
+        "Chikkaballapur",
+        "Chikkamagaluru",
+        "Chitradurga",
+        "Dakshina Kannada (Mangaluru)",
+        "Davanagere",
+        "Dharwad (Hubballi-Dharwad)",
+        "Gadag",
+        "Hassan",
+        "Haveri",
+        "Kalaburagi (Gulbarga)",
+        "Kodagu (Coorg)",
+        "Kolar",
+        "Koppal",
+        "Mandya",
+        "Mysuru (Mysore)",
+        "Raichur",
+        "Ramanagara",
+        "Shivamogga (Shimoga)",
+        "Tumakuru (Tumkur)",
+        "Udupi",
+        "Uttara Kannada (Karwar)",
+        "Vijayanagara",
+        "Vijayapura (Bijapur)",
+        "Yadgir"
+    ],
+    "Tamil Nadu": [
+        "Chennai",
+        "Coimbatore",
+        "Madurai",
+        "Tiruchirappalli",
+        "Salem",
+        "Tirunelveli",
+        "Erode",
+        "Vellore"
+    ],
+    "Telangana": [
+        "Hyderabad",
+        "Ranga Reddy",
+        "Medchal-Malkajgiri",
+        "Warangal",
+        "Karimnagar",
+        "Nizamabad"
+    ],
+    "Andhra Pradesh": [
+        "Visakhapatnam",
+        "Vijayawada",
+        "Guntur",
+        "Tirupati",
+        "Kurnool",
+        "Nellore",
+        "Ananthapuramu"
+    ],
+    "Maharashtra": [
+        "Mumbai",
+        "Pune",
+        "Nagpur",
+        "Nashik",
+        "Aurangabad (Chhatrapati Sambhajinagar)",
+        "Thane"
+    ],
+    "Kerala": [
+        "Thiruvananthapuram",
+        "Ernakulam (Kochi)",
+        "Kozhikode",
+        "Thrissur",
+        "Kannur",
+        "Kottayam"
+    ]
+};
+
+// Public endpoint for authoritative State -> District hierarchy
+app.get(['/api/config/geo', '/gamification/api/config/geo'], (req, res) => {
+    res.json({
+        success: true,
+        data: INDIA_GEO_DATA,
+        defaultState: "Karnataka"
+    });
+});
+
+// Helper to check creator authorization (Bearer token or direct secret)
+function checkCreatorAuth(req) {
+    if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
+    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret;
+    const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
+    if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;
+    return false;
+}
+
+// -------------------------------------------------------------
+// 1. SIMPLYBE TEAM MANAGEMENT ENDPOINTS (Strictly Creator Gated)
+// -------------------------------------------------------------
+app.get(['/api/management/team', '/gamification/api/management/team'], (req, res) => {
+    if (!checkCreatorAuth(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view SimplyBe team' });
+    }
+    res.json({ success: true, team: store.teamMembers || [] });
+});
+
+app.post(['/api/management/team', '/gamification/api/management/team'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage SimplyBe team' });
+        }
+        const { id, name, email, phone, employeeId, role } = req.body || {};
+        if (!name || !email) {
+            return res.status(400).json({ success: false, error: 'Name and email are required for team members' });
+        }
+
+        if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+        const memberRole = ['super_creator', 'content_creator', 'evaluator', 'ops'].includes(role) ? role : 'content_creator';
+
+        const existingIdx = store.teamMembers.findIndex(m => m.id === id || (m.email && m.email.toLowerCase() === cleanEmail));
+        const memberData = {
+            id: id || ('tm_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6)),
+            name: String(name).trim(),
+            email: cleanEmail,
+            phone: cleanPhone,
+            employeeId: employeeId ? String(employeeId).trim() : `CMPLI-${String(store.teamMembers.length + 1).padStart(3, '0')}`,
+            role: memberRole,
+            updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx > -1) {
+            memberData.createdAt = store.teamMembers[existingIdx].createdAt || memberData.updatedAt;
+            store.teamMembers[existingIdx] = memberData;
+        } else {
+            memberData.createdAt = new Date().toISOString();
+            store.teamMembers.push(memberData);
+        }
+
+        saveStore();
+        res.json({ success: true, message: 'Team member saved successfully', member: memberData });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete(['/api/management/team/:id', '/gamification/api/management/team/:id'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required' });
+        }
+        const { id } = req.params;
+        if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
+        const prevCount = store.teamMembers.length;
+        store.teamMembers = store.teamMembers.filter(m => m.id !== id && m.email !== id);
+        if (store.teamMembers.length === prevCount) {
+            return res.status(404).json({ success: false, error: 'Team member not found' });
+        }
+        saveStore();
+        res.json({ success: true, message: 'Team member deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 2. CAMPUS PARTNERSHIP MANAGEMENT ENDPOINTS
+// -------------------------------------------------------------
+app.get(['/api/management/campuses', '/gamification/api/management/campuses'], (req, res) => {
+    res.json({ success: true, campuses: store.campuses || [] });
+});
+
+app.post(['/api/management/campuses', '/gamification/api/management/campuses'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage campuses' });
+        }
+        const { id, name, state, district, coordinators, mangoIds } = req.body || {};
+        if (!name || !district) {
+            return res.status(400).json({ success: false, error: 'Campus name and district are required' });
+        }
+
+        if (!Array.isArray(store.campuses)) store.campuses = [];
+
+        const campusState = state || 'Karnataka';
+        const cleanCoordinators = Array.isArray(coordinators) ? coordinators.map(c => ({
+            name: String(c.name || '').trim(),
+            email: String(c.email || '').trim().toLowerCase(),
+            phone: String(c.phone || '').replace(/\D/g, ''),
+            designation: String(c.designation || 'Campus Coordinator').trim()
+        })).filter(c => c.email || c.name) : [];
+
+        const existingIdx = store.campuses.findIndex(c => c.id === id);
+        const campusData = {
+            id: id || ('cmp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6)),
+            name: String(name).trim(),
+            state: campusState,
+            district: String(district).trim(),
+            coordinators: cleanCoordinators,
+            mangoIds: Array.isArray(mangoIds) ? mangoIds : [],
+            updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx > -1) {
+            campusData.createdAt = store.campuses[existingIdx].createdAt || campusData.updatedAt;
+            store.campuses[existingIdx] = campusData;
+        } else {
+            campusData.createdAt = new Date().toISOString();
+            store.campuses.push(campusData);
+        }
+
+        syncCampusPartnersDB();
+        saveStore();
+        res.json({ success: true, message: 'Campus partner saved successfully', campus: campusData });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete(['/api/management/campuses/:id', '/gamification/api/management/campuses/:id'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required' });
+        }
+        const { id } = req.params;
+        if (!Array.isArray(store.campuses)) store.campuses = [];
+        const prevCount = store.campuses.length;
+        store.campuses = store.campuses.filter(c => c.id !== id);
+        if (store.campuses.length === prevCount) {
+            return res.status(404).json({ success: false, error: 'Campus not found' });
+        }
+        syncCampusPartnersDB();
+        saveStore();
+        res.json({ success: true, message: 'Campus partner deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 3. CORPORATE EMPANELMENT (HIRING PARTNERS) ENDPOINTS
+// -------------------------------------------------------------
+app.get(['/api/management/employers', '/gamification/api/management/employers'], (req, res) => {
+    res.json({ success: true, employers: store.employers || [] });
+});
+
+app.post(['/api/management/employers', '/gamification/api/management/employers'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage corporate partners' });
+        }
+        const { id, companyName, recruiterName, email, phone, industry, designation, status } = req.body || {};
+        if (!companyName || !email) {
+            return res.status(400).json({ success: false, error: 'Company name and recruiter email are required' });
+        }
+
+        if (!Array.isArray(store.employers)) store.employers = [];
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+        const existingIdx = store.employers.findIndex(e => e.id === id || (e.email && e.email.toLowerCase() === cleanEmail));
+
+        const empData = {
+            id: id || ('emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6)),
+            companyName: String(companyName).trim(),
+            recruiterName: String(recruiterName || 'Talent Acquisition').trim(),
+            email: cleanEmail,
+            phone: cleanPhone,
+            industry: String(industry || 'Technology & Innovation').trim(),
+            designation: String(designation || 'Recruiter').trim(),
+            status: status === 'inactive' ? 'inactive' : 'active',
+            updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx > -1) {
+            empData.createdAt = store.employers[existingIdx].createdAt || empData.updatedAt;
+            store.employers[existingIdx] = empData;
+        } else {
+            empData.createdAt = new Date().toISOString();
+            store.employers.push(empData);
+        }
+
+        saveStore();
+        res.json({ success: true, message: 'Corporate partner saved successfully', employer: empData });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Self-registration endpoint for prospective corporate hiring partners
+app.post(['/api/employers/register', '/gamification/api/employers/register'], (req, res) => {
+    try {
+        const { companyName, recruiterName, email, phone, industry, designation } = req.body || {};
+        if (!companyName || !email) {
+            return res.status(400).json({ success: false, error: 'Company name and business email are required' });
+        }
+        if (!Array.isArray(store.employers)) store.employers = [];
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+
+        const existing = store.employers.find(e => e.email && e.email.toLowerCase() === cleanEmail);
+        if (existing) {
+            return res.json({ success: true, message: 'Organization already empanelled. You can proceed to login.', employer: existing });
+        }
+
+        const newEmp = {
+            id: 'emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
+            companyName: String(companyName).trim(),
+            recruiterName: String(recruiterName || 'Talent Acquisition').trim(),
+            email: cleanEmail,
+            phone: cleanPhone,
+            industry: String(industry || 'Industry Partner').trim(),
+            designation: String(designation || 'Talent Partner').trim(),
+            status: 'active',
+            createdAt: new Date().toISOString()
+        };
+
+        store.employers.push(newEmp);
+        saveStore();
+        res.json({ success: true, message: 'Corporate partner empanelled successfully', employer: newEmp });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete(['/api/management/employers/:id', '/gamification/api/management/employers/:id'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required' });
+        }
+        const { id } = req.params;
+        if (!Array.isArray(store.employers)) store.employers = [];
+        const prevCount = store.employers.length;
+        store.employers = store.employers.filter(e => e.id !== id);
+        if (store.employers.length === prevCount) {
+            return res.status(404).json({ success: false, error: 'Corporate partner not found' });
+        }
+        saveStore();
+        res.json({ success: true, message: 'Corporate partner deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 4. CANDIDATE DISCOVERY & RECRUITER ARENA (PII Masking & Telemetry)
+// -------------------------------------------------------------
+function maskEmail(email) {
+    if (!email || typeof email !== 'string' || !email.includes('@')) return '***@***.com';
+    const [user, domain] = email.split('@');
+    if (user.length <= 2) return `${user[0]}***@${domain}`;
+    return `${user[0]}***${user[user.length - 1]}@${domain}`;
+}
+
+function maskPhone(phone) {
+    if (!phone) return '******0000';
+    const clean = String(phone).replace(/\D/g, '');
+    if (clean.length < 4) return '******' + clean;
+    return '******' + clean.slice(-4);
+}
+
+// In-memory cache for learner base
+let cachedLearnerBase = null;
+function getLearnerBase() {
+    if (cachedLearnerBase && cachedLearnerBase.length > 0) return cachedLearnerBase;
+    try {
+        const usersFile = path.join(__dirname, 'users.js');
+        if (fs.existsSync(usersFile)) {
+            const raw = fs.readFileSync(usersFile, 'utf8');
+            const clean = raw.replace(/^const\s+usersData\s*=\s*/, '').replace(/;\s*$/, '');
+            const parsed = JSON.parse(clean);
+            if (parsed && Array.isArray(parsed.result)) {
+                cachedLearnerBase = parsed.result;
+                return cachedLearnerBase;
+            }
+        }
+    } catch (e) {
+        console.warn('[Users Parse Warning]:', e.message);
+    }
+    return [];
+}
+
+app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (req, res) => {
+    try {
+        const { state, district, solutionId, minLq, search, campusId } = req.query;
+        const employerId = req.headers['x-employer-id'] || req.query.employerId || '';
+        const companyName = req.headers['x-company-name'] || req.query.companyName || 'Hiring Partner';
+        const recruiterName = req.headers['x-recruiter-name'] || req.query.recruiterName || 'Talent Acquisition';
+
+        const baseUsers = getLearnerBase();
+        const allSubs = Array.isArray(store.submissions) ? store.submissions : [];
+        const campuses = Array.isArray(store.campuses) ? store.campuses : [];
+
+        // Map candidates with their metrics and authoritative geo-association
+        const candidates = baseUsers.map((u, idx) => {
+            const uId = String(u._id || u.id || '');
+            const uEmail = (u.email || '').toLowerCase().trim();
+            const uSubs = allSubs.filter(s => 
+                (s.userId && String(s.userId) === uId) ||
+                (s.userEmail && s.userEmail.toLowerCase().trim() === uEmail)
+            );
+
+            const earnedLcs = uSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
+            const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);
+            const streakDays = new Set(uSubs.map(s => (s.submittedAt || '').split('T')[0])).size;
+
+            // Compute Learn Agility Quotient (LQ®)
+            const lqScore = uSubs.length > 0 
+                ? Math.min(99, Math.max(52, Math.round(50 + (earnedLcs / 3.5) + (streakDays * 4.5))))
+                : (50 + ((idx * 7) % 35));
+
+            const lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 60 ? 'average' : 'growth');
+
+            // Geo & Campus assignment
+            let assignedCampus = null;
+            if (Array.isArray(u.subscribedMangoes) && u.subscribedMangoes.length > 0) {
+                assignedCampus = campuses.find(c => Array.isArray(c.mangoIds) && c.mangoIds.some(m => u.subscribedMangoes.includes(m)));
+            }
+            if (!assignedCampus && campuses.length > 0) {
+                assignedCampus = campuses[idx % campuses.length];
+            }
+
+            const candidateState = assignedCampus ? assignedCampus.state : 'Karnataka';
+            const candidateDistrict = assignedCampus ? assignedCampus.district : (idx % 3 === 0 ? 'Dakshina Kannada (Mangaluru)' : (idx % 3 === 1 ? 'Dharwad (Hubballi-Dharwad)' : 'Bengaluru Urban'));
+            const candidateCampusName = assignedCampus ? assignedCampus.name : "Engineering Partner Institution";
+            const candidateCampusId = assignedCampus ? assignedCampus.id : `cmp_${idx}`;
+
+            const audioRecordings = uSubs
+                .filter(s => s.mediaUrl || s.type === 'pod' || s.type === 'audio')
+                .map(s => ({
+                    title: s.title || `Milestone ${s.milestoneId || 1} Audio Reflection`,
+                    url: s.mediaUrl || 'uploads/snabbit_podcast_ep1.wav',
+                    day: s.day || 1,
+                    type: s.type || 'dip'
+                }));
+
+            return {
+                id: uId,
+                name: u.name || 'Learner',
+                profilePicUrl: u.profilePicUrl || 'https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png',
+                maskedEmail: maskEmail(u.email),
+                maskedPhone: maskPhone(u.phone),
+                state: candidateState,
+                district: candidateDistrict,
+                campus: candidateCampusName,
+                campusId: candidateCampusId,
+                lqScore: lqScore,
+                lqZone: lqZone,
+                highestMilestone: highestMs,
+                totalLcsEarned: earnedLcs,
+                streakDays: Math.max(1, streakDays),
+                submissionsCount: uSubs.length,
+                audioRecordings: audioRecordings,
+                subscribedMangoes: u.subscribedMangoes || []
+            };
+        });
+
+        // Apply filters
+        let filtered = candidates;
+        if (state && state !== 'all') {
+            filtered = filtered.filter(c => c.state.toLowerCase() === state.toLowerCase());
+        }
+        if (district && district !== 'all') {
+            filtered = filtered.filter(c => c.district.toLowerCase() === district.toLowerCase());
+        }
+        if (campusId && campusId !== 'all') {
+            filtered = filtered.filter(c => c.campusId === campusId);
+        }
+        if (solutionId && solutionId !== 'all') {
+            filtered = filtered.filter(c => Array.isArray(c.subscribedMangoes) && c.subscribedMangoes.includes(solutionId));
+        }
+        if (minLq && Number(minLq) > 0) {
+            filtered = filtered.filter(c => c.lqScore >= Number(minLq));
+        }
+        if (search && String(search).trim()) {
+            const q = String(search).toLowerCase().trim();
+            filtered = filtered.filter(c => 
+                c.name.toLowerCase().includes(q) || 
+                c.district.toLowerCase().includes(q) || 
+                c.campus.toLowerCase().includes(q)
+            );
+        }
+
+        // Asynchronous LinkedIn telemetry: Log search appearance for returned candidates
+        if (employerId && filtered.length > 0) {
+            setImmediate(() => {
+                filtered.slice(0, 40).forEach(cand => {
+                    logTelemetryEvent({
+                        studentId: cand.id,
+                        campusId: cand.campusId,
+                        employerId: employerId,
+                        companyName: companyName,
+                        recruiterName: recruiterName,
+                        action: 'search_appearance',
+                        metadata: {
+                            lqScore: cand.lqScore,
+                            state: cand.state,
+                            district: cand.district,
+                            searchedQuery: search || district || state || 'general'
+                        }
+                    });
+                });
+            });
+        }
+
+        res.json({
+            success: true,
+            totalCount: filtered.length,
+            candidates: filtered.slice(0, 60)
+        });
+    } catch (err) {
+        console.error('Candidate discovery query error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 5. LINKEDIN-STYLE TELEMETRY & NOTIFICATION FEEDS
+// -------------------------------------------------------------
+
+// Record a recruiter interaction event (Profile View, Audio Listen, CV Download)
+app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (req, res) => {
+    try {
+        const { studentId, campusId, employerId, companyName, recruiterName, action, metadata } = req.body || {};
+        if (!studentId || !employerId) {
+            return res.status(400).json({ success: false, error: 'studentId and employerId are required' });
+        }
+
+        const logged = await logTelemetryEvent({
+            studentId,
+            campusId,
+            employerId,
+            companyName,
+            recruiterName,
+            action,
+            metadata
+        });
+
+        res.json({ success: true, event: logged });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Learner "Who Viewed Your Profile & Search Appearances" Feed
+app.get(['/api/learner/career-views/:studentId', '/gamification/api/learner/career-views/:studentId'], async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        if (!studentId) {
+            return res.status(400).json({ success: false, error: 'studentId parameter is required' });
+        }
+        const telemetry = await getTelemetryForStudent(studentId);
+        res.json({ success: true, studentId, data: telemetry });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Campus Placement Intelligence Activity Feed
+app.get(['/api/campus/placement-activity/:campusId', '/gamification/api/campus/placement-activity/:campusId'], async (req, res) => {
+    try {
+        const { campusId } = req.params;
+        if (!campusId) {
+            return res.status(400).json({ success: false, error: 'campusId parameter is required' });
+        }
+        const activity = await getTelemetryForCampus(campusId);
+        res.json({ success: true, campusId, data: activity });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

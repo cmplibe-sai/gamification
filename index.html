@@ -74,6 +74,7 @@
                 <div id="learnerNav" class="hidden flex items-center gap-1 sm:gap-1.5 md:gap-3 overflow-x-auto no-scrollbar shrink-0">
                     <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active" title="Home"><i class="fas fa-home"></i> <span class="hidden sm:inline">Home</span></button>
                     <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn" title="Level-Up"><i class="fas fa-layer-group"></i> <span class="hidden sm:inline">Level-Up</span><span class="hidden md:inline"> (4 Milestones)</span></button>
+                    <button onclick="switchTab('careerViewsTab')" id="nav-careerViewsTab" class="nav-tab-btn" title="Career Views & Talent Search"><i class="fas fa-eye text-emerald-400"></i> <span class="hidden sm:inline">Career Views</span><span id="careerViewsBadge" class="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hidden">0</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span><span class="hidden lg:inline"> Leaderboard</span></button>
                     
                     <!-- LC Currency Pill -->
@@ -93,10 +94,26 @@
                 <div id="adminNav" class="hidden flex items-center gap-1 sm:gap-2 md:gap-3 overflow-x-auto no-scrollbar shrink-0">
                     <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active" title="Overview"><i class="fas fa-chart-line"></i> <span class="hidden sm:inline">Overview</span></button>
                     <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn" title="Level-Up Command"><i class="fas fa-sliders-h"></i> <span class="hidden sm:inline">Command</span><span class="hidden md:inline"> Center</span></button>
+                    <button onclick="switchTab('managementTab')" id="nav-managementTab" class="nav-tab-btn" title="Management Console"><i class="fas fa-sitemap text-indigo-400"></i> <span class="hidden sm:inline">Management</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span></button>
                     
                     <div class="bg-emerald-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-0.5 sm:ml-2 shrink-0">
                         <i class="fas fa-shield-alt text-[11px] sm:text-xs"></i> <span class="hidden md:inline">Creator Hub</span>
+                    </div>
+
+                    <!-- Logout -->
+                    <button onclick="logout()" class="ml-0.5 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
+                        <i class="fas fa-sign-out-alt text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Recruiter / Employer Navigation Tabs -->
+                <div id="recruiterNav" class="hidden flex items-center gap-1 sm:gap-2 md:gap-3 overflow-x-auto no-scrollbar shrink-0">
+                    <button onclick="switchTab('recruiterTab')" id="nav-recruiterTab" class="nav-tab-btn active" title="Talent Arena"><i class="fas fa-briefcase text-cyan-400"></i> <span class="hidden sm:inline">Talent Arena</span></button>
+                    <button onclick="switchTab('leaderboardTab')" id="nav-recruiterLeaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy text-amber-400"></i> <span class="hidden sm:inline">Ranks</span></button>
+                    
+                    <div class="bg-cyan-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-cyan-500/30 flex items-center gap-1.5 text-cyan-300 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-0.5 sm:ml-2 shrink-0">
+                        <i class="fas fa-building text-[11px] sm:text-xs"></i> <span id="recruiterHeaderBadge" class="hidden md:inline">Hiring Partner</span>
                     </div>
 
                     <!-- Logout -->
@@ -424,9 +441,9 @@
                         <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Creator Command Hub</h2>
                         <p class="text-slate-400 text-sm mt-1">Monitor cohort compliance, evaluate check-in proofs, and track customer health.</p>
                     </div>
-                    <div id="managePartnersBtnContainer">
-                        <button onclick="openPartnerManagementModal()" class="btn-secondary py-2.5 px-4 text-xs">
-                            <i class="fas fa-handshake text-emerald-400 mr-2"></i> Manage Campus Partners
+                    <div>
+                        <button onclick="switchTab('managementTab')" class="btn-secondary py-2.5 px-4 text-xs">
+                            <i class="fas fa-sitemap text-indigo-400 mr-2"></i> Management Console
                         </button>
                     </div>
                 </div>
@@ -721,7 +738,496 @@
                 </div>
             </section>
 
+            <!-- ==============================================================
+                 5. LEARNER CAREER VIEWS & LINKEDIN-STYLE SEARCH APPEARANCES
+                 ============================================================== -->
+            <section id="careerViewsTab" class="hidden space-y-8 animate-fade-in">
+                <!-- Welcome Banner -->
+                <div class="glass-card p-6 md:p-8 relative overflow-hidden border-emerald-500/30 bg-gradient-to-r from-slate-900/90 via-emerald-950/20 to-slate-900/90">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="badge-pill badge-emerald"><i class="fas fa-chart-line"></i> Talent Visibility</span>
+                                <span class="badge-pill badge-indigo"><i class="fas fa-award"></i> Learn Agility Quotient (LQ®)</span>
+                            </div>
+                            <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Career Views & Recruiter Interest</h2>
+                            <p class="text-slate-400 text-sm mt-1">Track how top companies discover your talent profile, inspect your Learn Agility Quotient (LQ®), and listen to verified audio reflections.</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="switchTab('levelUpTab')" class="btn-primary text-xs md:text-sm">
+                                <i class="fas fa-bolt mr-2 text-amber-400"></i> Boost LQ® Score
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4 Metrics KPI Bar -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass-card p-5 border-emerald-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">7-Day Searches</span>
+                            <i class="fas fa-search text-emerald-400 text-sm"></i>
+                        </div>
+                        <h3 id="careerViewsSearch7d" class="text-2xl md:text-3xl font-extrabold text-white">0</h3>
+                        <p class="text-[11px] text-emerald-400/80 mt-1"><i class="fas fa-arrow-trend-up mr-1"></i> Search appearances</p>
+                    </div>
+
+                    <div class="glass-card p-5 border-indigo-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">30-Day Impressions</span>
+                            <i class="fas fa-bullseye text-indigo-400 text-sm"></i>
+                        </div>
+                        <h3 id="careerViewsSearch30d" class="text-2xl md:text-3xl font-extrabold text-white">0</h3>
+                        <p class="text-[11px] text-indigo-300 mt-1">Total corporate queries</p>
+                    </div>
+
+                    <div class="glass-card p-5 border-cyan-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Profile Inspections</span>
+                            <i class="fas fa-user-check text-cyan-400 text-sm"></i>
+                        </div>
+                        <h3 id="careerViewsProfileCount" class="text-2xl md:text-3xl font-extrabold text-white">0</h3>
+                        <p class="text-[11px] text-cyan-300 mt-1">Recruiter profile views</p>
+                    </div>
+
+                    <div class="glass-card p-5 border-amber-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Learn Agility (LQ®)</span>
+                            <i class="fas fa-brain text-amber-400 text-sm"></i>
+                        </div>
+                        <h3 id="careerViewsLqScore" class="text-2xl md:text-3xl font-extrabold text-amber-400">--%</h3>
+                        <p id="careerViewsLqZone" class="text-[11px] text-slate-400 mt-1">Awaiting evaluation</p>
+                    </div>
+                </div>
+
+                <!-- Main Activity & Coaching Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Notification Stream -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                            <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-bell text-emerald-400 mr-2"></i> Who Viewed Your Profile</h3>
+                            <span class="text-xs text-slate-400">Live LinkedIn-Style Telemetry</span>
+                        </div>
+                        
+                        <div id="careerViewsActivityList" class="space-y-3">
+                            <div class="text-center py-10 glass-card">
+                                <i class="fas fa-radar text-4xl text-slate-600 mb-3 animate-pulse"></i>
+                                <p class="text-sm font-bold text-white">Active Recruiter Matching In Progress</p>
+                                <p class="text-xs text-slate-400 mt-1">As hiring partners filter candidates by State, District, and LQ®, your notifications will appear here.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visibility Accelerator Guide -->
+                    <div class="space-y-6">
+                        <div class="glass-card p-6 border-indigo-500/30">
+                            <h4 class="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-lightbulb"></i> Maximize Recruiter Discovery
+                            </h4>
+                            <div class="space-y-4 text-xs text-slate-300">
+                                <div class="flex gap-3 items-start">
+                                    <div class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 font-bold">1</div>
+                                    <div>
+                                        <p class="font-bold text-white">Complete Daily cMPLi Dip Reflections</p>
+                                        <p class="text-slate-400 text-[11px] mt-0.5">Submitting daily voice check-ins advances your consistency streak, placing you at the top of recruiter searches.</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 items-start">
+                                    <div class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold">2</div>
+                                    <div>
+                                        <p class="font-bold text-white">Maintain 80%+ Learn Agility Quotient (LQ®)</p>
+                                        <p class="text-slate-400 text-[11px] mt-0.5">Employers specifically filter by Strong Zone LQ® for priority campus hiring and internships.</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-3 items-start">
+                                    <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 font-bold">3</div>
+                                    <div>
+                                        <p class="font-bold text-white">Record Clear Voice Summaries</p>
+                                        <p class="text-slate-400 text-[11px] mt-0.5">Corporate talent acquisition leads listen to verified audio samples directly in the talent portal.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==============================================================
+                 6. SIMPLYBE UNIFIED MANAGEMENT HUB (Creator Only)
+                 ============================================================== -->
+            <section id="managementTab" class="hidden space-y-8 animate-fade-in">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
+                    <div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="badge-pill badge-indigo"><i class="fas fa-sitemap"></i> Platform Governance</span>
+                            <span class="badge-pill badge-emerald"><i class="fas fa-shield-alt"></i> SimplyBe Core</span>
+                        </div>
+                        <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">SimplyBe Management Hub</h2>
+                        <p class="text-slate-400 text-sm mt-1">Manage internal creator team members, empanel corporate hiring partners, and administer campus colleges.</p>
+                    </div>
+                </div>
+
+                <!-- Sub-Hub Navigation Pills -->
+                <div class="flex gap-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+                    <button id="mgmtSubTabBtn-team" onclick="switchManagementSubTab('team')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+                        <i class="fas fa-users-cog"></i> <span>SimplyBe Team Hub</span>
+                    </button>
+                    <button id="mgmtSubTabBtn-corporates" onclick="switchManagementSubTab('corporates')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-building"></i> <span>Corporate Empanelment</span>
+                    </button>
+                    <button id="mgmtSubTabBtn-campuses" onclick="switchManagementSubTab('campuses')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-university"></i> <span>Campus Partnerships</span>
+                    </button>
+                </div>
+
+                <!-- SUB-HUB 1: SimplyBe Team Management -->
+                <div id="mgmtSubTab-team" class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Add Member Form -->
+                        <div class="glass-card p-6 border-indigo-500/30 h-fit">
+                            <h4 class="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-user-plus"></i> Onboard Team Member
+                            </h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Full Name</label>
+                                    <input type="text" id="newTeamName" placeholder="e.g. Sai Kumar Yadiki" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Email ID</label>
+                                    <input type="email" id="newTeamEmail" placeholder="team@cmplibe.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">10-Digit Phone</label>
+                                    <input type="tel" id="newTeamPhone" placeholder="6309764212" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Employee / Contact ID</label>
+                                    <input type="text" id="newTeamEmpId" placeholder="CMPLI-004" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Platform Role & Access</label>
+                                    <select id="newTeamRole" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-indigo-500 font-semibold">
+                                        <option value="super_creator">Super Creator (Full Admin & Config)</option>
+                                        <option value="content_creator" selected>Content Creator (POD Quizzes & Milestones)</option>
+                                        <option value="evaluator">Evaluator (Submission Reviews & Feedback)</option>
+                                        <option value="ops">Operations & Campus Liaison</option>
+                                    </select>
+                                </div>
+                                <button onclick="saveTeamMember()" class="w-full btn-primary py-3 text-xs">
+                                    <i class="fas fa-save mr-2"></i> Save Team Member
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Team Members Directory -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                                <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-users text-indigo-400 mr-2"></i> Active SimplyBe Staff</h3>
+                                <span id="mgmtTeamCount" class="text-xs text-slate-400">Loading...</span>
+                            </div>
+                            <div class="glass-card rounded-2xl border-slate-800 overflow-hidden">
+                                <div class="overflow-x-auto custom-scrollbar">
+                                    <table class="w-full text-left border-collapse whitespace-nowrap text-xs">
+                                        <thead class="bg-slate-900/90 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
+                                            <tr>
+                                                <th class="p-4">Member Name</th>
+                                                <th class="p-4">Role</th>
+                                                <th class="p-4">Contact Info</th>
+                                                <th class="p-4">Employee ID</th>
+                                                <th class="p-4 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="mgmtTeamTableBody" class="divide-y divide-slate-800/60"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-HUB 2: Corporate Empanelment -->
+                <div id="mgmtSubTab-corporates" class="hidden space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Empanel Form -->
+                        <div class="glass-card p-6 border-cyan-500/30 h-fit">
+                            <h4 class="text-sm font-black text-cyan-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-building-circle-check"></i> Empanel Hiring Partner
+                            </h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Company / Organization Name</label>
+                                    <input type="text" id="newEmpCompanyName" placeholder="e.g. BLive Electric Mobility" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Industry / Sector</label>
+                                    <input type="text" id="newEmpIndustry" placeholder="e.g. CleanTech & EV Logistics" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Recruiter / HR Contact Name</label>
+                                    <input type="text" id="newEmpRecruiterName" placeholder="e.g. Rohit Verma" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Recruiter Email (Login Credential)</label>
+                                    <input type="email" id="newEmpEmail" placeholder="talent@company.com" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Recruiter Phone (Login OTP)</label>
+                                    <input type="tel" id="newEmpPhone" placeholder="9880011223" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Designation</label>
+                                    <input type="text" id="newEmpDesignation" placeholder="e.g. Talent Acquisition Lead" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <button onclick="saveCorporateEmployer()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg text-xs">
+                                    <i class="fas fa-handshake mr-2"></i> Empanel & Activate Partner
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Corporates Directory -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                                <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-building text-cyan-400 mr-2"></i> Empanelled Corporate Partners</h3>
+                                <button onclick="switchTab('recruiterTab')" class="btn-secondary py-1.5 px-3 text-xs">
+                                    <i class="fas fa-binoculars mr-1 text-cyan-400"></i> Open Talent Arena Preview
+                                </button>
+                            </div>
+                            <div id="mgmtCorporateList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-HUB 3: Campus Partnerships -->
+                <div id="mgmtSubTab-campuses" class="hidden space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- Add Campus Form -->
+                        <div class="glass-card p-6 border-emerald-500/30 h-fit">
+                            <h4 class="text-sm font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fas fa-university"></i> Register Partner College
+                            </h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">1. Select State</label>
+                                    <select id="mgmtCampusState" onchange="populateMgmtDistrictOptions()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold">
+                                        <option value="Karnataka" selected>Karnataka</option>
+                                        <option value="Tamil Nadu">Tamil Nadu</option>
+                                        <option value="Telangana">Telangana</option>
+                                        <option value="Andhra Pradesh">Andhra Pradesh</option>
+                                        <option value="Maharashtra">Maharashtra</option>
+                                        <option value="Kerala">Kerala</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">2. Select District (Official 2026 Geo)</label>
+                                    <select id="mgmtCampusDistrict" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500 font-semibold"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">3. Institution / College Name</label>
+                                    <input type="text" id="mgmtCampusName" placeholder="e.g. St. Joseph Engineering College" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div class="pt-2 border-t border-slate-800">
+                                    <span class="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Primary Coordinator Details</span>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Coordinator Name</label>
+                                    <input type="text" id="mgmtCoordName" placeholder="e.g. Dr. Rio D'Souza" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Coordinator Email (Login ID)</label>
+                                    <input type="email" id="mgmtCoordEmail" placeholder="principal@sjec.ac.in" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Coordinator Phone</label>
+                                    <input type="tel" id="mgmtCoordPhone" placeholder="9845012345" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Designation</label>
+                                    <input type="text" id="mgmtCoordDesignation" placeholder="e.g. Principal / Placement Head" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-400 mb-1">Permitted Solutions (Cohorts)</label>
+                                    <div id="mgmtCampusSolutionsList" class="space-y-2 max-h-36 overflow-y-auto custom-scrollbar p-2 bg-slate-950 rounded-xl border border-slate-800"></div>
+                                </div>
+                                <button onclick="saveCampusPartnerRecord()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg text-xs">
+                                    <i class="fas fa-check mr-2"></i> Register Campus Partner
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Campuses Directory -->
+                        <div class="lg:col-span-2 space-y-4">
+                            <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                                <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-university text-emerald-400 mr-2"></i> Empanelled Institutions</h3>
+                                <span id="mgmtCampusCount" class="text-xs text-slate-400">Loading...</span>
+                            </div>
+                            <div id="mgmtCampusList" class="space-y-4"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==============================================================
+                 7. RECRUITER TALENT ARENA (Hiring Partner Discovery Portal)
+                 ============================================================== -->
+            <section id="recruiterTab" class="hidden space-y-8 animate-fade-in">
+                <!-- Welcome Banner -->
+                <div class="glass-card p-6 md:p-8 relative overflow-hidden border-cyan-500/30 bg-gradient-to-r from-slate-900/90 via-cyan-950/20 to-slate-900/90">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="badge-pill badge-cyan"><i class="fas fa-briefcase"></i> Candidate Discovery</span>
+                                <span class="badge-pill badge-indigo"><i class="fas fa-award"></i> Learn Agility Quotient (LQ®)</span>
+                            </div>
+                            <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading">Corporate Candidate Discovery Arena</h2>
+                            <p class="text-slate-400 text-sm mt-1">Discover verified high-agility talent across partner institutions. Filter by State, District, and Learn Agility Quotient (LQ®).</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-slate-400 block">Logged in as</span>
+                            <span id="recruiterCompanyName" class="text-sm font-bold text-cyan-300">BLive Electric Mobility</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cascading Filter Controls -->
+                <div class="glass-card p-5 border-slate-800">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">1. State</label>
+                            <select id="recruiterFilterState" onchange="onRecruiterStateChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold">
+                                <option value="all">All States</option>
+                                <option value="Karnataka" selected>Karnataka</option>
+                                <option value="Tamil Nadu">Tamil Nadu</option>
+                                <option value="Telangana">Telangana</option>
+                                <option value="Andhra Pradesh">Andhra Pradesh</option>
+                                <option value="Maharashtra">Maharashtra</option>
+                                <option value="Kerala">Kerala</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">2. District / City</label>
+                            <select id="recruiterFilterDistrict" onchange="renderRecruiterCandidates()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold">
+                                <option value="all">All Districts</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">3. Institution</label>
+                            <select id="recruiterFilterCampus" onchange="renderRecruiterCandidates()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold">
+                                <option value="all">All Partner Colleges</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">4. Min Learn Agility (LQ®)</label>
+                            <select id="recruiterFilterMinLq" onchange="renderRecruiterCandidates()" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold">
+                                <option value="0">All Scores</option>
+                                <option value="60">60%+ (Solid)</option>
+                                <option value="80" selected>80%+ (Strong Zone)</option>
+                                <option value="90">90%+ (Elite Tier)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">5. Search Candidate</label>
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                                <input type="text" id="recruiterFilterSearch" onkeyup="renderRecruiterCandidates()" placeholder="Name, college, skill..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Talent Candidates Stream -->
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-users-viewfinder text-cyan-400 mr-2"></i> Qualified Talent Pool</h3>
+                            <span id="recruiterCandidatesCount" class="badge-pill badge-indigo">0 Candidates</span>
+                        </div>
+                        <span class="text-xs text-slate-400"><i class="fas fa-shield-alt text-emerald-400 mr-1"></i> PII Protected (Direct Connect Enabled)</span>
+                    </div>
+
+                    <div id="recruiterCandidateGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    
+                    <div id="recruiterEmptyState" class="hidden text-center py-16 glass-card">
+                        <i class="fas fa-user-slash text-4xl text-slate-600 mb-3"></i>
+                        <p class="text-base font-bold text-white">No candidates matched the selected filters</p>
+                        <p class="text-xs text-slate-400 mt-1">Try broadening your District or Learn Agility Quotient (LQ®) threshold.</p>
+                    </div>
+                </div>
+            </section>
+
         </main>
+    </div>
+
+    <!-- CANDIDATE DOSSIER / CV INSPECTION MODAL -->
+    <div id="recruiterDossierModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-2xl rounded-3xl overflow-hidden flex flex-col border border-cyan-500/40 shadow-2xl max-h-[90vh]">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                        <i class="fas fa-id-card text-lg"></i>
+                    </div>
+                    <div>
+                        <span id="dossierLqBadge" class="badge-pill badge-indigo">92% Learn Agility (LQ®)</span>
+                        <h3 id="dossierCandidateName" class="text-lg font-bold text-white font-heading mt-1">Candidate Talent Dossier</h3>
+                    </div>
+                </div>
+                <button onclick="closeRecruiterDossierModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <!-- Academic & Geo Credentials -->
+                <div class="glass-card p-4 border-slate-800 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <span class="text-slate-400 block">Institution</span>
+                        <span id="dossierCampus" class="font-bold text-white">St. Joseph Engineering College</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">State & District</span>
+                        <span id="dossierDistrict" class="font-bold text-cyan-300">Karnataka - Dakshina Kannada (Mangaluru)</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">Highest Level-Up Milestone</span>
+                        <span id="dossierMilestone" class="font-bold text-emerald-400">Milestone 2 Achieved</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block">Daily Consistency Streak</span>
+                        <span id="dossierStreak" class="font-bold text-amber-400">12 Days Active</span>
+                    </div>
+                </div>
+
+                <!-- Verified Audio Reflection Player -->
+                <div class="glass-card p-5 border-cyan-500/20">
+                    <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="fas fa-microphone"></i> Verified Candidate Voice Reflection
+                    </h4>
+                    <p class="text-xs text-slate-300 mb-3">Listen to this candidate's authentic vocal delivery and problem formulation during daily check-in evaluations.</p>
+                    <div id="dossierAudioContainer"></div>
+                </div>
+
+                <!-- Contact & Interview Connect -->
+                <div class="glass-card p-5 border-indigo-500/20 space-y-3">
+                    <h4 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                        <i class="fas fa-paper-plane"></i> Direct Candidate Connection
+                    </h4>
+                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs flex justify-between items-center">
+                        <div>
+                            <span class="text-slate-400 block text-[10px]">VERIFIED EMAIL</span>
+                            <span id="dossierEmail" class="font-bold text-white">c***a@gmail.com</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px]">VERIFIED PHONE</span>
+                            <span id="dossierPhone" class="font-bold text-white">******7977</span>
+                        </div>
+                    </div>
+                    <button onclick="requestCandidateInterview()" class="w-full btn-primary py-3 text-xs">
+                        <i class="fas fa-calendar-check mr-2"></i> Request Interview & Unlock Full PII Dossier
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ==============================================================
