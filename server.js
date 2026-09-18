@@ -1362,6 +1362,10 @@ async function syncGoogleSheetData(sheetIdInput) {
 
     try {
         const sheetId = (sheetIdInput || DEFAULT_GOOGLE_SHEET_ID).trim();
+        // Strict Whitelist Validation: Google Sheet IDs are strictly alphanumeric, underscores, and hyphens
+        if (!/^[a-zA-Z0-9_-]{20,100}$/.test(sheetId)) {
+            throw new Error(`Invalid Google Sheet ID format: "${sheetId.slice(0, 20)}..."`);
+        }
         console.log(`[GoogleSheetSync] Fetching CSV from sheet: ${sheetId}...`);
         const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
@@ -1378,10 +1382,15 @@ async function syncGoogleSheetData(sheetIdInput) {
         // Enrich rows with rich text (bold & italics) directly from Google Sheet XLSX export
         let richTextMap = {};
         try {
-            const { execSync } = require('child_process');
+            const { execFileSync } = require('child_process');
             const pyScript = path.join(__dirname, 'scripts', 'extract_sheet_rich_text.py');
             if (fs.existsSync(pyScript)) {
-                const pyOut = execSync(`python "${pyScript}" "${sheetId}"`, { timeout: 15000 }).toString().trim();
+                // Safe process execution via execFileSync: arguments passed as array directly to OS process spawn without shell invocation
+                const pyOut = execFileSync('python', [pyScript, sheetId], {
+                    timeout: 15000,
+                    encoding: 'utf8',
+                    windowsHide: true
+                }).trim();
                 richTextMap = JSON.parse(pyOut);
                 console.log(`[GoogleSheetSync] Rich text bold/italics loaded for ${Object.keys(richTextMap).length} stories`);
             }
@@ -1734,10 +1743,31 @@ async function syncGoogleSheetData(sheetIdInput) {
     }
 }
 
-// REST Endpoints for Google Sheet Sync
+// In-memory store for creator tokens and rate limiting (used by auth and sync endpoints)
+const validCreatorTokens = new Map();
+const failedCreatorAuthAttempts = new Map(); // ip -> { count, lockedUntil }
+
+function verifyCreatorToken(req) {
+    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.query.token;
+    if (!authHeader || typeof authHeader !== 'string') return false;
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!validCreatorTokens.has(cleanToken)) return false;
+    const expiry = validCreatorTokens.get(cleanToken);
+    if (Date.now() > expiry) {
+        validCreatorTokens.delete(cleanToken);
+        return false;
+    }
+    return true;
+}
+
+// REST Endpoints for Google Sheet Sync (Secured: syncing custom sheet IDs requires creator authentication)
 app.get(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
     try {
-        const sheetId = req.query.sheetId || DEFAULT_GOOGLE_SHEET_ID;
+        const requestedSheetId = (req.query.sheetId || '').trim();
+        if (requestedSheetId && requestedSheetId !== DEFAULT_GOOGLE_SHEET_ID && !verifyCreatorToken(req)) {
+            return res.status(401).json({ success: false, error: 'Unauthorized: Creator token required to sync custom sheet ID' });
+        }
+        const sheetId = requestedSheetId || DEFAULT_GOOGLE_SHEET_ID;
         const result = await syncGoogleSheetData(sheetId);
         res.json(result);
     } catch (err) {
@@ -1748,7 +1778,11 @@ app.get(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async
 
 app.post(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
     try {
-        const sheetId = req.body.sheetId || req.query.sheetId || DEFAULT_GOOGLE_SHEET_ID;
+        const requestedSheetId = (req.body.sheetId || req.query.sheetId || '').trim();
+        if (requestedSheetId && requestedSheetId !== DEFAULT_GOOGLE_SHEET_ID && !verifyCreatorToken(req)) {
+            return res.status(401).json({ success: false, error: 'Unauthorized: Creator token required to sync custom sheet ID' });
+        }
+        const sheetId = requestedSheetId || DEFAULT_GOOGLE_SHEET_ID;
         const result = await syncGoogleSheetData(sheetId);
         res.json(result);
     } catch (err) {
@@ -2787,8 +2821,6 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
 // In-memory store for active learner quiz sessions with 2-hour TTL
 const podQuizSessions = new Map();
 const userSessionRates = new Map();
-const validCreatorTokens = new Map();
-const failedCreatorAuthAttempts = new Map(); // ip -> { count, lockedUntil }
 
 setInterval(() => {
     const now = Date.now();
@@ -2807,19 +2839,6 @@ setInterval(() => {
         if (rec.lockedUntil && rec.lockedUntil < now) failedCreatorAuthAttempts.delete(ip);
     }
 }, 300000);
-
-function verifyCreatorToken(req) {
-    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.query.token;
-    if (!authHeader || typeof authHeader !== 'string') return false;
-    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!validCreatorTokens.has(cleanToken)) return false;
-    const expiry = validCreatorTokens.get(cleanToken);
-    if (Date.now() > expiry) {
-        validCreatorTokens.delete(cleanToken);
-        return false;
-    }
-    return true;
-}
 
 // Issues a cryptographic creator session token to requesters providing the valid shared secret (CREATOR_ADMIN_SECRET)
 app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (req, res) => {

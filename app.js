@@ -13027,27 +13027,48 @@ async function startAudioRecording(idx, isResume = false) {
                     // Multi-token matching: Compares what the customer spoken against teleprompter words
                     if (window._teleprompterWords && window._teleprompterWords.length > 0) {
                         const wordsSpoken = cleanSpeech.toLowerCase().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(Boolean);
-                        const cur = window._currentReadWordIndex || 0;
-                        const lookahead = Math.min(cur + 25, window._teleprompterWords.length);
+                        let searchCursor = Math.max(window._currentReadWordIndex || 0, 0);
+                        let maxMatchedIndex = searchCursor;
+                        const matchedThisBatch = [];
+                        const stopWords = new Set(['the', 'to', 'in', 'on', 'at', 'by', 'for', 'of', 'and', 'or', 'a', 'an', 'is', 'it', 'as', 'be', 'we', 'he', 'so']);
 
                         for (const spoken of wordsSpoken) {
                             if (spoken.length < 2) continue;
-                            for (let w = cur; w < lookahead; w++) {
+                            const isStopWord = stopWords.has(spoken);
+                            // Stop words (the/to/for/etc.) can only look ahead up to 2 words from current position.
+                            // Distinct content words can look ahead up to 25 words.
+                            const maxLookaheadDist = isStopWord ? 2 : 25;
+                            const lookahead = Math.min(searchCursor + maxLookaheadDist + 1, window._teleprompterWords.length);
+
+                            for (let w = searchCursor; w < lookahead; w++) {
                                 const target = window._teleprompterWords[w]?.clean || '';
                                 if (!target) continue;
 
                                 const isMatch = (target === spoken) ||
-                                    (target.length >= 4 && (target.startsWith(spoken) || spoken.startsWith(target))) ||
-                                    (target.length >= 5 && spoken.length >= 5 && (target.slice(0, 4) === spoken.slice(0, 4)));
+                                    (!isStopWord && target.length >= 4 && (target.startsWith(spoken) || spoken.startsWith(target))) ||
+                                    (!isStopWord && target.length >= 5 && spoken.length >= 5 && (target.slice(0, 4) === spoken.slice(0, 4)));
 
                                 if (isMatch) {
-                                    window._lastSpeechMatchTime = Date.now();
-                                    // Mark this word as correctly pronounced / read
-                                    window._teleprompterWordStatus = window._teleprompterWordStatus || {};
-                                    window._teleprompterWordStatus[w] = true;
-                                    updateTeleprompterWordHighlight(w);
+                                    matchedThisBatch.push(w);
+                                    if (w > maxMatchedIndex) {
+                                        maxMatchedIndex = w;
+                                    }
+                                    // Advance searchCursor monotonically so subsequent words in this utterance match strictly AFTER this word!
+                                    searchCursor = w + 1;
                                     break;
                                 }
+                            }
+                        }
+
+                        if (matchedThisBatch.length > 0) {
+                            window._lastSpeechMatchTime = Date.now();
+                            window._teleprompterWordStatus = window._teleprompterWordStatus || {};
+                            for (const mIdx of matchedThisBatch) {
+                                window._teleprompterWordStatus[mIdx] = true;
+                            }
+                            // Strictly monotonic forward progress — never snap backward mid-sentence!
+                            if (maxMatchedIndex >= (window._currentReadWordIndex || 0)) {
+                                updateTeleprompterWordHighlight(maxMatchedIndex, matchedThisBatch);
                             }
                         }
                     }
