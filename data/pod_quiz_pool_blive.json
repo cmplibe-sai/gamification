@@ -1,6 +1,118 @@
 [
   {
     "id": "q_blive_549_1",
+    "title": "What doorstep delivery arrival time is highlighted as the standard for quick-commerce?",
+    "options": [
+      "Under ten minutes",
+      "Within forty-five minutes",
+      "Two to three hours",
+      "Next business day"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, quick-commerce orders arrive at your doorstep in under ten minutes.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_2",
+    "title": "How many wheels define the high-payload cargo vehicle market targeted by BLive?",
+    "options": [
+      "Two-wheeler electric bikes",
+      "Four-wheeler cargo vehicles",
+      "Three-wheeler auto rickshaws",
+      "Six-wheeler heavy trucks"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, the collaboration targets the high-payload four-wheeler cargo market.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_3",
+    "title": "Which urban tier classification is specifically expanding alongside metropolitan centers for EV delivery?",
+    "options": [
+      "Tier-1 capitals only",
+      "Tier-4 rural hamlets",
+      "Expanding Tier-2 cities",
+      "Remote tribal territories"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, clean last-mile logistics is expanding rapidly across metropolitan centers and Tier-2 cities.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_4",
+    "title": "What milestone edition number marks today's featured cMPLi Dip story?",
+    "options": [
+      "500th edition story",
+      "525th edition story",
+      "540th edition story",
+      "549th edition story"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, today's feature marks the 549th cMPLi Dip story.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_5",
+    "title": "How many core operational pillars does BLive consolidate into its turnkey platform?",
+    "options": [
+      "Four operational pillars",
+      "Only one pillar",
+      "Two separate pillars",
+      "Seven independent pillars"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, BLive consolidates 4 pillars: vehicle sourcing, green financing, charging, and maintenance.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_6",
+    "title": "How many automated telemetry capabilities are powered by BLive's AI platform?",
+    "options": [
+      "Only one task",
+      "Four automated functions",
+      "Twelve separate systems",
+      "Over twenty manual logs"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, the platform automates 4 functions: route planning, battery SoC tracking, driver monitoring, and maintenance scheduling.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_7",
+    "title": "What contract duration do early-career managers negotiate with quick-commerce aggregators?",
+    "options": [
+      "Single-month spot leases",
+      "Ninety-day trial permits",
+      "Multi-year service agreements",
+      "Ten-year government treaties"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, professionals negotiate multi-year service level agreements with high-growth quick-commerce aggregators.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_8",
+    "title": "What target fleet availability level does BLive guarantee across commercial delivery routes?",
+    "options": [
+      "50 percent availability",
+      "Weekend operation only",
+      "Standard seasonal operation",
+      "Maximum fleet uptime"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, the intelligent technology stack guarantees maximum fleet uptime across nationwide commercial routes.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_blive_549_9",
     "title": "Which company is highlighted as driving clean last-mile logistics across India?",
     "options": [
       "BLive",
@@ -14,7 +126,7 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_2",
+    "id": "q_blive_549_10",
     "title": "What primary business model does BLive operate to remain scalable?",
     "options": [
       "Heavy manufacturing model",
@@ -28,7 +140,7 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_3",
+    "id": "q_blive_549_11",
     "title": "What comprehensive solution does BLive's B2B cargo division provide to enterprise delivery giants?",
     "options": [
       "Software licensing only",
@@ -42,234 +154,178 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_4",
-    "title": "Which cargo vehicle segment is targeted in BLive's collaboration to rapidly scale delivery capacity?",
-    "options": [
-      "Electric passenger aircraft",
-      "Electric heavy trains",
-      "Two-wheeler luxury bikes",
-      "Four-wheeler cargo vehicles"
-    ],
-    "correctOption": 3,
-    "explanation": "Based on the story, the milestone collaboration targets the high-payload four-wheeler cargo market.",
-    "category": "Market & Customers",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_5",
+    "id": "q_blive_549_12",
     "title": "What proprietary technology anchors BLive's physical fleet rollout?",
     "options": [
-      "AI fleet management platform",
       "Manual spreadsheet tracking",
       "Radio dispatch system",
-      "Blockchain ledger network"
+      "Blockchain ledger network",
+      "AI fleet management platform"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, the physical rollout is anchored by BLive's proprietary, one-stop AI fleet management software platform.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_6",
-    "title": "Which capability is automated using BLive's real-time vehicle telemetry?",
+    "id": "q_blive_549_13",
+    "title": "Which route capability is automated using BLive's real-time vehicle telemetry?",
     "options": [
-      "Customer credit card billing",
       "Smart route planning",
+      "Credit card billing",
       "Social media marketing",
-      "Retail storefront leases"
+      "Storefront retail leases"
     ],
-    "correctOption": 1,
-    "explanation": "Based on the story, telemetry and analytics automate smart route planning and driver performance monitoring.",
+    "correctOption": 0,
+    "explanation": "Based on the story, telemetry and analytics automate smart route planning.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_7",
+    "id": "q_blive_549_14",
     "title": "What critical battery metric is tracked live through BLive's intelligent platform?",
     "options": [
       "Factory warranty claims",
-      "Vehicle retail resale price",
       "Battery state-of-charge",
+      "Vehicle retail resale price",
       "Battery scrap weight"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, BLive tracks live battery state-of-charge (SoC) in real time.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_8",
-    "title": "How does BLive guarantee maximum vehicle uptime across commercial delivery routes?",
+    "id": "q_blive_549_15",
+    "title": "How does BLive prevent vehicle breakdowns across commercial delivery routes?",
     "options": [
       "Annual manual inspection",
       "Unscheduled breakdown towing",
-      "Driver self-repair",
-      "Dynamic preventive maintenance"
+      "Dynamic preventive maintenance",
+      "Driver self-repair"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, the platform automates dynamic preventive maintenance scheduling.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_9",
+    "id": "q_blive_549_16",
     "title": "What financial hurdle does BLive eliminate for enterprise delivery fleets?",
     "options": [
-      "Upfront capital expenditure",
       "Daily driver wage payouts",
       "Goods and services tax",
-      "Warehouse property rent"
+      "Warehouse property rent",
+      "Upfront capital expenditure"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, BLive eliminates capital expenditure (CapEx) barriers by consolidating vehicle sourcing, financing, and charging.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_10",
+    "id": "q_blive_549_17",
     "title": "What key economic benefit does BLive's intelligent technology stack deliver to operators?",
     "options": [
-      "Higher vehicle export tariffs",
       "Lower total ownership cost",
+      "Higher vehicle export tariffs",
       "Increased fuel consumption",
       "Higher insurance premiums"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, the intelligent technology stack dramatically reduces total cost of ownership (TCO).",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_11",
+    "id": "q_blive_549_18",
     "title": "Which enterprise customer segment relies heavily on BLive's clean delivery fleet?",
     "options": [
       "Luxury holiday resorts",
-      "Commercial airlines",
       "Quick-commerce aggregators",
+      "Commercial airlines",
       "Heavy mining contractors"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, BLive provides fleet solutions to e-commerce, quick-commerce, and logistics giants.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_blive_549_12",
-    "title": "In which geographical regions is clean last-mile logistics expanding alongside metropolitan centers?",
-    "options": [
-      "Isolated rural villages",
-      "Overseas island territories",
-      "Foreign export hubs",
-      "Expanding Tier-2 cities"
-    ],
-    "correctOption": 3,
-    "explanation": "Based on the story, clean last-mile logistics is rapidly expanding across metropolitan centers and Tier-2 cities.",
-    "category": "Market & Customers",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_13",
+    "id": "q_blive_549_19",
     "title": "Which front-line role offers high career velocity for graduating business talent at BLive?",
     "options": [
-      "B2B Sales",
       "Assembly line manufacturing",
       "Software kernel compilation",
+      "B2B Sales",
       "Administrative filing"
     ],
-    "correctOption": 0,
+    "correctOption": 2,
     "explanation": "Based on the story, the primary growth vectors lie in high-impact, client-facing roles such as B2B Sales.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_14",
-    "title": "What type of agreements do early-career professionals negotiate with enterprise accounts?",
-    "options": [
-      "Single-day spot rentals",
-      "Multi-year service contracts",
-      "Government agricultural subsidies",
-      "Residential lease agreements"
-    ],
-    "correctOption": 1,
-    "explanation": "Based on the story, professionals negotiate multi-year service level agreements with high-growth quick-commerce aggregators.",
-    "category": "Careers & Leadership",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_15",
+    "id": "q_blive_549_20",
     "title": "What strategic deliverable do professionals pitch to enterprise logistics accounts?",
     "options": [
-      "Traditional diesel engine overhauls",
+      "Traditional diesel overhauls",
       "Consumer advertising billboards",
-      "Custom fleet electrification roadmaps",
-      "Cryptocurrency investments"
+      "Cryptocurrency investments",
+      "Custom fleet electrification roadmaps"
     ],
-    "correctOption": 2,
+    "correctOption": 3,
     "explanation": "Based on the story, professionals pitch custom fleet electrification roadmaps to enterprise accounts.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_16",
+    "id": "q_blive_549_21",
     "title": "What type of financing does BLive consolidate for delivery fleet operators?",
     "options": [
+      "Tailored green financing",
       "High-interest payday loans",
       "Foreign sovereign bonds",
-      "Peer-to-peer microloans",
-      "Tailored green financing"
+      "Peer-to-peer microloans"
     ],
-    "correctOption": 3,
+    "correctOption": 0,
     "explanation": "Based on the story, BLive consolidates tailored green financing alongside charging infrastructure.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_17",
+    "id": "q_blive_549_22",
     "title": "What vehicle sourcing approach does BLive employ to meet diverse customer requirements?",
     "options": [
-      "Multi-brand vehicle sourcing",
       "Single-brand exclusive manufacturing",
+      "Multi-brand vehicle sourcing",
       "Imported luxury vehicles",
       "Second-hand vehicle auctions"
     ],
-    "correctOption": 0,
+    "correctOption": 1,
     "explanation": "Based on the story, BLive consolidates multi-brand vehicle sourcing for commercial delivery fleets.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_18",
+    "id": "q_blive_549_23",
     "title": "What operational infrastructure does BLive provide alongside electric vehicles?",
     "options": [
       "Highway petrol stations",
-      "Dedicated charging and maintenance",
       "Airport runway tarmac",
+      "Dedicated charging and maintenance",
       "Automotive retail showrooms"
     ],
-    "correctOption": 1,
+    "correctOption": 2,
     "explanation": "Based on the story, BLive bundles charging infrastructure and dedicated maintenance operations.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_19",
-    "title": "Which delivery time expectation is mentioned as typical in modern quick-commerce logistics?",
-    "options": [
-      "Next-week delivery",
-      "Three to five days",
-      "Under ten minutes",
-      "Forty-eight hours"
-    ],
-    "correctOption": 2,
-    "explanation": "Based on the story, quick-commerce orders arrive at doorsteps in under ten minutes.",
-    "category": "Market & Customers",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_20",
+    "id": "q_blive_549_24",
     "title": "Who are the regional partners that early-career professionals directly engage with?",
     "options": [
-      "International maritime shipping lines",
+      "Maritime shipping lines",
       "Individual retail homeowners",
       "University athletic departments",
       "Regional logistics partners"
@@ -280,7 +336,7 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_21",
+    "id": "q_blive_549_25",
     "title": "What analytical tool enables BLive to predict maintenance needs dynamically?",
     "options": [
       "Predictive data analytics",
@@ -294,7 +350,7 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_22",
+    "id": "q_blive_549_26",
     "title": "What aspect of driver behavior is monitored by BLive's AI platform?",
     "options": [
       "Personal banking transactions",
@@ -308,381 +364,325 @@
     "pts": 11
   },
   {
-    "id": "q_blive_549_23",
-    "title": "What primary operational metric does BLive guarantee across commercial delivery routes?",
-    "options": [
-      "Maximum vehicle top speed",
-      "Highest passenger capacity",
-      "Maximum fleet uptime",
-      "Minimum vehicle battery weight"
-    ],
-    "correctOption": 2,
-    "explanation": "Based on the story, the system guarantees maximum fleet uptime across nationwide commercial delivery routes.",
-    "category": "Operational Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_24",
+    "id": "q_blive_549_27",
     "title": "Which management role focuses on nurturing long-term relationships with large corporate clients?",
     "options": [
       "Mechanical grease technician",
       "Assembly line welder",
-      "Warehouse security guard",
-      "Key Account Management"
+      "Key Account Management",
+      "Warehouse security guard"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, Key Account Management is a primary high-impact growth vector.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_25",
+    "id": "q_blive_549_28",
     "title": "How does BLive expand its network without heavy vehicle manufacturing investments?",
     "options": [
-      "Multi-stakeholder partnerships",
       "Building giant steel factories",
       "Government takeover decrees",
-      "Hostile corporate buyouts"
+      "Hostile corporate buyouts",
+      "Multi-stakeholder partnerships"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, BLive leverages innovative multi-stakeholder partnerships to scale with an asset-light model.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_blive_549_26",
+    "id": "q_blive_549_29",
     "title": "What payload capacity distinguishes BLive's cargo vehicle collaboration?",
     "options": [
-      "Ultralight drone capacity",
       "High-payload capacity",
+      "Ultralight drone capacity",
       "Micro passenger capacity",
       "Zero-load bicycle capacity"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, the collaboration targets the high-payload four-wheeler cargo market.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_27",
+    "id": "q_blive_549_30",
     "title": "What is the overarching mission of BLive's commercial mobility division?",
     "options": [
       "Diesel engine manufacturing",
-      "Private jet leasing",
       "Emission-free delivery capacity",
+      "Private jet leasing",
       "Coal freight logistics"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, BLive enables providers to scale emission-free delivery capacity rapidly.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_blive_549_28",
+    "id": "q_blive_549_31",
     "title": "Which client-facing role drives new commercial accounts for BLive?",
     "options": [
       "Software documentation archivist",
       "Inventory barcode scanner",
-      "Facility cafeteria manager",
-      "Enterprise Client Acquisition"
+      "Enterprise Client Acquisition",
+      "Facility cafeteria manager"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, Strategic Enterprise Client Acquisition is a core growth vector.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_29",
-    "title": "What scope of operations does BLive's fleet management software cover?",
+    "id": "q_blive_549_32",
+    "title": "What geographic scope does BLive's fleet management software cover?",
     "options": [
-      "Nationwide commercial delivery",
       "Single-neighborhood pilot routes",
       "Rural dirt pathways only",
-      "Overseas maritime lanes"
+      "Overseas maritime lanes",
+      "Nationwide commercial delivery"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, BLive guarantees uptime across nationwide commercial delivery routes.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_30",
+    "id": "q_blive_549_33",
     "title": "How are vehicle telemetry data processed within BLive's platform?",
     "options": [
-      "Manual hand calculations",
       "Machine learning algorithms",
+      "Manual hand calculations",
       "Punched card readers",
       "Weekly paper mailings"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, machine learning and real-time telemetry automate fleet intelligence.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_31",
+    "id": "q_blive_549_34",
     "title": "What makes clean last-mile logistics critical in modern Indian cities?",
     "options": [
       "Declining urban populations",
-      "Phasing out online shopping",
       "Rapid quick-commerce growth",
+      "Phasing out online shopping",
       "Reduced retail supply chains"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, rapid e-commerce and quick-commerce growth are transforming supply chains.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_blive_549_32",
+    "id": "q_blive_549_35",
     "title": "What barrier often prevents delivery providers from adopting electric vehicles independently?",
     "options": [
       "Excessive driver availability",
       "Too many free chargers",
-      "Lack of delivery demand",
-      "High vehicle acquisition cost"
+      "High vehicle acquisition cost",
+      "Lack of delivery demand"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, capital expenditure barriers prevent rapid fleet electrification.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_33",
+    "id": "q_blive_549_36",
     "title": "How does BLive remove upfront capital hurdles for commercial logistics providers?",
     "options": [
-      "Full-stack fleet bundling",
       "Selling second-hand diesel vans",
       "Demanding 100% upfront cash",
-      "Subcontracting foreign fleets"
+      "Subcontracting foreign fleets",
+      "Full-stack fleet bundling"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, BLive bundles vehicle sourcing, green financing, and maintenance into a single service.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_34",
+    "id": "q_blive_549_37",
     "title": "What type of telemetry data is monitored for route optimization?",
     "options": [
-      "Radio broadcast volume",
       "Real-time vehicle location",
+      "Radio broadcast volume",
       "Driver family history",
       "Cabin air scent"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, real-time vehicle telemetry feeds smart route planning.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_35",
+    "id": "q_blive_549_38",
     "title": "What role do early-career professionals play in client negotiations?",
     "options": [
       "Draft internal code compilers",
-      "Perform brake pad machining",
       "Negotiate service contracts",
+      "Perform brake pad machining",
       "Sweep warehouse loading docks"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, early-career professionals negotiate multi-year service level agreements.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_36",
+    "id": "q_blive_549_39",
     "title": "What market need does BLive fulfill for e-commerce platforms?",
     "options": [
       "Used petrol motorbikes",
       "Consumer personal auto loans",
-      "Office furniture leasing",
-      "Reliable electrified fleets"
+      "Reliable electrified fleets",
+      "Office furniture leasing"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, BLive fulfills the need for reliable, turnkey electrified fleets.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_blive_549_37",
+    "id": "q_blive_549_40",
     "title": "What primary technology component automates BLive's preventive maintenance?",
     "options": [
-      "Predictive telemetry algorithms",
       "Analog pressure gauges",
       "Paper punch cards",
-      "Magnetic tape drives"
+      "Magnetic tape drives",
+      "Predictive telemetry algorithms"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, predictive analytics and telemetry schedule maintenance before breakdowns occur.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_38",
+    "id": "q_blive_549_41",
     "title": "What business advantage does an asset-light model provide to BLive?",
     "options": [
-      "Heavy factory depreciation",
       "Rapid operational scalability",
+      "Heavy factory depreciation",
       "High fixed property overhead",
       "Slow geographic expansion"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, an asset-light model enables rapid, scalable nationwide expansion.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_blive_549_39",
+    "id": "q_blive_549_42",
     "title": "Which logistics sector is the primary beneficiary of BLive's four-wheeler rollout?",
     "options": [
       "Private passenger taxi fleets",
-      "Agricultural harvesting teams",
       "Enterprise cargo delivery",
+      "Agricultural harvesting teams",
       "Luxury limousine rentals"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, the collaboration targets enterprise cargo delivery providers.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_blive_549_40",
+    "id": "q_blive_549_43",
     "title": "What ensures battery health remains optimal across BLive's fleet?",
     "options": [
       "Occasional visual inspection",
       "Replacing batteries monthly",
-      "Ignoring battery temperatures",
-      "Live state-of-charge tracking"
+      "Live state-of-charge tracking",
+      "Ignoring battery temperatures"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, live state-of-charge tracking protects battery longevity.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_41",
+    "id": "q_blive_549_44",
     "title": "What type of contracts create recurring revenue stability for BLive?",
     "options": [
-      "Multi-year service agreements",
       "One-time vehicle auctions",
       "Pay-per-minute rentals",
-      "Hourly parking tickets"
+      "Hourly parking tickets",
+      "Multi-year service agreements"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, multi-year service agreements create durable commercial partnerships.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_42",
+    "id": "q_blive_549_45",
     "title": "What commercial skill is essential for early-career growth in EV fleet management?",
     "options": [
-      "Automotive body painting",
       "B2B client acquisition",
+      "Automotive body painting",
       "Manual transmission assembly",
       "Highway toll collection"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, B2B sales and enterprise client acquisition offer the highest velocity.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_blive_549_43",
+    "id": "q_blive_549_46",
     "title": "How does BLive simplify charging for delivery drivers?",
     "options": [
       "Domestic household extension cords",
-      "Solar panels on roofs",
       "Integrated charging network",
+      "Solar panels on roofs",
       "Manual generator hand-cranks"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, BLive consolidates dedicated charging infrastructure for delivery fleets.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_blive_549_44",
+    "id": "q_blive_549_47",
     "title": "Which customer benefit directly results from reduced total cost of ownership?",
     "options": [
       "Higher maintenance downtime",
       "Greater fuel dependency",
-      "Increased vehicle weight",
-      "Improved operating margins"
+      "Improved operating margins",
+      "Increased vehicle weight"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, lowering total cost of ownership improves fleet operating margins.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_blive_549_45",
+    "id": "q_blive_549_48",
     "title": "What makes BLive's platform a one-stop solution for delivery providers?",
     "options": [
-      "End-to-end service integration",
       "Only supplying spare tires",
       "Offering driver uniforms only",
-      "Providing road maps only"
+      "Providing road maps only",
+      "End-to-end service integration"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, BLive combines vehicles, financing, charging, and maintenance into one platform.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_blive_549_46",
-    "title": "Which city classification represents a major frontier for BLive's expansion?",
-    "options": [
-      "Remote mountain hamlets",
-      "Tier-2 urban centers",
-      "Offshore mining rigs",
-      "Foreign military bases"
-    ],
-    "correctOption": 1,
-    "explanation": "Based on the story, clean last-mile logistics is expanding rapidly across Tier-2 cities.",
-    "category": "Market & Customers",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_47",
+    "id": "q_blive_549_49",
     "title": "What strategic asset protects BLive from competitive commoditization?",
     "options": [
+      "Proprietary AI fleet software",
       "Third-party vehicle patents",
       "Exclusive highway ownership",
-      "Proprietary AI fleet software",
       "Imported diesel stock"
     ],
-    "correctOption": 2,
+    "correctOption": 0,
     "explanation": "Based on the story, BLive's proprietary AI fleet management platform anchors its market position.",
     "category": "Business Strategy",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_48",
-    "title": "What key outcome does automated route planning deliver to logistics operators?",
-    "options": [
-      "Longer delivery travel times",
-      "Higher battery drain rates",
-      "Increased traffic idling",
-      "Optimized delivery efficiency"
-    ],
-    "correctOption": 3,
-    "explanation": "Based on the story, automated smart route planning optimizes delivery speed and fleet efficiency.",
-    "category": "Operational Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_blive_549_49",
-    "title": "What type of roadmap do account managers develop for corporate clients?",
-    "options": [
-      "Fleet electrification roadmaps",
-      "Diesel generator roadmaps",
-      "Employee holiday schedules",
-      "Office renovation blueprints"
-    ],
-    "correctOption": 0,
-    "explanation": "Based on the story, professionals develop custom fleet electrification roadmaps for enterprise accounts.",
-    "category": "Careers & Leadership",
     "pts": 11
   },
   {

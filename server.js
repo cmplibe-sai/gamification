@@ -2930,7 +2930,48 @@ function cleanScriptForSpeech(text) {
     cleaned = cleaned.replace(/__([^_]+)__/g, '$1');
     cleaned = cleaned.replace(/_([^_]+)_/g, '$1');
 
-    // 6. Line by line processing for bullet lists, numbering & natural speech cadence
+    // 6. PRONUNCIATION DICTIONARY & PHONETIC NORMALIZATION (ElevenLabs TTS)
+    // Brand & Platform Names:
+    // "cMPLiBe" / "cmplibe" -> "Simply-Be"
+    cleaned = cleaned.replace(/\bcMPLiBe\b/gi, 'Simply-Be');
+    // "cMPLi" / "cmpli" / "Cmpli" / "CMPLI" -> "Simply"
+    cleaned = cleaned.replace(/\bcMPLi\b/gi, 'Simply');
+    cleaned = cleaned.replace(/\bc-mpli\b/gi, 'Simply');
+    // "BLive" / "blive" -> "B-Live" (forces ElevenLabs British voice to say "B-Live", never "blive")
+    cleaned = cleaned.replace(/\bBLive\b/gi, 'B-Live');
+    cleaned = cleaned.replace(/\bB-Live\b/gi, 'B-Live');
+
+    // Episode & Edition Numbers:
+    // "#cD549" or "#cD 549" or "cD549" -> "Simply Dip story number 549"
+    cleaned = cleaned.replace(/#?cD\s*(\d+)/gi, 'Simply Dip story number $1');
+    // "549 th" or "549th" -> "five hundred and forty-ninth"
+    cleaned = cleaned.replace(/\b549\s*th\b/gi, 'five hundred and forty-ninth');
+    cleaned = cleaned.replace(/(\d+)\s*th\b/gi, (match, n) => {
+        const num = parseInt(n, 10);
+        if (num === 549) return 'five hundred and forty-ninth';
+        return `${num}th`;
+    });
+
+    // Number & Tier normalizations:
+    cleaned = cleaned.replace(/\bTier[- ]2\b/gi, 'Tier Two');
+    cleaned = cleaned.replace(/\bTier[- ]1\b/gi, 'Tier One');
+    cleaned = cleaned.replace(/\bTier[- ]3\b/gi, 'Tier Three');
+    cleaned = cleaned.replace(/\bfour-wheeler\b/gi, 'four wheeler');
+    cleaned = cleaned.replace(/\btwo-wheeler\b/gi, 'two wheeler');
+
+    // Technical acronyms for clear spoken output:
+    cleaned = cleaned.replace(/\bB2B\b/g, 'B to B');
+    cleaned = cleaned.replace(/\bB2C\b/g, 'B to C');
+    cleaned = cleaned.replace(/\bAI\b/g, 'A.I.');
+    cleaned = cleaned.replace(/\bEVs\b/g, 'E.V.s');
+    cleaned = cleaned.replace(/\bEV\b/g, 'E.V.');
+    cleaned = cleaned.replace(/\bSoC\b/g, 'state of charge');
+    cleaned = cleaned.replace(/\bTCO\b/g, 'total cost of ownership');
+    cleaned = cleaned.replace(/\bSLAs\b/g, 'S.L.A.s');
+    cleaned = cleaned.replace(/\bSLA\b/g, 'S.L.A.');
+    cleaned = cleaned.replace(/\bHVAC\b/g, 'H.V.A.C.');
+
+    // 7. Line by line processing for bullet lists, numbering & natural speech cadence
     const lines = cleaned.split(/\r?\n/);
     const speechLines = [];
 

@@ -15,6 +15,62 @@
   },
   {
     "id": "q_carrier_0907_2",
+    "title": "How much is Carrier investing in its new Indian manufacturing facility?",
+    "options": [
+      "$10 Million",
+      "$100 Million",
+      "$50 Million",
+      "$1 Billion"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, Carrier is investing US$100 million in a new manufacturing facility.",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_3",
+    "title": "By what multiple is India's operational data centre capacity projected to expand?",
+    "options": [
+      "Twofold expansion",
+      "Fivefold expansion",
+      "Tenfold expansion",
+      "Twentyfold expansion"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, India’s operational data centre capacity is expanding tenfold.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_4",
+    "title": "Within how many kilometres of five sea ports is Carrier's Sri City plant located?",
+    "options": [
+      "Beyond 500 kilometres",
+      "Exactly 250 kilometres",
+      "Over 800 kilometres",
+      "Within 100 kilometres"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_5",
+    "title": "How many commercial sea ports are located within 100 kilometres of the Sri City plant?",
+    "options": [
+      "Five sea ports",
+      "Only two ports",
+      "Three sea ports",
+      "Eight sea ports"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_6",
     "title": "Which infrastructure surge is driving massive demand for Carrier's industrial cooling systems?",
     "options": [
       "Automobile manufacturing",
@@ -28,7 +84,7 @@
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_3",
+    "id": "q_carrier_0907_7",
     "title": "What does HVAC stand for in the context of Carrier Global's expertise?",
     "options": [
       "Heavy Vehicles and Cargo",
@@ -42,296 +98,240 @@
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_4",
-    "title": "How much is Carrier investing in its new Indian manufacturing facility?",
-    "options": [
-      "$10 Million",
-      "$50 Million",
-      "$1 Billion",
-      "$100 Million"
-    ],
-    "correctOption": 3,
-    "explanation": "Based on the story, Carrier is investing US$100 million in a new manufacturing facility.",
-    "category": "Finance & Scale",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_0907_5",
+    "id": "q_carrier_0907_8",
     "title": "Where is Carrier's new manufacturing facility situated in India?",
     "options": [
-      "Sri City Andhra Pradesh",
       "Bengaluru Karnataka",
       "Pune Maharashtra",
-      "Noida Uttar Pradesh"
+      "Noida Uttar Pradesh",
+      "Sri City Andhra Pradesh"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, Carrier's new manufacturing facility is located in Sri City, Andhra Pradesh.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_6",
-    "title": "What strategic logistical advantage does the Sri City location offer Carrier?",
-    "options": [
-      "Largest airport in India",
-      "Near five sea ports",
-      "Cold climate zone",
-      "Borders three nations"
-    ],
-    "correctOption": 1,
-    "explanation": "Based on the story, Sri City is strategically situated within 100 kilometres of five sea ports.",
-    "category": "Operational Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_0907_7",
+    "id": "q_carrier_0907_9",
     "title": "Which international export regions will Carrier supply from its new Indian facility?",
     "options": [
+      "West Asia and Africa",
       "Europe and North America",
       "Southeast Asia and Australia",
-      "West Asia and Africa",
       "South America and Europe"
     ],
-    "correctOption": 2,
+    "correctOption": 0,
     "explanation": "Based on the story, the plant establishes an export engine for West Asia and Africa.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_8",
+    "id": "q_carrier_0907_10",
     "title": "What type of imported equipment is Carrier aiming to phase out through localization?",
     "options": [
       "Server computer racks",
+      "High-capacity chillers",
       "Silicon microchips",
-      "Fiber optic cables",
-      "High-capacity chillers"
+      "Fiber optic cables"
     ],
-    "correctOption": 3,
+    "correctOption": 1,
     "explanation": "Based on the story, Carrier aims to phase out imported high-capacity chillers through supply chain localization.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_9",
+    "id": "q_carrier_0907_11",
     "title": "Beyond initial equipment sales, how does Carrier generate sustainable recurring revenue?",
     "options": [
-      "Maintenance and digital platforms",
       "Consumer mobile phones",
       "Commercial real estate",
+      "Maintenance and digital platforms",
       "Cryptocurrency mining"
     ],
-    "correctOption": 0,
+    "correctOption": 2,
     "explanation": "Based on the story, sustainable revenue comes from recurring maintenance agreements and digital platforms.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_10",
+    "id": "q_carrier_0907_12",
     "title": "Which national initiative is Carrier aligning with to optimize procurement and lower duties?",
     "options": [
       "Digital India",
-      "Make in India",
       "Skill India",
-      "Startup India"
+      "Startup India",
+      "Make in India"
     ],
-    "correctOption": 1,
+    "correctOption": 3,
     "explanation": "Based on the story, Carrier localizes production under the Make in India framework.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_11",
+    "id": "q_carrier_0907_13",
     "title": "Who are the primary enterprise clients for Carrier's multi-year lifecycle contracts?",
     "options": [
+      "Hyperscalers and industrial developers",
       "Individual homeowners",
       "Retail electronics stores",
-      "Hyperscalers and industrial developers",
       "Educational primary schools"
     ],
-    "correctOption": 2,
+    "correctOption": 0,
     "explanation": "Based on the story, Carrier embeds into multi-year lifecycle contracts with hyperscalers and developers.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_12",
+    "id": "q_carrier_0907_14",
     "title": "What happens to server racks in data centres when processing cloud workloads?",
     "options": [
       "They shrink in size",
+      "They heat up significantly",
       "They consume less electricity",
-      "They require more water",
-      "They heat up significantly"
+      "They require more water"
     ],
-    "correctOption": 3,
+    "correctOption": 1,
     "explanation": "Based on the story, vast networks of server racks heat up in energy-dense data centres.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_13",
-    "title": "By what multiple is India's operational data centre capacity projected to expand?",
-    "options": [
-      "Tenfold expansion",
-      "Twofold expansion",
-      "Fivefold expansion",
-      "Twentyfold expansion"
-    ],
-    "correctOption": 0,
-    "explanation": "Based on the story, India’s operational data centre capacity is expanding tenfold.",
-    "category": "Market & Customers",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_0907_14",
+    "id": "q_carrier_0907_15",
     "title": "What contractual strategy helps B2B industrial giants build defensible market positions?",
     "options": [
       "Spot market sales only",
-      "Multi-year lifecycle contracts",
       "Exiting manufacturing plants",
+      "Multi-year lifecycle contracts",
       "Ignoring hyperscalers"
     ],
-    "correctOption": 1,
+    "correctOption": 2,
     "explanation": "Based on the story, embedding into multi-year lifecycle contracts builds defensible market positions.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_15",
+    "id": "q_carrier_0907_16",
     "title": "For management graduates, what dynamic career sector is highlighted beyond tech startups?",
     "options": [
       "Fast-food franchising",
       "Entertainment media",
-      "Industrial capital goods",
-      "Academic publishing"
+      "Academic publishing",
+      "Industrial capital goods"
     ],
-    "correctOption": 2,
+    "correctOption": 3,
     "explanation": "Based on the story, capital goods and industrial conglomerates offer dynamic career pathways.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_16",
+    "id": "q_carrier_0907_17",
     "title": "Which entry-level roles provide the highest career velocity for young professionals?",
     "options": [
+      "Client Acquisition and B2B Sales",
       "Back-office record filing",
       "Software algorithm coding",
-      "Human resources filing",
-      "Client Acquisition and B2B Sales"
+      "Human resources filing"
     ],
-    "correctOption": 3,
+    "correctOption": 0,
     "explanation": "Based on the story, Client Acquisition and B2B Sales provide the highest career velocity.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_17",
+    "id": "q_carrier_0907_18",
     "title": "Who do young B2B professionals directly interface with to negotiate high-value deals?",
     "options": [
-      "Facility developers and contractors",
       "Internal compliance clerks",
+      "Facility developers and contractors",
       "Retail walk-in shoppers",
       "Social media influencers"
     ],
-    "correctOption": 0,
+    "correctOption": 1,
     "explanation": "Based on the story, professionals interface directly with facility developers, contractors, and enterprise clients.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_18",
+    "id": "q_carrier_0907_19",
     "title": "What is the most effective starting point for long-term capital goods enterprise leadership?",
     "options": [
       "Immediate overseas relocation",
-      "Local cross-functional roles",
       "Consumer social media apps",
+      "Local cross-functional roles",
       "Purely theoretical research"
     ],
-    "correctOption": 1,
+    "correctOption": 2,
     "explanation": "Based on the story, the most effective starting point is cross-functional and cross-industry at the local level.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_19",
+    "id": "q_carrier_0907_20",
     "title": "Which regional organization provides ideal ground-level exposure for early-career talent?",
     "options": [
       "Offshore investment banking",
       "Consumer fashion outlets",
-      "Local industrial equipment dealerships",
-      "Music record labels"
+      "Music record labels",
+      "Local industrial equipment dealerships"
     ],
-    "correctOption": 2,
+    "correctOption": 3,
     "explanation": "Based on the story, joining regional manufacturing companies or local dealerships builds ground credibility.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_20",
+    "id": "q_carrier_0907_21",
     "title": "What type of expertise builds credibility required for multi-billion-dollar enterprise leadership?",
     "options": [
+      "Supply chains and technical selling",
       "Consumer game design",
       "Graphic poster design",
-      "Day-trading equity stocks",
-      "Supply chains and technical selling"
+      "Day-trading equity stocks"
     ],
-    "correctOption": 3,
+    "correctOption": 0,
     "explanation": "Based on the story, hands-on expertise in localized supply chains and direct technical selling builds leadership credibility.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_21",
+    "id": "q_carrier_0907_22",
     "title": "What overarching theme defines Carrier's core growth strategy in India?",
     "options": [
-      "Localized cooling for data boom",
       "Exiting the Asian continent",
+      "Localized cooling for data boom",
       "Transitioning to retail fashion",
       "Reducing equipment lifespan"
     ],
-    "correctOption": 0,
+    "correctOption": 1,
     "explanation": "Based on the story, Carrier is capitalizing on the AI and data centre boom through localized cooling solutions.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_22",
+    "id": "q_carrier_0907_23",
     "title": "What digital capability enhances Carrier's recurring service contracts?",
     "options": [
       "Social video streaming",
-      "Digital energy management",
       "Online payment processing",
+      "Digital energy management",
       "Cryptocurrency wallets"
     ],
-    "correctOption": 1,
+    "correctOption": 2,
     "explanation": "Based on the story, digital energy-management platforms generate recurring value across product lifecycles.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_23",
+    "id": "q_carrier_0907_24",
     "title": "How does local manufacturing help Carrier respond to hyperscale facility buildouts?",
     "options": [
       "Longer international shipping",
       "Higher ocean freight costs",
-      "Faster supply chain response",
-      "Increased customs clearance delays"
-    ],
-    "correctOption": 2,
-    "explanation": "Based on the story, localizing production enables swift response to hyperscale infrastructure buildouts.",
-    "category": "Operational Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_0907_24",
-    "title": "What distance separates Carrier's Sri City facility from five major sea ports?",
-    "options": [
-      "Over 1000 kilometres",
-      "Exactly 500 kilometres",
-      "Beyond 800 kilometres",
-      "Within 100 kilometres"
+      "Increased customs clearance delays",
+      "Faster supply chain response"
     ],
     "correctOption": 3,
-    "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+    "explanation": "Based on the story, localizing production enables swift response to hyperscale infrastructure buildouts.",
     "category": "Operational Execution",
     "pts": 11
   },
@@ -561,142 +561,142 @@
   },
   {
     "id": "q_carrier_0907_41",
-    "title": "What infrastructure connects Carrier's Sri City plant to overseas markets?",
-    "options": [
-      "Five nearby sea ports",
-      "Transcontinental railway only",
-      "River barge canal only",
-      "Inland mountain passes"
-    ],
-    "correctOption": 0,
-    "explanation": "Based on the story, proximity within 100 kilometres of five sea ports facilitates global exports.",
-    "category": "Operational Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_0907_42",
     "title": "What business model transition are industrial giants like Carrier executing?",
     "options": [
-      "From B2B to consumer retail",
       "From equipment to lifecycle services",
+      "From B2B to consumer retail",
       "From hardware to mobile games",
       "From manufacturing to agriculture"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, giants build defensible positions by embedding into multi-year lifecycle contracts.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_43",
+    "id": "q_carrier_0907_42",
     "title": "How do maintenance contracts protect industrial manufacturers from market volatility?",
     "options": [
       "Unpredictable spot pricing",
-      "Zero long-term commitment",
       "Predictable recurring cash flow",
+      "Zero long-term commitment",
       "Complete reliance on one-off sales"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, recurring maintenance agreements and digital platforms generate sustainable revenue.",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_44",
+    "id": "q_carrier_0907_43",
     "title": "What type of developers partner with Carrier for large-scale campus cooling?",
     "options": [
       "Residential home carpenters",
       "Interior wallpaper decorators",
-      "Landscape gardeners",
-      "Industrial facility developers"
+      "Industrial facility developers",
+      "Landscape gardeners"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, Carrier partners with industrial developers, hyperscalers, and commercial hubs.",
     "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_45",
+    "id": "q_carrier_0907_44",
     "title": "What foundational exposure should business graduates acquire early in their careers?",
     "options": [
-      "Hands-on supply chain expertise",
       "Passive office bureaucracy",
       "Pure theoretical modeling",
-      "Consumer entertainment blogging"
+      "Consumer entertainment blogging",
+      "Hands-on supply chain expertise"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, developing early, hands-on expertise in localized supply chains builds leadership credibility.",
     "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_46",
+    "id": "q_carrier_0907_45",
     "title": "What role does Carrier Global play in the worldwide HVAC sector?",
     "options": [
-      "Local regional auto shop",
       "Global HVAC market leader",
+      "Local regional auto shop",
       "Residential plumbing contractor",
       "Small component importer"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, US-based HVAC giant Carrier Global is a global leader in climate control.",
     "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_47",
+    "id": "q_carrier_0907_46",
     "title": "Why are server racks described as 'digital engines' in the case study?",
     "options": [
       "They physically move vehicles",
-      "They burn diesel fuel directly",
       "They power modern cloud computing",
+      "They burn diesel fuel directly",
       "They rotate electrical dynamos"
     ],
-    "correctOption": 2,
+    "correctOption": 1,
     "explanation": "Based on the story, server racks act as critical digital engines powering streaming, payments, and apps.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_48",
+    "id": "q_carrier_0907_47",
     "title": "What target timeline is set for Carrier's $1 billion India revenue goal?",
     "options": [
       "Within fifty years",
       "By next month",
-      "In the next quarter",
-      "By the decade's end"
+      "By the decade's end",
+      "In the next quarter"
     ],
-    "correctOption": 3,
+    "correctOption": 2,
     "explanation": "Based on the story, Carrier targets US$1 billion in annual revenue from India by the decade's end (2030).",
     "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_49",
+    "id": "q_carrier_0907_48",
     "title": "How does Carrier support energy sustainability in large data centres?",
     "options": [
-      "Digital energy management software",
       "Switching off all servers",
       "Disabling cooling fans",
-      "Operating servers without cooling"
+      "Operating servers without cooling",
+      "Digital energy management software"
     ],
-    "correctOption": 0,
+    "correctOption": 3,
     "explanation": "Based on the story, Carrier provides digital energy-management platforms to optimize thermal efficiency.",
     "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_0907_50",
+    "id": "q_carrier_0907_49",
     "title": "What credibility is essential before taking on multi-billion-dollar enterprise leadership?",
     "options": [
-      "High social media following",
       "Ground-level commercial credibility",
+      "High social media following",
       "Passive administrative tenure",
       "Purely theoretical study"
     ],
-    "correctOption": 1,
+    "correctOption": 0,
     "explanation": "Based on the story, ground-level credibility in localized supply chains and technical selling is essential.",
     "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_50",
+    "title": "What infrastructure connects Carrier's Sri City plant to overseas markets?",
+    "options": [
+      "Transcontinental railway only",
+      "Five nearby sea ports",
+      "River barge canal only",
+      "Inland mountain passes"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, proximity within 100 kilometres of five sea ports facilitates global exports.",
+    "category": "Operational Execution",
     "pts": 11
   }
 ]
