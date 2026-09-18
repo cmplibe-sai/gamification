@@ -704,9 +704,9 @@ app.get(['/api/config', '/gamification/api/config'], (req, res) => {
         baseUrl: process.env.BASE_URL || 'https://api-prod-new.tagmango.com/api/v1',
         creatorId: process.env.CREATOR_ID || '6682734e120c766a6e5af59c',
         adminEmails: adminEmails,
-        teamMembers: (store.teamMembers || []).map(m => ({ id: m.id, name: m.name, email: m.email, phone: m.phone, role: m.role, employeeId: m.employeeId })),
-        campuses: (store.campuses || []).map(c => ({ id: c.id, name: c.name, state: c.state, district: c.district, coordinators: c.coordinators, mangoIds: c.mangoIds })),
-        employers: (store.employers || []).map(e => ({ id: e.id, companyName: e.companyName, recruiterName: e.recruiterName, email: e.email, phone: e.phone, industry: e.industry, designation: e.designation, status: e.status })),
+        teamMembers: (store.teamMembers || []).map(m => ({ id: m.id, name: m.name, role: m.role })),
+        campuses: (store.campuses || []).map(c => ({ id: c.id, name: c.name, state: c.state, district: c.district, mangoIds: c.mangoIds })),
+        employers: (store.employers || []).map(e => ({ id: e.id, companyName: e.companyName, industry: e.industry, status: e.status })),
         databaseConnected: isDbConnected
     });
 });
@@ -4756,7 +4756,21 @@ app.delete(['/api/management/team/:id', '/gamification/api/management/team/:id']
 // 2. CAMPUS PARTNERSHIP MANAGEMENT ENDPOINTS
 // -------------------------------------------------------------
 app.get(['/api/management/campuses', '/gamification/api/management/campuses'], (req, res) => {
-    res.json({ success: true, campuses: store.campuses || [] });
+    if (checkCreatorAuth(req)) {
+        return res.json({ success: true, campuses: store.campuses || [] });
+    }
+    const partnerEmail = (req.headers['x-partner-email'] || req.query.partnerEmail || '').toLowerCase().trim();
+    const campusId = req.headers['x-campus-id'] || req.query.campusId;
+    if (partnerEmail || campusId) {
+        const matching = (store.campuses || []).filter(c => 
+            (campusId && c.id === campusId) ||
+            (partnerEmail && Array.isArray(c.coordinators) && c.coordinators.some(coord => coord.email && coord.email.toLowerCase() === partnerEmail))
+        );
+        if (matching.length > 0) {
+            return res.json({ success: true, campuses: matching });
+        }
+    }
+    return res.status(403).json({ success: false, error: 'Unauthorized: Creator or campus partner authorization required' });
 });
 
 app.post(['/api/management/campuses', '/gamification/api/management/campuses'], (req, res) => {
@@ -4830,7 +4844,17 @@ app.delete(['/api/management/campuses/:id', '/gamification/api/management/campus
 // 3. CORPORATE EMPANELMENT (HIRING PARTNERS) ENDPOINTS
 // -------------------------------------------------------------
 app.get(['/api/management/employers', '/gamification/api/management/employers'], (req, res) => {
-    res.json({ success: true, employers: store.employers || [] });
+    if (checkCreatorAuth(req)) {
+        return res.json({ success: true, employers: store.employers || [] });
+    }
+    const empId = req.headers['x-employer-id'] || req.query.employerId;
+    if (empId) {
+        const emp = (store.employers || []).find(e => e.id === empId && e.status !== 'inactive');
+        if (emp) {
+            return res.json({ success: true, employers: [emp] });
+        }
+    }
+    return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view corporate partner directory' });
 });
 
 app.post(['/api/management/employers', '/gamification/api/management/employers'], (req, res) => {
@@ -4972,17 +4996,32 @@ function getLearnerBase() {
 
 app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (req, res) => {
     try {
+        // Strict RBAC: Caller must be either Creator OR a verified empanelled Employer
+        const isCreator = checkCreatorAuth(req);
+        const reqEmpId = req.headers['x-employer-id'] || req.query.employerId || '';
+        const verifiedEmployer = !isCreator 
+            ? (store.employers || []).find(e => e.id === reqEmpId && e.status !== 'inactive')
+            : null;
+
+        if (!isCreator && !verifiedEmployer) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized: Access restricted to verified corporate hiring partners and creators.'
+            });
+        }
+
+        const effectiveEmployerId = isCreator ? (reqEmpId || 'creator_preview') : verifiedEmployer.id;
+        const effectiveCompanyName = isCreator ? (req.headers['x-company-name'] || req.query.companyName || 'SimplyBe Talent Operations') : verifiedEmployer.companyName;
+        const effectiveRecruiterName = isCreator ? (req.headers['x-recruiter-name'] || req.query.recruiterName || 'Internal Reviewer') : (verifiedEmployer.recruiterName || 'Talent Acquisition');
+
         const { state, district, solutionId, minLq, search, campusId } = req.query;
-        const employerId = req.headers['x-employer-id'] || req.query.employerId || '';
-        const companyName = req.headers['x-company-name'] || req.query.companyName || 'Hiring Partner';
-        const recruiterName = req.headers['x-recruiter-name'] || req.query.recruiterName || 'Talent Acquisition';
 
         const baseUsers = getLearnerBase();
         const allSubs = Array.isArray(store.submissions) ? store.submissions : [];
         const campuses = Array.isArray(store.campuses) ? store.campuses : [];
 
-        // Map candidates with their metrics and authoritative geo-association
-        const candidates = baseUsers.map((u, idx) => {
+        // Map candidates with their GENUINE metrics and authoritative geo-association (Zero fabrication)
+        const candidates = baseUsers.map(u => {
             const uId = String(u._id || u.id || '');
             const uEmail = (u.email || '').toLowerCase().trim();
             const uSubs = allSubs.filter(s => 
@@ -4994,34 +5033,33 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);
             const streakDays = new Set(uSubs.map(s => (s.submittedAt || '').split('T')[0])).size;
 
-            // Compute Learn Agility Quotient (LQ®)
-            const lqScore = uSubs.length > 0 
-                ? Math.min(99, Math.max(52, Math.round(50 + (earnedLcs / 3.5) + (streakDays * 4.5))))
-                : (50 + ((idx * 7) % 35));
+            // Learn Agility Quotient (LQ®) strictly grounded in real student performance
+            let lqScore = 0;
+            let lqZone = 'unrated';
+            if (uSubs.length > 0) {
+                lqScore = Math.min(99, Math.max(30, Math.round(50 + (earnedLcs / 3.5) + (streakDays * 4.5))));
+                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 60 ? 'average' : 'growth');
+            }
 
-            const lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 60 ? 'average' : 'growth');
-
-            // Geo & Campus assignment
+            // Real Geo & Campus assignment - NEVER round-robin or fabricated
             let assignedCampus = null;
             if (Array.isArray(u.subscribedMangoes) && u.subscribedMangoes.length > 0) {
                 assignedCampus = campuses.find(c => Array.isArray(c.mangoIds) && c.mangoIds.some(m => u.subscribedMangoes.includes(m)));
             }
-            if (!assignedCampus && campuses.length > 0) {
-                assignedCampus = campuses[idx % campuses.length];
-            }
 
-            const candidateState = assignedCampus ? assignedCampus.state : 'Karnataka';
-            const candidateDistrict = assignedCampus ? assignedCampus.district : (idx % 3 === 0 ? 'Dakshina Kannada (Mangaluru)' : (idx % 3 === 1 ? 'Dharwad (Hubballi-Dharwad)' : 'Bengaluru Urban'));
-            const candidateCampusName = assignedCampus ? assignedCampus.name : "Engineering Partner Institution";
-            const candidateCampusId = assignedCampus ? assignedCampus.id : `cmp_${idx}`;
+            const candidateState = assignedCampus ? assignedCampus.state : (u.state || 'Unassigned');
+            const candidateDistrict = assignedCampus ? assignedCampus.district : (u.district || u.city || 'Unassigned');
+            const candidateCampusName = assignedCampus ? assignedCampus.name : (u.institution || u.college || 'Independent Learner');
+            const candidateCampusId = assignedCampus ? assignedCampus.id : '';
 
+            // Verified audio recordings only - NO fallback placeholders
             const audioRecordings = uSubs
-                .filter(s => s.mediaUrl || s.type === 'pod' || s.type === 'audio')
+                .filter(s => s.mediaUrl || s.audioUrl)
                 .map(s => ({
-                    title: s.title || `Milestone ${s.milestoneId || 1} Audio Reflection`,
-                    url: s.mediaUrl || 'uploads/snabbit_podcast_ep1.wav',
+                    title: s.title || `Milestone ${s.milestoneId || 1} Voice Reflection`,
+                    url: s.mediaUrl || s.audioUrl,
                     day: s.day || 1,
-                    type: s.type || 'dip'
+                    type: s.type || 'audio'
                 }));
 
             return {
@@ -5038,7 +5076,7 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
                 lqZone: lqZone,
                 highestMilestone: highestMs,
                 totalLcsEarned: earnedLcs,
-                streakDays: Math.max(1, streakDays),
+                streakDays: streakDays,
                 submissionsCount: uSubs.length,
                 audioRecordings: audioRecordings,
                 subscribedMangoes: u.subscribedMangoes || []
@@ -5072,15 +5110,15 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         }
 
         // Asynchronous LinkedIn telemetry: Log search appearance for returned candidates
-        if (employerId && filtered.length > 0) {
+        if (effectiveEmployerId && filtered.length > 0) {
             setImmediate(() => {
                 filtered.slice(0, 40).forEach(cand => {
                     logTelemetryEvent({
                         studentId: cand.id,
                         campusId: cand.campusId,
-                        employerId: employerId,
-                        companyName: companyName,
-                        recruiterName: recruiterName,
+                        employerId: effectiveEmployerId,
+                        companyName: effectiveCompanyName,
+                        recruiterName: effectiveRecruiterName,
                         action: 'search_appearance',
                         metadata: {
                             lqScore: cand.lqScore,
@@ -5116,12 +5154,20 @@ app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (r
             return res.status(400).json({ success: false, error: 'studentId and employerId are required' });
         }
 
+        const isCreator = checkCreatorAuth(req);
+        const isEmployer = (store.employers || []).some(e => e.id === employerId && e.status !== 'inactive');
+        const isStudent = (req.headers['x-student-id'] && req.headers['x-student-id'] === studentId) || action === 'profile_view';
+
+        if (!isCreator && !isEmployer && !isStudent) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Telemetry event source not verified' });
+        }
+
         const logged = await logTelemetryEvent({
             studentId,
             campusId,
             employerId,
-            companyName,
-            recruiterName,
+            companyName: companyName || 'Hiring Partner',
+            recruiterName: recruiterName || 'Talent Acquisition',
             action,
             metadata
         });
@@ -5139,6 +5185,18 @@ app.get(['/api/learner/career-views/:studentId', '/gamification/api/learner/care
         if (!studentId) {
             return res.status(400).json({ success: false, error: 'studentId parameter is required' });
         }
+
+        const isCreator = checkCreatorAuth(req);
+        const reqStudentId = req.headers['x-student-id'] || req.query.studentId;
+        const reqStudentEmail = (req.headers['x-student-email'] || req.query.studentEmail || '').toLowerCase().trim();
+
+        if (!isCreator && reqStudentId !== studentId) {
+            const learner = getLearnerBase().find(u => String(u._id || u.id) === String(studentId));
+            if (!learner || !reqStudentEmail || (learner.email || '').toLowerCase().trim() !== reqStudentEmail) {
+                return res.status(403).json({ success: false, error: 'Unauthorized: Access restricted to student profile owner or creator' });
+            }
+        }
+
         const telemetry = await getTelemetryForStudent(studentId);
         res.json({ success: true, studentId, data: telemetry });
     } catch (err) {
@@ -5153,6 +5211,17 @@ app.get(['/api/campus/placement-activity/:campusId', '/gamification/api/campus/p
         if (!campusId) {
             return res.status(400).json({ success: false, error: 'campusId parameter is required' });
         }
+
+        const isCreator = checkCreatorAuth(req);
+        const reqPartnerEmail = (req.headers['x-partner-email'] || req.query.partnerEmail || '').toLowerCase().trim();
+        const campus = (store.campuses || []).find(c => c.id === campusId);
+
+        const isCoordinator = campus && Array.isArray(campus.coordinators) && campus.coordinators.some(coord => coord.email && coord.email.toLowerCase() === reqPartnerEmail);
+
+        if (!isCreator && !isCoordinator) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Campus coordinator access required for this placement feed' });
+        }
+
         const activity = await getTelemetryForCampus(campusId);
         res.json({ success: true, campusId, data: activity });
     } catch (err) {

@@ -1575,7 +1575,7 @@ async function initAdminApp() {
     if (manageBtnContainer) {
         if (isAdminLogin && !isCampusPartner) {
             manageBtnContainer.innerHTML = `
-                <button onclick="openPartnerManagementModal()" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
+                <button onclick="switchTab('managementTab'); if (typeof switchManagementSubTab === 'function') switchManagementSubTab('campuses');" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
                     <i class="fas fa-university mr-2"></i> Manage Campus Partners
                 </button>`;
         } else {
@@ -10679,6 +10679,11 @@ function stopMediaRecording(index) {
 // ================= CAMPUS PARTNER MANAGEMENT =================
 
 function openPartnerManagementModal() {
+    switchTab('managementTab');
+    if (typeof switchManagementSubTab === 'function') {
+        switchManagementSubTab('campuses');
+    }
+    return;
     const activeMangos = allAdminMangos.filter(m => levelUpAccessConfig.includes(m._id));
     
     let checkboxesHtml = activeMangos.length === 0 
@@ -17978,7 +17983,7 @@ function renderAdminMilestoneGrid() {
         </div>`;
     }).join('');
 
-    grid.innerHTML = partnerManageBtn + gridCards;
+    grid.innerHTML = headerHtml + gridCards;
 }
 window.renderAdminMilestoneGrid = renderAdminMilestoneGrid;
 
