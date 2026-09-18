@@ -16906,7 +16906,7 @@ async function verifyOTP() {
         let sessionTokenAcquired = false;
         try {
             const loginIdent = tempLoginId || authUser.email || (authUser.phone ? String(authUser.phone) : (authUser._id || authUser.id));
-            const sessRes = await fetch('/api/auth/session', {
+            const sessRes = await apiFetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -16942,9 +16942,9 @@ async function verifyOTP() {
                 return;
             }
         } catch (sessErr) {
-            console.warn('Session issuance notice:', sessErr.message);
+            console.error('Session issuance error:', sessErr);
             if (role === 'recruiter' || role === 'creator') {
-                alert("❌ Authentication service unavailable. Please check your network connection.");
+                alert(`❌ Authentication service error: ${sessErr.message || 'Unable to connect to server.'}\nPlease check that the server is running and try again.`);
                 if (btn) {
                     btn.innerText = "Verify & Enter Arena";
                     btn.disabled = false;
