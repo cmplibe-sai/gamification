@@ -68,6 +68,15 @@ try {
         console.log('[Seed Asset] Copied snabbit_podcast_ep1.wav to uploads directory');
     }
 
+    ['pod_m1_2026_09_10.mp3', 'pod_m1_2026_09_11.mp3'].forEach(f => {
+        const trk = path.join(trackedDataDir, 'uploads', f);
+        const tgt = path.join(UPLOADS_DIR, f);
+        if (fs.existsSync(trk) && !fs.existsSync(tgt)) {
+            fs.copyFileSync(trk, tgt);
+            console.log(`[Seed Asset] Copied ${f} to uploads directory`);
+        }
+    });
+
     const trackedQuiz = path.join(trackedDataDir, 'pod_quiz_pool_snabbit.json');
     const targetQuiz = path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json');
     if (fs.existsSync(trackedQuiz) && !fs.existsSync(targetQuiz)) {
@@ -674,13 +683,13 @@ app.post(['/api/level-up-access', '/gamification/api/level-up-access'], handlePo
 const MODULE_ACCESS_FILE = path.join(DATA_DIR, 'module_access.json');
 
 const MODULE_ACCESS_DEFAULTS = {
-    "1": ["dip", "pod"],
-    "2": ["dip", "pod", "immerse", "projects"],
-    "3": ["dip", "pod", "immerse", "projects", "problem_solution"],
-    "4": ["dip", "pod", "immerse", "projects", "residency"]
+    "1": ["pod", "dip"],
+    "2": ["pod", "dip", "immerse", "projects"],
+    "3": ["pod", "dip", "immerse", "projects", "problem_solution"],
+    "4": ["pod", "dip", "immerse", "projects", "residency"]
 };
 
-const CANONICAL_MODULE_ORDER = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+const CANONICAL_MODULE_ORDER = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
 
 function sortModuleList(list) {
     if (!Array.isArray(list)) return list;
@@ -1130,77 +1139,41 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').replace(/["']/g, '').trim();
     const rawText = String(articleText || '').trim();
     
-    // Extract distinct substantive sentences and clauses
+    // Extract distinct substantive factual sentences/points from the article
     const rawSentences = rawText
         .split(/(?:\r?\n|•|\. |\? |; )+/)
-        .map(s => s.trim().replace(/^[-*•]\s*/, '').replace(/["']/g, ''))
-        .filter(s => s.length > 20 && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
+        .map(s => s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["']/g, ''))
+        .filter(s => s.length > 25 && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
 
-    const sentences = rawSentences.length > 0 ? rawSentences : [`The fundamental operational dynamics and business strategy of ${cleanTitle}`];
+    const keyPoints = rawSentences.length >= 4 
+        ? rawSentences 
+        : [
+            `Core operations and business execution of ${cleanTitle}`,
+            `Target customer segments and market demand for ${cleanTitle}`,
+            `Strategic financial growth and unit economics of ${cleanTitle}`,
+            `Key career roles and operational execution in ${cleanTitle}`
+        ];
 
-    // Extract numbers / metrics / monetary figures
-    const metricMatches = rawText.match(/(?:US\$|Rs\.?|\$)\s*[\d,.]+\s*(?:crore|lakh|cr|billion|million|k)?|\b\d+%\b|\b\d+(?:,\d+)?\s*(?:sq(?:uare)?\s*ft|beds|units|seats|mins?|hours?|years?)?/gi) || [];
-    const uniqueMetrics = [...new Set(metricMatches.map(m => m.trim().replace(/["']/g, '')))];
-
-    const promptStems = [
-        `What core problem or customer friction does ${cleanTitle} primarily address?`,
-        `Which foundational operational capability enables ${cleanTitle} to scale?`,
-        `What primary business model or revenue mechanism underpins ${cleanTitle}?`,
-        `Regarding geographic rollout, which strategic launch market is emphasized for ${cleanTitle}?`,
-        `What key financial metric or funding milestone is highlighted for ${cleanTitle}?`,
-        `How does regulatory governance impact the business landscape described in ${cleanTitle}?`,
-        `What structural industry shift forms the core context of ${cleanTitle}?`,
-        `Which target consumer or enterprise tenant segment does ${cleanTitle} focus on?`,
-        `How does ${cleanTitle} maintain capital efficiency in its expansion strategy?`,
-        `What competitive moat or brand heritage does ${cleanTitle} leverage against rivals?`,
-        `Which consultative or operational capability is required to execute ${cleanTitle}'s strategy?`,
-        `What asset-light or partnership structure is utilized to expand ${cleanTitle}?`,
-        `What critical consumer behavioral shift supports the ongoing adoption of ${cleanTitle}?`,
-        `Which quantitative milestone illustrates the commercial scale of ${cleanTitle}?`,
-        `How does ${cleanTitle} balance high service quality with unit economic viability?`,
-        `What key supply-chain or distribution channel supports ${cleanTitle}'s operations?`,
-        `Which entry-level functional career role is highlighted in the context of ${cleanTitle}?`,
-        `How does frontline execution in regional markets build capabilities for ${cleanTitle}?`,
-        `What risk-mitigation strategy does ${cleanTitle} implement to safeguard capital?`,
-        `What specific asset class or service vertical does ${cleanTitle} concentrate on?`,
-        `How do institutional investor expectations influence the standards set in ${cleanTitle}?`,
-        `What distinguishing feature separates ${cleanTitle} from unorganized market players?`,
-        `What strategic takeaway regarding enterprise sales negotiation emerges from ${cleanTitle}?`,
-        `Which macro demographic or economic tailwind accelerates growth for ${cleanTitle}?`,
-        `How does key-account management protect the long-term revenue base in ${cleanTitle}?`,
-        `What role does site sourcing or micro-market selection play in ${cleanTitle}?`,
-        `What long-term monetization or exit vehicle is associated with assets like ${cleanTitle}?`,
-        `How does ${cleanTitle} adapt its offering to meet corporate enterprise expectations?`,
-        `What execution capability prevents project delays and capital lock-in for ${cleanTitle}?`,
-        `Which regional market example demonstrates foundational execution before scaling to ${cleanTitle}?`,
-        `How does brand equity influence customer acquisition and financing terms for ${cleanTitle}?`,
-        `What operational trade-off does ${cleanTitle} overcome through innovative structuring?`,
-        `Which technology, infrastructure, or operational standard is critical for ${cleanTitle}?`,
-        `What is the strategic rationale behind turning underutilized assets into platforms like ${cleanTitle}?`,
-        `How does consultative selling differentiate business development in ${cleanTitle}?`,
-        `What statutory or compliance benchmark protects stakeholder investments in ${cleanTitle}?`,
-        `Which early-stage professional pathway creates a launchpad toward leadership in ${cleanTitle}?`,
-        `How does density or cluster-based operations improve unit economics in ${cleanTitle}?`,
-        `What customer retention or platform stickiness driver is emphasized in ${cleanTitle}?`,
-        `Which stakeholder group exerts the strongest governance influence on ${cleanTitle}?`,
-        `What operational lesson regarding deal closures is drawn from regional developers in ${cleanTitle}?`,
-        `How does ${cleanTitle} structure its financing to support large-scale capital requirements?`,
-        `What type of multi-skilled capability or functional versatility is highlighted in ${cleanTitle}?`,
-        `How do enterprise requirements in ${cleanTitle} compare with retail market practices?`,
-        `What strategic partnership framework enables ${cleanTitle} to scale without direct land purchases?`,
-        `Which performance indicator best reflects sustainable operational health in ${cleanTitle}?`,
-        `How does ${cleanTitle} bridge the gap between legacy operations and modern institutional demands?`,
-        `What career capability enables professionals to transition from regional sales to ${cleanTitle}?`,
-        `What primary risk would arise if ${cleanTitle} neglected institutional governance standards?`,
-        `In summary, what overarching strategic principle defines the long-term value of ${cleanTitle}?`
+    // Simple, direct question stems focused strictly on the story
+    const simpleStems = [
+        `According to the story, what core focus defines ${cleanTitle}?`,
+        `Which key operational strategy enables ${cleanTitle} to scale?`,
+        `What primary business model or service approach underpins ${cleanTitle}?`,
+        `What key market or customer need is highlighted for ${cleanTitle}?`,
+        `What financial metric, milestone, or growth goal is emphasized?`,
+        `Which capability is required to execute ${cleanTitle} successfully?`,
+        `What key operational lesson emerges from this story?`,
+        `What career path or functional role is discussed in the context of ${cleanTitle}?`,
+        `How does ${cleanTitle} differentiate its offering in the market?`,
+        `What overarching business principle defines the success of ${cleanTitle}?`
     ];
 
     const categories = [
-        'Strategic Value Proposition & Business Model',
-        'Market Opportunity & Demographics',
-        'Financial Economics & Unit Growth',
-        'Operational Execution & Partnerships',
-        'Leadership, Human Capital & Strategic Careers'
+        'Business Strategy',
+        'Market & Customers',
+        'Operational Execution',
+        'Finance & Scale',
+        'Careers & Leadership'
     ];
 
     const questions = [];
@@ -1208,53 +1181,57 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
 
     for (let i = 0; i < 50; i++) {
         const cat = categories[i % categories.length];
-        const sentence = sentences[i % sentences.length];
-        const qPrompt = promptStems[i];
+        const stem = simpleStems[i % simpleStems.length];
+        const correctPoint = keyPoints[i % keyPoints.length];
 
-        // Ensure clean text without quotes
-        const cleanSentence = sentence.replace(/["']/g, '').trim();
-        const correct = cleanSentence.length > 100 ? cleanSentence.substring(0, 95) + '...' : cleanSentence;
+        // Format correct answer as concise, readable sentence/clause
+        let correctText = correctPoint.replace(/\s+/g, ' ').trim();
+        if (correctText.length > 80) {
+            const cut = correctText.lastIndexOf(' ', 75);
+            correctText = (cut > 40 ? correctText.substring(0, cut) : correctText.substring(0, 75)) + '...';
+        }
 
-        // Context-aware plausible distractors
-        const distractorSets = [
-            [
-                'Operating with speculative high-leverage financing without capital reserves',
-                'Offering generic commodity services without localized market alignment',
-                'Exclusively relying on government subsidies without commercial viability'
-            ],
-            [
-                'Eliminating all capital investments while freezing operational hiring',
-                'Operating indefinitely at negative gross margins with zero monetization plan',
-                'Relying solely on speculative tokenized fundraising mechanisms'
-            ],
-            [
-                'Standardizing operations to a bare-minimum baseline without compliance oversight',
-                'Outsourcing 100% of core delivery to unregulated anonymous third parties',
-                'Purchasing all physical assets outright through high-interest short-term debt'
-            ],
-            [
-                'Limiting career specialization strictly to repetitive clerical tasks',
-                'Following legacy corporate titles in stagnant industries without growth upside',
-                'Avoiding high-growth sectors due to absence of multi-decade historical playbooks'
-            ],
-            [
-                'A temporary seasonal spike with no long-term demographic backing',
-                'Unregulated market conditions that prevent commercial competition',
-                'Mandatory consumer spending decrees enforced by global agencies'
-            ]
-        ];
+        // Draw distractors strictly from other distinct points in the same story
+        const distractors = [];
+        let offset = 1;
+        while (distractors.length < 3) {
+            const candidateIdx = (i + offset) % keyPoints.length;
+            const cand = keyPoints[candidateIdx].replace(/\s+/g, ' ').trim();
+            let distractorText = cand;
+            if (distractorText.length > 80) {
+                const cut = distractorText.lastIndexOf(' ', 75);
+                distractorText = (cut > 40 ? distractorText.substring(0, cut) : distractorText.substring(0, 75)) + '...';
+            }
+            if (distractorText !== correctText && !distractors.includes(distractorText)) {
+                distractors.push(distractorText);
+            }
+            offset++;
+            if (offset > keyPoints.length + 10) {
+                // Fallback in-story options if text was very short
+                const defaults = [
+                    `Standard regional expansion without specialized execution`,
+                    `Short-term operations without long-term scale planning`,
+                    `Generic market participation without brand differentiation`
+                ];
+                for (const d of defaults) {
+                    if (distractors.length < 3 && !distractors.includes(d) && d !== correctText) {
+                        distractors.push(d);
+                    }
+                }
+                break;
+            }
+        }
 
-        const baseDistractors = distractorSets[i % distractorSets.length];
-        const targetPos = i % 4;
-        const options = [...baseDistractors];
-        options.splice(targetPos, 0, correct);
+        const targetPos = (i * 3 + 1) % 4;
+        const options = [...distractors];
+        options.splice(targetPos, 0, correctText);
 
         questions.push({
             id: `${baseIdPrefix}_${i + 1}`,
-            title: qPrompt,
+            title: stem,
             options: options,
             correctOption: targetPos,
-            explanation: `Strategic concept: ${cleanSentence}`,
+            explanation: `Based on the story: ${correctPoint.length > 120 ? correctPoint.substring(0, 115) + '...' : correctPoint}`,
             category: cat,
             pts: 11
         });
@@ -1432,6 +1409,7 @@ async function syncGoogleSheetData(sheetIdInput) {
         let syncedCount = 0;
         let unchangedCount = 0;
         const syncedEntries = [];
+        const autoVoiceTasks = [];
 
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
@@ -1493,7 +1471,20 @@ async function syncGoogleSheetData(sheetIdInput) {
             if (!rawAudioUrl && rawMainQ && (rawMainQ.startsWith('http://') || rawMainQ.startsWith('https://')) && (rawMainQ.includes('.mp3') || rawMainQ.includes('.wav') || rawMainQ.includes('.m4a') || rawMainQ.includes('cloudinary'))) {
                 rawAudioUrl = rawMainQ;
             }
-            const audioUrl = rawAudioUrl || existing.audioUrl || '';
+            let audioUrl = rawAudioUrl || existing.audioUrl || '';
+
+            // Auto-detect existing British audio file on disk or enqueue for background voice synthesis
+            if (module === 'pod') {
+                const safeDKey = String(dateKey).replace(/[^a-zA-Z0-9_\-]/g, '_');
+                const expectedFile = `pod_m${msId}_${safeDKey}.mp3`;
+                if (!audioUrl && fs.existsSync(path.join(UPLOADS_DIR, expectedFile))) {
+                    audioUrl = `/gamification/uploads/${expectedFile}`;
+                } else if (!audioUrl && dateKey === '2026-09-09' && fs.existsSync(path.join(UPLOADS_DIR, 'snabbit_podcast_ep1.wav'))) {
+                    audioUrl = '/gamification/uploads/snabbit_podcast_ep1.wav';
+                } else if (!audioUrl && (articleText || description)) {
+                    autoVoiceTasks.push({ text: articleText || description, msId, dateKey });
+                }
+            }
 
             // Questions builder
             let questions = [];
@@ -1656,6 +1647,21 @@ async function syncGoogleSheetData(sheetIdInput) {
             console.log(`[GoogleSheetSync] ✅ Successfully updated ${syncedCount} changed session(s) (${unchangedCount} unchanged, total: ${rows.length - 1}) from Google Sheet (${sheetId})`);
         } else {
             console.log(`[GoogleSheetSync] ℹ️ All ${unchangedCount} sessions in Google Sheet match current database. Zero unnecessary writes.`);
+        }
+
+        // Automated Background Synthesis of British Voice Narration for newly synced POD sessions
+        if (autoVoiceTasks.length > 0) {
+            (async () => {
+                for (const task of autoVoiceTasks) {
+                    try {
+                        console.log(`[GoogleSheetSync Auto-Voice] Synthesizing British audio for date ${task.dateKey} (MS ${task.msId})...`);
+                        await synthesizeBritishVoiceNarration(task.text, task.msId, task.dateKey);
+                        await new Promise(r => setTimeout(r, 1500));
+                    } catch(e) {
+                        console.warn(`[GoogleSheetSync Auto-Voice Warning] Failed for ${task.dateKey}:`, e.message);
+                    }
+                }
+            })();
         }
 
         return {
@@ -2921,6 +2927,102 @@ function cleanScriptForSpeech(text) {
 // In-memory rate limiter for voice synthesis (max 3 calls per 3 minutes to prevent credit draining)
 const voiceGenRateLimiter = new Map(); // ip -> [timestamps]
 
+// Reusable core engine for authentic British podcast audio narration via ElevenLabs
+async function synthesizeBritishVoiceNarration(text, milestoneId = 1, dateKey = 'ep1', options = {}) {
+    const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
+    if (!elevenKey) {
+        throw new Error('ElevenLabs configuration missing: ELEVENLABS_API_KEY is not set in .env on the server.');
+    }
+
+    const configuredVoiceId = (process.env.ELEVENLABS_VOICE_ID || '').trim();
+    const targetVoiceId = (options.voiceId && typeof options.voiceId === 'string' && options.voiceId.trim()) 
+        ? options.voiceId.trim() 
+        : configuredVoiceId;
+    const effectiveVoiceId = configuredVoiceId || targetVoiceId || '9XoiuCBdWP6fgkEbTNW0';
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+        throw new Error('Script text is required to synthesize speech.');
+    }
+
+    const cleanedSpeechText = cleanScriptForSpeech(text);
+    if (!cleanedSpeechText) {
+        throw new Error('Script text contained no readable prose after cleaning.');
+    }
+
+    const safeMsId = parseInt(milestoneId, 10) || 1;
+    const safeDateKey = String(dateKey || 'ep1').replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const fileName = `pod_m${safeMsId}_${safeDateKey}.mp3`;
+    const filePath = path.join(UPLOADS_DIR, fileName);
+
+    console.log(`[ElevenLabs Voice Synthesis] Synthesizing ${cleanedSpeechText.length} chars with British voice: ${effectiveVoiceId}...`);
+
+    const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(effectiveVoiceId)}?output_format=mp3_44100_128`;
+    const response = await fetch(elevenUrl, {
+        method: 'POST',
+        headers: {
+            'xi-api-key': elevenKey,
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg'
+        },
+        body: JSON.stringify({
+            text: cleanedSpeechText,
+            model_id: 'eleven_multilingual_v2',
+            voice_settings: {
+                stability: typeof options.stability === 'number' ? Math.max(0.1, Math.min(1.0, options.stability)) : 0.38,
+                similarity_boost: typeof options.similarityBoost === 'number' ? Math.max(0.1, Math.min(1.0, options.similarityBoost)) : 0.80,
+                style: typeof options.style === 'number' ? Math.max(0.0, Math.min(1.0, options.style)) : 0.20,
+                use_speaker_boost: true
+            }
+        })
+    });
+
+    if (!response.ok) {
+        const errStatus = response.status;
+        let errDetail = '';
+        try {
+            const errJson = await response.json();
+            errDetail = errJson.detail?.message || errJson.message || JSON.stringify(errJson);
+        } catch(e) {
+            errDetail = await response.text();
+        }
+        console.error(`[ElevenLabs API Error ${errStatus}]:`, errDetail);
+        throw new Error(`ElevenLabs generation failed (${errStatus}): ${errDetail}`);
+    }
+
+    const arrayBuf = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+    fs.writeFileSync(filePath, buffer);
+    console.log(`[ElevenLabs Voice Generated] Saved ${buffer.length} bytes to ${fileName}`);
+
+    const publicUrl = `/gamification/uploads/${fileName}`;
+
+    // Auto-persist audioUrl to milestone configs immediately so it is never lost or reverted
+    try {
+        const currentConfigs = getMilestoneConfigsFromDb();
+        const dateStr = String(dateKey || '').trim();
+        if (dateStr) {
+            if (!currentConfigs[String(safeMsId)]) currentConfigs[String(safeMsId)] = {};
+            if (!currentConfigs[String(safeMsId)]['pod']) currentConfigs[String(safeMsId)]['pod'] = {};
+            if (!currentConfigs[String(safeMsId)]['pod'][dateStr]) currentConfigs[String(safeMsId)]['pod'][dateStr] = {};
+            
+            currentConfigs[String(safeMsId)]['pod'][dateStr].audioUrl = publicUrl;
+            saveMilestoneConfigsToDb(currentConfigs);
+            console.log(`[ElevenLabs Voice Generated] Auto-persisted audioUrl to milestone_configs.json for pod ${dateStr}`);
+        }
+    } catch(cfgSaveErr) {
+        console.warn('[ElevenLabs Voice Generated] Warning auto-persisting audioUrl:', cfgSaveErr);
+    }
+
+    return {
+        success: true,
+        audioUrl: publicUrl,
+        fileName: fileName,
+        cleanedTextPreview: cleanedSpeechText.slice(0, 140) + '...',
+        charCount: cleanedSpeechText.length,
+        fileSizeBytes: buffer.length
+    };
+}
+
 // Creator endpoint: generates authentic British podcast audio via ElevenLabs
 // Strictly protected by Creator Bearer token and rate-limited
 app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], async (req, res) => {
@@ -2946,134 +3048,56 @@ app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], as
         timestamps.push(now);
         voiceGenRateLimiter.set(clientIp, timestamps);
 
-        // 3. Environment check
-        const elevenKey = (process.env.ELEVENLABS_API_KEY || '').trim();
-        if (!elevenKey) {
-            return res.status(503).json({
-                success: false,
-                error: 'ElevenLabs configuration missing: ELEVENLABS_API_KEY is not set in .env on the server.'
-            });
+        const { text, voiceId, milestoneId, dateKey, stability, similarityBoost, style } = req.body || {};
+        const result = await synthesizeBritishVoiceNarration(text, milestoneId, dateKey, { voiceId, stability, similarityBoost, style });
+        return res.json(result);
+
+    } catch (err) {
+        console.error('Error in /api/pod/generate-voice:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Automated on-demand endpoint: ensures British podcast audio exists and returns audioUrl immediately
+app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (req, res) => {
+    try {
+        const dateKey = String(req.query.dateKey || '').trim();
+        const msId = String(req.query.milestoneId || '1').trim();
+        if (!dateKey) {
+            return res.status(400).json({ success: false, error: 'dateKey query parameter required' });
         }
 
-        const { text, voiceId, milestoneId, dateKey } = req.body || {};
-        const configuredVoiceId = (process.env.ELEVENLABS_VOICE_ID || '').trim();
-        const targetVoiceId = (voiceId && typeof voiceId === 'string' && voiceId.trim()) 
-            ? voiceId.trim() 
-            : configuredVoiceId;
-
-        if (!targetVoiceId) {
-            return res.status(400).json({
-                success: false,
-                error: 'Voice ID missing: Provide a voiceId or set ELEVENLABS_VOICE_ID in .env.'
-            });
-        }
-
-        // Voice ID guard: prioritize configured cloned voice ID
-        const effectiveVoiceId = configuredVoiceId || targetVoiceId;
-
-        // 4. Text cleaning
-        if (!text || typeof text !== 'string' || !text.trim()) {
-            return res.status(400).json({
-                success: false,
-                error: 'Script text is required to synthesize speech.'
-            });
-        }
-
-        const cleanedSpeechText = cleanScriptForSpeech(text);
-        if (!cleanedSpeechText) {
-            return res.status(400).json({
-                success: false,
-                error: 'Script text contained no readable prose after cleaning.'
-            });
-        }
-
-        console.log(`[ElevenLabs Voice Synthesis] Synthesizing ${cleanedSpeechText.length} chars with voice: ${effectiveVoiceId}...`);
-
-        // 5. Call ElevenLabs TTS API with British Voice Model Calibration
-        const elevenUrl = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(effectiveVoiceId)}?output_format=mp3_44100_128`;
-        const response = await fetch(elevenUrl, {
-            method: 'POST',
-            headers: {
-                'xi-api-key': elevenKey,
-                'Content-Type': 'application/json',
-                'Accept': 'audio/mpeg'
-            },
-            body: JSON.stringify({
-                text: cleanedSpeechText,
-                model_id: 'eleven_multilingual_v2',
-                voice_settings: {
-                    stability: typeof req.body?.stability === 'number' ? Math.max(0.1, Math.min(1.0, req.body.stability)) : 0.38,
-                    similarity_boost: typeof req.body?.similarityBoost === 'number' ? Math.max(0.1, Math.min(1.0, req.body.similarityBoost)) : 0.80,
-                    style: typeof req.body?.style === 'number' ? Math.max(0.0, Math.min(1.0, req.body.style)) : 0.20,
-                    use_speaker_boost: true
-                }
-            })
-        });
-
-        if (!response.ok) {
-            const errStatus = response.status;
-            let errDetail = '';
-            try {
-                const errJson = await response.json();
-                errDetail = errJson.detail?.message || errJson.message || JSON.stringify(errJson);
-            } catch(e) {
-                errDetail = await response.text();
-            }
-
-            console.error(`[ElevenLabs API Error ${errStatus}]:`, errDetail);
-            if (errStatus === 401) {
-                return res.status(401).json({ success: false, error: 'Unauthorized: Invalid ElevenLabs API Key in server .env' });
-            } else if (errStatus === 402 || (errDetail && /quota|credit|balance/i.test(errDetail))) {
-                return res.status(402).json({ success: false, error: 'ElevenLabs quota/credits exhausted. Please check your ElevenLabs subscription.' });
-            } else if (errStatus === 429) {
-                return res.status(429).json({ success: false, error: 'ElevenLabs rate limit exceeded. Please wait a minute and retry.' });
-            }
-            return res.status(errStatus).json({ success: false, error: `ElevenLabs generation failed (${errStatus}): ${errDetail}` });
-        }
-
-        // 6. Stream/save buffer safely to disk
-        const arrayBuf = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuf);
-
-        // Deterministic collision-safe filename: pod_m${msId}_${dateKey}.mp3
-        const safeMsId = parseInt(milestoneId, 10) || 1;
-        const safeDateKey = String(dateKey || 'ep1').replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const safeMsId = parseInt(msId, 10) || 1;
+        const safeDateKey = dateKey.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const fileName = `pod_m${safeMsId}_${safeDateKey}.mp3`;
         const filePath = path.join(UPLOADS_DIR, fileName);
 
-        fs.writeFileSync(filePath, buffer);
-        console.log(`[ElevenLabs Voice Generated] Saved ${buffer.length} bytes to ${fileName}`);
-
-        const publicUrl = `/gamification/uploads/${fileName}`;
-
-        // Auto-persist audioUrl to milestone configs immediately so it is never lost or reverted
-        try {
-            const currentConfigs = getMilestoneConfigsFromDb();
-            const dateStr = String(dateKey || '').trim();
-            if (dateStr) {
-                if (!currentConfigs[String(safeMsId)]) currentConfigs[String(safeMsId)] = {};
-                if (!currentConfigs[String(safeMsId)]['pod']) currentConfigs[String(safeMsId)]['pod'] = {};
-                if (!currentConfigs[String(safeMsId)]['pod'][dateStr]) currentConfigs[String(safeMsId)]['pod'][dateStr] = {};
-                
-                currentConfigs[String(safeMsId)]['pod'][dateStr].audioUrl = publicUrl;
-                saveMilestoneConfigsToDb(currentConfigs);
-                console.log(`[ElevenLabs Voice Generated] Auto-persisted audioUrl to milestone_configs.json for pod ${dateStr}`);
-            }
-        } catch(cfgSaveErr) {
-            console.warn('[ElevenLabs Voice Generated] Warning auto-persisting audioUrl:', cfgSaveErr);
+        // 1. If audio file already exists on disk, return it immediately
+        if (fs.existsSync(filePath)) {
+            const publicUrl = `/gamification/uploads/${fileName}`;
+            return res.json({ success: true, audioUrl: publicUrl, cached: true });
         }
 
-        return res.json({
-            success: true,
-            audioUrl: publicUrl,
-            fileName: fileName,
-            cleanedTextPreview: cleanedSpeechText.slice(0, 140) + '...',
-            charCount: cleanedSpeechText.length,
-            fileSizeBytes: buffer.length
-        });
+        // 2. Special case for Snabbit legacy audio
+        if (dateKey === '2026-09-09' && fs.existsSync(path.join(UPLOADS_DIR, 'snabbit_podcast_ep1.wav'))) {
+            return res.json({ success: true, audioUrl: '/gamification/uploads/snabbit_podcast_ep1.wav', cached: true });
+        }
+
+        // 3. If file missing, lookup story text from milestone configs and synthesize British voice automatically
+        const currentConfigs = getMilestoneConfigsFromDb();
+        const podEntry = currentConfigs[String(safeMsId)]?.pod?.[dateKey];
+        const storyText = podEntry?.articleText || podEntry?.description || '';
+
+        if (!storyText || !storyText.trim()) {
+            return res.status(404).json({ success: false, error: 'No story text available to synthesize audio for this date' });
+        }
+
+        console.log(`[Auto British Voice Sync] Auto-synthesizing missing audio on-demand for ${dateKey}...`);
+        const result = await synthesizeBritishVoiceNarration(storyText, safeMsId, dateKey);
+        return res.json({ success: true, audioUrl: result.publicUrl, newlyGenerated: true });
 
     } catch (err) {
-        console.error('Error generating ElevenLabs voice audio:', err);
+        console.error('Error in /api/pod/ensure-audio:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });

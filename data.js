@@ -3513,8 +3513,8 @@ var actualUsers = [
 // data.js - cMPLi Be Gamification Core Configurations & Projects
 
 var ALL_PLATFORM_MODULES = [
+    { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400' },
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
-    { code: 'pod', name: 'cMPLi Pod', icon: 'fa-podcast text-indigo-400' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
     { code: 'ios', name: 'Industry Oriented Session (IOS)', icon: 'fa-chalkboard-teacher text-emerald-400' },
     { code: 'projects', name: 'Real-World (cMPLi-ai) Projects', icon: 'fa-briefcase text-purple-400' },
@@ -3526,29 +3526,29 @@ var milestoneConfig = [
         id: 1,
         name: 'cMPLi Challenge Embracer',
         desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
-        defaultModules: ['dip', 'pod'],
-        modules: ['dip', 'pod']
+        defaultModules: ['pod', 'dip'],
+        modules: ['pod', 'dip']
     },
     {
         id: 2,
         name: 'cMPLi Curious',
         desc: 'Deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
-        defaultModules: ['dip', 'pod', 'immerse', 'projects'],
-        modules: ['dip', 'pod', 'immerse', 'projects']
+        defaultModules: ['pod', 'dip', 'immerse', 'projects'],
+        modules: ['pod', 'dip', 'immerse', 'projects']
     },
     {
         id: 3,
         name: 'cMPLi Committed',
         desc: 'Problem-Solution briefing, strategic problem framing, and advanced cross-functional mastery.',
-        defaultModules: ['dip', 'pod', 'immerse', 'projects', 'problem_solution'],
-        modules: ['dip', 'pod', 'immerse', 'projects', 'problem_solution']
+        defaultModules: ['pod', 'dip', 'immerse', 'projects', 'problem_solution'],
+        modules: ['pod', 'dip', 'immerse', 'projects', 'problem_solution']
     },
     {
         id: 4,
         name: 'cMPLi futuREadi earliTalent',
         desc: 'Corporate residency, institutional capstones, and industry readiness deployment.',
-        defaultModules: ['dip', 'pod', 'immerse', 'projects', 'residency'],
-        modules: ['dip', 'pod', 'immerse', 'projects', 'residency']
+        defaultModules: ['pod', 'dip', 'immerse', 'projects', 'residency'],
+        modules: ['pod', 'dip', 'immerse', 'projects', 'residency']
     }
 ];
 window.milestoneConfig = milestoneConfig;var defaultPodQuestionsPool = [

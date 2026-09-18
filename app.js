@@ -2348,10 +2348,10 @@ var isCampusPartner = false;
 var partnerAllowedMangoes = [];
 var activeAdminMilestoneId = 1;
 var activeMilestoneId = 1;
-var activeAdminModule = 'dip';
+var activeAdminModule = 'pod';
 var ALL_PLATFORM_MODULES = [
-    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
     { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400' },
+    { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
     { code: 'projects', name: 'Real-World Execution', icon: 'fa-briefcase text-purple-400' },
     { code: 'problem_solution', name: 'Problem-Solution Briefing', icon: 'fa-brain text-emerald-400' },
@@ -6308,7 +6308,7 @@ function getEnabledModulesForMilestone(msId) {
         const ms = milestoneConfig.find(m => m.id === Number(msId));
         if (ms && ms.defaultModules) mods = [...ms.defaultModules];
     }
-    if (mods.length === 0) mods = ['dip', 'pod'];
+    if (mods.length === 0) mods = ['pod', 'dip'];
 
     // If Creator has configured a non-zero target for Immerse in prerequisites, ensure it is included
     const prereqs = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(msId) : null;
@@ -6317,11 +6317,11 @@ function getEnabledModulesForMilestone(msId) {
     }
 
     // MANDATORY PLATFORM ORDER:
-    // 1. cMPLi Dip ('dip')
-    // 2. cMPLi POD ('pod')
+    // 1. cMPLi POD ('pod')
+    // 2. cMPLi Dip ('dip')
     // 3. cMPLi Immerse ('immerse')
     // followed by any advanced capstone modules
-    const canonicalOrder = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+    const canonicalOrder = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
     mods.sort((a, b) => {
         const idxA = canonicalOrder.indexOf(a);
         const idxB = canonicalOrder.indexOf(b);
@@ -6545,13 +6545,13 @@ function evaluateModulePrereqs(user, msId, modCode, checkSequential = true) {
         return { isLocked: false, isDeepLocked: false, unmetRules: [], progress: [], isBypassedForAdmin: true };
     }
 
-    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['dip', 'pod', 'immerse'];
+    const enabledMods = (typeof getEnabledModulesForMilestone === 'function') ? getEnabledModulesForMilestone(msId) : ['pod', 'dip', 'immerse'];
     const myIdx = enabledMods.indexOf(normMod);
 
     // Progressive Disclosure: Check if previous enabled module in sequence is already unlocked
     if (checkSequential && myIdx > 0) {
         const prevMod = enabledMods[myIdx - 1];
-        if (prevMod && prevMod !== 'dip') {
+        if (prevMod && prevMod !== enabledMods[0]) {
             const prevEval = evaluateModulePrereqs(user, msId, prevMod, false);
             if (prevEval.isLocked) {
                 const prevMObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === prevMod)) || { name: prevMod.toUpperCase(), icon: 'fa-cube' };
@@ -7020,7 +7020,7 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     } else {
         current.push(moduleCode);
     }
-    const canonicalOrder = ['dip', 'pod', 'immerse', 'projects', 'problem_solution', 'residency'];
+    const canonicalOrder = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
     current.sort((a, b) => {
         const idxA = canonicalOrder.indexOf(a);
         const idxB = canonicalOrder.indexOf(b);
@@ -10987,18 +10987,13 @@ function resolvePodAudioUrl(dayConfig, dateKey, msId = '1') {
     }
     const targetMs = String(msId || '1').trim();
     const cleanDate = String(dateKey || '').trim();
-    if (targetMs === '1') {
-        if (cleanDate === '2026-09-09') {
-            return '/gamification/uploads/snabbit_podcast_ep1.wav';
-        }
-        if (cleanDate === '2026-09-10') {
-            return '/gamification/uploads/pod_m1_2026_09_10.mp3';
-        }
-        if (cleanDate === '2026-09-11') {
-            return '/gamification/uploads/pod_m1_2026_09_11.mp3';
-        }
+    if (cleanDate === '2026-09-09') {
+        return '/gamification/uploads/snabbit_podcast_ep1.wav';
     }
-    // Return empty for unconfigured dates/milestones so the user receives the proper "Audio not yet configured" state
+    if (cleanDate) {
+        const safeDate = cleanDate.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        return `/gamification/uploads/pod_m${targetMs}_${safeDate}.mp3`;
+    }
     return '';
 }
 window.resolvePodAudioUrl = resolvePodAudioUrl;
@@ -11265,6 +11260,19 @@ async function openPodSessionModal(dayNum, dateKey) {
             const badge = document.getElementById('podListeningBadge');
 
             if (!player) return;
+
+            // Auto-heal / Ensure British voice audio if missing or network error
+            player.addEventListener('error', () => {
+                console.warn('[Pod Audio Player] Audio stream error, requesting ensure-audio from server...');
+                fetch(`/api/pod/ensure-audio?dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(safeMs)}`)
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res && res.success && res.audioUrl && player.src !== res.audioUrl) {
+                            player.src = res.audioUrl;
+                            player.load();
+                        }
+                    }).catch(() => {});
+            });
 
             let maxAudibleTime = 0;
 
@@ -17872,7 +17880,7 @@ function renderMilestoneModulesUI(msId) {
         }).join('');
     }
 
-    const firstMod = enabledMods[0] || 'dip';
+    const firstMod = enabledMods[0] || 'pod';
     if (typeof switchMilestoneTab === 'function') {
         switchMilestoneTab(firstMod);
     }
@@ -18073,7 +18081,7 @@ if (typeof window !== 'undefined') {
                 const subNav = document.getElementById('milestoneSubNav');
                 if (subNav && typeof switchMilestoneTab === 'function') {
                     const activeMods = getEnabledModulesForMilestone(activeMilestoneId);
-                    switchMilestoneTab(activeMods[0] || 'dip');
+                    switchMilestoneTab(activeMods[0] || 'pod');
                 }
                 const adminDetail = document.getElementById('adminMilestoneDetailContainer');
                 if (adminDetail && typeof renderAdminMilestoneDetail === 'function') {

@@ -1,702 +1,702 @@
 [
   {
     "id": "q_athulya_1",
-    "title": "Which institutional private equity investor is backing Athulya Senior Care's expansion?",
+    "title": "In which Indian city is Athulya Senior Care headquartered?",
     "options": [
-      "Morgan Stanley Private Equity",
-      "SoftBank Vision Fund",
-      "Sequoia Capital India",
-      "Tiger Global"
+      "Mumbai",
+      "Chennai",
+      "New Delhi",
+      "Kolkata"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya Senior Care is backed by Morgan Stanley, providing institutional capital for its domestic and overseas footprint.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 1,
+    "explanation": "Athulya Senior Care is a Chennai-based eldercare operator.",
+    "category": "Company Profile",
     "pts": 11
   },
   {
     "id": "q_athulya_2",
-    "title": "Where is Athulya Senior Care headquartered?",
+    "title": "Which global private equity firm is backing Athulya Senior Care?",
     "options": [
-      "Chennai",
-      "Bengaluru",
-      "Mumbai",
-      "Hyderabad"
+      "Morgan Stanley Private Equity",
+      "SoftBank Vision Fund",
+      "Sequoia Capital",
+      "Tiger Global"
     ],
     "correctOption": 0,
-    "explanation": "Athulya Senior Care is a Chennai-based firm pioneering assisted living and geriatric care.",
-    "category": "Global Expansion & Diaspora Markets",
+    "explanation": "Athulya Senior Care is backed by Morgan Stanley Private Equity.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_3",
-    "title": "What is the name of Athulya's upcoming senior living facility in Mauritius?",
+    "title": "What is the name of Athulya’s overseas senior care facility in Mauritius?",
     "options": [
-      "Chez Moi",
-      "Serene Living",
-      "Ananda Elders",
-      "Silver Haven"
+      "Senior Haven",
+      "ElderCare Villa",
+      "Silver Palms",
+      "Chez Moi"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya is establishing its international facility named 'Chez Moi' in Mauritius.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 3,
+    "explanation": "Athulya is setting up its \"Chez Moi\" facility in Mauritius.",
+    "category": "Expansion",
     "pts": 11
   },
   {
     "id": "q_athulya_4",
-    "title": "Why did Athulya strategically select Mauritius and Sri Lanka for initial overseas facilities?",
+    "title": "Besides Mauritius, which two overseas markets is Athulya planning expansion into?",
     "options": [
-      "Large Tamil diaspora seeking culturally aligned geriatric care",
-      "Cheapest real estate prices in the world",
-      "Zero healthcare regulations required",
-      "Mandatory retirement laws for expats"
+      "Canada and Germany",
+      "Australia and New Zealand",
+      "Sri Lanka and Dubai",
+      "Brazil and South Africa"
     ],
-    "correctOption": 0,
-    "explanation": "The expansion specifically targets the Tamil diaspora in Mauritius and Sri Lanka who value culturally familiar care, dietary alignment, and language comfort.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 2,
+    "explanation": "Athulya plans international expansion into Sri Lanka and Dubai.",
+    "category": "Expansion",
     "pts": 11
   },
   {
     "id": "q_athulya_5",
-    "title": "Which target customer demographic is Athulya focusing on in Dubai?",
+    "title": "Which demographic is Athulya targeting for culturally aligned care in Mauritius and Sri Lanka?",
     "options": [
-      "High-net-worth Indian expatriates navigating local real estate ecosystems",
-      "Subsidized government pension holders",
-      "Short-term college exchange students",
-      "Factory manufacturing contract workers"
+      "European tourists",
+      "The Tamil diaspora",
+      "University students",
+      "Corporate tech executives"
     ],
-    "correctOption": 0,
-    "explanation": "In Dubai, Athulya tailors its offering for affluent Non-Resident Indian expatriates seeking premium senior living arrangements.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 1,
+    "explanation": "Athulya targets the Tamil diaspora in Mauritius and Sri Lanka for familiar cultural care.",
+    "category": "Target Market",
     "pts": 11
   },
   {
     "id": "q_athulya_6",
-    "title": "What key customer friction do NRI families face when managing aging parents abroad?",
+    "title": "Which countries/institutions has Athulya signed MoUs with to export skilled care manpower?",
     "options": [
-      "Local overseas facilities lack cultural familiarity and family cannot provide 24/7 care",
-      "Overseas facilities are completely free of charge",
-      "Aviation bans prevent visits",
-      "Passports expire upon retirement"
+      "Singapore (SingHealth) and Japan",
+      "United Kingdom and France",
+      "United States and Mexico",
+      "China and Russia"
     ],
     "correctOption": 0,
-    "explanation": "Diaspora families face demanding work schedules and find local facilities culturally misaligned with their parents' lifestyle and language needs.",
-    "category": "Global Expansion & Diaspora Markets",
+    "explanation": "Athulya signed MoUs with Singapore’s SingHealth and Japan for exporting care professionals.",
+    "category": "Workforce",
     "pts": 11
   },
   {
     "id": "q_athulya_7",
-    "title": "Besides Mauritius, which other countries are explicitly part of Athulya's overseas facility roadmap?",
+    "title": "How many total senior care beds does Athulya currently manage?",
     "options": [
-      "Sri Lanka and Dubai (UAE)",
-      "Canada and Australia",
-      "United Kingdom and Germany",
-      "Brazil and South Africa"
+      "100 beds total",
+      "5,000 beds total",
+      "50,000 beds total",
+      "1,500 beds (900 operational)"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya has formalized roadmaps for facilities in Mauritius, Sri Lanka, and Dubai.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 3,
+    "explanation": "Athulya currently manages 1,500 beds, with 900 operational.",
+    "category": "Scale",
     "pts": 11
   },
   {
     "id": "q_athulya_8",
-    "title": "How does Athulya structure its international real estate footprint to minimize capital expenditure?",
+    "title": "What is Athulya’s approximate monthly revenue from its operational beds?",
     "options": [
-      "Asset-light operational partnerships with local property developers",
-      "Purchasing massive tracts of agricultural land outright",
-      "Issuing municipal sovereign bonds",
-      "Relying entirely on rented hotel banquet halls"
+      "Rs. 1.2 crore",
+      "Rs. 25 crore",
+      "Rs. 8.5 crore",
+      "Rs. 50 lakh"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya employs an asset-light model, partnering with established property and hospital operators rather than purchasing expensive real estate.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 2,
+    "explanation": "Athulya generates approximately Rs. 8.5 crore monthly from its operations.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_9",
-    "title": "What makes geriatric care a distinct real estate asset class globally?",
+    "title": "By 2030, how much is India’s organized senior care market projected to expand?",
     "options": [
-      "Predictable long-term occupancy coupled with specialized high-yield medical services",
-      "Frequent weekly tenant turnover like hotels",
-      "Zero utility or maintenance infrastructure requirements",
-      "Complete exemption from zoning laws"
+      "From 1,000 to 5,000 units",
+      "From 20,000 to 100,000 units",
+      "From 50,000 to 60,000 units",
+      "From 500,000 to 1,000,000 units"
     ],
-    "correctOption": 0,
-    "explanation": "Assisted senior living combines real estate tenancy with high-touch, recurring healthcare services, producing superior yields to conventional residential rental.",
-    "category": "Global Expansion & Diaspora Markets",
+    "correctOption": 1,
+    "explanation": "India’s organized senior care capacity is projected to grow from 20,000 to 100,000 units.",
+    "category": "Market Opportunity",
     "pts": 11
   },
   {
     "id": "q_athulya_10",
-    "title": "What cultural elements differentiate Indian assisted-living operators when serving diaspora communities?",
+    "title": "What top-line revenue target has Athulya set to support its planned FY32 IPO?",
     "options": [
-      "Native language communication, traditional dietary options, and festival celebrations",
-      "Standardized Western fast food and pop music only",
-      "Strict military schedules and silence curfews",
-      "Complete isolation from family communication"
+      "Rs. 1,000 crore",
+      "Rs. 100 crore",
+      "Rs. 500 crore",
+      "Rs. 5,000 crore"
     ],
     "correctOption": 0,
-    "explanation": "Culturally aligned food, native language staff, and festival celebrations build emotional trust and wellness among elderly diaspora residents.",
-    "category": "Global Expansion & Diaspora Markets",
+    "explanation": "Athulya is targeting a Rs. 1,000 crore top-line to support its planned FY32 IPO.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_11",
-    "title": "With which premier Singaporean healthcare institution has Athulya signed an MoU?",
+    "title": "What EBITDA target has Athulya outlined for its FY32 IPO roadmap?",
     "options": [
-      "SingHealth",
-      "National University Hospital",
-      "Raffles Medical Group",
-      "Tan Tock Seng Hospital"
+      "Rs. 25 crore",
+      "Rs. 75 crore",
+      "Rs. 750 crore",
+      "Rs. 250 crore"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya formalized an MoU with SingHealth in Singapore for healthcare collaboration and geriatric training.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 3,
+    "explanation": "Athulya is targeting Rs. 250 crore EBITDA to support its planned FY32 IPO.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_12",
-    "title": "Besides Singapore, which East Asian country has Athulya partnered with for geriatric manpower deployment?",
+    "title": "How large is the global eldercare industry projected to grow over the coming decade?",
     "options": [
-      "Japan",
-      "South Korea",
-      "Mongolia",
-      "Taiwan"
+      "From US$ 1 billion to US$ 2 billion",
+      "From US$ 100 billion to US$ 120 billion",
+      "From US$ 15 billion to US$ 50 billion",
+      "From US$ 500 million to US$ 1 billion"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya signed agreements to deploy skilled geriatric care professionals to Japan, which faces an acute elderly caregiver shortage.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 2,
+    "explanation": "The eldercare sector is projected to expand from US$ 15 billion to US$ 50 billion.",
+    "category": "Market Opportunity",
     "pts": 11
   },
   {
     "id": "q_athulya_13",
-    "title": "Why are nations like Japan and Singapore aggressively seeking Indian geriatric healthcare workers?",
+    "title": "According to the World Health Organization (WHO), what demographic percentage will the over-60 population cross?",
     "options": [
-      "Severe domestic demographic aging combined with acute local caregiver shortages",
-      "To replace all automated robotic systems",
-      "Indian nurses have zero visa requirements anywhere",
-      "Local citizens are legally banned from nursing"
+      "5% of total population",
+      "22% of total population",
+      "50% of total population",
+      "75% of total population"
     ],
-    "correctOption": 0,
-    "explanation": "Rapidly aging domestic populations in Japan and Singapore outpace local caregiver supply, creating huge demand for qualified international geriatric nurses.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 1,
+    "explanation": "The WHO expects the global over-60 demographic to cross 22% of total population.",
+    "category": "Demographics",
     "pts": 11
   },
   {
     "id": "q_athulya_14",
-    "title": "How does exporting trained geriatric caregivers enhance Athulya's margin profile?",
+    "title": "What asset structure does Athulya utilize to expand into international markets?",
     "options": [
-      "Unlocks premium foreign currency billing and high placement agency margins",
-      "Reduces total revenue while increasing domestic costs",
-      "Eliminates all training requirements",
-      "Permits paying caregivers zero compensation"
+      "Asset-light operational partnerships and specialized workforce export",
+      "Purchasing multi-billion-dollar hospitals outright",
+      "Building massive retirement islands from scratch",
+      "Operating purely via virtual telemedicine calls"
     ],
     "correctOption": 0,
-    "explanation": "International placement and specialized overseas workforce deployment yield much higher margins and strong foreign currency earnings.",
-    "category": "Workforce Export & International MoUs",
+    "explanation": "Athulya pairs asset-light operational tie-ups abroad with specialized workforce export.",
+    "category": "Strategy",
     "pts": 11
   },
   {
     "id": "q_athulya_15",
-    "title": "What dual strategy allows Athulya to capture both overseas facility revenue and staffing revenue?",
+    "title": "Which pioneer in senior living and mental healthcare was cited for early-career campus recruitment?",
     "options": [
-      "Asset-light overseas facilities combined with specialized workforce export",
-      "Manufacturing medical beds and operating private airlines",
-      "Offering retail consumer loans and lottery tickets",
-      "Running offshore call centers and crypto exchanges"
+      "Apollo Hospitals",
+      "Max Healthcare",
+      "Fortis Healthcare",
+      "Cadabams"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya captures value on two fronts: operating facilities abroad in partnership with local developers and exporting trained caregivers globally.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 3,
+    "explanation": "Cadabams recently offered an early-career opportunity for campus talent in senior care.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_16",
-    "title": "What training component is vital when preparing Indian caregivers for deployment in Japan?",
+    "title": "What career capabilities are required to scale eldercare services across international borders?",
     "options": [
-      "Language proficiency, elderly etiquette, and specialized dementia care standards",
-      "Commercial pilot licensing",
-      "Stock trading technical analysis",
-      "Industrial construction skills"
+      "Aircraft maintenance and navigation",
+      "Stock day trading and crypto mining",
+      "Client acquisition, cross-border ops, regulatory compliance, and business development",
+      "Petroleum drilling engineering"
     ],
-    "correctOption": 0,
-    "explanation": "Japanese elderly care requires rigorous language capability (N4/N3 JLPT), cultural sensitivity, and certified bedside geriatric procedures.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 2,
+    "explanation": "Cross-border eldercare needs client acquisition, regulatory compliance, and ops leadership.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_17",
-    "title": "How does Athulya's model solve the global talent shortage in healthcare?",
+    "title": "Why is eldercare evolving into a cross-border healthcare and real estate asset class?",
     "options": [
-      "Creating a pipeline of certified geriatric caregivers trained in India for international deployment",
-      "Hiring untrained volunteers on tourist visas",
-      "Relying exclusively on generative AI chatbots for physical care",
-      "Downsizing elderly care operations"
+      "Retirement homes are exempt from all taxes worldwide",
+      "Aging global populations and rising demand for specialized geriatric care",
+      "Seniors are legally required to move overseas",
+      "Hospitals are closing down globally"
     ],
-    "correctOption": 0,
-    "explanation": "By institutionalizing training and global accreditation, Athulya supplies structured healthcare talent to developed nations with deficit ratios.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 1,
+    "explanation": "Global aging demographics are transforming senior living into an institutional asset class.",
+    "category": "Industry Trends",
     "pts": 11
   },
   {
     "id": "q_athulya_18",
-    "title": "What credentialing challenges must cross-border healthcare workforce exporters navigate?",
+    "title": "What customer segment is Athulya targeting in Dubai?",
     "options": [
-      "Regulatory licensing, nursing board equivalencies, and work visa quotas",
-      "Filing patents for medical stethoscopes",
-      "Registering trademarks for nursing uniforms",
-      "Bypassing immigration border checks"
+      "High-net-worth Indian expatriates navigating the local ecosystem",
+      "Short-term transit tourists",
+      "Undergraduate college students",
+      "Budget construction laborers"
     ],
     "correctOption": 0,
-    "explanation": "Healthcare workforce export requires rigorous compliance with host nation health ministries, visa protocols, and clinical competency certifications.",
-    "category": "Workforce Export & International MoUs",
+    "explanation": "In Dubai, Athulya targets high-net-worth Indian expatriates seeking trusted care.",
+    "category": "Target Market",
     "pts": 11
   },
   {
     "id": "q_athulya_19",
-    "title": "What mutual benefit does the MoU between SingHealth and Athulya create?",
+    "title": "How does exporting trained geriatric care manpower benefit Indian eldercare operators?",
     "options": [
-      "Knowledge transfer, standardized geriatric clinical protocols, and cross-border talent pipelines",
-      "Exclusive patent ownership of all wheelchairs",
-      "Monopoly on all pharmaceutical imports into India",
-      "Merger of Indian and Singaporean central banks"
+      "Reduces healthcare standards in India",
+      "Eliminates all operational costs in Chennai",
+      "Forces operators to exit the domestic market",
+      "Solves global talent shortages while unlocking higher profit margins"
     ],
-    "correctOption": 0,
-    "explanation": "The partnership elevates clinical standards, provides exchange training, and establishes verified recruitment channels.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 3,
+    "explanation": "Exporting specialized care workers addresses global shortages while yielding higher margins.",
+    "category": "Strategy",
     "pts": 11
   },
   {
     "id": "q_athulya_20",
-    "title": "How does Athulya mitigate attrition among overseas deployed nursing talent?",
+    "title": "What key friction do elderly expatriates face in overseas locations like Mauritius?",
     "options": [
-      "Structured career progression, competitive overseas compensation, and clear repatriation pathways",
-      "Withholding personal identity documents",
-      "Imposing lifetime non-compete clauses without pay",
-      "Banning communication with families"
+      "Healthcare is completely illegal for seniors",
+      "Overseas locations have no doctors",
+      "Local facilities lack culturally aligned care and language familiarity",
+      "Seniors are barred from living in Mauritius"
     ],
-    "correctOption": 0,
-    "explanation": "Ethical recruitment, fair overseas wage structures, and recognized career ladders ensure high retention and strong employer brand equity.",
-    "category": "Workforce Export & International MoUs",
+    "correctOption": 2,
+    "explanation": "Expatriates often struggle to find culturally aligned geriatric care and language support.",
+    "category": "Customer Experience",
     "pts": 11
   },
   {
     "id": "q_athulya_21",
-    "title": "What is Athulya's current total bed capacity across its facilities?",
+    "title": "In which fiscal year does Athulya Senior Care plan to launch its public IPO?",
     "options": [
-      "1,500 beds total (with 900 currently operational)",
-      "50 beds total (with 10 operational)",
-      "10,000 beds total (all fully occupied)",
-      "50,000 beds total"
+      "FY24",
+      "FY32",
+      "FY25",
+      "FY50"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya manages a portfolio of 1,500 beds, of which 900 are operational and revenue-generating.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 1,
+    "explanation": "Athulya has laid out a roadmap targeting a public listing in FY32.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_22",
-    "title": "How much monthly revenue is Athulya currently generating from its operational capacity?",
+    "title": "What type of service delivery model does institutional eldercare represent?",
     "options": [
-      "Rs. 8.5 crore monthly",
-      "Rs. 50 lakh monthly",
-      "Rs. 100 crore monthly",
-      "Rs. 5,000 per month"
+      "A high-touch, human-centric assisted living model",
+      "A purely automated robotic clinic",
+      "A discount self-service warehouse",
+      "A remote algorithmic consulting platform"
     ],
     "correctOption": 0,
-    "explanation": "Athulya currently generates Rs. 8.5 crore per month across its operating beds and clinical care services.",
-    "category": "Financial Scale & Growth Projections",
+    "explanation": "Eldercare is inherently a high-touch, compassionate, service-intensive delivery model.",
+    "category": "Operations",
     "pts": 11
   },
   {
     "id": "q_athulya_23",
-    "title": "What is Athulya's targeted top-line revenue benchmark for its upcoming public listing?",
+    "title": "Why was the lack of student nominations for Cadabams described as a missed opportunity?",
     "options": [
-      "Rs. 1,000 crore",
-      "Rs. 50 crore",
-      "Rs. 10,000 crore",
-      "Rs. 100 crore"
+      "Cadabams only hires once every 50 years",
+      "Healthcare salaries are capped by law",
+      "Senior living has zero future job opportunities",
+      "Eldercare is a booming US$ 50B sunrise sector with massive career growth upside"
     ],
-    "correctOption": 0,
-    "explanation": "The company has set a strategic objective to achieve Rs. 1,000 crore in annual top-line revenue.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 3,
+    "explanation": "Eldercare is a high-growth US$ 50B sunrise industry offering immense leadership upside.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_24",
-    "title": "What EBITDA target has Athulya set to support its planned Initial Public Offering (IPO)?",
+    "title": "What core advantage does Athulya’s institutional private equity backing provide?",
     "options": [
-      "Rs. 250 crore EBITDA (representing a 25% margin)",
-      "Rs. 10 crore EBITDA",
-      "Zero EBITDA (running at a deliberate loss)",
-      "Rs. 900 crore EBITDA"
+      "Immunity from all healthcare regulations",
+      "Guaranteed government subsidies",
+      "Long-term capital stability, governance standards, and rapid bed expansion",
+      "Exemption from medical audits"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya aims for Rs. 250 crore in EBITDA alongside its Rs. 1,000 crore revenue target, delivering an attractive 25% margin profile.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 2,
+    "explanation": "Morgan Stanley’s backing provides institutional governance, capital strength, and scale.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_25",
-    "title": "In which financial year does Athulya project to launch its Initial Public Offering (IPO)?",
+    "title": "What overarching strategic takeaway emerges from Athulya’s global expansion?",
     "options": [
-      "FY32 (Fiscal Year 2032)",
-      "FY24 (Fiscal Year 2024)",
-      "FY50 (Fiscal Year 2050)",
-      "Next month"
+      "Senior living should remain strictly local and unorganized",
+      "Indian healthcare operators can build scalable, cross-border institutional platforms",
+      "Overseas elderly populations have zero care needs",
+      "Workforce export has no commercial viability"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya is targeting a planned Initial Public Offering by FY32 once its domestic and overseas bed capacity matures.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 1,
+    "explanation": "Athulya proves that Indian care operators can build scalable, high-margin global platforms.",
+    "category": "Strategy",
     "pts": 11
   },
   {
     "id": "q_athulya_26",
-    "title": "To what size is India's organized senior care market projected to grow by 2030?",
+    "title": "Story Review: In which Indian city is Athulya Senior Care headquartered?",
     "options": [
-      "From 20,000 units to 100,000 units",
-      "From 1,000 units to 2,000 units",
-      "It is expected to shrink by 50%",
-      "From 1 million units to 10 million units"
+      "Chennai",
+      "Mumbai",
+      "New Delhi",
+      "Kolkata"
     ],
     "correctOption": 0,
-    "explanation": "India's organized senior housing and assisted-living market is projected to expand 5x from 20,000 units to 100,000 units by 2030.",
-    "category": "Financial Scale & Growth Projections",
+    "explanation": "Athulya Senior Care is a Chennai-based eldercare operator.",
+    "category": "Company Profile",
     "pts": 11
   },
   {
     "id": "q_athulya_27",
-    "title": "What is the primary driver of Athulya's monthly recurring revenue (MRR)?",
+    "title": "Story Review: Which global private equity firm is backing Athulya Senior Care?",
     "options": [
-      "Monthly assisted living subscription fees covering lodging, medical monitoring, and meals",
-      "One-time admission fees only",
-      "Ad-supported television streaming",
-      "Government agricultural subsidies"
+      "SoftBank Vision Fund",
+      "Sequoia Capital",
+      "Tiger Global",
+      "Morgan Stanley Private Equity"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya's revenue model relies on predictable monthly subscription billing covering specialized nursing, room boarding, customized nutrition, and physician visits.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 3,
+    "explanation": "Athulya Senior Care is backed by Morgan Stanley Private Equity.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_28",
-    "title": "How does bed occupancy rate impact profitability in an assisted-living facility?",
+    "title": "Story Review: What is the name of Athulya’s overseas senior care facility in Mauritius?",
     "options": [
-      "Fixed operational costs mean high occupancy produces significant operating leverage",
-      "Occupancy has zero effect on operational profit",
-      "Empty beds generate higher margins than occupied beds",
-      "High occupancy automatically bankrupts the operator"
+      "Senior Haven",
+      "ElderCare Villa",
+      "Chez Moi",
+      "Silver Palms"
     ],
-    "correctOption": 0,
-    "explanation": "Assisted living has fixed real estate and staff costs; beyond breakeven occupancy (typically 70%), incremental bed revenues flow directly to operating EBITDA.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 2,
+    "explanation": "Athulya is setting up its \"Chez Moi\" facility in Mauritius.",
+    "category": "Expansion",
     "pts": 11
   },
   {
     "id": "q_athulya_29",
-    "title": "Why do private equity sponsors like Morgan Stanley value healthcare asset roll-ups?",
+    "title": "Story Review: Besides Mauritius, which two overseas markets is Athulya planning expansion into?",
     "options": [
-      "Recession-resilient recurring demand, strong pricing power, and high return on capital",
-      "High volatility and rapid crypto-like flips",
-      "Zero capital requirement and no tax oversight",
-      "Ability to shut down clinics at any moment"
+      "Canada and Germany",
+      "Sri Lanka and Dubai",
+      "Australia and New Zealand",
+      "Brazil and South Africa"
     ],
-    "correctOption": 0,
-    "explanation": "Healthcare infrastructure provides non-cyclical cash flows, inelastic customer demand, and significant multi-site expansion potential.",
-    "category": "Financial Scale & Growth Projections",
+    "correctOption": 1,
+    "explanation": "Athulya plans international expansion into Sri Lanka and Dubai.",
+    "category": "Expansion",
     "pts": 11
   },
   {
     "id": "q_athulya_30",
-    "title": "What valuation multiple benefit do public markets typically accord to high-EBITDA healthcare operators?",
+    "title": "Story Review: Which demographic is Athulya targeting for culturally aligned care in Mauritius and Sri Lanka?",
     "options": [
-      "Premium enterprise value-to-EBITDA multiples due to predictable, defensive earnings",
-      "Deep discount multiples lower than commodities",
-      "Valuation determined solely by Twitter followers",
-      "Negative price-to-earnings ratios"
+      "The Tamil diaspora",
+      "European tourists",
+      "University students",
+      "Corporate tech executives"
     ],
     "correctOption": 0,
-    "explanation": "Defensive cash flows, demographic tailwinds, and high EBITDA conversion consistently command premium public market multiples.",
-    "category": "Financial Scale & Growth Projections",
+    "explanation": "Athulya targets the Tamil diaspora in Mauritius and Sri Lanka for familiar cultural care.",
+    "category": "Target Market",
     "pts": 11
   },
   {
     "id": "q_athulya_31",
-    "title": "According to the World Health Organization (WHO), what proportion will the over-60 demographic exceed globally?",
+    "title": "Story Review: Which countries/institutions has Athulya signed MoUs with to export skilled care manpower?",
     "options": [
-      "Over 22% of the total world population",
-      "Less than 5% of the total population",
-      "Exactly 50% of all infants",
-      "Zero percent due to falling life expectancy"
+      "United Kingdom and France",
+      "United States and Mexico",
+      "China and Russia",
+      "Singapore (SingHealth) and Japan"
     ],
-    "correctOption": 0,
-    "explanation": "The WHO projects that people aged 60 and older will comprise more than 22% of the global population by 2050.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 3,
+    "explanation": "Athulya signed MoUs with Singapore’s SingHealth and Japan for exporting care professionals.",
+    "category": "Workforce",
     "pts": 11
   },
   {
     "id": "q_athulya_32",
-    "title": "What does the industry term 'Silver Economy' refer to?",
+    "title": "Story Review: How many total senior care beds does Athulya currently manage?",
     "options": [
-      "The economic ecosystem dedicated to products, healthcare, and living services for seniors",
-      "Mining silver and precious metals for currency",
-      "Discount sales on grey-colored electronics",
-      "Financial schemes for college sports teams"
+      "100 beds total",
+      "5,000 beds total",
+      "1,500 beds (900 operational)",
+      "50,000 beds total"
     ],
-    "correctOption": 0,
-    "explanation": "The 'Silver Economy' encompasses all economic activities and services catering to the consumption, wellness, and care needs of older adults.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 2,
+    "explanation": "Athulya currently manages 1,500 beds, with 900 operational.",
+    "category": "Scale",
     "pts": 11
   },
   {
     "id": "q_athulya_33",
-    "title": "To what valuation is the broader senior living and mental healthcare industry projected to scale in a decade?",
+    "title": "Story Review: What is Athulya’s approximate monthly revenue from its operational beds?",
     "options": [
-      "From US$15 billion to US$50 billion",
-      "From US$1 million to US$2 million",
-      "From US$1 trillion to US$100 trillion",
-      "It is expected to decline to zero"
+      "Rs. 1.2 crore",
+      "Rs. 8.5 crore",
+      "Rs. 25 crore",
+      "Rs. 50 lakh"
     ],
-    "correctOption": 0,
-    "explanation": "The sector is projected to surge more than threefold, expanding from US$15 billion to over US$50 billion within the next ten years.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 1,
+    "explanation": "Athulya generates approximately Rs. 8.5 crore monthly from its operations.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_34",
-    "title": "Why is India experiencing a structural transition toward organized eldercare?",
+    "title": "Story Review: By 2030, how much is India’s organized senior care market projected to expand?",
     "options": [
-      "Nuclear family trends, rising overseas migration of adult children, and longer life expectancy",
-      "A sudden decrease in life expectancy across all states",
-      "Government mandates forbidding children from caring for parents",
-      "Elderly citizens abandoning cities to live in forests"
+      "From 20,000 to 100,000 units",
+      "From 1,000 to 5,000 units",
+      "From 50,000 to 60,000 units",
+      "From 500,000 to 1,000,000 units"
     ],
     "correctOption": 0,
-    "explanation": "Rapid urbanization, nuclear family structures, and children moving abroad have made institutional eldercare an essential societal need.",
-    "category": "Silver Economy & Demographics",
+    "explanation": "India’s organized senior care capacity is projected to grow from 20,000 to 100,000 units.",
+    "category": "Market Opportunity",
     "pts": 11
   },
   {
     "id": "q_athulya_35",
-    "title": "How does rising life expectancy transform healthcare spending profiles?",
+    "title": "Story Review: What top-line revenue target has Athulya set to support its planned FY32 IPO?",
     "options": [
-      "Shifts spending from acute episodic treatments to continuous chronic condition and wellness management",
-      "Eliminates the need for doctors and pharmacies",
-      "Causes medical costs to drop to zero after age 65",
-      "Confines all healthcare spending to infancy"
+      "Rs. 100 crore",
+      "Rs. 500 crore",
+      "Rs. 5,000 crore",
+      "Rs. 1,000 crore"
     ],
-    "correctOption": 0,
-    "explanation": "Longevity shifts care priorities toward palliative support, dementia management, physical therapy, and daily assisted living.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 3,
+    "explanation": "Athulya is targeting a Rs. 1,000 crore top-line to support its planned FY32 IPO.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_36",
-    "title": "What differentiates 'independent living' from 'assisted living' in senior care?",
+    "title": "Story Review: What EBITDA target has Athulya outlined for its FY32 IPO roadmap?",
     "options": [
-      "Assisted living provides 24/7 dedicated clinical care, bathing, and medication administration",
-      "Independent living is only for college students",
-      "Assisted living forbids residents from eating meals",
-      "There is zero functional difference"
+      "Rs. 25 crore",
+      "Rs. 75 crore",
+      "Rs. 250 crore",
+      "Rs. 750 crore"
     ],
-    "correctOption": 0,
-    "explanation": "Independent living serves active retirees needing community amenities, while assisted living provides clinical help with daily living activities (ADLs).",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 2,
+    "explanation": "Athulya is targeting Rs. 250 crore EBITDA to support its planned FY32 IPO.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_37",
-    "title": "Which demographic shift in developed countries is accelerating medical tourism and foreign care models?",
+    "title": "Story Review: How large is the global eldercare industry projected to grow over the coming decade?",
     "options": [
-      "Inverted age pyramids with high dependency ratios and strained public healthcare systems",
-      "Surplus of teenage caregivers in Europe and Japan",
-      "Rapid decline in retirement age to 25 years",
-      "Universal robotics replacing all physical medicine"
+      "From US$ 1 billion to US$ 2 billion",
+      "From US$ 15 billion to US$ 50 billion",
+      "From US$ 100 billion to US$ 120 billion",
+      "From US$ 500 million to US$ 1 billion"
     ],
-    "correctOption": 0,
-    "explanation": "Inverted age pyramids mean fewer working-age taxpayers support an expanding senior cohort, forcing reliance on overseas care solutions.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 1,
+    "explanation": "The eldercare sector is projected to expand from US$ 15 billion to US$ 50 billion.",
+    "category": "Market Opportunity",
     "pts": 11
   },
   {
     "id": "q_athulya_38",
-    "title": "Why are Indian healthcare operators uniquely positioned to lead global geriatric care?",
+    "title": "Story Review: According to the World Health Organization (WHO), what demographic percentage will the over-60 population cross?",
     "options": [
-      "World-class clinical training, English proficiency, empathy-driven care ethos, and cost-efficient staffing",
-      "India has the smallest population in Asia",
-      "Indian doctors are forbidden from practicing domestically",
-      "Indian operators only accept cryptocurrency"
+      "22% of total population",
+      "5% of total population",
+      "50% of total population",
+      "75% of total population"
     ],
     "correctOption": 0,
-    "explanation": "India's massive healthcare education infrastructure, clinical rigor, and cultural emphasis on filial respect create exceptional competitive advantages.",
-    "category": "Silver Economy & Demographics",
+    "explanation": "The WHO expects the global over-60 demographic to cross 22% of total population.",
+    "category": "Demographics",
     "pts": 11
   },
   {
     "id": "q_athulya_39",
-    "title": "What role does specialized dementia care play in high-acuity assisted living facilities?",
+    "title": "Story Review: What asset structure does Athulya utilize to expand into international markets?",
     "options": [
-      "Requires secure memory care units, cognitive stimulation protocols, and low staff-to-patient ratios",
-      "Dementia patients are sent home without support",
-      "It is managed entirely by self-checkout kiosks",
-      "Dementia requires zero specialized nursing protocols"
+      "Purchasing multi-billion-dollar hospitals outright",
+      "Building massive retirement islands from scratch",
+      "Operating purely via virtual telemedicine calls",
+      "Asset-light operational partnerships and specialized workforce export"
     ],
-    "correctOption": 0,
-    "explanation": "Dementia and Alzheimer's demand specialized memory infrastructure, anti-wandering technology, and highly trained cognitive therapy staff.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 3,
+    "explanation": "Athulya pairs asset-light operational tie-ups abroad with specialized workforce export.",
+    "category": "Strategy",
     "pts": 11
   },
   {
     "id": "q_athulya_40",
-    "title": "How does the 'grey hair goldmine' alter traditional commercial real estate development?",
+    "title": "Story Review: Which pioneer in senior living and mental healthcare was cited for early-career campus recruitment?",
     "options": [
-      "Developers integrate barrier-free architecture, panic buttons, and on-site clinics into master plans",
-      "Buildings eliminate elevators to encourage stair climbing",
-      "Apartments are built exclusively on 50th floors without medical access",
-      "Real estate firms refuse to sell homes to retirees"
+      "Apollo Hospitals",
+      "Max Healthcare",
+      "Cadabams",
+      "Fortis Healthcare"
     ],
-    "correctOption": 0,
-    "explanation": "Senior-living real estate requires specialized design: skid-proof flooring, wheelchair access, zero-threshold showers, and integrated medical emergency systems.",
-    "category": "Silver Economy & Demographics",
+    "correctOption": 2,
+    "explanation": "Cadabams recently offered an early-career opportunity for campus talent in senior care.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_41",
-    "title": "Which prominent senior living and mental healthcare pioneer recently offered campus placements that students missed?",
+    "title": "Story Review: What career capabilities are required to scale eldercare services across international borders?",
     "options": [
-      "Cadabams",
-      "Fortis Healthcare",
-      "Apollo Hospitals",
-      "Max Healthcare"
+      "Aircraft maintenance and navigation",
+      "Client acquisition, cross-border ops, regulatory compliance, and business development",
+      "Stock day trading and crypto mining",
+      "Petroleum drilling engineering"
     ],
-    "correctOption": 0,
-    "explanation": "Cadabams, an established pioneer in psychiatric rehabilitation and senior living, offered campus roles that students overlooked.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 1,
+    "explanation": "Cross-border eldercare needs client acquisition, regulatory compliance, and ops leadership.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_42",
-    "title": "Why was skipping the Cadabams campus placement described as a 'lost opportunity' for management graduates?",
+    "title": "Story Review: Why is eldercare evolving into a cross-border healthcare and real estate asset class?",
     "options": [
-      "Entering a high-growth US$50B sunrise industry early provides rapid career escalation and leadership equity",
-      "Cadabams pays zero salary to employees",
-      "The company was planning to liquidate immediately",
-      "Senior care has zero management positions"
+      "Aging global populations and rising demand for specialized geriatric care",
+      "Retirement homes are exempt from all taxes worldwide",
+      "Seniors are legally required to move overseas",
+      "Hospitals are closing down globally"
     ],
     "correctOption": 0,
-    "explanation": "Early entrants into fast-scaling sunrise industries like silver healthcare bypass traditional corporate bottlenecks and fast-track to executive leadership.",
-    "category": "Strategic Business Model & Careers",
+    "explanation": "Global aging demographics are transforming senior living into an institutional asset class.",
+    "category": "Industry Trends",
     "pts": 11
   },
   {
     "id": "q_athulya_43",
-    "title": "What career specialization is emerging from the cross-border expansion of eldercare operators?",
+    "title": "Story Review: What customer segment is Athulya targeting in Dubai?",
     "options": [
-      "Cross-border healthcare compliance, international client acquisition, and expatriate relationship management",
-      "Coding automated high-frequency crypto trading algorithms",
-      "Assembly-line textile manufacturing",
-      "Deep-sea submarine piloting"
+      "Short-term transit tourists",
+      "Undergraduate college students",
+      "Budget construction laborers",
+      "High-net-worth Indian expatriates navigating the local ecosystem"
     ],
-    "correctOption": 0,
-    "explanation": "Managing facilities across Dubai, Mauritius, and Singapore demands talent skilled in cross-border healthcare law, global HNWI sales, and regulatory diplomacy.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 3,
+    "explanation": "In Dubai, Athulya targets high-net-worth Indian expatriates seeking trusted care.",
+    "category": "Target Market",
     "pts": 11
   },
   {
     "id": "q_athulya_44",
-    "title": "What mistake do fresh management graduates often make during campus recruitment?",
+    "title": "Story Review: How does exporting trained geriatric care manpower benefit Indian eldercare operators?",
     "options": [
-      "Chasing legacy brand titles in saturated mature sectors while ignoring high-growth sunrise industries",
-      "Applying only to healthcare startups",
-      "Refusing to accept six-figure salaries",
-      "Demanding 100% remote work in farming"
+      "Reduces healthcare standards in India",
+      "Eliminates all operational costs in Chennai",
+      "Solves global talent shortages while unlocking higher profit margins",
+      "Forces operators to exit the domestic market"
     ],
-    "correctOption": 0,
-    "explanation": "Students frequently gravitate toward crowded legacy consulting or IT firms, missing massive wealth and leadership creation in high-growth niches like eldercare.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 2,
+    "explanation": "Exporting specialized care workers addresses global shortages while yielding higher margins.",
+    "category": "Strategy",
     "pts": 11
   },
   {
     "id": "q_athulya_45",
-    "title": "Why does cross-cultural workforce deployment require sophisticated human resource leadership?",
+    "title": "Story Review: What key friction do elderly expatriates face in overseas locations like Mauritius?",
     "options": [
-      "Navigating international labor treaties, language acclimation, and cultural assimilation for deployed nurses",
-      "Ensuring all nurses wear the exact same shoes",
-      "Eliminating all rest breaks during international flights",
-      "Forbidding employees from using mobile phones abroad"
+      "Healthcare is completely illegal for seniors",
+      "Local facilities lack culturally aligned care and language familiarity",
+      "Overseas locations have no doctors",
+      "Seniors are barred from living in Mauritius"
     ],
-    "correctOption": 0,
-    "explanation": "Deploying medical manpower to Singapore or Japan requires deep understanding of immigration compliance, cultural assimilation, and clinical ethics.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 1,
+    "explanation": "Expatriates often struggle to find culturally aligned geriatric care and language support.",
+    "category": "Customer Experience",
     "pts": 11
   },
   {
     "id": "q_athulya_46",
-    "title": "What is an 'asset-light' business model in the context of Athulya's overseas strategy?",
+    "title": "Story Review: In which fiscal year does Athulya Senior Care plan to launch its public IPO?",
     "options": [
-      "Managing healthcare operations while third-party partners own the physical land and buildings",
-      "Operating healthcare facilities with zero staff and zero beds",
-      "Selling all company assets to pay off debts",
-      "Refusing to sign contracts with any partner"
+      "FY32",
+      "FY24",
+      "FY25",
+      "FY50"
     ],
     "correctOption": 0,
-    "explanation": "Under an asset-light model, Athulya licenses its brand, operational playbook, and clinical manpower without tying up heavy capital in foreign property.",
-    "category": "Strategic Business Model & Careers",
+    "explanation": "Athulya has laid out a roadmap targeting a public listing in FY32.",
+    "category": "Financial Targets",
     "pts": 11
   },
   {
     "id": "q_athulya_47",
-    "title": "How does Athulya build trust with family members living thousands of miles away from their resident parents?",
+    "title": "Story Review: What type of service delivery model does institutional eldercare represent?",
     "options": [
-      "Real-time digital health dashboards, regular video updates, and transparent electronic medical records",
-      "Sending paper letters once every three years",
-      "Refusing to allow phone calls with residents",
-      "Deleting all medical charts after 24 hours"
+      "A purely automated robotic clinic",
+      "A discount self-service warehouse",
+      "A remote algorithmic consulting platform",
+      "A high-touch, human-centric assisted living model"
     ],
-    "correctOption": 0,
-    "explanation": "Transparent communication via mobile portals and live health tracking gives overseas family members peace of mind and reinforces customer retention.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 3,
+    "explanation": "Eldercare is inherently a high-touch, compassionate, service-intensive delivery model.",
+    "category": "Operations",
     "pts": 11
   },
   {
     "id": "q_athulya_48",
-    "title": "What makes regulatory compliance in overseas eldercare particularly complex?",
+    "title": "Story Review: Why was the lack of student nominations for Cadabams described as a missed opportunity?",
     "options": [
-      "Differing national standards for medication dispensing, caregiver accreditation, and elder safety audits",
-      "All countries share the exact same healthcare constitution",
-      "Healthcare facilities are exempt from all local laws",
-      "Only international maritime law applies to eldercare"
+      "Cadabams only hires once every 50 years",
+      "Healthcare salaries are capped by law",
+      "Eldercare is a booming US$ 50B sunrise sector with massive career growth upside",
+      "Senior living has zero future job opportunities"
     ],
-    "correctOption": 0,
-    "explanation": "Every jurisdiction (Mauritius, UAE, Singapore) enforces specific healthcare safety protocols, drug storage rules, and caregiver licensing standards.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 2,
+    "explanation": "Eldercare is a high-growth US$ 50B sunrise industry offering immense leadership upside.",
+    "category": "Careers",
     "pts": 11
   },
   {
     "id": "q_athulya_49",
-    "title": "What strategic lesson should student entrepreneurs draw from Athulya's market positioning?",
+    "title": "Story Review: What core advantage does Athulya’s institutional private equity backing provide?",
     "options": [
-      "Solving unglamorous, acute demographic pain points can build massive, defensible enterprise value",
-      "Only consumer social media apps can reach venture scale",
-      "Founders should avoid industries involving senior citizens",
-      "Businesses should never partner with private equity firms"
+      "Immunity from all healthcare regulations",
+      "Long-term capital stability, governance standards, and rapid bed expansion",
+      "Guaranteed government subsidies",
+      "Exemption from medical audits"
     ],
-    "correctOption": 0,
-    "explanation": "Athulya demonstrates that addressing structural, unglamorous demographic bottlenecks creates resilient, high-margin, and venture-fundable businesses.",
-    "category": "Strategic Business Model & Careers",
+    "correctOption": 1,
+    "explanation": "Morgan Stanley’s backing provides institutional governance, capital strength, and scale.",
+    "category": "Finance",
     "pts": 11
   },
   {
     "id": "q_athulya_50",
-    "title": "In the cMPLi POD model, how many questions are randomly drawn from this pool for each student quiz?",
+    "title": "Story Review: What overarching strategic takeaway emerges from Athulya’s global expansion?",
     "options": [
-      "3 randomized questions with jumbled options (11 LCs each, 33 LCs total)",
-      "All 50 questions must be completed in 5 minutes",
-      "Zero questions; it is audio-only",
-      "100 questions with negative marking"
+      "Indian healthcare operators can build scalable, cross-border institutional platforms",
+      "Senior living should remain strictly local and unorganized",
+      "Overseas elderly populations have zero care needs",
+      "Workforce export has no commercial viability"
     ],
     "correctOption": 0,
-    "explanation": "Each student is served 3 randomly sampled questions with shuffled options, earning 11 LCs per correct answer for a maximum of 33 LCs.",
-    "category": "Strategic Business Model & Careers",
+    "explanation": "Athulya proves that Indian care operators can build scalable, high-margin global platforms.",
+    "category": "Strategy",
     "pts": 11
   }
 ]
