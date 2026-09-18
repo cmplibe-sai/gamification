@@ -16782,7 +16782,61 @@ async function requestOTP() {
     }
 
     try {
-        const auth = resolvePlatformUserRole(rawInput);
+        let auth = resolvePlatformUserRole(rawInput);
+
+        // Recruiters and campus coordinators aren't in any client-side cached list on a fresh
+        // page load (that data is only fetched after a creator opens the Management Console),
+        // so fall back to a safe server-side lookup before declaring the account unregistered.
+        if (!auth) {
+            const cleanId = rawInput.toLowerCase().trim();
+            const isEmailInput = cleanId.includes('@');
+            try {
+                const roleRes = await fetch(`${window.APP_PATH_PREFIX || ''}/api/auth/resolve-role`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ loginId: rawInput })
+                });
+                const roleData = await roleRes.json();
+                if (roleData && roleData.success && roleData.found) {
+                    if (roleData.role === 'recruiter') {
+                        if (roleData.status === 'pending') {
+                            alert("⏳ Your corporate empanelment application is still pending creator approval.\n\nPlease check back once your organization has been approved.");
+                            if (btn) { btn.innerText = "Request OTP"; btn.disabled = false; }
+                            return;
+                        }
+                        auth = {
+                            role: 'recruiter',
+                            user: {
+                                _id: 'emp_' + (isEmailInput ? cleanId.split('@')[0] : cleanId.replace(/\D/g, '')),
+                                name: 'Talent Partner',
+                                companyName: roleData.companyName,
+                                email: isEmailInput ? cleanId : '',
+                                phone: !isEmailInput ? cleanId.replace(/\D/g, '') : '',
+                                role: 'recruiter'
+                            }
+                        };
+                    } else if (roleData.role === 'partner') {
+                        auth = {
+                            role: 'partner',
+                            partnerAllowedMangoes: roleData.partnerAllowedMangoes || [],
+                            campusId: roleData.campusId || 'campus_partner',
+                            campusName: roleData.campusName,
+                            user: {
+                                _id: 'partner_' + (isEmailInput ? cleanId.split('@')[0] : cleanId.replace(/\D/g, '')),
+                                name: roleData.coordinatorName || 'Campus Partner',
+                                email: isEmailInput ? cleanId : '',
+                                phone: !isEmailInput ? cleanId.replace(/\D/g, '') : '',
+                                campusId: roleData.campusId || '',
+                                campusName: roleData.campusName
+                            }
+                        };
+                    }
+                }
+            } catch (roleErr) {
+                console.warn('Role resolution notice:', roleErr.message);
+            }
+        }
+
         if (!auth) {
             alert("❌ Account not registered on learn.cmplibe.com.\n\nPlease check your registered email or 10-digit mobile number, or contact your cohort manager.");
             if (btn) {

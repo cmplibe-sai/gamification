@@ -785,6 +785,12 @@ app.get('/api/tagmango/subscribers', async (req, res) => {
 app.get('/api/tagmango/points/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+        // Guard: TagMango only accepts valid 24-hex-char MongoDB ObjectIds.
+        // Synthetic IDs (e.g. "creator_xxx", "test_xxx") are not real subscriber IDs.
+        const isValidObjectId = /^[a-f\d]{24}$/i.test(userId || '');
+        if (!isValidObjectId) {
+            return res.json({ success: true, code: 200, result: { collectivePoints: 0, totalPoints: 0 } });
+        }
         const data = await fetchTagMangoServer(`/external/gamification/points/collective/${encodeURIComponent(userId)}`);
         res.json(data);
     } catch (err) {
@@ -886,6 +892,12 @@ app.get('/api/tagmango/ledger/:userId', async (req, res) => {
         const { userId } = req.params;
         if (!userId) {
             return res.status(400).json({ success: false, error: 'User ID is required', result: { data: [] } });
+        }
+        // Guard: TagMango only accepts valid 24-hex-char MongoDB ObjectIds.
+        // Synthetic IDs (e.g. "creator_xxx", "test_xxx", "partner_xxx") must be short-circuited.
+        const isValidObjectId = /^[a-f\d]{24}$/i.test(userId);
+        if (!isValidObjectId) {
+            return res.json({ success: true, code: 200, result: { total: 0, data: [] } });
         }
 
         // Cache for 60 seconds to avoid hitting TagMango rate limits during high polling
@@ -3284,6 +3296,46 @@ app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (r
         return res.json({ success: true, token });
     } catch(err) {
         console.error('Error issuing creator token:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Public role-lookup endpoint: identifies whether a loginId belongs to a recruiter or campus
+// coordinator WITHOUT ever exposing the full employer/campus/coordinator directory to the client.
+// (/api/config strips coordinator/employer emails for privacy, so the client can no longer match
+// logins against that data itself - this endpoint does the same lookup server-side and returns
+// only the minimal, non-sensitive info needed to render the next login step.)
+app.post(['/api/auth/resolve-role', '/gamification/api/auth/resolve-role'], (req, res) => {
+    try {
+        const { loginId } = req.body || {};
+        if (!loginId || typeof loginId !== 'string') {
+            return res.json({ success: true, found: false });
+        }
+        const cleanLogin = loginId.toLowerCase().trim();
+        const cleanPhone = cleanLogin.replace(/\D/g, '');
+
+        const emp = (store.employers || []).find(e =>
+            (e.email && e.email.toLowerCase() === cleanLogin) ||
+            (cleanPhone && e.phone && String(e.phone).replace(/\D/g, '').endsWith(cleanPhone))
+        );
+        if (emp) {
+            return res.json({ success: true, found: true, role: 'recruiter', companyName: emp.companyName || 'Hiring Partner', status: emp.status });
+        }
+
+        for (const c of (store.campuses || [])) {
+            if (Array.isArray(c.coordinators)) {
+                const found = c.coordinators.find(coord =>
+                    (coord.email && coord.email.toLowerCase() === cleanLogin) ||
+                    (cleanPhone && coord.phone && String(coord.phone).replace(/\D/g, '').endsWith(cleanPhone))
+                );
+                if (found) {
+                    return res.json({ success: true, found: true, role: 'partner', campusName: c.name || 'Partner College', campusId: c.id, partnerAllowedMangoes: Array.isArray(c.mangoIds) ? c.mangoIds : [], coordinatorName: found.name || 'Campus Partner' });
+                }
+            }
+        }
+
+        return res.json({ success: true, found: false });
+    } catch (err) {
         return res.status(500).json({ success: false, error: err.message });
     }
 });

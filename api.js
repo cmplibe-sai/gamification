@@ -26,6 +26,18 @@ window.ADMIN_EMAILS = [
             if (Array.isArray(data.adminEmails) && data.adminEmails.length > 0) {
                 window.ADMIN_EMAILS = data.adminEmails;
             }
+            if (Array.isArray(data.teamMembers)) {
+                window.APP_CONFIG.teamMembers = data.teamMembers;
+                window._cachedTeamMembers = data.teamMembers;
+            }
+            if (Array.isArray(data.campuses)) {
+                window.APP_CONFIG.campuses = data.campuses;
+                window._cachedCampuses = data.campuses;
+            }
+            if (Array.isArray(data.employers)) {
+                window.APP_CONFIG.employers = data.employers;
+                window._cachedEmployers = data.employers;
+            }
         }
     } catch (e) {
         // Standalone/static fallback
