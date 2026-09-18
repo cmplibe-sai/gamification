@@ -12318,9 +12318,9 @@ function renderMarkdownText(text) {
     }
     cleaned = cleaned.replace(/""/g, '"');
 
-    // If text already has full HTML tags, sanitize scripts and return
-    const hasHtmlTags = /<(?:p|b|strong|i|em|ul|ol|li|h[1-6]|div|br)\b/i.test(cleaned);
-    if (hasHtmlTags) {
+    // If text already has full HTML block tags (p, ul, ol, h1-h6), sanitize scripts and return
+    const hasHtmlBlockTags = /<(?:p|ul|ol|li|h[1-6]|div)\b/i.test(cleaned);
+    if (hasHtmlBlockTags) {
         return cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/\n/g, '<br/>');
     }
 
@@ -12336,17 +12336,29 @@ function renderMarkdownText(text) {
     function formatInline(str) {
         let s = escapeHtml(str);
 
+        // Safely re-enable allowed formatting tags (<b>, <i>, <strong>, <em>)
+        s = s.replace(/&lt;b&gt;/gi, '<b>')
+             .replace(/&lt;\/b&gt;/gi, '</b>')
+             .replace(/&lt;strong&gt;/gi, '<strong>')
+             .replace(/&lt;\/strong&gt;/gi, '</strong>')
+             .replace(/&lt;i&gt;/gi, '<i>')
+             .replace(/&lt;\/i&gt;/gi, '</i>')
+             .replace(/&lt;em&gt;/gi, '<em>')
+             .replace(/&lt;\/em&gt;/gi, '</em>');
+
         // Bold + Italic ("bold incline"): ***bold italic*** or ___bold italic___
-        s = s.replace(/\*\*\*([^\*\n]+?)\*\*\*/g, '<strong class="font-bold text-white" style="font-style: italic !important; display: inline;">$1</strong>');
-        s = s.replace(/___([^_\n]+?)___/g, '<strong class="font-bold text-white" style="font-style: italic !important; display: inline;">$1</strong>');
+        s = s.replace(/\*\*\*([^\*]+?)\*\*\*/g, '<strong class="font-bold text-white italic inline">$1</strong>');
+        s = s.replace(/___([^_]+?)___/g, '<strong class="font-bold text-white italic inline">$1</strong>');
 
-        // Bold formatting: **bold** or __bold__
-        s = s.replace(/\*\*([^\*\n]+?)\*\*/g, '<strong class="font-bold text-white" style="display: inline;">$1</strong>');
-        s = s.replace(/__([^_\n]+?)__/g, '<strong class="font-bold text-white" style="display: inline;">$1</strong>');
+        // Bold formatting: **bold** or __bold__ or <b>/<strong>
+        s = s.replace(/\*\*([^\*]+?)\*\*/g, '<strong class="font-bold text-white inline">$1</strong>');
+        s = s.replace(/__([^_]+?)__/g, '<strong class="font-bold text-white inline">$1</strong>');
+        s = s.replace(/<(?:b|strong)>([\s\S]+?)<\/(?:b|strong)>/gi, '<strong class="font-bold text-white inline">$1</strong>');
 
-        // Italic formatting ("incline"): *italic* or _italic_
-        s = s.replace(/(^|[^\*])\*([^\*\n]+?)\*([^\*]|$)/g, '$1<em class="text-slate-200" style="font-style: italic !important; display: inline;">$2</em>$3');
-        s = s.replace(/(^|[^_])_([^_\n]+?)_([^_]|$)/g, '$1<em class="text-slate-200" style="font-style: italic !important; display: inline;">$2</em>$3');
+        // Italic formatting ("incline"): *italic* or _italic_ or <i>/<em>
+        s = s.replace(/(^|[^\*])\*([^\*]+?)\*([^\*]|$)/g, '$1<em class="text-slate-200 italic inline">$2</em>$3');
+        s = s.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, '$1<em class="text-slate-200 italic inline">$2</em>$3');
+        s = s.replace(/<(?:i|em)>([\s\S]+?)<\/(?:i|em)>/gi, '<em class="text-slate-200 italic inline">$1</em>');
 
         return s;
     }
@@ -12457,23 +12469,37 @@ function renderInteractiveReadingScript(text) {
 }
 window.renderInteractiveReadingScript = renderInteractiveReadingScript;
 
-function updateTeleprompterWordHighlight(targetIndex) {
+function updateTeleprompterWordHighlight(targetIndex, spokenIndices) {
     if (typeof targetIndex !== 'number' || isNaN(targetIndex)) return;
     const total = window._totalTeleprompterWords || (window._teleprompterWords ? window._teleprompterWords.length : 0);
     if (total === 0) return;
 
     window._currentReadWordIndex = Math.max(0, Math.min(targetIndex, total - 1));
+    window._teleprompterWordStatus = window._teleprompterWordStatus || {};
 
-    // Turn read words RED, active word AMBER with ring, unread words in standard SLATE
+    if (Array.isArray(spokenIndices)) {
+        for (const idx of spokenIndices) {
+            window._teleprompterWordStatus[idx] = true;
+        }
+    } else if (typeof targetIndex === 'number') {
+        window._teleprompterWordStatus[targetIndex] = true;
+    }
+
+    // ZERO-LAYOUT-SHIFT RENDERING:
+    // Strictly ZERO horizontal padding (px-0), ZERO margin, and ZERO dynamic font-weight alteration.
+    // The exact letter spacing, word width, and line geometry remain 100% constant whether highlighted or not!
+    // Spoken words: text-rose-400 (or emerald) with subtle background tint.
+    // Current focus word: text-amber-300 with underline decoration.
+    // Skipped / Unread words: clean white/slate text-slate-200.
     for (let i = 0; i < total; i++) {
         const el = document.getElementById(`tele_w_${i}`);
         if (!el) continue;
-        if (i < window._currentReadWordIndex) {
-            el.className = 'tele-word font-semibold text-rose-400 bg-rose-950/40 rounded px-0.5 transition-colors duration-150 cursor-pointer';
-        } else if (i === window._currentReadWordIndex) {
-            el.className = 'tele-word font-extrabold text-amber-300 bg-amber-950/60 rounded px-1 underline decoration-amber-400 transition-colors duration-150 cursor-pointer ring-1 ring-amber-500/40';
+        if (i === window._currentReadWordIndex) {
+            el.className = 'tele-word text-amber-300 bg-amber-400/20 underline decoration-amber-400 decoration-2 underline-offset-2 transition-colors duration-100 cursor-pointer';
+        } else if (window._teleprompterWordStatus[i]) {
+            el.className = 'tele-word text-rose-400 bg-rose-500/15 rounded-sm transition-colors duration-100 cursor-pointer';
         } else {
-            el.className = 'tele-word text-slate-200 hover:text-white transition-colors duration-150 cursor-pointer';
+            el.className = 'tele-word text-slate-200 hover:text-white transition-colors duration-100 cursor-pointer';
         }
     }
 
@@ -12509,12 +12535,13 @@ window.jumpTeleprompterToWord = jumpTeleprompterToWord;
 
 // ==============================================================
 // TELEPROMPTER AUTO-SCROLL & READING CADENCE ENGINE
-// Ultra-slow speed calibrated for 2.5 to 3 minutes minimum reading
+// Calibrated for natural 2.5 to 3.5 minutes master reading speed
 // ==============================================================
 window._teleprompterInterval = null;
 window._teleprompterCadenceInterval = null;
 window._teleprompterSpeed = 1; // 0.75x, 1x, 1.25x, 1.5x
 window._teleprompterIsPlaying = false;
+window._hasSpeechRecActive = false;
 
 function startTeleprompterScroll() {
     const vp = document.getElementById('teleprompter_viewport');
@@ -12530,7 +12557,7 @@ function startTeleprompterScroll() {
     window._teleprompterIsPlaying = true;
     updateTeleprompterControlsUI(true);
 
-    // 1. Ultra-slow viewport smooth crawl (0.20px per 30ms step ≈ 6.6px/s -> 2.5-3 minutes)
+    // 1. Ultra-slow viewport smooth crawl (0.25px per 30ms step ≈ 8px/s -> ~3 minutes for full story)
     const stepMs = 30;
     window._teleprompterInterval = setInterval(() => {
         const vpEl = document.getElementById('teleprompter_viewport');
@@ -12543,20 +12570,20 @@ function startTeleprompterScroll() {
             stopTeleprompterScroll();
             return;
         }
-        const scrollDelta = 0.20 * (window._teleprompterSpeed || 1);
+        const scrollDelta = 0.25 * (window._teleprompterSpeed || 1);
         vpEl.scrollTop += scrollDelta;
     }, stepMs);
 
-    // 2. Ultra-slow word-by-word reading progression timer (~750ms per word = ~2.75 minutes for 220 words)
-    // Coordinated with Speech Recognition: does not fight the student while they are speaking!
+    // 2. Word-by-word reading progression timer (~450ms per word ≈ 130 WPM -> ~2.7 mins for 360 words)
+    // When live Speech Recognition is active, the speaker's voice directly drives highlighting!
+    // The timer does NOT race ahead blindly if the speaker pauses or steps away.
     const totalWords = window._totalTeleprompterWords || (window._teleprompterWords ? window._teleprompterWords.length : 0);
-    const msPerWord = Math.round(750 / (window._teleprompterSpeed || 1));
+    const msPerWord = Math.round(450 / (window._teleprompterSpeed || 1));
     window._teleprompterCadenceInterval = setInterval(() => {
         if (!window._teleprompterIsPlaying) return;
 
-        // If Speech Recognition is actively transcribing words in the last 4500ms, let speech drive it!
-        const hasActiveSpeech = window._lastSpeechMatchTime && (Date.now() - window._lastSpeechMatchTime < 4500);
-        if (hasActiveSpeech) {
+        // If Speech Recognition is active and tracking the user's voice, do not auto-advance!
+        if (window._hasSpeechRecActive) {
             return;
         }
 
@@ -12838,7 +12865,9 @@ function audioBufferToWavBlob(buffer) {
 
 async function concatAudioBlobs(blobList) {
     if (!blobList || blobList.length === 0) return null;
-    if (blobList.length === 1 && blobList[0].type === 'audio/wav') return blobList[0];
+    // Single recording: Return the original compressed WebM/Opus or MP4 blob directly!
+    // Never blow up a single recording into an uncompressed 40MB raw WAV file.
+    if (blobList.length === 1) return blobList[0];
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) {
@@ -12863,26 +12892,30 @@ async function concatAudioBlobs(blobList) {
     }
 
     if (audioBuffers.length === 0) return blobList[0];
-    if (audioBuffers.length === 1) return audioBufferToWavBlob(audioBuffers[0]);
+    if (audioBuffers.length === 1) return blobList[0];
 
-    const totalLength = audioBuffers.reduce((sum, b) => sum + b.length, 0);
-    const numChannels = Math.max(...audioBuffers.map(b => b.numberOfChannels));
-    const sampleRate = audioBuffers[0].sampleRate;
+    // For multi-segment stitching: Downsample to 16kHz mono (speech standard).
+    // 16kHz 16-bit mono is only ~32KB/sec (< 4MB for 2 minutes), perfectly optimized for AssemblyAI/Whisper.
+    const targetSampleRate = 16000;
+    const totalDuration = audioBuffers.reduce((sum, b) => sum + b.duration, 0);
+    const totalSamples = Math.ceil(totalDuration * targetSampleRate);
 
-    const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(numChannels, totalLength, sampleRate);
-    const mergedBuffer = offlineCtx.createBuffer(numChannels, totalLength, sampleRate);
-
-    for (let channel = 0; channel < numChannels; channel++) {
-        const channelData = mergedBuffer.getChannelData(channel);
-        let currentOffset = 0;
+    const OfflineCtxClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (OfflineCtxClass) {
+        const offlineCtx = new OfflineCtxClass(1, totalSamples, targetSampleRate);
+        let offsetTime = 0;
         for (const buf of audioBuffers) {
-            const srcChannelData = buf.getChannelData(channel % buf.numberOfChannels);
-            channelData.set(srcChannelData, currentOffset);
-            currentOffset += buf.length;
+            const src = offlineCtx.createBufferSource();
+            src.buffer = buf;
+            src.connect(offlineCtx.destination);
+            src.start(offsetTime);
+            offsetTime += buf.duration;
         }
+        const renderedBuffer = await offlineCtx.startRendering();
+        return audioBufferToWavBlob(renderedBuffer);
     }
 
-    return audioBufferToWavBlob(mergedBuffer);
+    return blobList[0];
 }
 
 // ==============================================================
@@ -12891,6 +12924,7 @@ async function concatAudioBlobs(blobList) {
 // ==============================================================
 window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
 window._recordingAutosaveTimer = null;
+window._isAudioRecording = false;
 
 async function startAudioRecording(idx, isResume = false) {
     try {
@@ -12907,6 +12941,7 @@ async function startAudioRecording(idx, isResume = false) {
         if (!isResume) {
             window._accumulatedAudioBlobs[idx] = [];
             window._currentReadWordIndex = 0;
+            window._teleprompterWordStatus = {};
             updateTeleprompterWordHighlight(0);
         }
 
@@ -12942,9 +12977,26 @@ async function startAudioRecording(idx, isResume = false) {
             console.warn('[AudioContext Gain] Web Audio boost fallback:', audioCtxErr);
         }
 
-        _audioRecorder = new MediaRecorder(recStream);
+        // Configure MediaRecorder with lightweight 64kbps Opus compression (~1.5 MB for 3.5 minutes)
+        let preferredMime = 'audio/webm;codecs=opus';
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                preferredMime = 'audio/webm;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                preferredMime = 'audio/webm';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                preferredMime = 'audio/mp4';
+            } else {
+                preferredMime = '';
+            }
+        }
+        const recOptions = { audioBitsPerSecond: 64000 };
+        if (preferredMime) recOptions.mimeType = preferredMime;
+        _audioRecorder = new MediaRecorder(recStream, recOptions);
 
-        // Speech recognition: compares spoken words with teleprompter words to advance red highlighting
+        window._isAudioRecording = true;
+
+        // Continuous Speech Recognition with auto-restart in Chrome & pronunciation matching
         window._liveTranscripts = window._liveTranscripts || {};
         window._speechRec = window._speechRec || {};
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -12954,26 +13006,45 @@ async function startAudioRecording(idx, isResume = false) {
                 rec.continuous = true;
                 rec.interimResults = true;
                 rec.lang = 'en-US';
+
+                rec.onstart = () => {
+                    window._hasSpeechRecActive = true;
+                };
+
                 rec.onresult = (event) => {
-                    let trans = '';
-                    for (let i = 0; i < event.results.length; i++) {
-                        trans += event.results[i][0].transcript + ' ';
+                    window._hasSpeechRecActive = true;
+                    let latestSpeech = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        latestSpeech += event.results[i][0].transcript + ' ';
                     }
-                    const cleanSpeech = trans.trim();
+                    const cleanSpeech = latestSpeech.trim();
+                    if (!cleanSpeech) return;
+
                     window._liveTranscripts[idx] = (window._liveTranscripts[idx] ? window._liveTranscripts[idx] + ' ' : '') + cleanSpeech;
                     const hiddenTrans = document.getElementById(`checkin_transcript_${idx}`);
                     if (hiddenTrans) hiddenTrans.value = window._liveTranscripts[idx];
 
-                    // Match spoken tokens against teleprompter words
+                    // Multi-token matching: Compares what the customer spoken against teleprompter words
                     if (window._teleprompterWords && window._teleprompterWords.length > 0) {
-                        const wordsSpoken = cleanSpeech.toLowerCase().split(/\s+/);
-                        const lastToken = wordsSpoken[wordsSpoken.length - 1]?.replace(/[^\w]/g, '');
-                        if (lastToken && lastToken.length >= 3) {
-                            const cur = window._currentReadWordIndex || 0;
-                            const lookahead = Math.min(cur + 12, window._teleprompterWords.length);
+                        const wordsSpoken = cleanSpeech.toLowerCase().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(Boolean);
+                        const cur = window._currentReadWordIndex || 0;
+                        const lookahead = Math.min(cur + 25, window._teleprompterWords.length);
+
+                        for (const spoken of wordsSpoken) {
+                            if (spoken.length < 2) continue;
                             for (let w = cur; w < lookahead; w++) {
-                                if (window._teleprompterWords[w]?.clean === lastToken || window._teleprompterWords[w]?.clean.startsWith(lastToken)) {
+                                const target = window._teleprompterWords[w]?.clean || '';
+                                if (!target) continue;
+
+                                const isMatch = (target === spoken) ||
+                                    (target.length >= 4 && (target.startsWith(spoken) || spoken.startsWith(target))) ||
+                                    (target.length >= 5 && spoken.length >= 5 && (target.slice(0, 4) === spoken.slice(0, 4)));
+
+                                if (isMatch) {
                                     window._lastSpeechMatchTime = Date.now();
+                                    // Mark this word as correctly pronounced / read
+                                    window._teleprompterWordStatus = window._teleprompterWordStatus || {};
+                                    window._teleprompterWordStatus[w] = true;
                                     updateTeleprompterWordHighlight(w);
                                     break;
                                 }
@@ -12981,6 +13052,24 @@ async function startAudioRecording(idx, isResume = false) {
                         }
                     }
                 };
+
+                rec.onerror = (e) => {
+                    console.warn('[SpeechRec Info]:', e.error);
+                };
+
+                // Continuous Speech Recognition Auto-Restart in Chrome
+                rec.onend = () => {
+                    if (window._isAudioRecording && _audioRecorder && _audioRecorder.state === 'recording') {
+                        try {
+                            rec.start();
+                        } catch(err) {
+                            console.log('[SpeechRec Restart]:', err.message);
+                        }
+                    } else {
+                        window._hasSpeechRecActive = false;
+                    }
+                };
+
                 rec.start();
                 window._speechRec[idx] = rec;
             } catch(speechErr) {
@@ -13004,17 +13093,18 @@ async function startAudioRecording(idx, isResume = false) {
                 try { window._speechRec[idx].stop(); } catch(e) {}
             }
 
+            const segMime = _audioRecorder.mimeType || 'audio/webm';
             if (_audioChunks && _audioChunks.length > 0) {
-                const segBlob = new Blob(_audioChunks, { type: 'audio/webm' });
+                const segBlob = new Blob(_audioChunks, { type: segMime });
                 window._accumulatedAudioBlobs[idx] = window._accumulatedAudioBlobs[idx] || [];
                 window._accumulatedAudioBlobs[idx].push(segBlob);
             }
 
             const allBlobs = (window._accumulatedAudioBlobs[idx] && window._accumulatedAudioBlobs[idx].length > 0)
                 ? window._accumulatedAudioBlobs[idx]
-                : [new Blob(_audioChunks, { type: 'audio/webm' })];
+                : [new Blob(_audioChunks, { type: segMime })];
 
-            // Stitch audio blobs via Web Audio PCM buffer concatenation to prevent WebM container corruption
+            // Stitch audio blobs without exploding into uncompressed WAV
             const combinedBlob = await concatAudioBlobs(allBlobs);
             if (combinedBlob) {
                 window._accumulatedAudioBlobs[idx] = [combinedBlob];
@@ -13034,10 +13124,13 @@ async function startAudioRecording(idx, isResume = false) {
             const hiddenData = document.getElementById(`checkin_audio_data_${idx}`);
             if (hiddenData) hiddenData.value = blobUrl;
 
+            // Compressed audio download with correct file extension (.webm / .mp4 / .wav)
+            const ext = (combinedBlob.type && combinedBlob.type.includes('webm')) ? 'webm'
+                      : ((combinedBlob.type && combinedBlob.type.includes('mp4')) ? 'mp4' : 'wav');
             const downloadLink = document.getElementById(`audio_download_${idx}`);
             if (downloadLink) {
                 downloadLink.href = blobUrl;
-                downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.wav`;
+                downloadLink.download = `voice_reflection_${window._activeCheckinMod || 'dip'}_day${window._activeCheckinDay || 1}.${ext}`;
                 downloadLink.classList.remove('hidden');
                 downloadLink.classList.add('inline-flex');
             }
@@ -13137,7 +13230,7 @@ async function startAudioRecording(idx, isResume = false) {
 
         const recStatus = document.getElementById(`audio_rec_status_${idx}`);
         if (recStatus) {
-            recStatus.innerHTML = '<span class="text-rose-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note (Target 2.5-3 mins)... Read story above. Words turn RED as read.</span>';
+            recStatus.innerHTML = '<span class="text-rose-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note (Target 2.5-3.5 mins)... Read story above. Words turn RED as read.</span>';
         }
     } catch(err) {
         console.error('Microphone error:', err);
@@ -13156,6 +13249,9 @@ function resetAudioRecording(idx) {
         clearInterval(window._recordingAutosaveTimer);
         window._recordingAutosaveTimer = null;
     }
+    window._isAudioRecording = false;
+    window._hasSpeechRecActive = false;
+    window._teleprompterWordStatus = {};
     window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
     window._accumulatedAudioBlobs[idx] = [];
     _audioChunks = [];
@@ -13189,6 +13285,11 @@ function resetAudioRecording(idx) {
 window.resetAudioRecording = resetAudioRecording;
 
 function stopAudioRecording(idx) {
+    window._isAudioRecording = false;
+    window._hasSpeechRecActive = false;
+    if (window._speechRec && window._speechRec[idx]) {
+        try { window._speechRec[idx].stop(); } catch(e) {}
+    }
     if (window._recordingAutosaveTimer) {
         clearInterval(window._recordingAutosaveTimer);
         window._recordingAutosaveTimer = null;

@@ -1375,6 +1375,20 @@ async function syncGoogleSheetData(sheetIdInput) {
             return { success: true, count: 0, message: 'No data rows found in Google Sheet' };
         }
 
+        // Enrich rows with rich text (bold & italics) directly from Google Sheet XLSX export
+        let richTextMap = {};
+        try {
+            const { execSync } = require('child_process');
+            const pyScript = path.join(__dirname, 'scripts', 'extract_sheet_rich_text.py');
+            if (fs.existsSync(pyScript)) {
+                const pyOut = execSync(`python "${pyScript}" "${sheetId}"`, { timeout: 15000 }).toString().trim();
+                richTextMap = JSON.parse(pyOut);
+                console.log(`[GoogleSheetSync] Rich text bold/italics loaded for ${Object.keys(richTextMap).length} stories`);
+            }
+        } catch(richErr) {
+            console.warn('[GoogleSheetSync] Rich text extraction notice (falling back to CSV):', richErr.message);
+        }
+
         const headers = rows[0].map(h => String(h || '').toLowerCase().trim());
         const cleanHeader = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -1418,12 +1432,12 @@ async function syncGoogleSheetData(sheetIdInput) {
         const lcLateIdx = getIdx(['late', 'lc late', 'lcs late']);
         const startIdx = getIdx(['start time', 'window start', 'opens at', 'open time', 'start', 'from time']);
         const endIdx = getIdx(['end time', 'window end', 'closes at', 'close time', 'to time', 'end', 'deadline']);
-        const timeWinIdx = getIdx(['time duration', 'time window', 'timing', 'duration', 'submission window', 'open hours', 'time slot', 'interval', 'window']);
-        const dayIdx = getIdx(['day number', 'session day', 'day', 'session']);
-        const audioUrlIdx = getIdx(['audio url', 'audio link', 'podcast url', 'audio']);
-        const quizQIdx = getIdx(['quiz question', 'q1 question', 'mcq', 'quiz', 'question 1', 'q1', 'prompt']);
-        const quizOptIdx = getIdx(['quiz options', 'q1 options', 'options', 'choices', 'answers']);
-        const quizAnsIdx = getIdx(['quiz answer', 'correct answer', 'q1 answer', 'q1 correct', 'answer', 'correct']);
+        const dayIdx = getIdx(['day', 'day number', 'day #', 'session day', 'class']);
+        const audioUrlIdx = getIdx(['audio url', 'audio link', 'audio', 'podcast url', 'podcast link', 'recording url', 'mp3 url', 'audio/video url']);
+        const quizQIdx = getIdx(['pod quiz question', 'quiz question', 'pod question', 'quiz prompt']);
+        const quizOptIdx = getIdx(['pod quiz options', 'quiz options', 'options', 'choices']);
+        const quizAnsIdx = getIdx(['pod quiz answer', 'quiz answer', 'correct answer', 'answer', 'correct option']);
+        const timeWinIdx = getIdx(['time-duration', 'timeduration', 'time duration', 'duration', 'time window', 'window']);
 
         // Helper: Check if existing config is completely identical to incoming config (Smart Diff)
         const isConfigEqual = (existing, proposed) => {
@@ -1471,7 +1485,9 @@ async function syncGoogleSheetData(sheetIdInput) {
             const title = rawTitle || existing.title || existing.audioTitle || `cMPLi ${module.toUpperCase()} Insights`;
 
             const rawDesc = descIdx !== -1 ? String(row[descIdx] || '').trim() : '';
-            const articleText = rawDesc || existing.articleText || existing.description || '';
+            const cleanTitleKey = (rawTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const richDesc = richTextMap[cleanTitleKey] || '';
+            const articleText = richDesc || rawDesc || existing.articleText || existing.description || '';
             const description = articleText;
 
             const rawMainQ = mainQIdx !== -1 ? String(row[mainQIdx] || '').trim() : '';
@@ -3947,13 +3963,14 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         const transcriptionPromises = subAnswers.map(async (a, idx) => {
             const audioUrl = a.audioUrl || (a.type === 'audio' ? (a.value || '') : '');
             if (!audioUrl || (!audioUrl.startsWith('/') && !audioUrl.includes('/uploads/') && !audioUrl.startsWith('http'))) return;
-            if (a.transcription && a.transcription.trim().length > 20) return; // Already transcribed
 
             console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
             const transcript = await transcribeAudioWithAssemblyAI(audioUrl);
             if (transcript && transcript.trim().length > 0) {
                 a.transcription = transcript.trim();
-                console.log(`[AssemblyAI] Q${idx+1} transcript: "${transcript.slice(0, 100)}..."`);
+                console.log(`[AssemblyAI] Q${idx+1} transcript (${transcript.split(/\s+/).length} words): "${transcript.slice(0, 100)}..."`);
+            } else if (a.transcription && a.transcription.trim().length > 0) {
+                console.log(`[AssemblyAI] Preserving existing client transcript for Q${idx+1}: "${a.transcription.slice(0, 60)}..."`);
             }
         });
         // Wait for all transcriptions to complete before rubric comparison
