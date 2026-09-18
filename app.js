@@ -16795,6 +16795,33 @@ async function requestOTP() {
         window._pendingAuth = auth;
         tempLoginId = rawInput.toLowerCase().trim();
 
+        // If user is a Corporate Recruiter, show the Empanelment Access Key input
+        const recruiterKeyContainer = document.getElementById('recruiterKeyContainer');
+        const step2Banner = document.getElementById('step2Banner');
+        const otpInputContainer = document.getElementById('otpInputContainer');
+
+        if (auth.role === 'recruiter') {
+            if (recruiterKeyContainer) recruiterKeyContainer.classList.remove('hidden');
+            if (step2Banner) {
+                step2Banner.innerHTML = `<i class="fas fa-building text-amber-400 mr-1.5"></i> Corporate Talent Portal for <strong>${auth.user.companyName || 'Hiring Partner'}</strong>.<br><span class="text-[11px] text-slate-400">Please provide your organization's secret empanelment key to proceed.</span>`;
+            }
+            const keyInp = document.getElementById('recruiterAccessKeyInput');
+            if (keyInp) {
+                keyInp.value = '';
+                setTimeout(() => keyInp.focus(), 150);
+            }
+        } else {
+            if (recruiterKeyContainer) recruiterKeyContainer.classList.add('hidden');
+            if (step2Banner) {
+                step2Banner.innerHTML = `<i class="fas fa-shield-alt mr-1.5"></i> One-Time Password sent.`;
+            }
+            const otpInp = document.getElementById('otpCode');
+            if (otpInp) {
+                otpInp.value = '';
+                setTimeout(() => otpInp.focus(), 150);
+            }
+        }
+
         document.getElementById('step1')?.classList.add('hidden');
         document.getElementById('step2')?.classList.remove('hidden');
     } catch (err) {
@@ -16811,21 +16838,33 @@ window.requestOTP = requestOTP;
 
 async function verifyOTP() {
     const otpInput = (document.getElementById('otpCode')?.value || '').trim();
+    const recruiterKeyInput = (document.getElementById('recruiterAccessKeyInput')?.value || '').trim();
     const btn = document.querySelector('#step2 button');
-
-    if (otpInput !== "1234") {
-        alert("Invalid OTP. Only universal OTP 1234 is allowed.");
-        if (btn) {
-            btn.innerText = "Verify & Access";
-            btn.disabled = false;
-        }
-        return;
-    }
 
     if (!window._pendingAuth) {
         alert("Session expired. Please request OTP again.");
         logout();
         return;
+    }
+
+    const role = window._pendingAuth.role;
+    const authUser = window._pendingAuth.user;
+
+    // Strict Recruiter Key Verification: Corporate recruiters MUST enter their secret empanelment key
+    if (role === 'recruiter') {
+        if (!recruiterKeyInput) {
+            alert("❌ Corporate Empanelment Access Key is required for Recruiter Portal access.\n\nPlease enter the secret key provided to your organization.");
+            return;
+        }
+    } else {
+        if (otpInput !== "1234") {
+            alert("Invalid OTP. Only universal OTP 1234 is allowed.");
+            if (btn) {
+                btn.innerText = "Verify & Access";
+                btn.disabled = false;
+            }
+            return;
+        }
     }
 
     if (btn) {
@@ -16839,13 +16878,8 @@ async function verifyOTP() {
         const learnerNav = document.getElementById('learnerNav');
         const adminNav = document.getElementById('adminNav');
 
-        if (loginScreen) loginScreen.style.display = 'none';
-        if (mainApp) mainApp.classList.remove('hidden');
-
-        const role = window._pendingAuth.role;
-        const authUser = window._pendingAuth.user;
-
         // Obtain cryptographic session token from server
+        let sessionTokenAcquired = false;
         try {
             const loginIdent = tempLoginId || authUser.email || (authUser.phone ? String(authUser.phone) : (authUser._id || authUser.id));
             const sessRes = await fetch('/api/auth/session', {
@@ -16854,18 +16888,37 @@ async function verifyOTP() {
                 body: JSON.stringify({
                     role: role,
                     loginId: loginIdent,
-                    otp: otpInput,
-                    employerKey: authUser.accessKey || ''
+                    otp: otpInput || '1234',
+                    employerKey: recruiterKeyInput || authUser.accessKey || ''
                 })
             });
             const sessData = await sessRes.json();
             if (sessData && sessData.success && sessData.token) {
                 localStorage.setItem('cmpli_session_token', sessData.token);
                 sessionStorage.setItem('cmpli_session_token', sessData.token);
+                sessionTokenAcquired = true;
+            } else if (role === 'recruiter') {
+                alert(`❌ Recruiter Access Refused: ${sessData.error || 'Invalid corporate empanelment key.'}`);
+                if (btn) {
+                    btn.innerText = "Verify & Enter Arena";
+                    btn.disabled = false;
+                }
+                return;
             }
         } catch (sessErr) {
             console.warn('Session issuance notice:', sessErr.message);
+            if (role === 'recruiter') {
+                alert("❌ Authentication service unavailable. Please check your network connection.");
+                if (btn) {
+                    btn.innerText = "Verify & Enter Arena";
+                    btn.disabled = false;
+                }
+                return;
+            }
         }
+
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (mainApp) mainApp.classList.remove('hidden');
 
         if (role === 'creator') {
             isAdminLogin = true;

@@ -77,8 +77,44 @@ async function runTests() {
     });
     assert('Mere possession of employerId rejected without session token (401)', spoofAttempt.status === 401);
 
-    // Legitimate Recruiter Login via POST /api/auth/session
-    console.log('\n3. Test Recruiter Session Authentication:');
+    // Legitimate Recruiter Login via POST /api/auth/session with Strict Key Requirement
+    console.log('\n3. Test Recruiter Strict Key Authentication:');
+    
+    // Recruiter attempt with bare OTP '1234' and NO employerKey -> MUST FAIL WITH 403!
+    const bareOtpRecruiter = await request({
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/auth/session',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }, {
+        role: 'recruiter',
+        loginId: 'talent@blive.co.in',
+        otp: '1234' // No employerKey!
+    });
+    assert('Recruiter login with bare OTP 1234 rejected without access key (403 Forbidden)', bareOtpRecruiter.status === 403);
+
+    // Recruiter attempt with invalid employerKey -> MUST FAIL WITH 403!
+    const wrongKeyRecruiter = await request({
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/auth/session',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }, {
+        role: 'recruiter',
+        loginId: 'talent@blive.co.in',
+        employerKey: 'wrong_unauthorized_key'
+    });
+    assert('Recruiter login with incorrect key rejected (403 Forbidden)', wrongKeyRecruiter.status === 403);
+
+    // Retrieve active employer key for testing
+    const fs = require('fs');
+    const storeData = JSON.parse(fs.readFileSync('./server_data/gamification_store.json', 'utf8'));
+    const bliveEmp = storeData.employers.find(e => e.id === 'emp_blive_01');
+    const validBliveKey = bliveEmp.accessKey;
+
+    // Legitimate recruiter login with valid employerKey
     const recAuth = await request({
         hostname: 'localhost',
         port: PORT,
@@ -88,9 +124,9 @@ async function runTests() {
     }, {
         role: 'recruiter',
         loginId: 'talent@blive.co.in',
-        otp: '1234'
+        employerKey: validBliveKey
     });
-    assert('Recruiter login succeeds with cryptographic token', recAuth.status === 200 && recAuth.body.token && recAuth.body.token.startsWith('cmpli_sess_rec_'));
+    assert('Recruiter login succeeds with valid organization accessKey', recAuth.status === 200 && recAuth.body.token && recAuth.body.token.startsWith('cmpli_sess_rec_'));
     const recToken = recAuth.body.token;
 
     // Authorized Candidate Query with Recruiter Session
@@ -263,6 +299,17 @@ async function runTests() {
         otp: '1234'
     });
     assert('Creator session token issued', crtAuth.status === 200 && crtAuth.body.token);
+    const crtToken = crtAuth.body.token;
+
+    // Use creator session token to access creator-gated endpoint
+    const creatorAccess = await request({
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/management/employers',
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${crtToken}` }
+    });
+    assert('Creator session token grants authorized access to /api/management/employers (200 OK)', creatorAccess.status === 200 && creatorAccess.body.success && Array.isArray(creatorAccess.body.employers));
 
     console.log(`\n=== SUMMARY: ${passedCount}/${totalCount} ASSERTIONS PASSED ===`);
     if (passedCount === totalCount) {

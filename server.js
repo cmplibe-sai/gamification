@@ -422,7 +422,7 @@ if (store.employers.length === 0) {
             phone: '9880011223',
             industry: 'CleanTech & EV Logistics',
             designation: 'Talent Acquisition Lead',
-            accessKey: 'emp_key_blive_live_9981',
+            accessKey: 'emp_key_' + crypto.randomBytes(16).toString('hex'),
             status: 'active',
             createdAt: new Date().toISOString()
         },
@@ -434,7 +434,7 @@ if (store.employers.length === 0) {
             phone: '9880011224',
             industry: 'Industrial IoT & HVAC',
             designation: 'Campus Hiring Manager',
-            accessKey: 'emp_key_carrier_live_8872',
+            accessKey: 'emp_key_' + crypto.randomBytes(16).toString('hex'),
             status: 'active',
             createdAt: new Date().toISOString()
         },
@@ -446,7 +446,7 @@ if (store.employers.length === 0) {
             phone: '9880011225',
             industry: 'Quick Commerce & Operations',
             designation: 'People Operations Lead',
-            accessKey: 'emp_key_snabbit_live_7763',
+            accessKey: 'emp_key_' + crypto.randomBytes(16).toString('hex'),
             status: 'active',
             createdAt: new Date().toISOString()
         }
@@ -456,10 +456,7 @@ if (store.employers.length === 0) {
     let updatedKeys = false;
     store.employers.forEach(e => {
         if (!e.accessKey) {
-            e.accessKey = e.id === 'emp_blive_01' ? 'emp_key_blive_live_9981' :
-                          (e.id === 'emp_carrier_02' ? 'emp_key_carrier_live_8872' :
-                          (e.id === 'emp_snabbit_03' ? 'emp_key_snabbit_live_7763' :
-                          ('emp_key_' + crypto.randomBytes(16).toString('hex'))));
+            e.accessKey = 'emp_key_' + crypto.randomBytes(16).toString('hex');
             updatedKeys = true;
         }
     });
@@ -3329,10 +3326,13 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             if (emp.status === 'inactive') {
                 return res.status(403).json({ success: false, error: 'Corporate partner account is inactive' });
             }
+            // Strict Recruiter Key Requirement: Corporate recruiters must provide their organization's secret access key
             const isKeyMatch = employerKey && emp.accessKey && emp.accessKey === String(employerKey).trim();
-            const isOtpMatch = otp === '1234';
-            if (!isKeyMatch && !isOtpMatch) {
-                return res.status(403).json({ success: false, error: 'Invalid recruiter authentication credentials' });
+            if (!isKeyMatch) {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Unauthorized: Valid corporate empanelment access key (employerKey) is strictly required for recruiter talent arena login.' 
+                });
             }
             const token = `cmpli_sess_rec_${crypto.randomBytes(24).toString('hex')}`;
             validUserSessions.set(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
@@ -4829,9 +4829,11 @@ app.get(['/api/config/geo', '/gamification/api/config/geo'], (req, res) => {
     });
 });
 
-// Helper to check creator authorization (Bearer token or direct secret)
+// Helper to check creator authorization (Bearer token, valid creator session, or direct secret)
 function checkCreatorAuth(req) {
     if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
+    const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
+    if (sess && sess.role === 'creator') return true;
     const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret;
     const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
     if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;

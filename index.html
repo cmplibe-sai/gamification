@@ -42,10 +42,20 @@
             </div>
             
             <div id="step2" class="hidden">
-                <div class="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl mb-4 text-xs text-indigo-300 font-medium">
+                <div id="step2Banner" class="p-3 bg-indigo-950/40 border border-indigo-500/30 rounded-xl mb-4 text-xs text-indigo-300 font-medium">
                     <i class="fas fa-shield-alt mr-1.5"></i> One-Time Password sent.
                 </div>
-                <input type="text" id="otpCode" onkeypress="if(event.key === 'Enter') verifyOTP()" placeholder="Enter OTP (Hint: 1234)" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 tracking-widest text-center text-lg font-bold">
+                <!-- Recruiter Access Key field (automatically shown when a corporate recruiter email is entered) -->
+                <div id="recruiterKeyContainer" class="hidden mb-4 text-left">
+                    <label class="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 mb-1.5">
+                        <i class="fas fa-key text-xs"></i> Corporate Empanelment Access Key
+                    </label>
+                    <input type="password" id="recruiterAccessKeyInput" placeholder="Enter organization secret access key" class="w-full bg-slate-900/90 border border-amber-500/40 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 placeholder:text-slate-500">
+                    <p class="text-[10px] text-slate-400 mt-1">Provided by SimplyBe upon organization empanelment.</p>
+                </div>
+                <div id="otpInputContainer">
+                    <input type="text" id="otpCode" onkeypress="if(event.key === 'Enter') verifyOTP()" placeholder="Enter OTP (Hint: 1234)" class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3 mb-4 text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 tracking-widest text-center text-lg font-bold">
+                </div>
                 <button onclick="verifyOTP()" class="btn-primary w-full py-3.5 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 border-emerald-500/30 shadow-emerald-600/30">
                     <i class="fas fa-check-circle mr-1"></i> Verify & Enter Arena
                 </button>
