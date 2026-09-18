@@ -68,7 +68,7 @@ try {
         console.log('[Seed Asset] Copied snabbit_podcast_ep1.wav to uploads directory');
     }
 
-    ['pod_m1_2026_09_10.mp3', 'pod_m1_2026_09_11.mp3'].forEach(f => {
+    ['pod_m1_2026_09_10.mp3', 'pod_m1_2026_09_11.mp3', 'pod_m1_2026_09_18.mp3'].forEach(f => {
         const trk = path.join(trackedDataDir, 'uploads', f);
         const tgt = path.join(UPLOADS_DIR, f);
         if (fs.existsSync(trk) && !fs.existsSync(tgt)) {
@@ -103,6 +103,13 @@ try {
     if (fs.existsSync(trackedCarrierQuiz) && !fs.existsSync(targetCarrierQuiz)) {
         fs.copyFileSync(trackedCarrierQuiz, targetCarrierQuiz);
         console.log('[Seed Asset] Copied pod_quiz_pool_carrier.json to server_data directory');
+    }
+
+    const trackedMilestoneConfigs = path.join(trackedDataDir, 'milestone_configs.json');
+    const targetMilestoneConfigs = path.join(DATA_DIR, 'milestone_configs.json');
+    if (fs.existsSync(trackedMilestoneConfigs) && !fs.existsSync(targetMilestoneConfigs)) {
+        fs.copyFileSync(trackedMilestoneConfigs, targetMilestoneConfigs);
+        console.log('[Seed Asset] Copied milestone_configs.json to server_data directory');
     }
 
     const trackedModulePrereqs = path.join(trackedDataDir, 'module_prereqs.json');
@@ -1147,11 +1154,6 @@ function deriveDayNumber(module, dateKey, explicitDay) {
 // Synthesizes a structured 50-question bank from story article text
 // Categorized across 5 critical dimensions with varied distractors
 // -------------------------------------------------------------
-// -------------------------------------------------------------
-// SimpliPod Dynamic 50-Question Pool Generator
-// Synthesizes a structured 50-question bank from story article text
-// Categorized across 5 critical dimensions with varied distractors
-// -------------------------------------------------------------
 function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     if (!title && !articleText) return [];
 
@@ -1201,11 +1203,9 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
 
     function cleanOptionText(text) {
         let clean = text.replace(/\s+/g, ' ').replace(/[;,\.]+$/, '').trim();
-        // Keep options punchy without ugly ellipses
-        if (clean.length > 60) {
-            const words = clean.split(' ').slice(0, 7).join(' ');
-            clean = words.replace(/[,;]+$/, '');
-        }
+        // Keep options punchy (strictly capped at 5 words without ellipses)
+        const words = clean.split(' ').slice(0, 5).join(' ');
+        clean = words.replace(/[,;]+$/, '');
         return clean;
     }
 

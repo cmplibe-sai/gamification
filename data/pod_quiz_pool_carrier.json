@@ -1,385 +1,91 @@
 [
   {
-    "id": "q_carrier_1",
+    "id": "q_carrier_0907_1",
     "title": "What is Carrier Global's targeted annual revenue from India by the decade's end?",
     "options": [
-      "$500 Million",
       "$1 Billion",
+      "$500 Million",
       "$10 Billion",
       "$100 Million"
     ],
-    "correctOption": 1,
-    "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-    "category": "Revenue Target",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_2",
-    "title": "Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
-    "options": [
-      "Data Centres",
-      "Automobile Manufacturing",
-      "Food Processing",
-      "Consumer Electronics"
-    ],
     "correctOption": 0,
-    "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-    "category": "Market Drivers",
+    "explanation": "Based on the story, Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
+    "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_carrier_3",
+    "id": "q_carrier_0907_2",
+    "title": "Which infrastructure surge is driving massive demand for Carrier's industrial cooling systems?",
+    "options": [
+      "Automobile manufacturing",
+      "Data centre expansion",
+      "Food processing",
+      "Consumer electronics"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, the rapid buildout of energy-dense data centres drives high-capacity cooling demand.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_3",
     "title": "What does HVAC stand for in the context of Carrier Global's expertise?",
     "options": [
       "Heavy Vehicles and Cargo",
       "High Voltage and Current",
-      "Housing, Valuation and Commerce",
-      "Heating, Ventilation & Air-Conditioning"
-    ],
-    "correctOption": 3,
-    "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-    "category": "Industry Terminology",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_4",
-    "title": "How much is Carrier investing in its new manufacturing facility in India?",
-    "options": [
-      "$10 million",
-      "$50 million",
-      "$100 million",
-      "$1 billion"
+      "Heating Ventilation Air-Conditioning",
+      "Housing Valuation and Commerce"
     ],
     "correctOption": 2,
-    "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-    "category": "Investment",
+    "explanation": "Based on the story, HVAC stands for Heating, Ventilation & Air-Conditioning.",
+    "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_5",
-    "title": "Where is Carrier's new manufacturing facility situated?",
+    "id": "q_carrier_0907_4",
+    "title": "How much is Carrier investing in its new Indian manufacturing facility?",
     "options": [
-      "Bengaluru, Karnataka",
-      "Sri City, Andhra Pradesh",
-      "Pune, Maharashtra",
-      "Noida, Uttar Pradesh"
-    ],
-    "correctOption": 1,
-    "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-    "category": "Geography",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_6",
-    "title": "What is one strategic geographical advantage of Sri City mentioned in the text?",
-    "options": [
-      "It is within 100 kilometres of five sea ports",
-      "It has the largest airport in India",
-      "It is located in a cold climate zone",
-      "It borders three different countries"
-    ],
-    "correctOption": 0,
-    "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-    "category": "Supply Chain",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_7",
-    "title": "Which regions does Carrier plan to export to from its new Indian facility?",
-    "options": [
-      "Europe and North America",
-      "Southeast Asia and Australia",
-      "South America and Europe",
-      "West Asia and Africa"
-    ],
-    "correctOption": 3,
-    "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-    "category": "Export Strategy",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_8",
-    "title": "What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
-    "options": [
-      "Server racks",
-      "Silicon chips",
-      "High-capacity chillers",
-      "Fiber optic cables"
-    ],
-    "correctOption": 2,
-    "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-    "category": "Localization",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_9",
-    "title": "Beyond initial equipment sales, how is Carrier securing sustainable revenue?",
-    "options": [
-      "By selling consumer electronics",
-      "Through recurring maintenance agreements and digital platforms",
-      "By investing in real estate",
-      "Through cryptocurrency mining"
-    ],
-    "correctOption": 1,
-    "explanation": "Sustainable revenue comes from recurring maintenance agreements, digital platforms, and system retrofits.",
-    "category": "Business Model",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_10",
-    "title": "Which government framework is Carrier aligning with to optimize component procurement and lower import duties?",
-    "options": [
-      "Make in India",
-      "Digital India",
-      "Skill India",
-      "Startup India"
-    ],
-    "correctOption": 0,
-    "explanation": "Localizing production under the \"Make in India\" framework optimizes procurement and duties.",
-    "category": "Government Policy",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_11",
-    "title": "Who are the primary clients for Carrier's multi-year lifecycle contracts?",
-    "options": [
-      "Individual homeowners",
-      "Retail electronics stores",
-      "Educational institutions",
-      "Hyperscalers and industrial developers"
-    ],
-    "correctOption": 3,
-    "explanation": "Carrier embeds itself into multi-year contracts with hyperscalers, industrial developers, and commercial hubs.",
-    "category": "Client Segments",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_12",
-    "title": "What happens to server racks in energy-dense data centres when processing cloud applications?",
-    "options": [
-      "They shrink in size",
-      "They consume less electricity",
-      "They heat up significantly",
-      "They require more water"
-    ],
-    "correctOption": 2,
-    "explanation": "Vast networks of server racks heat up in energy-dense data centres.",
-    "category": "Technical Context",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_13",
-    "title": "By what factor is India’s operational data centre capacity expanding?",
-    "options": [
-      "Twofold",
-      "Tenfold",
-      "Fivefold",
-      "Twentyfold"
-    ],
-    "correctOption": 1,
-    "explanation": "India’s operational data centre capacity is expanding tenfold.",
-    "category": "Market Scale",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_14",
-    "title": "According to the text, what helps build defensible market positions for B2B industrial giants?",
-    "options": [
-      "Embedding into multi-year lifecycle contracts",
-      "Focusing only on initial sales",
-      "Selling off manufacturing plants",
-      "Ignoring hyperscale infrastructure"
-    ],
-    "correctOption": 0,
-    "explanation": "Embedding into multi-year lifecycle contracts builds defensible market positions.",
-    "category": "Competitive Strategy",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_15",
-    "title": "For business and management graduates, what dynamic career pathway is highlighted as an alternative to tech startups?",
-    "options": [
-      "Fast-food management",
-      "Entertainment industry",
-      "Academic research",
-      "Industrial and capital goods conglomerates"
-    ],
-    "correctOption": 3,
-    "explanation": "Industrial and capital goods conglomerates provide dynamic career pathways beyond tech startups.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_16",
-    "title": "Which entry-level roles provide the highest career velocity for aspirants in this sector?",
-    "options": [
-      "Back-office administration",
-      "Software coding",
-      "Client Acquisition and B2B Sales",
-      "Human Resources"
-    ],
-    "correctOption": 2,
-    "explanation": "Real momentum comes from Client Acquisition, B2B Sales, and Client-Facing Partner Management.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_17",
-    "title": "What kind of interfaces are crucial for young professionals to negotiate high-value contracts?",
-    "options": [
-      "Internal company audits",
-      "Direct interface with facility developers and enterprise clients",
-      "Retail customer service",
-      "Social media management"
-    ],
-    "correctOption": 1,
-    "explanation": "Young professionals interface directly with facility developers, contractors, and enterprise clients.",
-    "category": "Sales Execution",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_18",
-    "title": "What is the most effective starting point to position oneself for global capital goods leadership in the mid-to-long run?",
-    "options": [
-      "Cross-functional and cross-industry roles at the local level",
-      "Joining a top consumer tech startup",
-      "Moving abroad immediately",
-      "Focusing solely on B2C social marketing"
-    ],
-    "correctOption": 0,
-    "explanation": "The most effective starting point is cross-functional and cross-industry at the local level.",
-    "category": "Career Growth",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_19",
-    "title": "Which of the following is recommended as a starting point for early career development in this sector?",
-    "options": [
-      "Multinational consumer IT firms",
-      "Investment banks",
-      "E-commerce aggregators",
-      "Regional manufacturing companies or local dealerships"
-    ],
-    "correctOption": 3,
-    "explanation": "Begin by joining regional manufacturing companies, component suppliers, or local dealerships.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_20",
-    "title": "What type of expertise builds the ground-level credibility needed for enterprise leadership?",
-    "options": [
-      "Consumer app UI development",
-      "Graphic design",
-      "Localized supply chains and direct technical selling",
-      "Stock day trading"
-    ],
-    "correctOption": 2,
-    "explanation": "Developing early expertise in localized supply chains and direct technical selling builds leadership credibility.",
-    "category": "Core Competencies",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_21",
-    "title": "What is the overarching theme of Carrier's strategy in India?",
-    "options": [
-      "Exiting the Asian market",
-      "Capitalizing on the AI/data centre boom through localized cooling solutions",
-      "Transitioning from B2B to B2C retail",
-      "Reducing product lifecycles to drive fast sales"
-    ],
-    "correctOption": 1,
-    "explanation": "Carrier is capitalizing on the AI/data centre infrastructure boom through localized high-capacity cooling.",
-    "category": "Strategic Vision",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_22",
-    "title": "Story Review: What is Carrier Global's targeted annual revenue from India by the decade's end?",
-    "options": [
+      "$10 Million",
+      "$50 Million",
       "$1 Billion",
-      "$500 Million",
-      "$10 Billion",
       "$100 Million"
     ],
-    "correctOption": 0,
-    "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-    "category": "Revenue Target",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_23",
-    "title": "Story Review: Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
-    "options": [
-      "Automobile Manufacturing",
-      "Food Processing",
-      "Consumer Electronics",
-      "Data Centres"
-    ],
     "correctOption": 3,
-    "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-    "category": "Market Drivers",
+    "explanation": "Based on the story, Carrier is investing US$100 million in a new manufacturing facility.",
+    "category": "Finance & Scale",
     "pts": 11
   },
   {
-    "id": "q_carrier_24",
-    "title": "Story Review: What does HVAC stand for in the context of Carrier Global's expertise?",
+    "id": "q_carrier_0907_5",
+    "title": "Where is Carrier's new manufacturing facility situated in India?",
     "options": [
-      "Heavy Vehicles and Cargo",
-      "High Voltage and Current",
-      "Heating, Ventilation & Air-Conditioning",
-      "Housing, Valuation and Commerce"
+      "Sri City Andhra Pradesh",
+      "Bengaluru Karnataka",
+      "Pune Maharashtra",
+      "Noida Uttar Pradesh"
     ],
-    "correctOption": 2,
-    "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-    "category": "Industry Terminology",
+    "correctOption": 0,
+    "explanation": "Based on the story, Carrier's new manufacturing facility is located in Sri City, Andhra Pradesh.",
+    "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_25",
-    "title": "Story Review: How much is Carrier investing in its new manufacturing facility in India?",
+    "id": "q_carrier_0907_6",
+    "title": "What strategic logistical advantage does the Sri City location offer Carrier?",
     "options": [
-      "$10 million",
-      "$100 million",
-      "$50 million",
-      "$1 billion"
+      "Largest airport in India",
+      "Near five sea ports",
+      "Cold climate zone",
+      "Borders three nations"
     ],
     "correctOption": 1,
-    "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-    "category": "Investment",
+    "explanation": "Based on the story, Sri City is strategically situated within 100 kilometres of five sea ports.",
+    "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_26",
-    "title": "Story Review: Where is Carrier's new manufacturing facility situated?",
-    "options": [
-      "Sri City, Andhra Pradesh",
-      "Bengaluru, Karnataka",
-      "Pune, Maharashtra",
-      "Noida, Uttar Pradesh"
-    ],
-    "correctOption": 0,
-    "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-    "category": "Geography",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_27",
-    "title": "Story Review: What is one strategic geographical advantage of Sri City mentioned in the text?",
-    "options": [
-      "It has the largest airport in India",
-      "It is located in a cold climate zone",
-      "It borders three different countries",
-      "It is within 100 kilometres of five sea ports"
-    ],
-    "correctOption": 3,
-    "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-    "category": "Supply Chain",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_28",
-    "title": "Story Review: Which regions does Carrier plan to export to from its new Indian facility?",
+    "id": "q_carrier_0907_7",
+    "title": "Which international export regions will Carrier supply from its new Indian facility?",
     "options": [
       "Europe and North America",
       "Southeast Asia and Australia",
@@ -387,316 +93,610 @@
       "South America and Europe"
     ],
     "correctOption": 2,
-    "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-    "category": "Export Strategy",
+    "explanation": "Based on the story, the plant establishes an export engine for West Asia and Africa.",
+    "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_29",
-    "title": "Story Review: What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
+    "id": "q_carrier_0907_8",
+    "title": "What type of imported equipment is Carrier aiming to phase out through localization?",
     "options": [
-      "Server racks",
-      "High-capacity chillers",
-      "Silicon chips",
-      "Fiber optic cables"
-    ],
-    "correctOption": 1,
-    "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-    "category": "Localization",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_30",
-    "title": "Story Review: Beyond initial equipment sales, how is Carrier securing sustainable revenue?",
-    "options": [
-      "Through recurring maintenance agreements and digital platforms",
-      "By selling consumer electronics",
-      "By investing in real estate",
-      "Through cryptocurrency mining"
-    ],
-    "correctOption": 0,
-    "explanation": "Sustainable revenue comes from recurring maintenance agreements, digital platforms, and system retrofits.",
-    "category": "Business Model",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_31",
-    "title": "Story Review: Which government framework is Carrier aligning with to optimize component procurement and lower import duties?",
-    "options": [
-      "Digital India",
-      "Skill India",
-      "Startup India",
-      "Make in India"
+      "Server computer racks",
+      "Silicon microchips",
+      "Fiber optic cables",
+      "High-capacity chillers"
     ],
     "correctOption": 3,
-    "explanation": "Localizing production under the \"Make in India\" framework optimizes procurement and duties.",
-    "category": "Government Policy",
+    "explanation": "Based on the story, Carrier aims to phase out imported high-capacity chillers through supply chain localization.",
+    "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_32",
-    "title": "Story Review: Who are the primary clients for Carrier's multi-year lifecycle contracts?",
+    "id": "q_carrier_0907_9",
+    "title": "Beyond initial equipment sales, how does Carrier generate sustainable recurring revenue?",
+    "options": [
+      "Maintenance and digital platforms",
+      "Consumer mobile phones",
+      "Commercial real estate",
+      "Cryptocurrency mining"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, sustainable revenue comes from recurring maintenance agreements and digital platforms.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_10",
+    "title": "Which national initiative is Carrier aligning with to optimize procurement and lower duties?",
+    "options": [
+      "Digital India",
+      "Make in India",
+      "Skill India",
+      "Startup India"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, Carrier localizes production under the Make in India framework.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_11",
+    "title": "Who are the primary enterprise clients for Carrier's multi-year lifecycle contracts?",
     "options": [
       "Individual homeowners",
       "Retail electronics stores",
       "Hyperscalers and industrial developers",
-      "Educational institutions"
+      "Educational primary schools"
     ],
     "correctOption": 2,
-    "explanation": "Carrier embeds itself into multi-year contracts with hyperscalers, industrial developers, and commercial hubs.",
-    "category": "Client Segments",
+    "explanation": "Based on the story, Carrier embeds into multi-year lifecycle contracts with hyperscalers and developers.",
+    "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_33",
-    "title": "Story Review: What happens to server racks in energy-dense data centres when processing cloud applications?",
+    "id": "q_carrier_0907_12",
+    "title": "What happens to server racks in data centres when processing cloud workloads?",
     "options": [
       "They shrink in size",
-      "They heat up significantly",
       "They consume less electricity",
-      "They require more water"
-    ],
-    "correctOption": 1,
-    "explanation": "Vast networks of server racks heat up in energy-dense data centres.",
-    "category": "Technical Context",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_34",
-    "title": "Story Review: By what factor is India’s operational data centre capacity expanding?",
-    "options": [
-      "Tenfold",
-      "Twofold",
-      "Fivefold",
-      "Twentyfold"
-    ],
-    "correctOption": 0,
-    "explanation": "India’s operational data centre capacity is expanding tenfold.",
-    "category": "Market Scale",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_35",
-    "title": "Story Review: According to the text, what helps build defensible market positions for B2B industrial giants?",
-    "options": [
-      "Focusing only on initial sales",
-      "Selling off manufacturing plants",
-      "Ignoring hyperscale infrastructure",
-      "Embedding into multi-year lifecycle contracts"
+      "They require more water",
+      "They heat up significantly"
     ],
     "correctOption": 3,
-    "explanation": "Embedding into multi-year lifecycle contracts builds defensible market positions.",
-    "category": "Competitive Strategy",
+    "explanation": "Based on the story, vast networks of server racks heat up in energy-dense data centres.",
+    "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_36",
-    "title": "Story Review: For business and management graduates, what dynamic career pathway is highlighted as an alternative to tech startups?",
+    "id": "q_carrier_0907_13",
+    "title": "By what multiple is India's operational data centre capacity projected to expand?",
     "options": [
-      "Fast-food management",
-      "Entertainment industry",
-      "Industrial and capital goods conglomerates",
-      "Academic research"
-    ],
-    "correctOption": 2,
-    "explanation": "Industrial and capital goods conglomerates provide dynamic career pathways beyond tech startups.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_37",
-    "title": "Story Review: Which entry-level roles provide the highest career velocity for aspirants in this sector?",
-    "options": [
-      "Back-office administration",
-      "Client Acquisition and B2B Sales",
-      "Software coding",
-      "Human Resources"
-    ],
-    "correctOption": 1,
-    "explanation": "Real momentum comes from Client Acquisition, B2B Sales, and Client-Facing Partner Management.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_38",
-    "title": "Story Review: What kind of interfaces are crucial for young professionals to negotiate high-value contracts?",
-    "options": [
-      "Direct interface with facility developers and enterprise clients",
-      "Internal company audits",
-      "Retail customer service",
-      "Social media management"
+      "Tenfold expansion",
+      "Twofold expansion",
+      "Fivefold expansion",
+      "Twentyfold expansion"
     ],
     "correctOption": 0,
-    "explanation": "Young professionals interface directly with facility developers, contractors, and enterprise clients.",
-    "category": "Sales Execution",
+    "explanation": "Based on the story, India’s operational data centre capacity is expanding tenfold.",
+    "category": "Market & Customers",
     "pts": 11
   },
   {
-    "id": "q_carrier_39",
-    "title": "Story Review: What is the most effective starting point to position oneself for global capital goods leadership in the mid-to-long run?",
+    "id": "q_carrier_0907_14",
+    "title": "What contractual strategy helps B2B industrial giants build defensible market positions?",
     "options": [
-      "Joining a top consumer tech startup",
-      "Moving abroad immediately",
-      "Focusing solely on B2C social marketing",
-      "Cross-functional and cross-industry roles at the local level"
+      "Spot market sales only",
+      "Multi-year lifecycle contracts",
+      "Exiting manufacturing plants",
+      "Ignoring hyperscalers"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, embedding into multi-year lifecycle contracts builds defensible market positions.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_15",
+    "title": "For management graduates, what dynamic career sector is highlighted beyond tech startups?",
+    "options": [
+      "Fast-food franchising",
+      "Entertainment media",
+      "Industrial capital goods",
+      "Academic publishing"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, capital goods and industrial conglomerates offer dynamic career pathways.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_16",
+    "title": "Which entry-level roles provide the highest career velocity for young professionals?",
+    "options": [
+      "Back-office record filing",
+      "Software algorithm coding",
+      "Human resources filing",
+      "Client Acquisition and B2B Sales"
     ],
     "correctOption": 3,
-    "explanation": "The most effective starting point is cross-functional and cross-industry at the local level.",
-    "category": "Career Growth",
+    "explanation": "Based on the story, Client Acquisition and B2B Sales provide the highest career velocity.",
+    "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_40",
-    "title": "Story Review: Which of the following is recommended as a starting point for early career development in this sector?",
+    "id": "q_carrier_0907_17",
+    "title": "Who do young B2B professionals directly interface with to negotiate high-value deals?",
     "options": [
-      "Multinational consumer IT firms",
-      "Investment banks",
-      "Regional manufacturing companies or local dealerships",
-      "E-commerce aggregators"
-    ],
-    "correctOption": 2,
-    "explanation": "Begin by joining regional manufacturing companies, component suppliers, or local dealerships.",
-    "category": "Career Pathways",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_41",
-    "title": "Story Review: What type of expertise builds the ground-level credibility needed for enterprise leadership?",
-    "options": [
-      "Consumer app UI development",
-      "Localized supply chains and direct technical selling",
-      "Graphic design",
-      "Stock day trading"
-    ],
-    "correctOption": 1,
-    "explanation": "Developing early expertise in localized supply chains and direct technical selling builds leadership credibility.",
-    "category": "Core Competencies",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_42",
-    "title": "Story Review: What is the overarching theme of Carrier's strategy in India?",
-    "options": [
-      "Capitalizing on the AI/data centre boom through localized cooling solutions",
-      "Exiting the Asian market",
-      "Transitioning from B2B to B2C retail",
-      "Reducing product lifecycles to drive fast sales"
+      "Facility developers and contractors",
+      "Internal compliance clerks",
+      "Retail walk-in shoppers",
+      "Social media influencers"
     ],
     "correctOption": 0,
-    "explanation": "Carrier is capitalizing on the AI/data centre infrastructure boom through localized high-capacity cooling.",
-    "category": "Strategic Vision",
+    "explanation": "Based on the story, professionals interface directly with facility developers, contractors, and enterprise clients.",
+    "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_43",
-    "title": "Story Review: What is Carrier Global's targeted annual revenue from India by the decade's end?",
+    "id": "q_carrier_0907_18",
+    "title": "What is the most effective starting point for long-term capital goods enterprise leadership?",
     "options": [
-      "$500 Million",
-      "$10 Billion",
-      "$100 Million",
-      "$1 Billion"
+      "Immediate overseas relocation",
+      "Local cross-functional roles",
+      "Consumer social media apps",
+      "Purely theoretical research"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, the most effective starting point is cross-functional and cross-industry at the local level.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_19",
+    "title": "Which regional organization provides ideal ground-level exposure for early-career talent?",
+    "options": [
+      "Offshore investment banking",
+      "Consumer fashion outlets",
+      "Local industrial equipment dealerships",
+      "Music record labels"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, joining regional manufacturing companies or local dealerships builds ground credibility.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_20",
+    "title": "What type of expertise builds credibility required for multi-billion-dollar enterprise leadership?",
+    "options": [
+      "Consumer game design",
+      "Graphic poster design",
+      "Day-trading equity stocks",
+      "Supply chains and technical selling"
     ],
     "correctOption": 3,
-    "explanation": "Carrier Global targets US$1 billion in annual revenue from India by the decade's end.",
-    "category": "Revenue Target",
+    "explanation": "Based on the story, hands-on expertise in localized supply chains and direct technical selling builds leadership credibility.",
+    "category": "Careers & Leadership",
     "pts": 11
   },
   {
-    "id": "q_carrier_44",
-    "title": "Story Review: Which infrastructure surge is driving the massive demand for Carrier's industrial cooling systems?",
+    "id": "q_carrier_0907_21",
+    "title": "What overarching theme defines Carrier's core growth strategy in India?",
     "options": [
-      "Automobile Manufacturing",
-      "Food Processing",
-      "Data Centres",
-      "Consumer Electronics"
-    ],
-    "correctOption": 2,
-    "explanation": "The surge in energy-dense data centres is driving high-capacity commercial climate control demand.",
-    "category": "Market Drivers",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_45",
-    "title": "Story Review: What does HVAC stand for in the context of Carrier Global's expertise?",
-    "options": [
-      "Heavy Vehicles and Cargo",
-      "Heating, Ventilation & Air-Conditioning",
-      "High Voltage and Current",
-      "Housing, Valuation and Commerce"
-    ],
-    "correctOption": 1,
-    "explanation": "HVAC stands for Heating, Ventilation & Air-Conditioning.",
-    "category": "Industry Terminology",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_46",
-    "title": "Story Review: How much is Carrier investing in its new manufacturing facility in India?",
-    "options": [
-      "$100 million",
-      "$10 million",
-      "$50 million",
-      "$1 billion"
+      "Localized cooling for data boom",
+      "Exiting the Asian continent",
+      "Transitioning to retail fashion",
+      "Reducing equipment lifespan"
     ],
     "correctOption": 0,
-    "explanation": "Carrier is investing US$100 million in a new manufacturing facility in Sri City.",
-    "category": "Investment",
+    "explanation": "Based on the story, Carrier is capitalizing on the AI and data centre boom through localized cooling solutions.",
+    "category": "Business Strategy",
     "pts": 11
   },
   {
-    "id": "q_carrier_47",
-    "title": "Story Review: Where is Carrier's new manufacturing facility situated?",
+    "id": "q_carrier_0907_22",
+    "title": "What digital capability enhances Carrier's recurring service contracts?",
     "options": [
-      "Bengaluru, Karnataka",
-      "Pune, Maharashtra",
-      "Noida, Uttar Pradesh",
-      "Sri City, Andhra Pradesh"
+      "Social video streaming",
+      "Digital energy management",
+      "Online payment processing",
+      "Cryptocurrency wallets"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, digital energy-management platforms generate recurring value across product lifecycles.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_23",
+    "title": "How does local manufacturing help Carrier respond to hyperscale facility buildouts?",
+    "options": [
+      "Longer international shipping",
+      "Higher ocean freight costs",
+      "Faster supply chain response",
+      "Increased customs clearance delays"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, localizing production enables swift response to hyperscale infrastructure buildouts.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_24",
+    "title": "What distance separates Carrier's Sri City facility from five major sea ports?",
+    "options": [
+      "Over 1000 kilometres",
+      "Exactly 500 kilometres",
+      "Beyond 800 kilometres",
+      "Within 100 kilometres"
     ],
     "correctOption": 3,
-    "explanation": "Carrier is investing US$100 million in Sri City, Andhra Pradesh.",
-    "category": "Geography",
+    "explanation": "Based on the story, Sri City is situated within 100 kilometres of five sea ports.",
+    "category": "Operational Execution",
     "pts": 11
   },
   {
-    "id": "q_carrier_48",
-    "title": "Story Review: What is one strategic geographical advantage of Sri City mentioned in the text?",
+    "id": "q_carrier_0907_25",
+    "title": "What digital activities trigger server rack heating in commercial data centres?",
     "options": [
-      "It has the largest airport in India",
-      "It is located in a cold climate zone",
-      "It is within 100 kilometres of five sea ports",
-      "It borders three different countries"
-    ],
-    "correctOption": 2,
-    "explanation": "Sri City is strategically situated within 100 kilometres of five sea ports.",
-    "category": "Supply Chain",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_49",
-    "title": "Story Review: Which regions does Carrier plan to export to from its new Indian facility?",
-    "options": [
-      "Europe and North America",
-      "West Asia and Africa",
-      "Southeast Asia and Australia",
-      "South America and Europe"
-    ],
-    "correctOption": 1,
-    "explanation": "Sri City establishes an export engine for West Asia and Africa.",
-    "category": "Export Strategy",
-    "pts": 11
-  },
-  {
-    "id": "q_carrier_50",
-    "title": "Story Review: What type of imported equipment is Carrier aiming to phase out by localizing its supply chain?",
-    "options": [
-      "High-capacity chillers",
-      "Server racks",
-      "Silicon chips",
-      "Fiber optic cables"
+      "Video streaming and cloud apps",
+      "Reading physical paper books",
+      "Writing fountain pen letters",
+      "Analog wristwatch operation"
     ],
     "correctOption": 0,
-    "explanation": "Localizing production allows Carrier to phase out imported high-capacity chillers.",
-    "category": "Localization",
+    "explanation": "Based on the story, streaming videos, processing online payments, and cloud apps heat up server racks.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_26",
+    "title": "What system modifications provide recurring revenue over an equipment's lifecycle?",
+    "options": [
+      "Total equipment demolition",
+      "System retrofits and upgrades",
+      "Scrapping functioning units",
+      "Discarding warranty agreements"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, system retrofits and recurring maintenance provide sustainable revenue.",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_27",
+    "title": "Which commercial facilities require Carrier's high-capacity climate control systems?",
+    "options": [
+      "Small residential bedrooms",
+      "Single-car garage stalls",
+      "Commercial hubs and data centres",
+      "Outdoor camping tents"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, hyperscalers, industrial developers, and commercial hubs require high-capacity climate control.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_28",
+    "title": "How does the 'Make in India' framework benefit Carrier's production economics?",
+    "options": [
+      "Higher export penalties",
+      "Mandatory import quotas",
+      "Increased overseas tariffs",
+      "Lower import duties"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, localizing production optimizes component procurement and lowers import duties.",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_29",
+    "title": "What role focuses on managing long-term relationships with facility partners?",
+    "options": [
+      "Client-Facing Partner Management",
+      "Assembly forklift driver",
+      "Security perimeter guard",
+      "Cafeteria chef"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, Client-Facing Partner Management is a high-velocity career profile.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_30",
+    "title": "What makes data centre cooling systems specialized compared to standard air conditioning?",
+    "options": [
+      "Low electricity usage",
+      "High-density thermal loads",
+      "Decorative aesthetic styling",
+      "Fragrance diffusion features"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, energy-dense data centres require high-capacity, specialized industrial climate control.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_31",
+    "title": "What type of suppliers should young graduates consider joining to learn technical ecosystems?",
+    "options": [
+      "Fast-fashion textile mills",
+      "Luxury perfume boutiques",
+      "Component suppliers",
+      "Novelty toy distributors"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, joining regional manufacturing companies or component suppliers builds foundational expertise.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_32",
+    "title": "How do hyperscalers secure long-term thermal reliability for their server hardware?",
+    "options": [
+      "Annual spot market auctions",
+      "Unscheduled technician visits",
+      "Third-party consumer warranties",
+      "Lifecycle service contracts"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, hyperscalers embed into multi-year lifecycle contracts with industrial cooling partners.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_33",
+    "title": "What geographic trade gateway is Carrier developing from southern India?",
+    "options": [
+      "Middle East export hub",
+      "North American retail hub",
+      "Antarctic research station",
+      "Pacific island trading post"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, Carrier's Indian facility establishes an export engine for West Asia and Africa.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_34",
+    "title": "What enables Carrier to phase out expensive foreign imports in India?",
+    "options": [
+      "Importing cheaper foreign parts",
+      "Domestic supply chain localization",
+      "Shutting down local operations",
+      "Relying on air freight"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, Carrier localizes its supply chain to phase out imported high-capacity chillers.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_35",
+    "title": "Which cloud processing activity causes thermal buildup in data infrastructure?",
+    "options": [
+      "Offline battery storage",
+      "Printed ledger bookkeeping",
+      "Online payment processing",
+      "Manual cash counting"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, processing online payments and cloud applications drives energy density in servers.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_36",
+    "title": "What commercial advantage does Carrier gain by manufacturing chillers locally in Andhra Pradesh?",
+    "options": [
+      "Higher international shipping",
+      "Complex customs clearance",
+      "Longer delivery lead times",
+      "Optimized component procurement"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, localizing production optimizes component procurement and lowers duties.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_37",
+    "title": "What type of selling requires deep understanding of industrial specifications and client needs?",
+    "options": [
+      "Direct technical selling",
+      "Retail impulse merchandising",
+      "Supermarket cashiering",
+      "Door-to-door retail selling"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, developing expertise in direct technical selling builds enterprise leadership credibility.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_38",
+    "title": "What scale of contracts do front-line professionals negotiate with hyperscalers?",
+    "options": [
+      "Ten-dollar microtransactions",
+      "High-value enterprise contracts",
+      "Daily consumer spot sales",
+      "Weekly grocery receipts"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, young professionals negotiate high-value contracts with developers and enterprise clients.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_39",
+    "title": "Which customer engagement profile builds crucial client rapport in industrial B2B markets?",
+    "options": [
+      "Assembly robot welder",
+      "Warehouse carton packer",
+      "Customer Engagement Specialist",
+      "Office janitorial supervisor"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, Customer Engagement and Partner Management offer rapid career progression.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_40",
+    "title": "Why is India's data centre capacity requiring billions in cooling investments?",
+    "options": [
+      "Declining cloud usage",
+      "Closure of internet portals",
+      "Reduced power availability",
+      "Massive ten-fold expansion"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, India's operational data centre capacity is expanding tenfold, demanding billions in cooling.",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_41",
+    "title": "What infrastructure connects Carrier's Sri City plant to overseas markets?",
+    "options": [
+      "Five nearby sea ports",
+      "Transcontinental railway only",
+      "River barge canal only",
+      "Inland mountain passes"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, proximity within 100 kilometres of five sea ports facilitates global exports.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_42",
+    "title": "What business model transition are industrial giants like Carrier executing?",
+    "options": [
+      "From B2B to consumer retail",
+      "From equipment to lifecycle services",
+      "From hardware to mobile games",
+      "From manufacturing to agriculture"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, giants build defensible positions by embedding into multi-year lifecycle contracts.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_43",
+    "title": "How do maintenance contracts protect industrial manufacturers from market volatility?",
+    "options": [
+      "Unpredictable spot pricing",
+      "Zero long-term commitment",
+      "Predictable recurring cash flow",
+      "Complete reliance on one-off sales"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, recurring maintenance agreements and digital platforms generate sustainable revenue.",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_44",
+    "title": "What type of developers partner with Carrier for large-scale campus cooling?",
+    "options": [
+      "Residential home carpenters",
+      "Interior wallpaper decorators",
+      "Landscape gardeners",
+      "Industrial facility developers"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, Carrier partners with industrial developers, hyperscalers, and commercial hubs.",
+    "category": "Market & Customers",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_45",
+    "title": "What foundational exposure should business graduates acquire early in their careers?",
+    "options": [
+      "Hands-on supply chain expertise",
+      "Passive office bureaucracy",
+      "Pure theoretical modeling",
+      "Consumer entertainment blogging"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, developing early, hands-on expertise in localized supply chains builds leadership credibility.",
+    "category": "Careers & Leadership",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_46",
+    "title": "What role does Carrier Global play in the worldwide HVAC sector?",
+    "options": [
+      "Local regional auto shop",
+      "Global HVAC market leader",
+      "Residential plumbing contractor",
+      "Small component importer"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, US-based HVAC giant Carrier Global is a global leader in climate control.",
+    "category": "Business Strategy",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_47",
+    "title": "Why are server racks described as 'digital engines' in the case study?",
+    "options": [
+      "They physically move vehicles",
+      "They burn diesel fuel directly",
+      "They power modern cloud computing",
+      "They rotate electrical dynamos"
+    ],
+    "correctOption": 2,
+    "explanation": "Based on the story, server racks act as critical digital engines powering streaming, payments, and apps.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_48",
+    "title": "What target timeline is set for Carrier's $1 billion India revenue goal?",
+    "options": [
+      "Within fifty years",
+      "By next month",
+      "In the next quarter",
+      "By the decade's end"
+    ],
+    "correctOption": 3,
+    "explanation": "Based on the story, Carrier targets US$1 billion in annual revenue from India by the decade's end (2030).",
+    "category": "Finance & Scale",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_49",
+    "title": "How does Carrier support energy sustainability in large data centres?",
+    "options": [
+      "Digital energy management software",
+      "Switching off all servers",
+      "Disabling cooling fans",
+      "Operating servers without cooling"
+    ],
+    "correctOption": 0,
+    "explanation": "Based on the story, Carrier provides digital energy-management platforms to optimize thermal efficiency.",
+    "category": "Operational Execution",
+    "pts": 11
+  },
+  {
+    "id": "q_carrier_0907_50",
+    "title": "What credibility is essential before taking on multi-billion-dollar enterprise leadership?",
+    "options": [
+      "High social media following",
+      "Ground-level commercial credibility",
+      "Passive administrative tenure",
+      "Purely theoretical study"
+    ],
+    "correctOption": 1,
+    "explanation": "Based on the story, ground-level credibility in localized supply chains and technical selling is essential.",
+    "category": "Careers & Leadership",
     "pts": 11
   }
 ]
