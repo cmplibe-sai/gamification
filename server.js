@@ -12,6 +12,14 @@ try {
     dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 } catch (e) {}
 
+// Process safety handlers to ensure server resilience
+process.on('uncaughtException', (err) => {
+    console.error('[UNCAUGHT EXCEPTION]:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[UNHANDLED REJECTION]:', reason);
+});
+
 // Load environment variables explicitly from current directory
 dotenv.config({ path: path.join(__dirname, '.env') });
 
