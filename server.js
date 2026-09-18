@@ -3016,6 +3016,7 @@ async function synthesizeBritishVoiceNarration(text, milestoneId = 1, dateKey = 
     return {
         success: true,
         audioUrl: publicUrl,
+        publicUrl: publicUrl,
         fileName: fileName,
         cleanedTextPreview: cleanedSpeechText.slice(0, 140) + '...',
         charCount: cleanedSpeechText.length,
@@ -3094,7 +3095,7 @@ app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (
 
         console.log(`[Auto British Voice Sync] Auto-synthesizing missing audio on-demand for ${dateKey}...`);
         const result = await synthesizeBritishVoiceNarration(storyText, safeMsId, dateKey);
-        return res.json({ success: true, audioUrl: result.publicUrl, newlyGenerated: true });
+        return res.json({ success: true, audioUrl: result.audioUrl || result.publicUrl, newlyGenerated: true });
 
     } catch (err) {
         console.error('Error in /api/pod/ensure-audio:', err);
