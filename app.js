@@ -16796,12 +16796,16 @@ async function requestOTP() {
         tempLoginId = rawInput.toLowerCase().trim();
 
         // If user is a Corporate Recruiter, show the Empanelment Access Key input
+        // If user is a Creator, show the Creator Security Key input
         const recruiterKeyContainer = document.getElementById('recruiterKeyContainer');
+        const creatorKeyContainer = document.getElementById('creatorKeyContainer');
         const step2Banner = document.getElementById('step2Banner');
         const otpInputContainer = document.getElementById('otpInputContainer');
 
         if (auth.role === 'recruiter') {
             if (recruiterKeyContainer) recruiterKeyContainer.classList.remove('hidden');
+            if (creatorKeyContainer) creatorKeyContainer.classList.add('hidden');
+            if (otpInputContainer) otpInputContainer.classList.add('hidden');
             if (step2Banner) {
                 step2Banner.innerHTML = `<i class="fas fa-building text-amber-400 mr-1.5"></i> Corporate Talent Portal for <strong>${auth.user.companyName || 'Hiring Partner'}</strong>.<br><span class="text-[11px] text-slate-400">Please provide your organization's secret empanelment key to proceed.</span>`;
             }
@@ -16810,8 +16814,22 @@ async function requestOTP() {
                 keyInp.value = '';
                 setTimeout(() => keyInp.focus(), 150);
             }
+        } else if (auth.role === 'creator') {
+            if (creatorKeyContainer) creatorKeyContainer.classList.remove('hidden');
+            if (recruiterKeyContainer) recruiterKeyContainer.classList.add('hidden');
+            if (otpInputContainer) otpInputContainer.classList.add('hidden');
+            if (step2Banner) {
+                step2Banner.innerHTML = `<i class="fas fa-shield-alt text-rose-400 mr-1.5"></i> SimplyBe Creator Console.<br><span class="text-[11px] text-slate-400">Master Creator Security Key is strictly required for administrative access.</span>`;
+            }
+            const crtKeyInp = document.getElementById('creatorAdminSecretInput');
+            if (crtKeyInp) {
+                crtKeyInp.value = '';
+                setTimeout(() => crtKeyInp.focus(), 150);
+            }
         } else {
             if (recruiterKeyContainer) recruiterKeyContainer.classList.add('hidden');
+            if (creatorKeyContainer) creatorKeyContainer.classList.add('hidden');
+            if (otpInputContainer) otpInputContainer.classList.remove('hidden');
             if (step2Banner) {
                 step2Banner.innerHTML = `<i class="fas fa-shield-alt mr-1.5"></i> One-Time Password sent.`;
             }
@@ -16839,6 +16857,7 @@ window.requestOTP = requestOTP;
 async function verifyOTP() {
     const otpInput = (document.getElementById('otpCode')?.value || '').trim();
     const recruiterKeyInput = (document.getElementById('recruiterAccessKeyInput')?.value || '').trim();
+    const creatorSecretInput = (document.getElementById('creatorAdminSecretInput')?.value || '').trim();
     const btn = document.querySelector('#step2 button');
 
     if (!window._pendingAuth) {
@@ -16850,10 +16869,15 @@ async function verifyOTP() {
     const role = window._pendingAuth.role;
     const authUser = window._pendingAuth.user;
 
-    // Strict Recruiter Key Verification: Corporate recruiters MUST enter their secret empanelment key
+    // Strict Credentials Verification
     if (role === 'recruiter') {
         if (!recruiterKeyInput) {
             alert("❌ Corporate Empanelment Access Key is required for Recruiter Portal access.\n\nPlease enter the secret key provided to your organization.");
+            return;
+        }
+    } else if (role === 'creator') {
+        if (!creatorSecretInput) {
+            alert("❌ Creator Security Key is required for administrative console access.\n\nPlease enter the master Creator Security Key.");
             return;
         }
     } else {
@@ -16889,13 +16913,18 @@ async function verifyOTP() {
                     role: role,
                     loginId: loginIdent,
                     otp: otpInput || '1234',
-                    employerKey: recruiterKeyInput || authUser.accessKey || ''
+                    employerKey: recruiterKeyInput || authUser.accessKey || '',
+                    adminSecret: creatorSecretInput || ''
                 })
             });
             const sessData = await sessRes.json();
             if (sessData && sessData.success && sessData.token) {
                 localStorage.setItem('cmpli_session_token', sessData.token);
                 sessionStorage.setItem('cmpli_session_token', sessData.token);
+                if (role === 'creator' && creatorSecretInput) {
+                    sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
+                    window._creatorAdminSecret = creatorSecretInput;
+                }
                 sessionTokenAcquired = true;
             } else if (role === 'recruiter') {
                 alert(`❌ Recruiter Access Refused: ${sessData.error || 'Invalid corporate empanelment key.'}`);
@@ -16904,10 +16933,17 @@ async function verifyOTP() {
                     btn.disabled = false;
                 }
                 return;
+            } else if (role === 'creator') {
+                alert(`❌ Creator Access Refused: ${sessData.error || 'Invalid Creator Security Key.'}`);
+                if (btn) {
+                    btn.innerText = "Verify & Enter Arena";
+                    btn.disabled = false;
+                }
+                return;
             }
         } catch (sessErr) {
             console.warn('Session issuance notice:', sessErr.message);
-            if (role === 'recruiter') {
+            if (role === 'recruiter' || role === 'creator') {
                 alert("❌ Authentication service unavailable. Please check your network connection.");
                 if (btn) {
                     btn.innerText = "Verify & Enter Arena";

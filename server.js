@@ -454,8 +454,9 @@ if (store.employers.length === 0) {
     saveStore();
 } else {
     let updatedKeys = false;
+    const legacyHardcodedKeys = ['emp_key_blive_live_9981', 'emp_key_carrier_live_8872', 'emp_key_snabbit_live_7763'];
     store.employers.forEach(e => {
-        if (!e.accessKey) {
+        if (!e.accessKey || legacyHardcodedKeys.includes(e.accessKey)) {
             e.accessKey = 'emp_key_' + crypto.randomBytes(16).toString('hex');
             updatedKeys = true;
         }
@@ -3300,12 +3301,18 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
         const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
 
         if (role === 'creator') {
-            const isSecretValid = adminSecret && configuredSecret && String(adminSecret).trim() === configuredSecret;
-            const isTeamMember = (store.teamMembers || []).some(m => m.email && m.email.toLowerCase() === cleanLogin);
-            const isOtpValid = otp === '1234' || isSecretValid;
-            if (!isOtpValid || (!isSecretValid && !isTeamMember)) {
-                return res.status(403).json({ success: false, error: 'Unauthorized: Invalid creator credentials' });
+            // Strict Creator Key Requirement: Unconditionally require valid CREATOR_ADMIN_SECRET
+            if (!configuredSecret) {
+                return res.status(503).json({ success: false, error: 'Creator authentication service unavailable: CREATOR_ADMIN_SECRET is not configured on the server.' });
             }
+            const isSecretValid = adminSecret && typeof adminSecret === 'string' && String(adminSecret).trim() === configuredSecret;
+            if (!isSecretValid) {
+                return res.status(403).json({ 
+                    success: false, 
+                    error: 'Unauthorized: Valid Creator Security Key (adminSecret) is strictly required for creator administrative session access.' 
+                });
+            }
+            const isTeamMember = (store.teamMembers || []).some(m => m.email && m.email.toLowerCase() === cleanLogin);
             const token = `cmpli_sess_crt_${crypto.randomBytes(24).toString('hex')}`;
             validUserSessions.set(token, { role: 'creator', userId: cleanLogin, email: cleanLogin, expiresAt: Date.now() + 86400000 });
             return res.json({ success: true, token, role: 'creator' });

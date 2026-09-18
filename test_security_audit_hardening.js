@@ -287,7 +287,8 @@ async function runTests() {
     });
     assert('Unauthenticated management/employers query rejected (403)', unauthCreator.status === 403);
 
-    const crtAuth = await request({
+    // 1. Creator login with bare OTP '1234' and NO adminSecret -> MUST FAIL WITH 403!
+    const bareOtpCreator = await request({
         hostname: 'localhost',
         port: PORT,
         path: '/api/auth/session',
@@ -298,7 +299,40 @@ async function runTests() {
         loginId: 'cmplibesai@gmail.com',
         otp: '1234'
     });
-    assert('Creator session token issued', crtAuth.status === 200 && crtAuth.body.token);
+    assert('Creator login with bare OTP 1234 rejected without adminSecret (403 Forbidden)', bareOtpCreator.status === 403);
+
+    // 2. Creator login with incorrect adminSecret -> MUST FAIL WITH 403!
+    const wrongSecretCreator = await request({
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/auth/session',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }, {
+        role: 'creator',
+        loginId: 'cmplibesai@gmail.com',
+        adminSecret: 'invalid_unauthorized_secret'
+    });
+    assert('Creator login with incorrect adminSecret rejected (403 Forbidden)', wrongSecretCreator.status === 403);
+
+    // Load actual CREATOR_ADMIN_SECRET from .env for test
+    const envContent = fs.readFileSync('.env', 'utf8');
+    const secretMatch = envContent.match(/CREATOR_ADMIN_SECRET=([^\r\n]+)/);
+    const validAdminSecret = secretMatch ? secretMatch[1].trim() : '';
+
+    // 3. Legitimate creator login with valid adminSecret
+    const crtAuth = await request({
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/auth/session',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }, {
+        role: 'creator',
+        loginId: 'cmplibesai@gmail.com',
+        adminSecret: validAdminSecret
+    });
+    assert('Creator session token issued with valid adminSecret', crtAuth.status === 200 && crtAuth.body.token);
     const crtToken = crtAuth.body.token;
 
     // Use creator session token to access creator-gated endpoint
@@ -310,6 +344,12 @@ async function runTests() {
         headers: { 'Authorization': `Bearer ${crtToken}` }
     });
     assert('Creator session token grants authorized access to /api/management/employers (200 OK)', creatorAccess.status === 200 && creatorAccess.body.success && Array.isArray(creatorAccess.body.employers));
+
+    // 4. Verify legacy seed keys are rotated and no longer exist in persisted store
+    const legacyHardcodedKeys = ['emp_key_blive_live_9981', 'emp_key_carrier_live_8872', 'emp_key_snabbit_live_7763'];
+    const updatedStore = JSON.parse(fs.readFileSync('./server_data/gamification_store.json', 'utf8'));
+    const anyLegacyKey = updatedStore.employers.some(e => legacyHardcodedKeys.includes(e.accessKey));
+    assert('Legacy hardcoded seed keys rotated in persistent storage', !anyLegacyKey);
 
     console.log(`\n=== SUMMARY: ${passedCount}/${totalCount} ASSERTIONS PASSED ===`);
     if (passedCount === totalCount) {
