@@ -149,6 +149,12 @@
                         <i class="fas fa-graduation-cap text-[11px] sm:text-xs"></i> <span id="partnerHeaderBadge" class="hidden md:inline">Campus Partner</span>
                     </div>
 
+                    <!-- Placement Notifications -->
+                    <button onclick="openCampusNotificationsModal()" class="relative ml-0.5 sm:ml-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Placement & Recruiter Alerts">
+                        <i class="fas fa-bell text-xs text-amber-400"></i>
+                        <span id="partnerNavBadgeCount" class="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-black rounded-full px-1 flex items-center justify-center hidden">0</span>
+                    </button>
+
                     <!-- Logout -->
                     <button onclick="logout()" class="ml-0.5 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
@@ -851,8 +857,34 @@
                         </div>
                     </div>
 
-                    <!-- Visibility Accelerator Guide -->
+                    <!-- Verified CV & Career Assets Hub -->
                     <div class="space-y-6">
+                        <div class="glass-card p-6 border-cyan-500/30">
+                            <h4 class="text-sm font-black text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <i class="fas fa-file-invoice"></i> Verified CV / Resume
+                            </h4>
+                            <p class="text-xs text-slate-300 mb-4">Empanelled corporate recruiters inspect candidate CVs to evaluate technical achievements and placement readiness.</p>
+                            
+                            <div id="careerViewsCvStatus" class="p-3 bg-slate-950 rounded-xl border border-slate-800 mb-3 text-xs">
+                                <div class="flex items-center justify-between">
+                                    <span id="careerViewsCvFileName" class="text-slate-400 font-semibold truncate"><i class="fas fa-file-pdf mr-1.5 text-rose-400"></i>No CV Uploaded</span>
+                                    <span id="careerViewsCvBadge" class="badge-pill badge-slate text-[9px]">Missing</span>
+                                </div>
+                                <span id="careerViewsCvMeta" class="text-[10px] text-slate-500 block mt-1">Upload your resume in PDF format</span>
+                            </div>
+
+                            <div class="space-y-2">
+                                <input type="file" id="learnerCvFileInput" accept=".pdf,.doc,.docx" class="hidden" onchange="handleLearnerCvSelected(event)">
+                                <button onclick="document.getElementById('learnerCvFileInput').click()" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/20">
+                                    <i class="fas fa-cloud-arrow-up"></i> <span id="btnUploadCvText">Upload / Update CV</span>
+                                </button>
+                                <button id="btnDownloadOwnCv" onclick="downloadOwnCv()" class="hidden w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-700">
+                                    <i class="fas fa-download text-cyan-400"></i> Download Uploaded CV
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Visibility Accelerator Guide -->
                         <div class="glass-card p-6 border-indigo-500/30">
                             <h4 class="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                 <i class="fas fa-lightbulb"></i> Maximize Recruiter Discovery
@@ -1016,10 +1048,6 @@
                                 <div>
                                     <label class="block text-xs font-bold text-slate-400 mb-1">Designation</label>
                                     <input type="text" id="newEmpDesignation" placeholder="e.g. Talent Acquisition Lead" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-500">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 mb-1">Permitted Solutions / Cohorts (Access)</label>
-                                    <div id="mgmtEmployerSolutionsList" class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar p-2 bg-slate-950 rounded-xl border border-slate-800"></div>
                                 </div>
                                 <button id="btnSaveEmployer" onclick="saveCorporateEmployer()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg text-xs">
                                     <i class="fas fa-handshake mr-2"></i> <span id="btnSaveEmployerText">Empanel & Activate Partner</span>
@@ -1255,13 +1283,37 @@
                     </div>
                 </div>
 
-                <!-- Verified Audio Reflection Player -->
-                <div class="glass-card p-5 border-cyan-500/20">
-                    <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <i class="fas fa-microphone"></i> Verified Candidate Voice Reflection
+                <!-- 3D Realistic Speedometer Gauge & Agility Analysis -->
+                <div class="glass-card p-5 border-cyan-500/20 text-center">
+                    <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
+                        <i class="fas fa-gauge-high"></i> Learn Agility Quotient (LQ®) Speedometer
                     </h4>
-                    <p class="text-xs text-slate-300 mb-3">Listen to this candidate's authentic vocal delivery and problem formulation during daily check-in evaluations.</p>
-                    <div id="dossierAudioContainer"></div>
+                    <p class="text-[11px] text-slate-400 mb-2">Live 3D telemetry evaluation across problem formulation, consistency, and daily check-ins.</p>
+                    
+                    <div id="recruiterLqGaugeVisual" class="w-full flex justify-center py-2"></div>
+                    
+                    <div class="flex items-center justify-center gap-3 mt-2">
+                        <span id="recruiterLqZoneBadge" class="badge-pill badge-emerald text-xs"><i class="fas fa-bolt mr-1"></i> Strong Zone</span>
+                        <span id="recruiterLqLcBadge" class="text-xs font-bold text-slate-300 font-mono">0 LCs Earned</span>
+                    </div>
+                </div>
+
+                <!-- Verified CV / Resume Section -->
+                <div class="glass-card p-4 border-slate-800 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                            <i class="fas fa-file-pdf text-lg"></i>
+                        </div>
+                        <div class="truncate">
+                            <h5 id="dossierCvTitle" class="text-xs font-bold text-white truncate">Candidate Verified Resume</h5>
+                            <span id="dossierCvMeta" class="text-[10px] text-slate-400 block">Available for empanelled review</span>
+                        </div>
+                    </div>
+                    <div id="dossierCvAction">
+                        <button id="btnDossierDownloadCv" onclick="downloadCandidateCv()" class="btn-primary py-2 px-3 text-xs whitespace-nowrap">
+                            <i class="fas fa-download mr-1.5 text-cyan-300"></i> Download CV
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Contact & Interview Connect -->
@@ -1283,6 +1335,29 @@
                         <i class="fas fa-calendar-check mr-2"></i> Request Interview & Unlock Full PII Dossier
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CAMPUS PARTNER NOTIFICATIONS MODAL -->
+    <div id="campusNotificationsModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-xl rounded-3xl overflow-hidden flex flex-col border border-emerald-500/40 shadow-2xl max-h-[85vh]">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                        <i class="fas fa-bell text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white font-heading">Campus Placement Alerts</h3>
+                        <p class="text-[11px] text-slate-400">Direct recruiter interest and student interview connection requests</p>
+                    </div>
+                </div>
+                <button onclick="closeCampusNotificationsModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+            <div id="campusNotificationsList" class="p-5 overflow-y-auto custom-scrollbar space-y-3">
+                <div class="text-center py-8 text-xs text-slate-500">Loading campus placement alerts...</div>
             </div>
         </div>
     </div>

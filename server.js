@@ -281,7 +281,8 @@ function loadStore() {
         employers: [],
         coachingSessions: [],
         coachingActionItems: [],
-        courseProgress: {}
+        courseProgress: {},
+        studentCVs: {}
     };
 }
 
@@ -294,6 +295,7 @@ if (!store.submissionsRevision) {
 if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
 if (!Array.isArray(store.campuses)) store.campuses = [];
 if (!Array.isArray(store.employers)) store.employers = [];
+if (!store.studentCVs || typeof store.studentCVs !== 'object') store.studentCVs = {};
 
 // Helper to keep legacy campusPartnersDB in sync with multi-coordinator campuses
 function syncCampusPartnersDB() {
@@ -727,7 +729,16 @@ app.get(['/api/config', '/gamification/api/config'], (req, res) => {
         adminEmails: adminEmails,
         teamMembers: (store.teamMembers || []).map(m => ({ id: m.id, name: m.name, role: m.role })),
         campuses: (store.campuses || []).map(c => ({ id: c.id, name: c.name, state: c.state, district: c.district, mangoIds: c.mangoIds })),
-        employers: (store.employers || []).map(e => ({ id: e.id, companyName: e.companyName, industry: e.industry, status: e.status })),
+        employers: (store.employers || []).filter(e => e.status === 'active').map(e => ({ 
+            id: e.id, 
+            companyName: e.companyName, 
+            recruiterName: e.recruiterName,
+            email: e.email,
+            phone: e.phone,
+            industry: e.industry, 
+            designation: e.designation,
+            status: e.status 
+        })),
         databaseConnected: isDbConnected
     });
 });
@@ -5123,7 +5134,7 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
         if (!checkCreatorAuth(req)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage corporate partners' });
         }
-        const { id, companyName, recruiterName, email, phone, industry, designation, status, permittedMangoes } = req.body || {};
+        const { id, companyName, recruiterName, email, phone, industry, designation, status } = req.body || {};
         if (!companyName || !email) {
             return res.status(400).json({ success: false, error: 'Company name and recruiter email are required' });
         }
@@ -5144,7 +5155,6 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
             industry: String(industry || 'Technology & Innovation').trim(),
             designation: String(designation || 'Recruiter').trim(),
             accessKey: existingEmp && existingEmp.accessKey ? existingEmp.accessKey : ('emp_key_' + crypto.randomBytes(16).toString('hex')),
-            permittedMangoes: Array.isArray(permittedMangoes) ? permittedMangoes : (existingEmp && Array.isArray(existingEmp.permittedMangoes) ? existingEmp.permittedMangoes : []),
             status: status === 'inactive' ? 'inactive' : (status === 'pending' ? 'pending' : 'active'),
             updatedAt: new Date().toISOString()
         };
@@ -5398,22 +5408,15 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
                 streakDays: streakDays,
                 submissionsCount: uSubs.length,
                 audioRecordings: audioRecordings,
-                subscribedMangoes: u.subscribedMangoes || []
+                subscribedMangoes: u.subscribedMangoes || [],
+                hasCv: Boolean(store.studentCVs && (store.studentCVs[uId] || store.studentCVs[uEmail])),
+                cvUrl: (store.studentCVs && (store.studentCVs[uId]?.cvUrl || store.studentCVs[uEmail]?.cvUrl)) || '',
+                _rawEmail: uEmail
             };
         });
 
         // Apply filters
         let filtered = candidates;
-
-        // Strictly enforce organization solution access permissions (permittedMangoes)
-        const activeEmpPermitted = verifiedEmployer?.permittedMangoes || 
-            (isCreator && req.headers['x-employer-id'] ? store.employers?.find(e => e.id === req.headers['x-employer-id'])?.permittedMangoes : null);
-        if (Array.isArray(activeEmpPermitted) && activeEmpPermitted.length > 0) {
-            filtered = filtered.filter(c => 
-                Array.isArray(c.subscribedMangoes) && 
-                c.subscribedMangoes.some(m => activeEmpPermitted.includes(m))
-            );
-        }
 
         if (state && state !== 'all') {
             filtered = filtered.filter(c => c.state.toLowerCase() === state.toLowerCase());
@@ -5435,12 +5438,19 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         }
         if (search && String(search).trim()) {
             const q = String(search).toLowerCase().trim();
-            filtered = filtered.filter(c => 
-                c.name.toLowerCase().includes(q) || 
-                c.district.toLowerCase().includes(q) || 
-                c.campus.toLowerCase().includes(q) ||
-                c.state.toLowerCase().includes(q)
-            );
+            const qNoSpace = q.replace(/\s+/g, '');
+            const tokens = q.split(/\s+/).filter(Boolean);
+
+            filtered = filtered.filter(c => {
+                const searchableText = `${c.name} ${c._rawEmail || ''} ${c.id || ''} ${c.campus} ${c.district} ${c.state}`.toLowerCase();
+                const searchableNoSpace = searchableText.replace(/\s+/g, '');
+
+                return (
+                    searchableText.includes(q) ||
+                    searchableNoSpace.includes(qNoSpace) ||
+                    (tokens.length > 0 && tokens.every(t => searchableText.includes(t)))
+                );
+            });
         }
 
         // Asynchronous LinkedIn telemetry: Log search appearance for returned candidates
@@ -5465,13 +5475,92 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             });
         }
 
+        // Strip private helper fields before sending response
+        const safeCandidates = filtered.map(cand => {
+            const { _rawEmail, ...safe } = cand;
+            return safe;
+        });
+
         res.json({
             success: true,
-            totalCount: filtered.length,
-            candidates: filtered.slice(0, 100)
+            totalCount: safeCandidates.length,
+            candidates: safeCandidates.slice(0, 100)
         });
     } catch (err) {
         console.error('Candidate discovery query error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 4b. VERIFIED CV / RESUME UPLOAD & DOWNLOAD ENDPOINTS
+// -------------------------------------------------------------
+app.post(['/api/learner/cv', '/gamification/api/learner/cv'], async (req, res) => {
+    try {
+        const { studentId, cvUrl, fileData, filename, fileName, size, fileSize, mimeType } = req.body || {};
+        const dataUrl = cvUrl || fileData;
+        const name = filename || fileName || 'resume.pdf';
+        const byteSize = size || fileSize || null;
+
+        if (!studentId || !dataUrl) {
+            return res.status(400).json({ success: false, error: 'studentId and file data/url are required' });
+        }
+        const isCreator = checkCreatorAuth(req);
+        const session = getAuthenticatedSession(req);
+        const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
+
+        if (!isCreator && !isStudentOwner) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Only the student or creator can upload CV' });
+        }
+
+        if (!store.studentCVs || typeof store.studentCVs !== 'object') store.studentCVs = {};
+        store.studentCVs[String(studentId)] = {
+            studentId: String(studentId),
+            cvUrl: String(dataUrl),
+            fileData: String(dataUrl),
+            filename: String(name),
+            fileName: String(name),
+            mimeType: mimeType || 'application/pdf',
+            size: byteSize,
+            fileSize: byteSize,
+            uploadedAt: new Date().toISOString()
+        };
+        saveStore();
+        res.json({ success: true, message: 'CV uploaded and verified successfully', cv: store.studentCVs[String(studentId)] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get(['/api/learner/cv/:studentId', '/gamification/api/learner/cv/:studentId'], async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        if (!studentId) return res.status(400).json({ success: false, error: 'studentId is required' });
+
+        const isCreator = checkCreatorAuth(req);
+        const verifiedEmployer = verifyEmployerAuth(req);
+        const session = getAuthenticatedSession(req);
+        const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
+        const isCampusCoordinator = session && session.role === 'partner';
+
+        if (!isCreator && !verifiedEmployer && !isStudentOwner && !isCampusCoordinator) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Session required to view CV' });
+        }
+
+        const cleanId = String(studentId).toLowerCase().trim();
+        const base = getLearnerBase();
+        const matchedUser = base.find(u => String(u._id || u.id) === String(studentId) || (u.email && u.email.toLowerCase().trim() === cleanId));
+        const userEmail = matchedUser?.email ? matchedUser.email.toLowerCase().trim() : null;
+        const userId = matchedUser ? String(matchedUser._id || matchedUser.id) : null;
+
+        const cv = (store.studentCVs && (
+            store.studentCVs[String(studentId)] ||
+            store.studentCVs[cleanId] ||
+            (userId && store.studentCVs[userId]) ||
+            (userEmail && store.studentCVs[userEmail])
+        )) || null;
+        res.json({ success: true, studentId, cv });
+    } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -5514,8 +5603,8 @@ app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (r
         }
 
         const effEmployerId = isCreator ? (employerId || 'creator_preview') : verifiedEmployer.id;
-        const effCompanyName = isCreator ? (companyName || 'SimplyBe Talent Operations') : verifiedEmployer.companyName;
-        const effRecruiterName = isCreator ? (recruiterName || 'Talent Acquisition') : (verifiedEmployer.recruiterName || 'Talent Acquisition');
+        const effCompanyName = (companyName || (isCreator ? 'SimplyBe Talent Operations' : verifiedEmployer.companyName) || 'Corporate Partner').trim();
+        const effRecruiterName = (recruiterName || (isCreator ? 'Internal Reviewer' : verifiedEmployer.recruiterName) || 'Talent Acquisition').trim();
 
         const logged = await logTelemetryEvent({
             studentId,
