@@ -5529,10 +5529,26 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         const candidates = baseUsers.map(u => {
             const uId = String(u._id || u.id || '');
             const uEmail = (u.email || '').toLowerCase().trim();
-            const uSubs = allSubs.filter(s => 
-                (s.userId && String(s.userId) === uId) ||
-                (s.userEmail && s.userEmail.toLowerCase().trim() === uEmail)
-            );
+            const uPhone = (u.phone || '').trim();
+            const localPart = uEmail.split('@')[0];
+            const aliases = [];
+            if (uId) aliases.push(uId);
+            if (localPart) {
+                aliases.push(localPart);
+                aliases.push(`test_${localPart}`);
+                aliases.push(`usr_cust_${localPart}`);
+            }
+
+            const uSubs = allSubs.filter(s => {
+                if (!s) return false;
+                const subUid = s.userId ? String(s.userId) : null;
+                const subFid = s.fanId ? String(s.fanId) : null;
+                if (uId && (subUid === uId || subFid === uId)) return true;
+                if (subUid && aliases.includes(subUid)) return true;
+                if (uEmail && s.userEmail && s.userEmail.toLowerCase().trim() === uEmail) return true;
+                if (uPhone && s.userPhone && String(s.userPhone).trim() === uPhone) return true;
+                return false;
+            });
 
             const earnedLcs = uSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
             const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);

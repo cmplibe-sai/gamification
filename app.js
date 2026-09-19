@@ -8374,6 +8374,42 @@ window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;
 // ==============================================================
 // COMPLETION GRID DATA EXTRACTION & TELEMETRY EXPORT ENGINE
 // ==============================================================
+function sanitizeExportMediaUrl(url, defaultMediaType = 'media') {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        if (trimmed.includes('audio') || defaultMediaType === 'audio') return '[Audio Recording Attached]';
+        if (trimmed.includes('video') || defaultMediaType === 'video') return '[Video Recording Attached]';
+        if (trimmed.includes('pdf') || trimmed.includes('application')) return '[Document Attached]';
+        if (trimmed.includes('image')) return '[Image Attached]';
+        return '[Media Recording Attached]';
+    }
+    return trimmed;
+}
+window.sanitizeExportMediaUrl = sanitizeExportMediaUrl;
+
+function sanitizeExportText(text, maxLen = 2000) {
+    if (text === null || text === undefined) return '';
+    let str = (typeof text === 'object') ? JSON.stringify(text) : String(text);
+    // Neutralize any raw data URIs embedded in text (e.g. data:audio/x-m4a;base64,...)
+    if (str.startsWith('data:') || str.startsWith('blob:')) {
+        return sanitizeExportMediaUrl(str);
+    }
+    // Replace embedded data URIs with clean tags
+    str = str.replace(/data:(audio|video|image|application)\/[a-zA-Z0-9.-]+;base64,[A-Za-z0-9+/=]+/g, (m, type) => {
+        return `[Embedded ${type.toUpperCase()} Attached]`;
+    });
+    // Strip non-printable ASCII control characters (except standard whitespace)
+    str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    // Normalize newlines to spaces for single-line CSV cell safety
+    str = str.replace(/\r?\n/g, ' ').trim();
+    if (str.length > maxLen) {
+        str = str.slice(0, maxLen - 3) + '...';
+    }
+    return str;
+}
+window.sanitizeExportText = sanitizeExportText;
+
 function extractSubmissionResponses(sub) {
     if (!sub) return [];
     let responses = sub.responses || sub.answers || [];
@@ -8390,11 +8426,11 @@ function extractSubmissionResponses(sub) {
             }
             return {
                 questionNumber: idx + 1,
-                title: String(qTitle || ''),
+                title: sanitizeExportText(qTitle, 500),
                 type: r.type || 'text',
-                answer: String(ans || ''),
-                audioUrl: r.audioUrl || '',
-                videoUrl: r.videoUrl || '',
+                answer: sanitizeExportText(ans, 2000),
+                audioUrl: sanitizeExportMediaUrl(r.audioUrl, 'audio'),
+                videoUrl: sanitizeExportMediaUrl(r.videoUrl, 'video'),
                 isCorrect: r.isCorrect !== undefined ? r.isCorrect : null,
                 score: r.pts !== undefined ? r.pts : (r.score !== undefined ? r.score : null)
             };
@@ -8405,21 +8441,21 @@ function extractSubmissionResponses(sub) {
     if (sub.reflection || sub.transcription || sub.text || sub.notes) {
         fallbackList.push({
             questionNumber: 1,
-            title: sub.articleTitle || sub.title || 'Reflection / Key Insights',
+            title: sanitizeExportText(sub.articleTitle || sub.title || 'Reflection / Key Insights', 500),
             type: 'text',
-            answer: String(sub.reflection || sub.transcription || sub.text || sub.notes || ''),
-            audioUrl: sub.audioUrl || sub.mediaUrl || '',
-            videoUrl: sub.videoUrl || '',
+            answer: sanitizeExportText(sub.reflection || sub.transcription || sub.text || sub.notes || '', 2000),
+            audioUrl: sanitizeExportMediaUrl(sub.audioUrl || sub.mediaUrl, 'audio'),
+            videoUrl: sanitizeExportMediaUrl(sub.videoUrl, 'video'),
             isCorrect: null,
             score: null
         });
     } else if (sub.audioUrl || sub.mediaUrl) {
         fallbackList.push({
             questionNumber: 1,
-            title: sub.title || 'Audio Voice Reflection',
+            title: sanitizeExportText(sub.title || 'Audio Voice Reflection', 500),
             type: 'audio',
             answer: 'Audio Reflection Recorded',
-            audioUrl: sub.audioUrl || sub.mediaUrl || '',
+            audioUrl: sanitizeExportMediaUrl(sub.audioUrl || sub.mediaUrl, 'audio'),
             videoUrl: '',
             isCorrect: null,
             score: null
@@ -8427,11 +8463,11 @@ function extractSubmissionResponses(sub) {
     } else if (sub.videoUrl) {
         fallbackList.push({
             questionNumber: 1,
-            title: sub.title || 'Video Reflection',
+            title: sanitizeExportText(sub.title || 'Video Reflection', 500),
             type: 'video',
             answer: 'Video Reflection Recorded',
             audioUrl: '',
-            videoUrl: sub.videoUrl,
+            videoUrl: sanitizeExportMediaUrl(sub.videoUrl, 'video'),
             isCorrect: null,
             score: null
         });
@@ -8664,7 +8700,10 @@ window.getAdminCompletionGridData = getAdminCompletionGridData;
 // OWASP CSV & Formula Injection Neutralization Engine
 function escapeCsvCell(val) {
     if (val === null || val === undefined) return '""';
-    let str = String(val).replace(/\r?\n/g, ' ');
+    let str = String(val).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').replace(/\r?\n/g, ' ');
+    if (str.length > 2500) {
+        str = str.slice(0, 2497) + '...';
+    }
 
     // Check bare tab and CR before trimming (since trimStart strips whitespace including \t and \r)
     if (str.length > 0 && (str[0] === '\t' || str[0] === '\r')) {
@@ -8724,7 +8763,17 @@ function exportCompletionGrid(format = 'matrix_csv') {
                 completionPct: l.completionPct || 0,
                 earnedLcs: l.earnedLcs || 0,
                 day1StartDate: l.startDateStr || '',
-                sessions: l.sessions
+                sessions: (l.sessions || []).map(sess => ({
+                    ...sess,
+                    audioUrl: sanitizeExportMediaUrl(sess.audioUrl, 'audio'),
+                    videoUrl: sanitizeExportMediaUrl(sess.videoUrl, 'video'),
+                    responses: (sess.responses || []).map(r => ({
+                        ...r,
+                        answer: sanitizeExportText(r.answer, 2000),
+                        audioUrl: sanitizeExportMediaUrl(r.audioUrl, 'audio'),
+                        videoUrl: sanitizeExportMediaUrl(r.videoUrl, 'video')
+                    }))
+                }))
             }))
         };
         const jsonStr = JSON.stringify(jsonExport, null, 2);
@@ -8745,8 +8794,13 @@ function exportCompletionGrid(format = 'matrix_csv') {
         data.learners.forEach(l => {
             l.sessions.forEach(sess => {
                 if (sess.status === 'not_submitted') return; // Only log actual check-in responses
+                const sessAudio = sanitizeExportMediaUrl(sess.audioUrl, 'audio');
+                const sessVideo = sanitizeExportMediaUrl(sess.videoUrl, 'video');
+
                 if (Array.isArray(sess.responses) && sess.responses.length > 0) {
                     sess.responses.forEach(r => {
+                        const rAudio = sanitizeExportMediaUrl(r.audioUrl, 'audio');
+                        const rVideo = sanitizeExportMediaUrl(r.videoUrl, 'video');
                         rows.push([
                             escapeCsv(l.rank),
                             escapeCsv(l.name || 'Customer'),
@@ -8762,11 +8816,11 @@ function exportCompletionGrid(format = 'matrix_csv') {
                             escapeCsv(sess.matchPercentage !== null ? `${sess.matchPercentage}%` : ''),
                             escapeCsv(sess.attemptNumber),
                             escapeCsv(sess.submittedAt),
-                            escapeCsv(r.title),
-                            escapeCsv(r.answer),
-                            escapeCsv(r.audioUrl || sess.audioUrl || ''),
-                            escapeCsv(r.videoUrl || sess.videoUrl || ''),
-                            escapeCsv(sess.aiRemarks)
+                            escapeCsv(sanitizeExportText(r.title, 500)),
+                            escapeCsv(sanitizeExportText(r.answer, 2000)),
+                            escapeCsv(rAudio || sessAudio || ''),
+                            escapeCsv(rVideo || sessVideo || ''),
+                            escapeCsv(sanitizeExportText(sess.aiRemarks, 1000))
                         ].join(','));
                     });
                 } else {
@@ -8787,9 +8841,9 @@ function exportCompletionGrid(format = 'matrix_csv') {
                         escapeCsv(sess.submittedAt),
                         escapeCsv(sess.title),
                         escapeCsv('Completed & Verified'),
-                        escapeCsv(sess.audioUrl || ''),
-                        escapeCsv(sess.videoUrl || ''),
-                        escapeCsv(sess.aiRemarks)
+                        escapeCsv(sessAudio || ''),
+                        escapeCsv(sessVideo || ''),
+                        escapeCsv(sanitizeExportText(sess.aiRemarks, 1000))
                     ].join(','));
                 }
             });
@@ -8842,17 +8896,27 @@ function exportCompletionGrid(format = 'matrix_csv') {
                 let summary = '';
                 if (Array.isArray(sess.responses) && sess.responses.length > 0) {
                     summary = sess.responses.map(r => {
-                        const media = r.audioUrl ? ` [Audio: ${r.audioUrl}]` : (r.videoUrl ? ` [Video: ${r.videoUrl}]` : '');
-                        return `${r.title}: ${r.answer}${media}`;
+                        const cleanAudio = sanitizeExportMediaUrl(r.audioUrl, 'audio');
+                        const cleanVideo = sanitizeExportMediaUrl(r.videoUrl, 'video');
+                        const media = (cleanAudio && (cleanAudio.startsWith('http') || cleanAudio.startsWith('/')))
+                            ? ` [Audio: ${cleanAudio}]`
+                            : ((cleanAudio)
+                                ? ` [Audio Attached]`
+                                : ((cleanVideo && (cleanVideo.startsWith('http') || cleanVideo.startsWith('/')))
+                                    ? ` [Video: ${cleanVideo}]`
+                                    : (cleanVideo ? ` [Video Attached]` : '')));
+                        return `${r.title}: ${sanitizeExportText(r.answer, 500)}${media}`;
                     }).join(' | ');
                 } else if (sess.audioUrl) {
-                    summary = `Audio Reflection [${sess.audioUrl}]`;
+                    const cleanAudio = sanitizeExportMediaUrl(sess.audioUrl, 'audio');
+                    summary = (cleanAudio.startsWith('http') || cleanAudio.startsWith('/')) ? `Audio Reflection [${cleanAudio}]` : cleanAudio;
                 } else if (sess.videoUrl) {
-                    summary = `Video Reflection [${sess.videoUrl}]`;
+                    const cleanVideo = sanitizeExportMediaUrl(sess.videoUrl, 'video');
+                    summary = (cleanVideo.startsWith('http') || cleanVideo.startsWith('/')) ? `Video Reflection [${cleanVideo}]` : cleanVideo;
                 } else {
                     summary = 'Completed';
                 }
-                rowValues.push(escapeCsv(summary));
+                rowValues.push(escapeCsv(sanitizeExportText(summary, 2500)));
             } else {
                 rowValues.push(escapeCsv('Not Submitted'));
                 rowValues.push(escapeCsv(0));
@@ -10910,12 +10974,12 @@ function getUserSubmissionsByUserId(userIdentifier) {
     if (matchedUser) {
         if (!targetId || String(targetId).startsWith('usr_')) targetId = matchedUser._id;
         if (!targetEmail && matchedUser.email) targetEmail = matchedUser.email.toLowerCase().trim();
-        if (!targetPhone && matchedUser.phone) targetPhone = String(matchedUser.phone).trim();
+        if (!targetPhone && matchedUser.phone) targetPhone = String(matchedUser.phone).replace(/\D/g, '');
     }
 
     const cleanTargetEmail = targetEmail ? targetEmail.toLowerCase().trim() : null;
     const cleanTargetId = targetId ? String(targetId) : null;
-    const cleanTargetPhone = targetPhone ? String(targetPhone).trim() : null;
+    const cleanTargetPhone = targetPhone ? String(targetPhone).replace(/\D/g, '') : null;
 
     // Also match test aliases for known test accounts (e.g. test_engineersai02 for engineersai02@gmail.com)
     const aliases = [];
@@ -10938,8 +11002,8 @@ function getUserSubmissionsByUserId(userIdentifier) {
         // Email match (case-insensitive)
         if (cleanTargetEmail && sub.userEmail && sub.userEmail.toLowerCase().trim() === cleanTargetEmail) return true;
         
-        // Phone match
-        if (cleanTargetPhone && sub.userPhone && String(sub.userPhone).trim() === cleanTargetPhone) return true;
+        // Phone match (normalize digits only, consistent with maskPhone/coord.phone convention)
+        if (cleanTargetPhone && sub.userPhone && String(sub.userPhone).replace(/\D/g, '') === cleanTargetPhone) return true;
         
         return false;
     });
@@ -20009,14 +20073,13 @@ function openCandidateDossier(candId) {
         const matchedUser = allUsersPool.find(u => String(u._id) === String(candId) || String(u.id) === String(candId) || (candidate.name && u.name === candidate.name) || (u.email && candidate.maskedEmail && candidate.maskedEmail.includes(u.email.substring(0, 2))));
         if (matchedUser && typeof computeLqStats === 'function') {
             const stats = computeLqStats(matchedUser, 1, 'all');
-            // Only adopt client-side computeLqStats if it actually contains earned LCs in this browser session.
-            // In a recruiter session where student submissions are stored on the server and not in localStorage,
-            // never overwrite the authoritative server-calculated metrics with zeroes!
+            // Adopt client-side computeLqStats if it contains earned LCs in this browser session.
+            // Never overwrite with zeroes; take the highest verified attainment.
             if (stats && stats.earned > 0) {
-                candEarned = stats.earned;
+                candEarned = Math.max(candEarned, stats.earned);
                 candMax = (stats.max && stats.max >= 1452) ? stats.max : (candidate.maxLcs || 1452);
-                candLq = stats.pct;
-                candZone = stats.zone;
+                candLq = candMax > 0 ? Math.min(100, Math.round((candEarned / candMax) * 100)) : stats.pct;
+                candZone = candLq >= 80 ? 'strong' : (candLq >= 50 ? 'average' : 'weak');
                 candidate.lqScore = candLq;
                 candidate.lqZone = candZone;
                 candidate.totalLcsEarned = candEarned;
@@ -20078,48 +20141,89 @@ function openCandidateDossier(candId) {
 
     // Verified CV / Resume section in dossier
     const cvTitle = document.getElementById('dossierCvTitle');
-    const cvMeta = document.getElementById('dossierCvMeta');
-    const cvAction = document.getElementById('dossierCvAction');
+    const cvSub = document.getElementById('dossierCvSubtitle') || document.getElementById('dossierCvMeta');
+    const cvPreviewBtn = document.getElementById('dossierPreviewCv') || document.getElementById('btnDossierPreviewCv');
+    const cvDownloadBtn = document.getElementById('dossierDownloadCv') || document.getElementById('btnDossierDownloadCv');
 
-    if (candidate.hasCv) {
+    if (candidate.hasCv && candidate.cvUrl) {
         if (cvTitle) cvTitle.innerText = `${candidate.name} - Verified Resume`;
-        if (cvMeta) cvMeta.innerText = 'Candidate verified CV ready to preview or download';
-        if (cvAction) {
-            cvAction.innerHTML = `
-                <button id="btnDossierPreviewCv" onclick="previewCandidateCv('${candidate.id}')" class="py-2 px-3 text-xs rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold border border-slate-700 transition-colors flex items-center gap-1.5 shadow-md">
-                    <i class="fas fa-eye text-cyan-400"></i> Preview CV
-                </button>
-                <button id="btnDossierDownloadCv" onclick="downloadCandidateCv('${candidate.id}')" class="btn-primary py-2 px-3 text-xs whitespace-nowrap">
-                    <i class="fas fa-download mr-1.5 text-cyan-300"></i> Download CV
-                </button>
-            `;
+        if (cvSub) cvSub.innerText = "Candidate verified CV ready to preview or download";
+        if (cvPreviewBtn) {
+            cvPreviewBtn.style.display = 'inline-flex';
+            cvPreviewBtn.classList.remove('hidden');
+            cvPreviewBtn.onclick = () => previewCandidateCv(candidate.id);
+        }
+        if (cvDownloadBtn) {
+            cvDownloadBtn.style.display = 'inline-flex';
+            cvDownloadBtn.classList.remove('hidden');
+            cvDownloadBtn.onclick = () => downloadCandidateCv(candidate.id);
         }
     } else {
-        if (cvTitle) cvTitle.innerText = 'CV Not Uploaded';
-        if (cvMeta) cvMeta.innerText = 'Candidate has not yet uploaded a verified resume.';
-        if (cvAction) {
-            cvAction.innerHTML = `
-                <span class="px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-400 border border-slate-700">No CV Available</span>
+        if (cvTitle) cvTitle.innerText = "Resume Pending Verification";
+        if (cvSub) cvSub.innerText = "Learner has not yet uploaded a verified curriculum vitae.";
+        if (cvPreviewBtn) cvPreviewBtn.style.display = 'none';
+        if (cvDownloadBtn) cvDownloadBtn.style.display = 'none';
+    }
+
+    // Verified Audio Voice Reflection recordings list
+    const audioContainer = document.getElementById('dossierAudioList');
+    if (audioContainer) {
+        if (Array.isArray(candidate.audioRecordings) && candidate.audioRecordings.length > 0) {
+            audioContainer.innerHTML = candidate.audioRecordings.map(rec => `
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800/80 flex items-center justify-between gap-3 shadow-sm hover:border-cyan-500/30 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-lg bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                            <i class="fas fa-waveform-lines"></i>
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-white">${rec.title || 'Day ' + rec.day + ' Voice Reflection'}</h5>
+                            <span class="text-[10px] text-slate-400">cMPLi Dip &bull; Milestone 1 &bull; Day ${rec.day}</span>
+                        </div>
+                    </div>
+                    <audio controls class="h-8 max-w-[180px] sm:max-w-[220px]" src="${rec.url}"></audio>
+                </div>
+            `).join('');
+        } else {
+            audioContainer.innerHTML = `
+                <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-center text-slate-400 text-xs">
+                    <i class="fas fa-microphone-slash mb-1.5 text-slate-500 block text-base"></i>
+                    No voice reflections verified yet for this learner.
+                </div>
             `;
         }
     }
 
-    document.getElementById('recruiterDossierModal')?.classList.remove('hidden');
+    // Direct Connect modal wire-up
+    const connectBtn = document.getElementById('dossierDirectConnectBtn');
+    if (connectBtn) {
+        connectBtn.onclick = () => {
+            closeCandidateDossier();
+            openDirectCandidateConnectModal(candidate.id);
+        };
+    }
+
+    const modal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');
+    if (modal) modal.classList.remove('hidden');
 }
 window.openCandidateDossier = openCandidateDossier;
 
-function closeRecruiterDossierModal() {
-    document.getElementById('recruiterDossierModal')?.classList.add('hidden');
+function closeCandidateDossier() {
+    const modal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');
+    if (modal) modal.classList.add('hidden');
+    window._activeDossierCandidate = null;
+    if (recruiterLcGrowthChartInstance) {
+        try { recruiterLcGrowthChartInstance.destroy(); } catch (e) {}
+        recruiterLcGrowthChartInstance = null;
+    }
 }
-window.closeRecruiterDossierModal = closeRecruiterDossierModal;
+window.closeCandidateDossier = closeCandidateDossier;
+window.closeRecruiterDossierModal = closeCandidateDossier;
 
-var recruiterLcGrowthChartInstance = null;
-var currentRecruiterLcTimeframe = 30;
-
+// Timeframe toggle handler for recruiter candidate dossier
 function setRecruiterLcTimeframe(days) {
-    currentRecruiterLcTimeframe = days;
+    currentRecruiterLcTimeframe = Number(days) || 30;
     if (window._activeDossierCandidate) {
-        renderRecruiterLcGrowthChart(window._activeDossierCandidate, days);
+        renderRecruiterLcGrowthChart(window._activeDossierCandidate, currentRecruiterLcTimeframe);
     }
 }
 window.setRecruiterLcTimeframe = setRecruiterLcTimeframe;
@@ -20129,7 +20233,7 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     const days = Math.max(1, Number(daysBack) || 30);
     currentRecruiterLcTimeframe = days;
 
-    // Update active button state (supports both recruiterLcTf-30 and recruiterLcTf30 formats)
+    // Update active state of pill buttons
     [7, 14, 30, 90].forEach(d => {
         const btn = document.getElementById(`recruiterLcTf-${d}`) || document.getElementById(`recruiterLcTf${d}`);
         if (btn) {
@@ -20151,6 +20255,21 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
         const matched = allUsersPool.find(u => String(u._id) === String(candidate.id) || String(u.id) === String(candidate.id) || (candidate.name && u.name === candidate.name));
         if (matched) userObj = matched;
     } catch(e) {}
+
+    // Trigger async TagMango ledger fetch with in-flight and backoff deduplication
+    const targetUserId = userObj ? (userObj._id || userObj.id || candidate.id) : candidate.id;
+    if (targetUserId && typeof fetchTagMangoLedger === 'function') {
+        const cleanId = String(targetUserId);
+        const cached = userTagMangoLedgerCache[cleanId];
+        const isFreshOrBackedOff = cached && (!cached.failed || (Date.now() - cached.timestamp < 30000));
+        if (!isFreshOrBackedOff && !userTagMangoLedgerInFlight[cleanId]) {
+            fetchTagMangoLedger(cleanId).then(entries => {
+                if (entries && entries.length > 0) {
+                    renderRecruiterLcGrowthChart(candidate, days);
+                }
+            });
+        }
+    }
 
     const data = (typeof buildCumulativeLcTimeline === 'function') 
         ? buildCumulativeLcTimeline(userObj, days)
