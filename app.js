@@ -8666,14 +8666,18 @@ function escapeCsvCell(val) {
     if (val === null || val === undefined) return '""';
     let str = String(val).replace(/\r?\n/g, ' ');
 
-    // If cell text begins with =, +, -, @, \t, or \r, prefix with apostrophe to prevent spreadsheet formula execution
-    const trimmed = str.trimStart();
-    if (trimmed.length > 0) {
-        const firstChar = trimmed[0];
-        if (firstChar === '=' || firstChar === '@' || firstChar === '\t' || firstChar === '\r') {
-            str = "'" + str;
-        } else if ((firstChar === '+' || firstChar === '-') && isNaN(Number(trimmed))) {
-            str = "'" + str;
+    // Check bare tab and CR before trimming (since trimStart strips whitespace including \t and \r)
+    if (str.length > 0 && (str[0] === '\t' || str[0] === '\r')) {
+        str = "'" + str;
+    } else {
+        const trimmed = str.trimStart();
+        if (trimmed.length > 0) {
+            const firstChar = trimmed[0];
+            if (firstChar === '=' || firstChar === '@' || firstChar === '\t' || firstChar === '\r') {
+                str = "'" + str;
+            } else if ((firstChar === '+' || firstChar === '-') && isNaN(Number(trimmed))) {
+                str = "'" + str;
+            }
         }
     }
 
@@ -9619,11 +9623,7 @@ function downloadPodQuizPoolCSV(dateKey) {
 
     const headers = ['Question Number', 'Question Prompt', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Option (A/B/C/D)', 'Explanation', 'Category'];
     const optLetters = ['A', 'B', 'C', 'D'];
-    const escapeCsv = (val) => {
-        if (val === null || val === undefined) return '""';
-        const str = String(val).replace(/"/g, '""');
-        return `"${str}"`;
-    };
+    const escapeCsv = (typeof escapeCsvCell === 'function') ? escapeCsvCell : ((val) => `"${String(val || '').replace(/"/g, '""')}"`);
 
     const rows = questions.map((q, idx) => {
         const opts = q.options || [];
