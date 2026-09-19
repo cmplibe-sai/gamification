@@ -716,7 +716,8 @@ function updateLqCenterNumbers(earned, max, pct, prefix = 'lq') {
     const maxEl = document.getElementById(`${prefix}MaxLabel`);
     if (earnedEl) earnedEl.textContent = `${earned} LCs`;
     if (maxEl) {
-        if (prefix === 'adminLq' || prefix === 'recruiterLq') {
+        // adminLq shows the detailed fraction (internal view); recruiterLq hides it (external recruiter view)
+        if (prefix === 'adminLq') {
             maxEl.style.display = 'block';
             if (max <= 0) {
                 maxEl.textContent = `0 / 0 LCs (0%)`;
@@ -20305,7 +20306,14 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     }
 
     const ctx = canvas.getContext('2d');
-    const canvasHeight = canvas.clientHeight || canvas.height || 220;
+    // Explicitly set canvas pixel dimensions — clientHeight/Width are 0 when modal was hidden.
+    // Read from the parent container's actual rendered size as the reliable fallback.
+    const containerEl = canvas.parentElement;
+    const resolvedWidth = (containerEl && containerEl.clientWidth > 0) ? containerEl.clientWidth : 600;
+    const resolvedHeight = (containerEl && containerEl.clientHeight > 0) ? containerEl.clientHeight : 220;
+    canvas.width = resolvedWidth;
+    canvas.height = resolvedHeight;
+    const canvasHeight = resolvedHeight;
     const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
     gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');
     gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)');
