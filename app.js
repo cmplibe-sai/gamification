@@ -20166,7 +20166,9 @@ function openCandidateDossier(candId) {
     }
 
     // Verified Audio Voice Reflection recordings list
-    const audioContainer = document.getElementById('dossierAudioList');
+    const audioContainer = document.getElementById('dossierAudioList')
+        || document.getElementById('dossierVoiceReflections')
+        || document.getElementById('dossierAudioRecordings');
     if (audioContainer) {
         if (Array.isArray(candidate.audioRecordings) && candidate.audioRecordings.length > 0) {
             audioContainer.innerHTML = candidate.audioRecordings.map(rec => `
@@ -20193,13 +20195,12 @@ function openCandidateDossier(candId) {
         }
     }
 
-    // Direct Connect modal wire-up
-    const connectBtn = document.getElementById('dossierDirectConnectBtn');
+    // Direct Connect button — wire to the real requestCandidateInterview flow
+    const connectBtn = document.getElementById('dossierDirectConnectBtn')
+        || document.getElementById('btnDossierRequestInterview')
+        || document.getElementById('dossierConnectBtn');
     if (connectBtn) {
-        connectBtn.onclick = () => {
-            closeCandidateDossier();
-            openDirectCandidateConnectModal(candidate.id);
-        };
+        connectBtn.onclick = () => requestCandidateInterview();
     }
 
     const modal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');

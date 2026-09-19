@@ -5529,14 +5529,14 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         const candidates = baseUsers.map(u => {
             const uId = String(u._id || u.id || '');
             const uEmail = (u.email || '').toLowerCase().trim();
-            const uPhone = (u.phone || '').trim();
+            const uPhone = String(u.phone || '').replace(/\D/g, '');
             const localPart = uEmail.split('@')[0];
             const aliases = [];
             if (uId) aliases.push(uId);
             if (localPart) {
                 aliases.push(localPart);
                 aliases.push(`test_${localPart}`);
-                aliases.push(`usr_cust_${localPart}`);
+                // Note: usr_cust_ alias removed — not used anywhere in ID generation
             }
 
             const uSubs = allSubs.filter(s => {
@@ -5546,7 +5546,7 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
                 if (uId && (subUid === uId || subFid === uId)) return true;
                 if (subUid && aliases.includes(subUid)) return true;
                 if (uEmail && s.userEmail && s.userEmail.toLowerCase().trim() === uEmail) return true;
-                if (uPhone && s.userPhone && String(s.userPhone).trim() === uPhone) return true;
+                if (uPhone && s.userPhone && String(s.userPhone).replace(/\D/g, '') === uPhone) return true;
                 return false;
             });
 
