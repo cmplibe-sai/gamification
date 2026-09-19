@@ -102,6 +102,12 @@
                         <span class="text-[8px] sm:text-[10px] text-slate-400 uppercase font-bold">LCs</span>
                     </div>
 
+                    <!-- Customer Recruiter & Telemetry Alerts Bell -->
+                    <button onclick="openCustomerNotificationsModal()" id="customerNotifBell" class="relative ml-0.5 sm:ml-1 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Recruiter Placement & Inspection Alerts">
+                        <i class="fas fa-bell text-xs text-amber-400"></i>
+                        <span id="customerNotifBadge" class="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-black rounded-full px-1 flex items-center justify-center hidden">0</span>
+                    </button>
+
                     <!-- Logout -->
                     <button onclick="logout()" class="ml-0.5 sm:ml-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800/80 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center border border-slate-700 shrink-0" title="Logout">
                         <i class="fas fa-sign-out-alt text-xs"></i>
@@ -878,9 +884,14 @@
                                 <button onclick="document.getElementById('learnerCvFileInput').click()" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/20">
                                     <i class="fas fa-cloud-arrow-up"></i> <span id="btnUploadCvText">Upload / Update CV</span>
                                 </button>
-                                <button id="btnDownloadOwnCv" onclick="downloadOwnCv()" class="hidden w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-700">
-                                    <i class="fas fa-download text-cyan-400"></i> Download Uploaded CV
-                                </button>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="btnPreviewOwnCv" onclick="previewOwnCv()" class="hidden w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-700">
+                                        <i class="fas fa-eye text-cyan-400"></i> Preview CV
+                                    </button>
+                                    <button id="btnDownloadOwnCv" onclick="downloadOwnCv()" class="hidden w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-700">
+                                        <i class="fas fa-download text-cyan-400"></i> Download CV
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1298,6 +1309,45 @@
                     </div>
                 </div>
 
+                <!-- Recruiter View: Cumulative Learning Currencies (LCs) Growth Timeline -->
+                <div class="glass-card p-4 sm:p-5 border-slate-800 space-y-3">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-800">
+                        <div>
+                            <h4 class="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                <i class="fas fa-chart-line text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"></i> Cumulative LC Growth Velocity
+                            </h4>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Candidate's cumulative daily LC trajectory and learning pace across active milestones.</p>
+                        </div>
+                        <div class="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 shrink-0">
+                            <button onclick="setRecruiterLcTimeframe(7)" id="recruiterLcTf-7" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">7D</button>
+                            <button onclick="setRecruiterLcTimeframe(14)" id="recruiterLcTf-14" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">14D</button>
+                            <button onclick="setRecruiterLcTimeframe(30)" id="recruiterLcTf-30" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors bg-cyan-600 text-white shadow-md">30D</button>
+                            <button onclick="setRecruiterLcTimeframe(90)" id="recruiterLcTf-90" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">90D</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div class="glass p-2.5 rounded-xl border border-slate-800 text-center">
+                            <span class="text-[8px] uppercase font-bold text-slate-400 block">Total Cumulative</span>
+                            <p id="recruiterLcKpiTotalCumulative" class="text-sm font-extrabold text-white font-mono mt-0.5">0 LCs</p>
+                        </div>
+                        <div class="glass p-2.5 rounded-xl border border-slate-800 text-center">
+                            <span class="text-[8px] uppercase font-bold text-slate-400 block">Period Gained</span>
+                            <p id="recruiterLcKpiGained" class="text-sm font-extrabold text-cyan-400 font-mono mt-0.5">+0 LCs</p>
+                        </div>
+                        <div class="glass p-2.5 rounded-xl border border-slate-800 text-center">
+                            <span class="text-[8px] uppercase font-bold text-slate-400 block">Growth Velocity</span>
+                            <p id="recruiterLcKpiVelocity" class="text-sm font-extrabold text-emerald-400 font-mono mt-0.5">0 LC/day</p>
+                        </div>
+                        <div class="glass p-2.5 rounded-xl border border-slate-800 text-center">
+                            <span class="text-[8px] uppercase font-bold text-slate-400 block">Active Streak</span>
+                            <p id="recruiterLcKpiActiveDays" class="text-sm font-extrabold text-amber-400 font-mono mt-0.5">0 Days</p>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-44 sm:h-52 bg-slate-950/60 rounded-2xl p-2 border border-slate-800/80">
+                        <canvas id="recruiterLcGrowthCanvas"></canvas>
+                    </div>
+                </div>
+
                 <!-- Verified CV / Resume Section -->
                 <div class="glass-card p-4 border-slate-800 flex items-center justify-between gap-4">
                     <div class="flex items-center gap-3 min-w-0">
@@ -1309,7 +1359,10 @@
                             <span id="dossierCvMeta" class="text-[10px] text-slate-400 block">Available for empanelled review</span>
                         </div>
                     </div>
-                    <div id="dossierCvAction">
+                    <div id="dossierCvAction" class="flex items-center gap-2">
+                        <button id="btnDossierPreviewCv" onclick="previewDossierCv()" class="hidden py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                            <i class="fas fa-eye text-cyan-400"></i> Preview CV
+                        </button>
                         <button id="btnDossierDownloadCv" onclick="downloadCandidateCv()" class="btn-primary py-2 px-3 text-xs whitespace-nowrap">
                             <i class="fas fa-download mr-1.5 text-cyan-300"></i> Download CV
                         </button>
@@ -1469,7 +1522,7 @@
     <script src="timeline.js?v=2.9.1"></script>
     <script src="courses.js?v=2.9.1"></script>
     <script src="api.js?v=2.9.5"></script>
-    <script src="app.js?v=2.9.18"></script>
+    <script src="app.js?v=2.9.20"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
@@ -1478,6 +1531,66 @@
                 <i class="fas fa-times"></i>
             </button>
             <div id="claimCredentialContent"></div>
+        </div>
+    </div>
+
+    <!-- UNIVERSAL CV PREVIEW MODAL (Preview without downloading for Creator & Recruiter) -->
+    <div id="cvPreviewModal" class="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-5xl h-[92vh] rounded-3xl overflow-hidden flex flex-col border border-cyan-500/40 shadow-2xl">
+            <!-- Header -->
+            <div class="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/90 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                        <i class="fas fa-file-pdf text-lg"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h4 id="cvPreviewTitle" class="text-sm sm:text-base font-bold text-white truncate">Candidate Verified Resume</h4>
+                        <span id="cvPreviewMeta" class="text-[10px] sm:text-xs text-slate-400 block truncate">Document Preview</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <button id="btnCvPreviewDownload" class="btn-primary py-2 px-4 text-xs whitespace-nowrap">
+                        <i class="fas fa-download mr-1.5 text-cyan-300"></i> Download Document
+                    </button>
+                    <button onclick="closeCvPreviewModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors flex items-center justify-center border border-slate-700">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Viewer Container -->
+            <div id="cvPreviewContainer" class="flex-1 w-full h-full bg-slate-950 p-2 overflow-hidden flex items-center justify-center">
+                <iframe id="cvPreviewFrame" class="w-full h-full rounded-2xl border border-slate-800 bg-white shadow-inner" src="about:blank"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOMER NOTIFICATIONS MODAL (Bell Icon Recruiter Alerts) -->
+    <div id="customerNotificationsModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
+        <div class="glass w-full max-w-xl rounded-3xl overflow-hidden flex flex-col border border-indigo-500/40 shadow-2xl max-h-[85vh]">
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                        <i class="fas fa-bell text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white font-heading">Recruiter Inspection Alerts</h3>
+                        <p class="text-xs text-slate-400">Live alerts when corporate employers inspect your profile or request candidate dossiers</p>
+                    </div>
+                </div>
+                <button onclick="closeCustomerNotificationsModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center border border-slate-700">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+            <div id="customerNotificationsList" class="p-4 overflow-y-auto space-y-3 flex-1 custom-scrollbar">
+                <div class="text-center py-8 text-slate-500 text-xs">
+                    <i class="fas fa-circle-notch fa-spin mr-2"></i> Loading alerts...
+                </div>
+            </div>
+            <div class="p-3 border-t border-slate-800 bg-slate-950/60 text-center">
+                <button onclick="closeCustomerNotificationsModal(); switchTab('careerViewsTab');" class="text-xs text-cyan-400 hover:text-cyan-300 font-bold transition-colors">
+                    View Full Career Views &amp; Profile Activity &rarr;
+                </button>
+            </div>
         </div>
     </div>
 

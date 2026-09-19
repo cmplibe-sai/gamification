@@ -567,6 +567,14 @@ try {
     console.warn('[Telemetry Schema Warning]:', e.message);
 }
 
+function sanitizePlainText(val, maxLen = 120) {
+    if (val === null || val === undefined) return '';
+    let s = String(val).trim();
+    s = s.replace(/<[^>]*>?/gm, '').replace(/[\r\n\t]+/g, ' ');
+    if (s.length > maxLen) s = s.substring(0, maxLen);
+    return s.trim();
+}
+
 // Resilient in-memory fallback buffer (prevents lag and synchronous disk freezes)
 const inMemoryTelemetryBuffer = [];
 
@@ -575,8 +583,8 @@ async function logTelemetryEvent(data) {
         studentId: String(data.studentId || '').trim(),
         campusId: String(data.campusId || '').trim(),
         employerId: String(data.employerId || '').trim(),
-        companyName: String(data.companyName || 'Corporate Partner').trim(),
-        recruiterName: String(data.recruiterName || 'Talent Acquisition').trim(),
+        companyName: sanitizePlainText(data.companyName || 'Corporate Partner', 80),
+        recruiterName: sanitizePlainText(data.recruiterName || 'Talent Acquisition', 80),
         action: ['search_appearance', 'profile_view', 'cv_download', 'audio_listen'].includes(data.action) ? data.action : 'profile_view',
         metadata: data.metadata || {},
         createdAt: new Date()
@@ -602,14 +610,28 @@ async function logTelemetryEvent(data) {
 }
 
 async function getTelemetryForStudent(studentId) {
-    const cleanId = String(studentId).trim();
+    const cleanId = String(studentId || '').trim();
+    const base = typeof getLearnerBase === 'function' ? getLearnerBase() : [];
+    const matched = base.find(u => 
+        String(u._id || u.id || '').trim().toLowerCase() === cleanId.toLowerCase() || 
+        (u.email && u.email.toLowerCase().trim() === cleanId.toLowerCase())
+    );
+    const targetIds = [cleanId];
+    if (matched) {
+        if (matched._id) targetIds.push(String(matched._id).trim());
+        if (matched.id) targetIds.push(String(matched.id).trim());
+        if (matched.email) targetIds.push(matched.email.toLowerCase().trim());
+    }
+    const uniqueIds = Array.from(new Set(targetIds.filter(Boolean)));
+    const uniqueIdsLower = uniqueIds.map(id => id.toLowerCase());
+
     if (isDbConnected && ProfileView) {
         try {
             const sevenDaysAgo = new Date(Date.now() - (7 * 24 * 3600 * 1000));
             const [searchCount7d, searchCount30d, recentViews] = await Promise.all([
-                ProfileView.countDocuments({ studentId: cleanId, action: 'search_appearance', createdAt: { $gte: sevenDaysAgo } }),
-                ProfileView.countDocuments({ studentId: cleanId, action: 'search_appearance' }),
-                ProfileView.find({ studentId: cleanId, action: { $ne: 'search_appearance' } }).sort({ createdAt: -1 }).limit(30).lean()
+                ProfileView.countDocuments({ studentId: { $in: uniqueIds }, action: 'search_appearance', createdAt: { $gte: sevenDaysAgo } }),
+                ProfileView.countDocuments({ studentId: { $in: uniqueIds }, action: 'search_appearance' }),
+                ProfileView.find({ studentId: { $in: uniqueIds }, action: { $ne: 'search_appearance' } }).sort({ createdAt: -1 }).limit(30).lean()
             ]);
             return {
                 searchAppearances7d: searchCount7d,
@@ -622,10 +644,10 @@ async function getTelemetryForStudent(studentId) {
     }
 
     const sevenDaysAgo = Date.now() - (7 * 24 * 3600 * 1000);
-    const matched = inMemoryTelemetryBuffer.filter(t => t.studentId === cleanId);
-    const searchEvents = matched.filter(t => t.action === 'search_appearance');
+    const matchedEvents = inMemoryTelemetryBuffer.filter(t => uniqueIdsLower.includes(String(t.studentId || '').trim().toLowerCase()));
+    const searchEvents = matchedEvents.filter(t => t.action === 'search_appearance');
     const search7d = searchEvents.filter(t => new Date(t.createdAt).getTime() >= sevenDaysAgo).length;
-    const views = matched.filter(t => t.action !== 'search_appearance').slice(0, 30);
+    const views = matchedEvents.filter(t => t.action !== 'search_appearance').slice(0, 30);
 
     return {
         searchAppearances7d: search7d,
@@ -636,6 +658,23 @@ async function getTelemetryForStudent(studentId) {
 
 async function getTelemetryForCampus(campusId) {
     const cleanId = String(campusId).trim();
+    const base = typeof getLearnerBase === 'function' ? getLearnerBase() : [];
+
+    function enrichViews(viewsList) {
+        return (viewsList || []).map(v => {
+            const sId = String(v.studentId || '').trim().toLowerCase();
+            const student = base.find(u => 
+                String(u._id || u.id || '').trim().toLowerCase() === sId || 
+                (u.email && u.email.toLowerCase().trim() === sId)
+            );
+            return {
+                ...v,
+                studentName: sanitizePlainText(student?.name || (v.metadata && v.metadata.studentName) || 'Candidate', 80),
+                studentEmail: sanitizePlainText(student?.email || (v.metadata && v.metadata.studentEmail) || '', 80)
+            };
+        });
+    }
+
     if (isDbConnected && ProfileView) {
         try {
             const [totalSearches, totalViews, recentViews] = await Promise.all([
@@ -655,7 +694,7 @@ async function getTelemetryForCampus(campusId) {
                 totalSearches,
                 totalViews,
                 topPartners,
-                recentViews
+                recentViews: enrichViews(recentViews)
             };
         } catch (e) {
             console.warn('[Campus Telemetry Query Warning]:', e.message);
@@ -677,7 +716,7 @@ async function getTelemetryForCampus(campusId) {
         totalSearches: searches,
         totalViews: views.length,
         topPartners,
-        recentViews: views.slice(0, 50)
+        recentViews: enrichViews(views.slice(0, 50))
     };
 }
 
@@ -5304,12 +5343,12 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
         const existingEmp = existingIdx > -1 ? store.employers[existingIdx] : null;
         const empData = {
             id: id || (existingEmp ? existingEmp.id : ('emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6))),
-            companyName: String(companyName).trim(),
-            recruiterName: String(recruiterName || 'Talent Acquisition').trim(),
+            companyName: sanitizePlainText(companyName, 80),
+            recruiterName: sanitizePlainText(recruiterName || 'Talent Acquisition', 80),
             email: cleanEmail,
             phone: cleanPhone,
-            industry: String(industry || 'Technology & Innovation').trim(),
-            designation: String(designation || 'Recruiter').trim(),
+            industry: sanitizePlainText(industry || 'Technology & Innovation', 60),
+            designation: sanitizePlainText(designation || 'Recruiter', 60),
             accessKey: existingEmp && existingEmp.accessKey ? existingEmp.accessKey : ('emp_key_' + crypto.randomBytes(16).toString('hex')),
             status: status === 'inactive' ? 'inactive' : (status === 'pending' ? 'pending' : 'active'),
             updatedAt: new Date().toISOString()
@@ -5361,12 +5400,12 @@ app.post(['/api/employers/register', '/gamification/api/employers/register'], (r
 
         const newEmp = {
             id: 'emp_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
-            companyName: String(companyName).trim(),
-            recruiterName: String(recruiterName || 'Talent Acquisition').trim(),
+            companyName: sanitizePlainText(companyName, 80),
+            recruiterName: sanitizePlainText(recruiterName || 'Talent Acquisition', 80),
             email: cleanEmail,
             phone: cleanPhone,
-            industry: String(industry || 'Industry Partner').trim(),
-            designation: String(designation || 'Talent Partner').trim(),
+            industry: sanitizePlainText(industry || 'Industry Partner', 60),
+            designation: sanitizePlainText(designation || 'Talent Partner', 60),
             accessKey: 'emp_key_' + crypto.randomBytes(16).toString('hex'),
             status: 'pending', // Strictly pending creator approval; cannot access candidates
             createdAt: new Date().toISOString()
@@ -5497,22 +5536,25 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
 
             const earnedLcs = uSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
             const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);
+            const msSubs = uSubs.filter(s => String(s.milestoneId || 1) === String(highestMs));
+            const msEarned = msSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
             const streakDays = new Set(uSubs.map(s => (s.submittedAt || '').split('T')[0])).size;
 
-            // Learn Agility Quotient (LQ®) strictly grounded in milestone LC attainment matching computeLqStats
-            const msSubs = uSubs.filter(s => Number(s.milestoneId || 1) === Number(highestMs));
-            const msEarned = msSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-            // Milestone target baseline: 21 days of Dip (1 LC) + POD (2 LCs) = 63 LCs
-            const targetMsLcs = 63;
-            let lqScore = 30;
-            let lqZone = 'weak';
-            if (msSubs.length > 0) {
-                lqScore = Math.min(100, Math.max(30, Math.round((msEarned / targetMsLcs) * 100)));
-                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 50 ? 'average' : 'weak');
+            // Canonical Learn Agility Quotient (LQ®) strictly grounded in milestone eligible LC attainment matching computeLqStats (1452 LCs for MS1)
+            const msTargetMax = 1452;
+            let lqScore = 0;
+            if (msSubs.length > 0 || msEarned > 0) {
+                lqScore = msTargetMax > 0 ? Math.min(100, Math.round((msEarned / msTargetMax) * 100)) : 0;
             } else if (highestMs > 1) {
                 lqScore = Math.min(75, 30 + (highestMs * 12));
-                lqZone = lqScore >= 50 ? 'average' : 'weak';
             }
+            const lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 50 ? 'average' : 'weak');
+
+            const dailyLcsMap = {};
+            uSubs.forEach(s => {
+                const dateKey = (s.submittedAt || s.date || '').split('T')[0] || '2026-09-01';
+                dailyLcsMap[dateKey] = (dailyLcsMap[dateKey] || 0) + (Number(s.lcReward) || 0);
+            });
 
             // Real Geo & Campus assignment
             let assignedCampus = null;
@@ -5553,9 +5595,11 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
                 lqZone: lqZone,
                 highestMilestone: highestMs,
                 totalLcsEarned: earnedLcs,
+                maxLcs: msTargetMax,
                 streakDays: streakDays,
                 submissionsCount: uSubs.length,
                 audioRecordings: audioRecordings,
+                dailyLcs: dailyLcsMap,
                 subscribedMangoes: u.subscribedMangoes || [],
                 hasCv: Boolean(store.studentCVs && (store.studentCVs[uId] || store.studentCVs[uEmail])),
                 cvUrl: (store.studentCVs && (store.studentCVs[uId]?.cvUrl || store.studentCVs[uEmail]?.cvUrl)) || '',
@@ -5773,8 +5817,8 @@ app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (r
         }
 
         const effEmployerId = isCreator ? (employerId || 'creator_preview') : verifiedEmployer.id;
-        const effCompanyName = (companyName || (isCreator ? 'SimplyBe Talent Operations' : verifiedEmployer.companyName) || 'Corporate Partner').trim();
-        const effRecruiterName = (recruiterName || (isCreator ? 'Internal Reviewer' : verifiedEmployer.recruiterName) || 'Talent Acquisition').trim();
+        const effCompanyName = sanitizePlainText(companyName || (isCreator ? 'SimplyBe Talent Operations' : verifiedEmployer.companyName) || 'Corporate Partner', 80);
+        const effRecruiterName = sanitizePlainText(recruiterName || (isCreator ? 'Internal Reviewer' : verifiedEmployer.recruiterName) || 'Talent Acquisition', 80);
 
         const logged = await logTelemetryEvent({
             studentId,
@@ -5800,9 +5844,20 @@ app.get(['/api/learner/career-views/:studentId', '/gamification/api/learner/care
             return res.status(400).json({ success: false, error: 'studentId parameter is required' });
         }
 
+        const cleanId = String(studentId).toLowerCase().trim();
+        const base = getLearnerBase();
+        const matchedUser = base.find(u => String(u._id || u.id).toLowerCase() === cleanId || (u.email && u.email.toLowerCase().trim() === cleanId));
+        const userEmail = matchedUser?.email ? matchedUser.email.toLowerCase().trim() : null;
+        const userId = matchedUser ? String(matchedUser._id || matchedUser.id) : null;
+
         const isCreator = checkCreatorAuth(req);
         const session = getAuthenticatedSession(req);
-        const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
+        const isStudentOwner = session && session.role === 'customer' && (
+            String(session.userId) === String(studentId) ||
+            (session.email && session.email.toLowerCase().trim() === cleanId) ||
+            (userId && String(session.userId) === String(userId)) ||
+            (userEmail && session.email && session.email.toLowerCase().trim() === userEmail)
+        );
 
         if (!isCreator && !isStudentOwner) {
             return res.status(403).json({ 

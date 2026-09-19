@@ -40,6 +40,17 @@ window.getLocalDateKey = getLocalDateKey;
 var activeAdminDateKey = getLocalDateKey(new Date());
 window.activeAdminDateKey = activeAdminDateKey;
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
 const MANGO_PRICES = {
     "66ac8a14a04c8e9d18af993d": "Free",
     "6714e7d8eb97f72e99e3316c": "Free",
@@ -664,7 +675,7 @@ function ensureLqGaugeSvg(prefix = 'lq') {
             <!-- Center Score Digits: Prominent total number on top, exact customer totals below for creator only -->
             <div class="flex flex-col items-center text-center mt-1 select-none">
                 <span id="${prefix}EarnedNumber" class="text-3xl md:text-4xl font-black bg-gradient-to-r from-rose-400 via-rose-100 to-amber-300 bg-clip-text text-transparent font-mono leading-none tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">0 LCs</span>
-                <span id="${prefix}MaxLabel" class="${prefix === 'adminLq' ? 'block' : 'hidden'} text-xs md:text-sm text-slate-300 font-bold font-mono tracking-wide mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]" style="${prefix === 'adminLq' ? '' : 'display: none;'}">0 / 0 LCs (0%)</span>
+                <span id="${prefix}MaxLabel" class="${(prefix === 'adminLq' || prefix === 'recruiterLq') ? 'block' : 'hidden'} text-xs md:text-sm text-slate-300 font-bold font-mono tracking-wide mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]" style="${(prefix === 'adminLq' || prefix === 'recruiterLq') ? '' : 'display: none;'}">0 / 0 LCs (0%)</span>
             </div>
         </div>
     `;
@@ -705,7 +716,7 @@ function updateLqCenterNumbers(earned, max, pct, prefix = 'lq') {
     const maxEl = document.getElementById(`${prefix}MaxLabel`);
     if (earnedEl) earnedEl.textContent = `${earned} LCs`;
     if (maxEl) {
-        if (prefix === 'adminLq') {
+        if (prefix === 'adminLq' || prefix === 'recruiterLq') {
             maxEl.style.display = 'block';
             if (max <= 0) {
                 maxEl.textContent = `0 / 0 LCs (0%)`;
@@ -2320,7 +2331,53 @@ async function displayAdminLearnerDataById(userId, shouldScroll = true) {
                 <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${getActualLearnerHighestMilestone(learner._id || learner)}</strong></p>
                 <p><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></p>
             </div>
+            <div id="adminLearnerCvSection" class="pt-3 border-t border-slate-800">
+                <div class="flex items-center justify-center p-2 text-slate-500 text-xs"><i class="fas fa-circle-notch fa-spin mr-1.5"></i> Checking CV status...</div>
+            </div>
         `;
+    }
+
+    // Load Learner's Verified CV for Creator Preview & Download
+    try {
+        const cvSection = document.getElementById('adminLearnerCvSection');
+        if (cvSection) {
+            const cvTargetId = learner._id || learner.id || learner.email;
+            apiFetch(`/api/learner/cv/${cvTargetId}`).then(r => r.json()).then(cvData => {
+                if (cvData && cvData.success && cvData.cv) {
+                    const uDate = new Date(cvData.cv.uploadedAt).toLocaleDateString();
+                    cvSection.innerHTML = `
+                        <div class="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-white font-bold flex items-center gap-1.5 truncate text-xs">
+                                    <i class="fas fa-file-pdf text-rose-400"></i> ${cvData.cv.filename}
+                                </span>
+                                <span class="badge-pill badge-emerald text-[9px]">Verified Active</span>
+                            </div>
+                            <p class="text-[10px] text-slate-400">${Math.round((cvData.cv.size || 0) / 1024)} KB &bull; Uploaded ${uDate}</p>
+                            <div class="flex items-center gap-2 pt-1">
+                                <button onclick="previewCandidateCv('${cvTargetId}')" class="flex-1 py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                                    <i class="fas fa-eye text-cyan-400"></i> Preview CV
+                                </button>
+                                <button onclick="downloadCandidateCv('${cvTargetId}')" class="flex-1 py-1.5 px-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/20">
+                                    <i class="fas fa-download text-cyan-200"></i> Download CV
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    cvSection.innerHTML = `
+                        <div class="p-2.5 bg-slate-900/60 rounded-xl border border-slate-800 text-slate-500 text-xs flex items-center justify-between">
+                            <span><i class="fas fa-file-circle-xmark mr-1.5 text-slate-600"></i> No CV uploaded yet</span>
+                            <span class="badge-pill badge-slate text-[9px]">Missing</span>
+                        </div>
+                    `;
+                }
+            }).catch(() => {
+                if (cvSection) cvSection.innerHTML = '<span class="text-[10px] text-slate-500">CV lookup unavailable</span>';
+            });
+        }
+    } catch (e) {
+        console.warn("Error fetching admin learner CV:", e);
     }
 
     // 2. Fetch Live Collective Points & Render Beautiful Currencies Ledger
@@ -18016,11 +18073,17 @@ async function switchTab(tab) {
         if (currentUser && typeof renderSubmissionsAndReflections === 'function') {
             renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
         }
+        if (typeof loadCustomerNotifications === 'function') {
+            loadCustomerNotifications();
+        }
     }
 
     if (tab === 'careerViewsTab') {
         if (typeof renderLearnerCareerViews === 'function') {
             renderLearnerCareerViews();
+        }
+        if (typeof loadCustomerNotifications === 'function') {
+            loadCustomerNotifications();
         }
     }
 
@@ -19325,11 +19388,11 @@ async function renderRecruiterCandidates() {
                         <!-- Header / Agility Score -->
                         <div class="flex justify-between items-start gap-3">
                             <div class="flex items-center gap-3">
-                                <img src="${cand.profilePicUrl}" alt="${cand.name}" class="w-12 h-12 rounded-2xl object-cover border-2 border-slate-700 shrink-0" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
+                                <img src="${cand.profilePicUrl}" alt="${escapeHtml(cand.name)}" class="w-12 h-12 rounded-2xl object-cover border-2 border-slate-700 shrink-0" onerror="this.src='https://tagmango.com/staticassets/avatar-placeholder.png-1612857612139.png'">
                                 <div>
-                                    <h4 class="text-base font-extrabold text-white font-heading">${cand.name}</h4>
-                                    <span class="text-xs text-slate-400 block truncate max-w-[160px]">${cand.campus}</span>
-                                    <span class="text-[10px] text-cyan-400 font-semibold"><i class="fas fa-location-dot mr-1"></i>${cand.district}</span>
+                                    <h4 class="text-base font-extrabold text-white font-heading">${escapeHtml(cand.name)}</h4>
+                                    <span class="text-xs text-slate-400 block truncate max-w-[160px]">${escapeHtml(cand.campus)}</span>
+                                    <span class="text-[10px] text-cyan-400 font-semibold"><i class="fas fa-location-dot mr-1"></i>${escapeHtml(cand.district)}</span>
                                 </div>
                             </div>
                             
@@ -19354,8 +19417,8 @@ async function renderRecruiterCandidates() {
 
                         <!-- Masked Credentials & Verified Badges -->
                         <div class="mt-3 text-[11px] text-slate-400 flex justify-between items-center px-1 font-mono">
-                            <span><i class="fas fa-envelope mr-1 text-slate-500"></i>${cand.maskedEmail}</span>
-                            <span><i class="fas fa-phone mr-1 text-slate-500"></i>${cand.maskedPhone}</span>
+                            <span><i class="fas fa-envelope mr-1 text-slate-500"></i>${escapeHtml(cand.maskedEmail)}</span>
+                            <span><i class="fas fa-phone mr-1 text-slate-500"></i>${escapeHtml(cand.maskedPhone)}</span>
                         </div>
 
                         ${cand.hasCv ? `
@@ -19411,6 +19474,27 @@ function openCandidateDossier(candId) {
         })
     }).catch(() => {});
 
+    // Compute exact earned & max LCs to match Creator and Customer dashboards
+    let candEarned = candidate.totalLcsEarned || 0;
+    let candMax = 1452;
+    let candLq = candidate.lqScore;
+    let candZone = candidate.lqZone;
+
+    try {
+        const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
+        const matchedUser = allUsersPool.find(u => String(u._id) === String(candId) || String(u.id) === String(candId) || (candidate.name && u.name === candidate.name) || (u.email && candidate.maskedEmail && candidate.maskedEmail.includes(u.email.substring(0, 2))));
+        if (matchedUser && typeof computeLqStats === 'function') {
+            const stats = computeLqStats(matchedUser, 1, 'all');
+            candEarned = stats.earned;
+            candMax = stats.max;
+            candLq = stats.pct;
+            candZone = stats.zone;
+            candidate.lqScore = candLq;
+            candidate.lqZone = candZone;
+            candidate.totalLcsEarned = candEarned;
+        }
+    } catch(e) {}
+
     // Populate academic and credentials details
     const nameEl = document.getElementById('dossierCandidateName');
     const lqBadge = document.getElementById('dossierLqBadge');
@@ -19422,37 +19506,44 @@ function openCandidateDossier(candId) {
     const phoneEl = document.getElementById('dossierPhone');
 
     if (nameEl) nameEl.innerText = candidate.name;
-    if (lqBadge) lqBadge.innerText = `${candidate.lqScore}% Learn Agility Quotient (LQ®)`;
+    if (lqBadge) lqBadge.innerText = `${candLq}% Learn Agility Quotient (LQ®)`;
     if (campusEl) campusEl.innerText = candidate.campus;
     if (distEl) distEl.innerText = `${candidate.state} - ${candidate.district}`;
-    if (msEl) msEl.innerText = `Milestone ${candidate.highestMilestone} Achieved`;
-    if (streakEl) streakEl.innerText = `${candidate.streakDays} Days Consistency Streak`;
+    if (msEl) msEl.innerText = `Milestone ${candidate.highestMilestone || 1} Achieved`;
+    if (streakEl) streakEl.innerText = `${candidate.streakDays || 0} Days Consistency Streak`;
     if (emailEl) emailEl.innerText = candidate.maskedEmail;
     if (phoneEl) phoneEl.innerText = candidate.maskedPhone;
 
     // 3D Realistic Speedometer Gauge & Live Needle Evaluation
     try {
         ensureLqGaugeSvg('recruiterLq');
-        updateLqNeedle(candidate.lqScore, candidate.lqZone, 'recruiterLq');
-        updateLqCenterNumbers(candidate.totalLcsEarned || 0, 0, candidate.lqScore, 'recruiterLq');
+        updateLqNeedle(candLq, candZone, 'recruiterLq');
+        updateLqCenterNumbers(candEarned, candMax, candLq, 'recruiterLq');
 
         const zBadge = document.getElementById('recruiterLqZoneBadge');
         if (zBadge) {
-            if (candidate.lqZone === 'strong') {
+            if (candZone === 'strong') {
                 zBadge.className = 'badge-pill badge-emerald text-xs';
-                zBadge.innerHTML = '<i class="fas fa-bolt mr-1"></i> Strong Zone (High Match)';
-            } else if (candidate.lqZone === 'average') {
+                zBadge.innerHTML = `<i class="fas fa-bolt mr-1"></i> Strong Zone (${candLq}%)`;
+            } else if (candZone === 'average') {
                 zBadge.className = 'badge-pill badge-amber text-xs';
-                zBadge.innerHTML = '<i class="fas fa-bolt mr-1"></i> Growing Zone (Moderate)';
+                zBadge.innerHTML = `<i class="fas fa-bolt mr-1"></i> Growing Zone (${candLq}%)`;
             } else {
                 zBadge.className = 'badge-pill badge-red text-xs';
-                zBadge.innerHTML = '<i class="fas fa-bolt mr-1"></i> Weak Zone (Developing)';
+                zBadge.innerHTML = `<i class="fas fa-bolt mr-1"></i> Weak Zone (${candLq}%)`;
             }
         }
         const lcBadge = document.getElementById('recruiterLqLcBadge');
-        if (lcBadge) lcBadge.innerText = `${candidate.totalLcsEarned || 0} LCs Earned`;
+        if (lcBadge) lcBadge.innerText = `${candEarned} LCs Earned`;
     } catch(err) {
         console.error("Error updating recruiter speedometer gauge:", err);
+    }
+
+    // Render Cumulative LC Growth Velocity Chart
+    try {
+        renderRecruiterLcGrowthChart(candidate, currentRecruiterLcTimeframe || 30);
+    } catch (err) {
+        console.error("Error rendering recruiter growth chart:", err);
     }
 
     // Verified CV / Resume section in dossier
@@ -19462,9 +19553,12 @@ function openCandidateDossier(candId) {
 
     if (candidate.hasCv) {
         if (cvTitle) cvTitle.innerText = `${candidate.name} - Verified Resume`;
-        if (cvMeta) cvMeta.innerText = 'Candidate verified CV ready to download';
+        if (cvMeta) cvMeta.innerText = 'Candidate verified CV ready to preview or download';
         if (cvAction) {
             cvAction.innerHTML = `
+                <button id="btnDossierPreviewCv" onclick="previewCandidateCv('${candidate.id}')" class="py-2 px-3 text-xs rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold border border-slate-700 transition-colors flex items-center gap-1.5 shadow-md">
+                    <i class="fas fa-eye text-cyan-400"></i> Preview CV
+                </button>
                 <button id="btnDossierDownloadCv" onclick="downloadCandidateCv('${candidate.id}')" class="btn-primary py-2 px-3 text-xs whitespace-nowrap">
                     <i class="fas fa-download mr-1.5 text-cyan-300"></i> Download CV
                 </button>
@@ -19488,6 +19582,155 @@ function closeRecruiterDossierModal() {
     document.getElementById('recruiterDossierModal')?.classList.add('hidden');
 }
 window.closeRecruiterDossierModal = closeRecruiterDossierModal;
+
+var recruiterLcGrowthChartInstance = null;
+var currentRecruiterLcTimeframe = 30;
+
+function setRecruiterLcTimeframe(days) {
+    currentRecruiterLcTimeframe = days;
+    if (window._activeDossierCandidate) {
+        renderRecruiterLcGrowthChart(window._activeDossierCandidate, days);
+    }
+}
+window.setRecruiterLcTimeframe = setRecruiterLcTimeframe;
+
+function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
+    if (!candidate) return;
+    const days = Math.max(1, Number(daysBack) || 30);
+    currentRecruiterLcTimeframe = days;
+
+    // Update active button state (supports both recruiterLcTf-30 and recruiterLcTf30 formats)
+    [7, 14, 30, 90].forEach(d => {
+        const btn = document.getElementById(`recruiterLcTf-${d}`) || document.getElementById(`recruiterLcTf${d}`);
+        if (btn) {
+            if (d === days) {
+                btn.className = 'px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors bg-cyan-600 text-white shadow-md';
+            } else {
+                btn.className = 'px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white';
+            }
+        }
+    });
+
+    const canvas = document.getElementById('recruiterLcGrowthCanvas');
+    if (!canvas) return;
+
+    // Find actual learner user if available for historical ledger
+    let userObj = candidate;
+    try {
+        const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
+        const matched = allUsersPool.find(u => String(u._id) === String(candidate.id) || String(u.id) === String(candidate.id) || (candidate.name && u.name === candidate.name));
+        if (matched) userObj = matched;
+    } catch(e) {}
+
+    const data = (typeof buildCumulativeLcTimeline === 'function') 
+        ? buildCumulativeLcTimeline(userObj, days)
+        : { labels: [], cumulativeData: [], dailyData: [], totalCumulative: candidate.totalLcsEarned || 0, gainedInPeriod: 0, dailyAvg: 0 };
+
+    // Calculate active streak / consistency days
+    const activeDaysInPeriod = Array.isArray(data.dailyData) ? data.dailyData.filter(v => Number(v) > 0).length : 0;
+    const streakDisplay = (candidate.streakDays !== undefined && candidate.streakDays !== null) 
+        ? candidate.streakDays 
+        : activeDaysInPeriod;
+
+    // Update KPI tiles (matching exact IDs from index.html with fallbacks)
+    const totalEl = document.getElementById('recruiterLcKpiTotalCumulative');
+    const gainedEl = document.getElementById('recruiterLcKpiGained') || document.getElementById('recruiterLcKpiGainedInPeriod');
+    const avgEl = document.getElementById('recruiterLcKpiVelocity') || document.getElementById('recruiterLcKpiDailyAverage');
+    const streakEl = document.getElementById('recruiterLcKpiActiveDays');
+
+    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LC/day`;
+    if (streakEl) streakEl.textContent = `${streakDisplay} Days`;
+
+    if (typeof Chart === 'undefined') return;
+
+    if (recruiterLcGrowthChartInstance) {
+        try { recruiterLcGrowthChartInstance.destroy(); } catch (e) {}
+        recruiterLcGrowthChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const canvasHeight = canvas.clientHeight || canvas.height || 220;
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');
+    gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)');
+    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+
+    let pointRadius = 4;
+    let pointHoverRadius = 7;
+    if (days > 30) {
+        pointRadius = days > 90 ? 0 : 2;
+        pointHoverRadius = 6;
+    }
+
+    recruiterLcGrowthChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Cumulative LCs',
+                data: data.cumulativeData,
+                borderColor: '#22d3ee',
+                borderWidth: 3,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.35,
+                pointRadius: pointRadius,
+                pointHoverRadius: pointHoverRadius,
+                pointBackgroundColor: '#06b6d4',
+                pointBorderColor: '#0f172a',
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#38bdf8',
+                pointHoverBorderColor: '#ffffff',
+                pointHoverBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 650,
+                easing: 'easeOutQuart'
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#e2e8f0',
+                    bodyColor: '#38bdf8',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            return `Cumulative: ${ctx.parsed.y} LCs`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(51, 65, 85, 0.2)', drawBorder: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+                },
+                y: {
+                    beginAtZero: false,
+                    grid: { color: 'rgba(51, 65, 85, 0.25)', drawBorder: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => `${v} LC` }
+                }
+            }
+        }
+    });
+}
+window.renderRecruiterLcGrowthChart = renderRecruiterLcGrowthChart;
 
 async function downloadCandidateCv(candId) {
     const id = candId || window._activeDossierCandidate?.id;
@@ -19615,9 +19858,12 @@ window.handleLearnerCvSelected = handleLearnerCvSelected;
 async function renderLearnerCvStatus() {
     if (!currentUser) return;
     const studentId = currentUser._id || currentUser.id;
-    const statusText = document.getElementById('learnerCvStatusText');
-    const downloadBtn = document.getElementById('learnerCvDownloadBtn');
-    if (!statusText) return;
+    const fileNameEl = document.getElementById('careerViewsCvFileName');
+    const badgeEl = document.getElementById('careerViewsCvBadge');
+    const metaEl = document.getElementById('careerViewsCvMeta');
+    const previewBtn = document.getElementById('btnPreviewOwnCv');
+    const downloadBtn = document.getElementById('btnDownloadOwnCv');
+    const uploadText = document.getElementById('btnUploadCvText');
 
     try {
         const res = await apiFetch(`/api/learner/cv/${studentId}`);
@@ -19625,12 +19871,36 @@ async function renderLearnerCvStatus() {
         if (data.success && data.cv) {
             window._currentUserCv = data.cv;
             const uploadedDate = new Date(data.cv.uploadedAt).toLocaleDateString();
-            statusText.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Active Verified CV:</span> <span class="text-slate-200">${data.cv.filename}</span> <span class="text-[10px] text-slate-500 font-mono">(${Math.round(data.cv.size / 1024)} KB &bull; ${uploadedDate})</span>`;
+            if (fileNameEl) {
+                fileNameEl.innerHTML = `<i class="fas fa-file-pdf mr-1.5 text-rose-400"></i>${data.cv.filename}`;
+                fileNameEl.className = 'text-white font-bold truncate';
+            }
+            if (badgeEl) {
+                badgeEl.className = 'badge-pill badge-emerald text-[9px]';
+                badgeEl.innerText = 'Active Verified';
+            }
+            if (metaEl) {
+                metaEl.innerText = `${Math.round(data.cv.size / 1024)} KB • Uploaded on ${uploadedDate} • Visible to recruiters`;
+            }
+            if (previewBtn) previewBtn.classList.remove('hidden');
             if (downloadBtn) downloadBtn.classList.remove('hidden');
+            if (uploadText) uploadText.innerText = 'Replace / Update CV';
         } else {
             window._currentUserCv = null;
-            statusText.innerHTML = `<span class="text-amber-400 font-medium"><i class="fas fa-exclamation-triangle mr-1"></i> No Verified CV on file.</span> <span class="text-slate-400">Upload your latest PDF/Word resume to appear in employer shortlists.</span>`;
+            if (fileNameEl) {
+                fileNameEl.innerHTML = `<i class="fas fa-file-pdf mr-1.5 text-rose-400"></i>No CV Uploaded`;
+                fileNameEl.className = 'text-slate-400 font-semibold truncate';
+            }
+            if (badgeEl) {
+                badgeEl.className = 'badge-pill badge-slate text-[9px]';
+                badgeEl.innerText = 'Missing';
+            }
+            if (metaEl) {
+                metaEl.innerText = 'Upload your resume in PDF format to appear in recruiter searches';
+            }
+            if (previewBtn) previewBtn.classList.add('hidden');
             if (downloadBtn) downloadBtn.classList.add('hidden');
+            if (uploadText) uploadText.innerText = 'Upload / Update CV';
         }
     } catch (err) {
         console.error("Error checking CV status:", err);
@@ -19648,6 +19918,64 @@ function downloadOwnCv() {
     document.body.removeChild(a);
 }
 window.downloadOwnCv = downloadOwnCv;
+
+async function previewCandidateCv(candId) {
+    const id = candId || window._activeDossierCandidate?.id;
+    if (!id) return;
+    try {
+        const res = await apiFetch(`/api/learner/cv/${id}`);
+        const data = await res.json();
+        if (!data.success || !data.cv) {
+            alert(data.error || 'CV is not available for preview.');
+            return;
+        }
+
+        const modal = document.getElementById('cvPreviewModal');
+        const frame = document.getElementById('cvPreviewFrame');
+        const title = document.getElementById('cvPreviewTitle');
+        const dBtn = document.getElementById('cvPreviewDownloadBtn');
+
+        if (title) title.innerText = data.cv.filename || 'Candidate Resume';
+        if (frame) frame.src = data.cv.fileData;
+        if (dBtn) {
+            dBtn.onclick = () => downloadCandidateCv(id);
+        }
+        if (modal) modal.classList.remove('hidden');
+    } catch (err) {
+        console.error('Preview CV error:', err);
+        alert('Failed to preview CV.');
+    }
+}
+window.previewCandidateCv = previewCandidateCv;
+
+async function previewOwnCv() {
+    if (window._currentUserCv && window._currentUserCv.fileData) {
+        const modal = document.getElementById('cvPreviewModal');
+        const frame = document.getElementById('cvPreviewFrame');
+        const title = document.getElementById('cvPreviewTitle');
+        const dBtn = document.getElementById('cvPreviewDownloadBtn');
+
+        if (title) title.innerText = window._currentUserCv.filename || 'My Resume';
+        if (frame) frame.src = window._currentUserCv.fileData;
+        if (dBtn) {
+            dBtn.onclick = () => downloadOwnCv();
+        }
+        if (modal) modal.classList.remove('hidden');
+        return;
+    }
+    if (!currentUser) return;
+    const studentId = currentUser._id || currentUser.id;
+    previewCandidateCv(studentId);
+}
+window.previewOwnCv = previewOwnCv;
+
+function closeCvPreviewModal() {
+    const modal = document.getElementById('cvPreviewModal');
+    const frame = document.getElementById('cvPreviewFrame');
+    if (frame) frame.src = '';
+    if (modal) modal.classList.add('hidden');
+}
+window.closeCvPreviewModal = closeCvPreviewModal;
 
 // -------------------------------------------------------------
 // 8. LEARNER "WHO VIEWED YOUR PROFILE" & CAREER VIEWS FEED
@@ -19689,6 +20017,9 @@ async function renderLearnerCareerViews() {
         // Refresh learner CV status
         renderLearnerCvStatus();
 
+        // Update customer notifications badge
+        loadCustomerNotifications();
+
         // Update nav badge
         const badge = document.getElementById('careerViewsBadge');
         if (badge) {
@@ -19720,7 +20051,7 @@ async function renderLearnerCareerViews() {
         const actionTextMap = {
             profile_view: "inspected your Learn Agility Quotient (LQ®) candidate profile",
             audio_listen: "listened to your verified daily voice reflection",
-            cv_download: "requested your candidate summary dossier",
+            cv_download: "requested your candidate summary dossier and downloaded your Verified CV",
             search_appearance: "discovered your profile in a regional talent query"
         };
 
@@ -19739,11 +20070,11 @@ async function renderLearnerCareerViews() {
                     </div>
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <span class="font-extrabold text-white text-xs sm:text-sm truncate">${v.companyName || 'Corporate Hiring Partner'}</span>
+                            <span class="font-extrabold text-white text-xs sm:text-sm truncate">${escapeHtml(v.companyName || 'Corporate Hiring Partner')}</span>
                             ${actionBadgeMap[v.action] || actionBadgeMap.profile_view}
                         </div>
                         <p class="text-xs text-slate-400 mt-0.5">
-                            <strong class="text-slate-300">${v.recruiterName || 'Talent Acquisition'}</strong> ${actionTextMap[v.action] || actionTextMap.profile_view}.
+                            <strong class="text-slate-300">${escapeHtml(v.recruiterName || 'Talent Acquisition')}</strong> ${actionTextMap[v.action] || actionTextMap.profile_view}.
                         </p>
                     </div>
                 </div>
@@ -19757,6 +20088,90 @@ async function renderLearnerCareerViews() {
     }
 }
 window.renderLearnerCareerViews = renderLearnerCareerViews;
+
+// -------------------------------------------------------------
+// 8.1 CUSTOMER REAL-TIME NOTIFICATIONS
+// -------------------------------------------------------------
+async function loadCustomerNotifications() {
+    if (!currentUser || currentUser.role === 'recruiter') return;
+    const studentId = currentUser._id || currentUser.id;
+    const badge = document.getElementById('customerNotifBadge');
+
+    try {
+        const res = await apiFetch(`/api/learner/career-views/${studentId}`);
+        const data = await res.json();
+        if (data.success && data.data) {
+            const views = data.data.profileViews || [];
+            window._customerNotificationsCache = views;
+            if (badge) {
+                if (views.length > 0) {
+                    badge.innerText = views.length;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("Error loading customer notifications:", err);
+    }
+}
+window.loadCustomerNotifications = loadCustomerNotifications;
+
+function openCustomerNotificationsModal() {
+    const modal = document.getElementById('customerNotificationsModal');
+    const list = document.getElementById('customerNotificationsList');
+    if (!modal || !list) return;
+
+    const views = window._customerNotificationsCache || [];
+    if (views.length === 0) {
+        list.innerHTML = `
+            <div class="text-center py-8 glass-card border-slate-800 text-slate-400">
+                <i class="fas fa-bell-slash text-3xl mb-2 text-slate-600"></i>
+                <p class="text-xs font-bold text-slate-300">No Recruiter Placement Alerts Yet</p>
+                <p class="text-[11px] text-slate-500 mt-1">When corporate recruiters inspect your Learn Agility Quotient or download your CV, you will receive real-time notifications here.</p>
+            </div>
+        `;
+    } else {
+        list.innerHTML = views.map(v => {
+            const isDownload = v.action === 'cv_download';
+            const actionText = isDownload ? 'downloaded your Verified CV' : 'inspected your Learn Agility Quotient (LQ®) profile';
+            const iconCls = isDownload ? 'fa-file-arrow-down text-emerald-400' : 'fa-binoculars text-cyan-400';
+            const badgeCls = isDownload ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+            const dateStr = v.createdAt ? new Date(v.createdAt).toLocaleDateString() : 'Recent';
+
+            return `
+                <div class="glass-card p-3.5 border-slate-800 flex items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0 text-xs mt-0.5">
+                            <i class="fas ${iconCls}"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white text-xs">${escapeHtml(v.companyName || 'Corporate Recruiter')}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold border ${badgeCls}">${isDownload ? 'CV Download' : 'Profile View'}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-0.5">
+                                Recruiter <strong class="text-slate-300">${escapeHtml(v.recruiterName || 'Talent Acquisition')}</strong> ${actionText}.
+                            </p>
+                        </div>
+                    </div>
+                    <span class="text-[9px] text-slate-500 whitespace-nowrap shrink-0">
+                        ${dateStr}
+                    </span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    modal.classList.remove('hidden');
+}
+window.openCustomerNotificationsModal = openCustomerNotificationsModal;
+
+function closeCustomerNotificationsModal() {
+    document.getElementById('customerNotificationsModal')?.classList.add('hidden');
+}
+window.closeCustomerNotificationsModal = closeCustomerNotificationsModal;
 
 // -------------------------------------------------------------
 // 9. CAMPUS PARTNER PLACEMENT NOTIFICATIONS
@@ -19807,6 +20222,20 @@ function openCampusNotificationsModal() {
             const actionLabel = n.action === 'cv_download' ? 'Requested Candidate Connect & Dossier' :
                                (n.action === 'profile_view' ? 'Inspected Student LQ® Profile' : 'Recruiter Interaction');
             const badgeColor = n.action === 'cv_download' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+            
+            // Format candidate display as Name (Email) instead of raw database ID
+            let candName = n.studentName;
+            let candEmail = n.studentEmail;
+            if (!candName) {
+                const pool = (typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : [];
+                const match = pool.find(u => String(u._id) === String(n.studentId) || String(u.id) === String(n.studentId) || u.email === n.studentId);
+                if (match) {
+                    candName = match.name;
+                    candEmail = match.email;
+                }
+            }
+            const candidateDisplay = candName ? `${candName}${candEmail ? ` (${candEmail})` : ''}` : (candEmail || n.studentId || 'Student');
+
             return `
                 <div class="glass-card p-3.5 border-slate-800 flex items-start justify-between gap-3">
                     <div class="flex items-start gap-3">
@@ -19815,11 +20244,11 @@ function openCampusNotificationsModal() {
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="font-bold text-white text-xs">${n.companyName || 'Corporate Partner'}</span>
+                                <span class="font-bold text-white text-xs">${escapeHtml(n.companyName || 'Corporate Partner')}</span>
                                 <span class="px-2 py-0.5 rounded-full text-[9px] font-bold border ${badgeColor}">${actionLabel}</span>
                             </div>
                             <p class="text-[11px] text-slate-400 mt-0.5">
-                                Recruiter <strong class="text-slate-300">${n.recruiterName || 'Talent Acquisition'}</strong> connected regarding candidate <strong class="text-cyan-300">${n.studentName || n.studentId || 'Student'}</strong>.
+                                Recruiter <strong class="text-slate-300">${escapeHtml(n.recruiterName || 'Talent Acquisition')}</strong> connected regarding candidate <strong class="text-cyan-300">${escapeHtml(candidateDisplay)}</strong>.
                             </p>
                         </div>
                     </div>
