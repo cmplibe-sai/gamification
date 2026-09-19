@@ -3386,7 +3386,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
                 return res.status(403).json({ success: false, error: 'Corporate partner account is inactive' });
             }
             // Strict Recruiter Key Requirement: Corporate recruiters must provide their organization's secret access key
-            const isKeyMatch = employerKey && emp.accessKey && emp.accessKey === String(employerKey).trim();
+            const isKeyMatch = Boolean(employerKey && emp.accessKey && emp.accessKey === String(employerKey).trim());
             if (!isKeyMatch) {
                 return res.status(403).json({ 
                     success: false, 

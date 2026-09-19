@@ -1532,6 +1532,12 @@ async function initAdminApp() {
         }
     });
 
+    // 1b. Hide Management Console button for Campus Partners (only for Creators)
+    const mgmtBtnBox = document.getElementById('creatorManagementBtnContainer');
+    if (mgmtBtnBox) {
+        mgmtBtnBox.style.display = (isAdminLogin && !isCampusPartner) ? '' : 'none';
+    }
+
     // 2. Remove Serial Numbers (1., 2., 3.) robustly by targeting text nodes only
     document.querySelectorAll('label, h3, h4, h5, p, span').forEach(el => {
         Array.from(el.childNodes).forEach(node => {
@@ -17022,7 +17028,11 @@ async function verifyOTP() {
             } catch(e) {}
 
             if (learnerNav) learnerNav.classList.add('hidden');
+            if (recruiterNav) recruiterNav.classList.add('hidden');
+            if (document.getElementById('partnerNav')) document.getElementById('partnerNav').classList.add('hidden');
             if (adminNav) adminNav.classList.remove('hidden');
+            const mgmtBox = document.getElementById('creatorManagementBtnContainer');
+            if (mgmtBox) mgmtBox.style.display = '';
 
             switchTab('adminTab');
             if (typeof initAdminApp === 'function') {
@@ -17040,7 +17050,20 @@ async function verifyOTP() {
             } catch(e) {}
 
             if (learnerNav) learnerNav.classList.add('hidden');
-            if (adminNav) adminNav.classList.remove('hidden');
+            if (adminNav) adminNav.classList.add('hidden');
+            if (recruiterNav) recruiterNav.classList.add('hidden');
+            const partnerNav = document.getElementById('partnerNav');
+            if (partnerNav) partnerNav.classList.remove('hidden');
+            const partnerBadge = document.getElementById('partnerHeaderBadge');
+            if (partnerBadge) partnerBadge.innerText = authUser.campusName || 'Campus Partner';
+
+            const mgmtBox = document.getElementById('creatorManagementBtnContainer');
+            if (mgmtBox) mgmtBox.style.display = 'none';
+
+            switchTab('adminTab');
+            if (typeof initAdminApp === 'function') {
+                initAdminApp().catch(e => console.warn('Partner admin init:', e));
+            }
 
         } else if (role === 'recruiter') {
             isAdminLogin = false;
@@ -17056,6 +17079,7 @@ async function verifyOTP() {
 
             if (learnerNav) learnerNav.classList.add('hidden');
             if (adminNav) adminNav.classList.add('hidden');
+            if (document.getElementById('partnerNav')) document.getElementById('partnerNav').classList.add('hidden');
             const recruiterNav = document.getElementById('recruiterNav');
             if (recruiterNav) recruiterNav.classList.remove('hidden');
 
@@ -17063,6 +17087,9 @@ async function verifyOTP() {
             if (badge) badge.innerText = authUser.companyName || 'Hiring Partner';
             const compName = document.getElementById('recruiterCompanyName');
             if (compName) compName.innerText = authUser.companyName || 'Corporate Partner';
+
+            const mgmtBox = document.getElementById('creatorManagementBtnContainer');
+            if (mgmtBox) mgmtBox.style.display = 'none';
 
             switchTab('recruiterTab');
             if (typeof initRecruiterPortal === 'function') {
@@ -17080,8 +17107,13 @@ async function verifyOTP() {
                 sessionStorage.removeItem('isAdminLogin');
             } catch(e) {}
 
-            if (learnerNav) learnerNav.classList.remove('hidden');
             if (adminNav) adminNav.classList.add('hidden');
+            if (recruiterNav) recruiterNav.classList.add('hidden');
+            if (document.getElementById('partnerNav')) document.getElementById('partnerNav').classList.add('hidden');
+            if (learnerNav) learnerNav.classList.remove('hidden');
+
+            const mgmtBox = document.getElementById('creatorManagementBtnContainer');
+            if (mgmtBox) mgmtBox.style.display = 'none';
 
             switchTab('dashboardTab');
             if (typeof updateDashboardUI === 'function') updateDashboardUI();
@@ -17108,6 +17140,15 @@ function logout() {
         sessionStorage.removeItem('isAdminLogin');
         sessionStorage.removeItem('cmpli_session_token');
     } catch(e) {}
+
+    const partnerNav = document.getElementById('partnerNav');
+    if (partnerNav) partnerNav.classList.add('hidden');
+    const recruiterNav = document.getElementById('recruiterNav');
+    if (recruiterNav) recruiterNav.classList.add('hidden');
+    const adminNav = document.getElementById('adminNav');
+    if (adminNav) adminNav.classList.add('hidden');
+    const learnerNav = document.getElementById('learnerNav');
+    if (learnerNav) learnerNav.classList.remove('hidden');
 
     const loginInp = document.getElementById('loginId');
     if (loginInp) loginInp.value = '';
@@ -17946,6 +17987,9 @@ async function switchTab(tab) {
 
     // 4. Highlight active nav button
     let navBtn = document.getElementById('nav-' + tab);
+    if (!navBtn && isCampusPartner) {
+        navBtn = document.getElementById('nav-partner' + tab.replace('admin', ''));
+    }
     if (!navBtn && tab.startsWith('admin')) {
         navBtn = document.getElementById('nav-' + tab) || document.getElementById('nav-admin' + tab.replace('admin', ''));
     }
@@ -17967,9 +18011,24 @@ async function switchTab(tab) {
         }
     }
 
+    // Guard: Management Tab is strictly Creator-only (hidden & blocked for campus partners & recruiters)
     if (tab === 'managementTab') {
+        if (!isAdminLogin || isCampusPartner) {
+            console.warn("Unauthorized: SimplyBe Management Hub is strictly restricted to Creators.");
+            switchTab(isCampusPartner ? 'adminTab' : 'dashboardTab');
+            return;
+        }
         if (typeof initManagementConsole === 'function') {
             initManagementConsole();
+        }
+    }
+
+    // Guard: Admin Command Center is strictly Creator-only
+    if (tab === 'adminLevelUpTab') {
+        if (!isAdminLogin || isCampusPartner) {
+            console.warn("Unauthorized: Command Center is strictly restricted to Creators.");
+            switchTab(isCampusPartner ? 'adminTab' : 'dashboardTab');
+            return;
         }
     }
 
@@ -18754,6 +18813,15 @@ function renderManagementCorporates() {
                 <div class="flex justify-between text-slate-400">
                     <span>Direct Phone:</span>
                     <span class="font-mono text-slate-300">${e.phone ? ('+91 ' + e.phone) : '—'}</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-400 pt-1.5 mt-1 border-t border-slate-800/80">
+                    <span class="text-amber-400 font-semibold"><i class="fas fa-key text-[10px] mr-1"></i>Access Key:</span>
+                    <div class="flex items-center gap-1.5">
+                        <code class="text-[10px] font-mono text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 select-all">${e.accessKey || '—'}</code>
+                        <button onclick="navigator.clipboard.writeText('${e.accessKey || ''}'); alert('Organization Access Key copied to clipboard!');" class="text-slate-400 hover:text-amber-300 p-0.5 transition-colors" title="Copy Organization Access Key">
+                            <i class="fas fa-copy text-xs"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
