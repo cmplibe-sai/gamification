@@ -373,7 +373,14 @@ if (store.campuses.length === 0) {
                     designation: "Head of Training & Placement"
                 }
             ],
-            mangoIds: ['6714e7d8eb97f72e99e3316c'],
+            mangoIds: [
+                '6714e7d8eb97f72e99e3316c',
+                '68d38f6b46e0a315816fca79',
+                '66dc0cb4fae23118cf97ee0b',
+                '67123fa34c1143a41bdf064e',
+                '668fca8b99c07221c97a544b',
+                '6794ceb703e7e2c918ee08df'
+            ],
             createdAt: new Date().toISOString()
         },
         {
@@ -489,6 +496,24 @@ if (Array.isArray(store.submissions)) {
     });
     if (touched) {
         store.submissionsRevision = Date.now();
+        saveStore();
+    }
+}
+
+// Auto-migration: Ensure St. Joseph Engineering College has partner solutions registered
+if (Array.isArray(store.campuses)) {
+    const sjec = store.campuses.find(c => c.id === 'cmp_sjec_mngl');
+    if (sjec && (!Array.isArray(sjec.mangoIds) || !sjec.mangoIds.includes('68d38f6b46e0a315816fca79'))) {
+        sjec.mangoIds = Array.from(new Set([
+            ...(sjec.mangoIds || []),
+            '6714e7d8eb97f72e99e3316c',
+            '68d38f6b46e0a315816fca79',
+            '66dc0cb4fae23118cf97ee0b',
+            '67123fa34c1143a41bdf064e',
+            '668fca8b99c07221c97a544b',
+            '6794ceb703e7e2c918ee08df'
+        ]));
+        syncCampusPartnersDB();
         saveStore();
     }
 }
@@ -5355,15 +5380,19 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);
             const streakDays = new Set(uSubs.map(s => (s.submittedAt || '').split('T')[0])).size;
 
-            // Learn Agility Quotient (LQ®) strictly grounded in real student performance
+            // Learn Agility Quotient (LQ®) strictly grounded in milestone LC attainment matching computeLqStats
+            const msSubs = uSubs.filter(s => Number(s.milestoneId || 1) === Number(highestMs));
+            const msEarned = msSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+            // Milestone target baseline: 21 days of Dip (1 LC) + POD (2 LCs) = 63 LCs
+            const targetMsLcs = 63;
             let lqScore = 30;
-            let lqZone = 'growth';
-            if (uSubs.length > 0) {
-                lqScore = Math.min(99, Math.max(30, Math.round(30 + (earnedLcs / 3) + (streakDays * 4.5))));
-                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 50 ? 'average' : 'growth');
+            let lqZone = 'weak';
+            if (msSubs.length > 0) {
+                lqScore = Math.min(100, Math.max(30, Math.round((msEarned / targetMsLcs) * 100)));
+                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 50 ? 'average' : 'weak');
             } else if (highestMs > 1) {
                 lqScore = Math.min(75, 30 + (highestMs * 12));
-                lqZone = lqScore >= 50 ? 'average' : 'growth';
+                lqZone = lqScore >= 50 ? 'average' : 'weak';
             }
 
             // Real Geo & Campus assignment
@@ -5500,11 +5529,28 @@ app.post(['/api/learner/cv', '/gamification/api/learner/cv'], async (req, res) =
         const { studentId, cvUrl, fileData, filename, fileName, size, fileSize, mimeType } = req.body || {};
         const dataUrl = cvUrl || fileData;
         const name = filename || fileName || 'resume.pdf';
-        const byteSize = size || fileSize || null;
+        const byteSize = size || fileSize || (dataUrl ? Buffer.byteLength(dataUrl, 'utf8') : null);
 
         if (!studentId || !dataUrl) {
             return res.status(400).json({ success: false, error: 'studentId and file data/url are required' });
         }
+
+        // Server-side file size validation (max 5MB)
+        if (byteSize && Number(byteSize) > 5 * 1024 * 1024) {
+            return res.status(400).json({ success: false, error: 'File size exceeds maximum allowed limit of 5MB' });
+        }
+
+        // Server-side MIME & file extension validation
+        const cleanName = String(name).toLowerCase().trim();
+        const isPdfOrDoc = cleanName.endsWith('.pdf') || cleanName.endsWith('.doc') || cleanName.endsWith('.docx') ||
+            String(dataUrl).startsWith('data:application/pdf') ||
+            String(dataUrl).startsWith('data:application/msword') ||
+            String(dataUrl).startsWith('data:application/vnd.openxmlformats-officedocument');
+
+        if (!isPdfOrDoc) {
+            return res.status(400).json({ success: false, error: 'Only PDF and Word documents (.pdf, .doc, .docx) are supported' });
+        }
+
         const isCreator = checkCreatorAuth(req);
         const session = getAuthenticatedSession(req);
         const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
@@ -5537,21 +5583,40 @@ app.get(['/api/learner/cv/:studentId', '/gamification/api/learner/cv/:studentId'
         const { studentId } = req.params;
         if (!studentId) return res.status(400).json({ success: false, error: 'studentId is required' });
 
-        const isCreator = checkCreatorAuth(req);
-        const verifiedEmployer = verifyEmployerAuth(req);
-        const session = getAuthenticatedSession(req);
-        const isStudentOwner = session && session.role === 'customer' && String(session.userId) === String(studentId);
-        const isCampusCoordinator = session && session.role === 'partner';
-
-        if (!isCreator && !verifiedEmployer && !isStudentOwner && !isCampusCoordinator) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Session required to view CV' });
-        }
-
         const cleanId = String(studentId).toLowerCase().trim();
         const base = getLearnerBase();
         const matchedUser = base.find(u => String(u._id || u.id) === String(studentId) || (u.email && u.email.toLowerCase().trim() === cleanId));
         const userEmail = matchedUser?.email ? matchedUser.email.toLowerCase().trim() : null;
         const userId = matchedUser ? String(matchedUser._id || matchedUser.id) : null;
+
+        const isCreator = checkCreatorAuth(req);
+        const verifiedEmployer = verifyEmployerAuth(req);
+        const session = getAuthenticatedSession(req);
+        const isStudentOwner = session && session.role === 'customer' && (
+            String(session.userId) === String(studentId) ||
+            (session.email && session.email.toLowerCase().trim() === cleanId)
+        );
+
+        // Strict Campus Scoping: Campus partner can only access CVs of learners belonging to their campus
+        let isAuthorizedCoordinator = false;
+        if (session && session.role === 'partner' && session.campusId) {
+            const coordCampus = (store.campuses || []).find(c => c.id === session.campusId);
+            const coordMangoes = coordCampus?.mangoIds || [];
+            if (matchedUser) {
+                const userMangoes = Array.isArray(matchedUser.subscribedMangoes) ? matchedUser.subscribedMangoes : [];
+                const sharesMango = coordMangoes.some(m => userMangoes.includes(m));
+                const instName = (matchedUser.college || matchedUser.institution || '').toLowerCase();
+                const campusNameMatch = coordCampus && instName && (instName.includes(coordCampus.name.toLowerCase()) || coordCampus.name.toLowerCase().includes(instName));
+
+                if (sharesMango || campusNameMatch) {
+                    isAuthorizedCoordinator = true;
+                }
+            }
+        }
+
+        if (!isCreator && !verifiedEmployer && !isStudentOwner && !isAuthorizedCoordinator) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You do not have permission to view this student\'s CV.' });
+        }
 
         const cv = (store.studentCVs && (
             store.studentCVs[String(studentId)] ||

@@ -19299,6 +19299,17 @@ async function renderRecruiterCandidates() {
         window._recruiterCandidatesCache = data.candidates;
 
         grid.innerHTML = data.candidates.map(cand => {
+            // Unify candidate LQ score & zone with canonical calculateCustomerHealth / computeLqStats
+            if (typeof calculateCustomerHealth === 'function') {
+                try {
+                    const health = calculateCustomerHealth(cand);
+                    if (health && health.lqPct !== undefined) {
+                        cand.lqScore = health.lqPct;
+                        cand.lqZone = health.zone || (health.lqPct >= 80 ? 'strong' : (health.lqPct >= 50 ? 'average' : 'weak'));
+                    }
+                } catch (e) {}
+            }
+
             const lqColor = cand.lqZone === 'strong' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 
                             (cand.lqZone === 'average' ? 'text-indigo-400 border-indigo-500/40 bg-indigo-950/30' : 'text-amber-400 border-amber-500/40 bg-amber-950/30');
 
@@ -19747,7 +19758,7 @@ window.renderLearnerCareerViews = renderLearnerCareerViews;
 async function loadCampusPartnerNotifications() {
     if (!isCampusPartner && !isAdminLogin) return;
     const campusId = currentUser?.campusId || (Array.isArray(currentUser?.mangoIds) ? currentUser.mangoIds[0] : null) || 'all';
-    const badge = document.getElementById('campusPartnerNotifBadge');
+    const badge = document.getElementById('campusPartnerNotifBadge') || document.getElementById('partnerNavBadgeCount');
 
     try {
         const res = await apiFetch(`/api/campus/placement-activity/${campusId}`);
