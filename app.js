@@ -20069,11 +20069,11 @@ function openCandidateDossier(candId) {
     let candZone = candidate.lqZone || (candLq >= 80 ? 'strong' : (candLq >= 50 ? 'average' : 'weak'));
 
     try {
-        const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
-        const matchedUser = allUsersPool.find(u => String(u._id) === String(candId) || String(u.id) === String(candId) || (candidate.name && u.name === candidate.name) || (u.email && candidate.maskedEmail && candidate.maskedEmail.includes(u.email.substring(0, 2))));
-        if (matchedUser && typeof computeLqStats === 'function') {
-            const stats = computeLqStats(matchedUser, 1, 'all');
-            // Adopt client-side computeLqStats if it contains earned LCs in this browser session.
+        // Use candidate.id directly — getUserSubmissionsByUserId handles fanId, email, phone aliases.
+        // Avoid unreliable email-prefix user pool lookups that mismatch on recruiter-view candidates.
+        if (typeof computeLqStats === 'function') {
+            const stats = computeLqStats(String(candId), 1, 'all');
+            // Adopt client-side computeLqStats if it found submissions in this browser session.
             // Never overwrite with zeroes; take the highest verified attainment.
             if (stats && stats.earned > 0) {
                 candEarned = Math.max(candEarned, stats.earned);
@@ -20248,22 +20248,32 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     const canvas = document.getElementById('recruiterLcGrowthCanvas');
     if (!canvas) return;
 
-    // Find actual learner user if available for historical ledger
-    let userObj = candidate;
+    // Always key the ledger cache lookup to candidate.id (the server-assigned stable ID).
+    // Construct a stable proxy object so buildCumulativeLcTimeline resolves the cache correctly,
+    // and merges candidate.dailyLcs as immediate fallback while the async ledger loads.
+    const candidateId = String(candidate.id || '');
+    const cachedLedgerObj = candidateId ? userTagMangoLedgerCache[candidateId] : null;
+    const hasLiveLedger = cachedLedgerObj && !cachedLedgerObj.failed && Array.isArray(cachedLedgerObj.entries) && cachedLedgerObj.entries.length > 0;
+
+    // Build userObj with _id = candidateId so buildCumulativeLcTimeline hits the right cache slot.
+    // Also carry over candidate.dailyLcs (server-computed map) for immediate rendering fallback.
+    let userObj = Object.assign({}, candidate, { _id: candidateId, id: candidateId });
     try {
+        // If we can find the live user in the local pool, merge their data for submission matching
         const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
-        const matched = allUsersPool.find(u => String(u._id) === String(candidate.id) || String(u.id) === String(candidate.id) || (candidate.name && u.name === candidate.name));
-        if (matched) userObj = matched;
+        const matched = allUsersPool.find(u => String(u._id) === candidateId || String(u.id) === candidateId || (candidate.name && u.name === candidate.name));
+        if (matched) {
+            // Merge: keep candidate.dailyLcs from server but use matched user's submission data
+            userObj = Object.assign({}, matched, { _id: candidateId, id: candidateId, dailyLcs: candidate.dailyLcs || matched.dailyLcs });
+        }
     } catch(e) {}
 
-    // Trigger async TagMango ledger fetch with in-flight and backoff deduplication
-    const targetUserId = userObj ? (userObj._id || userObj.id || candidate.id) : candidate.id;
-    if (targetUserId && typeof fetchTagMangoLedger === 'function') {
-        const cleanId = String(targetUserId);
-        const cached = userTagMangoLedgerCache[cleanId];
+    // Trigger async TagMango ledger fetch — always keyed to candidateId for cache consistency
+    if (candidateId && typeof fetchTagMangoLedger === 'function') {
+        const cached = userTagMangoLedgerCache[candidateId];
         const isFreshOrBackedOff = cached && (!cached.failed || (Date.now() - cached.timestamp < 30000));
-        if (!isFreshOrBackedOff && !userTagMangoLedgerInFlight[cleanId]) {
-            fetchTagMangoLedger(cleanId).then(entries => {
+        if (!isFreshOrBackedOff && !userTagMangoLedgerInFlight[candidateId]) {
+            fetchTagMangoLedger(candidateId).then(entries => {
                 if (entries && entries.length > 0) {
                     renderRecruiterLcGrowthChart(candidate, days);
                 }
