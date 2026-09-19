@@ -920,6 +920,16 @@ function buildCumulativeLcTimeline(userIdentifier, daysBack = 30, ledgerEntries 
         });
     }
 
+    // 1b. Ingest Candidate dailyLcs Map if provided by server (e.g. Recruiter Candidate Dossier)
+    if (userObj && userObj.dailyLcs && typeof userObj.dailyLcs === 'object') {
+        Object.keys(userObj.dailyLcs).forEach(dateKey => {
+            const val = Number(userObj.dailyLcs[dateKey]) || 0;
+            if (val > 0 && !dailyLcs[dateKey]) {
+                dailyLcs[dateKey] = val;
+            }
+        });
+    }
+
     // 2. Ingest Local Submissions with Claude-recommended deduplication
     // (Grouping by dateKey + normalized module, resolving to completed > higher reward > most recent)
     const rawSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(userId) : [];
@@ -8360,6 +8370,503 @@ function renderAdminCohortSubmissions() {
     table.innerHTML = theadHtml + tbodyHtml;
 }
 window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;   
+
+// ==============================================================
+// COMPLETION GRID DATA EXTRACTION & TELEMETRY EXPORT ENGINE
+// ==============================================================
+function extractSubmissionResponses(sub) {
+    if (!sub) return [];
+    let responses = sub.responses || sub.answers || [];
+    if (Array.isArray(responses) && responses.length > 0) {
+        return responses.map((r, idx) => {
+            const qTitle = r.title || r.question || `Question ${idx + 1}`;
+            let ans = (r.answer !== undefined && r.answer !== null) ? r.answer : ((r.value !== undefined && r.value !== null) ? r.value : '');
+            if (ans === '' && r.selectedOption !== undefined) {
+                if (Array.isArray(r.options) && r.options[r.selectedOption]) {
+                    ans = r.options[r.selectedOption];
+                } else {
+                    ans = `Option ${r.selectedOption}`;
+                }
+            }
+            return {
+                questionNumber: idx + 1,
+                title: String(qTitle || ''),
+                type: r.type || 'text',
+                answer: String(ans || ''),
+                audioUrl: r.audioUrl || '',
+                videoUrl: r.videoUrl || '',
+                isCorrect: r.isCorrect !== undefined ? r.isCorrect : null,
+                score: r.pts !== undefined ? r.pts : (r.score !== undefined ? r.score : null)
+            };
+        });
+    }
+
+    const fallbackList = [];
+    if (sub.reflection || sub.transcription || sub.text || sub.notes) {
+        fallbackList.push({
+            questionNumber: 1,
+            title: sub.articleTitle || sub.title || 'Reflection / Key Insights',
+            type: 'text',
+            answer: String(sub.reflection || sub.transcription || sub.text || sub.notes || ''),
+            audioUrl: sub.audioUrl || sub.mediaUrl || '',
+            videoUrl: sub.videoUrl || '',
+            isCorrect: null,
+            score: null
+        });
+    } else if (sub.audioUrl || sub.mediaUrl) {
+        fallbackList.push({
+            questionNumber: 1,
+            title: sub.title || 'Audio Voice Reflection',
+            type: 'audio',
+            answer: 'Audio Reflection Recorded',
+            audioUrl: sub.audioUrl || sub.mediaUrl || '',
+            videoUrl: '',
+            isCorrect: null,
+            score: null
+        });
+    } else if (sub.videoUrl) {
+        fallbackList.push({
+            questionNumber: 1,
+            title: sub.title || 'Video Reflection',
+            type: 'video',
+            answer: 'Video Reflection Recorded',
+            audioUrl: '',
+            videoUrl: sub.videoUrl,
+            isCorrect: null,
+            score: null
+        });
+    }
+    return fallbackList;
+}
+
+function getAdminCompletionGridData() {
+    const filterMango = (document.getElementById('adminCohortFilter')?.value || 'all').trim();
+    const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
+    const searchText = (document.getElementById('adminSearchUser')?.value || '').toLowerCase().trim();
+
+    const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
+        ? adminRealtimeUsers 
+        : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
+
+    let cohort = pool.filter(u => {
+        const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
+        const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
+        
+        if (isCampusPartner) {
+            return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
+        }
+        
+        return hasAccess || isTestUserEmail; 
+    });
+
+    if (filterMango && filterMango !== 'all') {
+        cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
+    }
+
+    if (searchText) {
+        cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)) || (u.phone && String(u.phone).includes(searchText)));
+    }
+
+    let totalPending = 0;
+    let validCohort = [];
+
+    const msId = activeAdminMilestoneId || 1;
+    const cleanMod = normalizeLevelUpType(activeAdminModule || 'pod');
+    const prereqCfg = getMilestonePrereqConfig(msId);
+    const modDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'days');
+    const modLcsRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'lcs');
+
+    cohort.forEach(user => {
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(user) : [];
+
+        let calculatedLcs = 0;
+        subs.forEach(s => {
+            if (String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === cleanMod) {
+                calculatedLcs += Number(s.lcReward) || 0;
+            }
+        });
+        const earnedLcs = calculatedLcs;
+
+        const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === cleanMod && String(s.milestoneId || 1) === String(msId));
+
+        let completionPct = 0;
+        if (modDaysRule && modDaysRule.targetValue > 0) {
+            completionPct = Math.min(100, Math.round((targetModuleSubs.length / modDaysRule.targetValue) * 100));
+        } else if (modLcsRule && modLcsRule.targetValue > 0) {
+            completionPct = Math.min(100, Math.round((earnedLcs / modLcsRule.targetValue) * 100));
+        } else {
+            const effectiveMax = Math.max(1, (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21)));
+            completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
+        }
+
+        let isApproved = (typeof isCertificateApproved === 'function') ? isCertificateApproved(user._id, msId) : false;
+        const isPending = completionPct >= 90 && !isApproved;
+        
+        if (isPending) totalPending++;
+        if (filterStatus === 'pending' && !isPending) return;
+        if (filterStatus === 'approved' && !isApproved) return;
+        validCohort.push({ ...user, completionPct, isPending, isApproved, earnedLcs });
+    });
+
+    validCohort.sort((a, b) => {
+        const diffLcs = (b.earnedLcs || 0) - (a.earnedLcs || 0);
+        if (diffLcs !== 0) return diffLcs;
+        const diffPct = (b.completionPct || 0) - (a.completionPct || 0);
+        if (diffPct !== 0) return diffPct;
+        const nameA = String(a.name || a.email || a._id || '').toLowerCase();
+        const nameB = String(b.name || b.email || b._id || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    let maxDays = 21;
+    let isProjectGrid = (activeAdminModule === 'projects');
+    let projectHeaders = [];
+
+    const activeModDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'days');
+
+    if (isProjectGrid) {
+        projectHeaders = (typeof customProjectsDB !== 'undefined' && customProjectsDB[msId]) || [];
+        maxDays = projectHeaders.length; 
+    } else if (activeModDaysRule && activeModDaysRule.targetValue > 0) {
+        maxDays = activeModDaysRule.targetValue;
+    } else if (msId === 2 || msId === 3) {
+        if (cleanMod === 'dip' || cleanMod === 'pod') maxDays = 30;
+        if (cleanMod === 'immerse') maxDays = 12;
+        if (cleanMod === 'ios') maxDays = 15; 
+    } else if (cleanMod === 'immerse') {
+        maxDays = 9;
+    }
+
+    const enrichedCohort = validCohort.map((user, idx) => {
+        const uId = (user && (user._id || user.id)) || user;
+        const subs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(user) : [];
+        const sessions = [];
+
+        if (isProjectGrid) {
+            const userProjectSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === 'projects');
+            for (let i = 0; i < maxDays; i++) {
+                const matchingSub = userProjectSubs[i] || null;
+                const projectDef = projectHeaders[i] || {};
+                const projNum = i + 1;
+                const projTitle = projectDef.title || `Project ${projNum}`;
+                if (matchingSub) {
+                    const lcReward = (matchingSub.lcReward !== undefined && matchingSub.lcReward !== null) ? matchingSub.lcReward : (projectDef.pts || 0);
+                    sessions.push({
+                        dayOrIndex: projNum,
+                        label: `P${projNum}`,
+                        title: projTitle,
+                        status: matchingSub.status || 'completed',
+                        lcReward: lcReward,
+                        matchPercentage: matchingSub.matchPercentage !== undefined ? matchingSub.matchPercentage : null,
+                        attemptNumber: matchingSub.attemptsCount || matchingSub.attemptNumber || 1,
+                        submittedAt: matchingSub.submittedAt || matchingSub.date || matchingSub.timestamp || '',
+                        responses: extractSubmissionResponses(matchingSub),
+                        aiRemarks: matchingSub.aiRemarks || matchingSub.remarks || '',
+                        audioUrl: matchingSub.audioUrl || matchingSub.mediaUrl || '',
+                        videoUrl: matchingSub.videoUrl || ''
+                    });
+                } else {
+                    sessions.push({
+                        dayOrIndex: projNum,
+                        label: `P${projNum}`,
+                        title: projTitle,
+                        status: 'not_submitted',
+                        lcReward: 0,
+                        matchPercentage: null,
+                        attemptNumber: 0,
+                        submittedAt: '',
+                        responses: [],
+                        aiRemarks: '',
+                        audioUrl: '',
+                        videoUrl: ''
+                    });
+                }
+            }
+        } else {
+            const userMsJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(uId, msId) : null;
+            let userStartDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(uId, msId, cleanMod) : null);
+            const userModSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === cleanMod);
+            if (!userStartDateStr && userModSubs.length > 0) {
+                const sortedModSubs = [...userModSubs].sort((a, b) => String(a.dateKey || a.date || a.submittedAt || '').localeCompare(String(b.dateKey || b.date || b.submittedAt || '')));
+                userStartDateStr = sortedModSubs[0].dateKey || sortedModSubs[0].date || (sortedModSubs[0].submittedAt ? sortedModSubs[0].submittedAt.split('T')[0] : null);
+            }
+            if (!userStartDateStr) {
+                userStartDateStr = userMsJoinDate || getLocalDateKey(new Date());
+            } else if (userMsJoinDate && userStartDateStr < userMsJoinDate) {
+                userStartDateStr = userMsJoinDate;
+            }
+            let userMilestoneStartDate = new Date(userStartDateStr + 'T00:00:00');
+            if (isNaN(userMilestoneStartDate.getTime())) userMilestoneStartDate = new Date();
+            userMilestoneStartDate.setHours(0,0,0,0);
+
+            const daySubMap = (typeof buildDaySubMap === 'function') ? buildDaySubMap(userModSubs, userMilestoneStartDate, cleanMod, maxDays, msId) : {};
+
+            for (let d = 1; d <= maxDays; d++) {
+                const matchingSub = daySubMap[d] || null;
+                if (matchingSub) {
+                    sessions.push({
+                        dayOrIndex: d,
+                        label: `D${d}`,
+                        title: matchingSub.articleTitle || matchingSub.title || `Day ${d}`,
+                        status: matchingSub.status || 'completed',
+                        lcReward: Number(matchingSub.lcReward) || 0,
+                        matchPercentage: (matchingSub.matchPercentage !== undefined && matchingSub.matchPercentage !== null) ? matchingSub.matchPercentage : null,
+                        attemptNumber: matchingSub.attemptsCount || matchingSub.attemptNumber || 1,
+                        submittedAt: matchingSub.submittedAt || matchingSub.date || matchingSub.timestamp || '',
+                        responses: extractSubmissionResponses(matchingSub),
+                        aiRemarks: matchingSub.aiRemarks || matchingSub.remarks || '',
+                        audioUrl: matchingSub.audioUrl || matchingSub.mediaUrl || '',
+                        videoUrl: matchingSub.videoUrl || ''
+                    });
+                } else {
+                    sessions.push({
+                        dayOrIndex: d,
+                        label: `D${d}`,
+                        title: `Day ${d}`,
+                        status: 'not_submitted',
+                        lcReward: 0,
+                        matchPercentage: null,
+                        attemptNumber: 0,
+                        submittedAt: '',
+                        responses: [],
+                        aiRemarks: '',
+                        audioUrl: '',
+                        videoUrl: ''
+                    });
+                }
+            }
+        }
+
+        return {
+            ...user,
+            rank: idx + 1,
+            startDateStr: (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(uId, msId, cleanMod) : null) || '',
+            sessions
+        };
+    });
+
+    return {
+        milestoneId: msId,
+        moduleName: cleanMod,
+        filters: {
+            cohort: filterMango,
+            status: filterStatus,
+            search: searchText
+        },
+        maxDays,
+        isProjectGrid,
+        totalPending,
+        learners: enrichedCohort
+    };
+}
+window.getAdminCompletionGridData = getAdminCompletionGridData;
+
+function exportCompletionGrid(format = 'matrix_csv') {
+    const data = getAdminCompletionGridData();
+    if (!data || !data.learners || data.learners.length === 0) {
+        alert("No completion grid data found to export. Please check your cohort filters.");
+        return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const msTag = `M${data.milestoneId}`;
+    const modTag = data.moduleName || 'all';
+
+    const escapeCsv = (val) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""').replace(/\r?\n/g, ' ');
+        return `"${str}"`;
+    };
+
+    if (format === 'json') {
+        const jsonExport = {
+            exportMetadata: {
+                title: "cMPLiBe Level-Up Completion Grid Export",
+                exportedAt: new Date().toISOString(),
+                milestoneId: data.milestoneId,
+                module: data.moduleName,
+                filters: data.filters,
+                totalLearners: data.learners.length,
+                maxSessions: data.maxDays,
+                isProjectGrid: data.isProjectGrid
+            },
+            learners: data.learners.map(l => ({
+                rank: l.rank,
+                id: l._id || l.id,
+                name: l.name || 'Customer',
+                email: l.email || '',
+                phone: l.phone || '',
+                campus: l.college || l.institution || '',
+                state: l.state || '',
+                district: l.district || '',
+                approvalStatus: l.isApproved ? 'Approved' : (l.isPending ? 'Pending' : 'In Progress'),
+                completionPct: l.completionPct || 0,
+                earnedLcs: l.earnedLcs || 0,
+                day1StartDate: l.startDateStr || '',
+                sessions: l.sessions
+            }))
+        };
+        const jsonStr = JSON.stringify(jsonExport, null, 2);
+        downloadExportFile(jsonStr, `cMPLiBe_Completion_Data_${msTag}_${modTag}_${timestamp}.json`, 'application/json');
+        return;
+    }
+
+    if (format === 'responses_csv') {
+        // Detailed row-by-row question and answer response log
+        const headers = [
+            "Rank", "Learner Name", "Email", "Phone", "Campus / Institution",
+            "Milestone", "Module", "Session", "Session Title", "Session Status",
+            "LCs Awarded", "Match %", "Attempt", "Submission Date/Time",
+            "Question / Task", "Answer / Reflection", "Audio URL", "Video URL", "AI Feedback / Remarks"
+        ];
+        const rows = [headers.map(escapeCsv).join(',')];
+
+        data.learners.forEach(l => {
+            l.sessions.forEach(sess => {
+                if (sess.status === 'not_submitted') return; // Only log actual check-in responses
+                if (Array.isArray(sess.responses) && sess.responses.length > 0) {
+                    sess.responses.forEach(r => {
+                        rows.push([
+                            escapeCsv(l.rank),
+                            escapeCsv(l.name || 'Customer'),
+                            escapeCsv(l.email || ''),
+                            escapeCsv(l.phone || ''),
+                            escapeCsv(l.college || l.institution || ''),
+                            escapeCsv(data.milestoneId),
+                            escapeCsv(data.moduleName),
+                            escapeCsv(sess.label),
+                            escapeCsv(sess.title),
+                            escapeCsv(sess.status),
+                            escapeCsv(sess.lcReward),
+                            escapeCsv(sess.matchPercentage !== null ? `${sess.matchPercentage}%` : ''),
+                            escapeCsv(sess.attemptNumber),
+                            escapeCsv(sess.submittedAt),
+                            escapeCsv(r.title),
+                            escapeCsv(r.answer),
+                            escapeCsv(r.audioUrl || sess.audioUrl || ''),
+                            escapeCsv(r.videoUrl || sess.videoUrl || ''),
+                            escapeCsv(sess.aiRemarks)
+                        ].join(','));
+                    });
+                } else {
+                    rows.push([
+                        escapeCsv(l.rank),
+                        escapeCsv(l.name || 'Customer'),
+                        escapeCsv(l.email || ''),
+                        escapeCsv(l.phone || ''),
+                        escapeCsv(l.college || l.institution || ''),
+                        escapeCsv(data.milestoneId),
+                        escapeCsv(data.moduleName),
+                        escapeCsv(sess.label),
+                        escapeCsv(sess.title),
+                        escapeCsv(sess.status),
+                        escapeCsv(sess.lcReward),
+                        escapeCsv(sess.matchPercentage !== null ? `${sess.matchPercentage}%` : ''),
+                        escapeCsv(sess.attemptNumber),
+                        escapeCsv(sess.submittedAt),
+                        escapeCsv(sess.title),
+                        escapeCsv('Completed & Verified'),
+                        escapeCsv(sess.audioUrl || ''),
+                        escapeCsv(sess.videoUrl || ''),
+                        escapeCsv(sess.aiRemarks)
+                    ].join(','));
+                }
+            });
+        });
+
+        const csvContent = '\uFEFF' + rows.join('\r\n');
+        downloadExportFile(csvContent, `cMPLiBe_Responses_Log_${msTag}_${modTag}_${timestamp}.csv`, 'text/csv;charset=utf-8;');
+        return;
+    }
+
+    // Default: 'matrix_csv' (Tabular Spreadsheet matching the Completion Grid Table)
+    const baseHeaders = [
+        "Rank", "Learner Name", "Email", "Phone", "Campus / Institution",
+        "Approval Status", "Completion %", "Module LCs Earned", "Day 1 Start Date"
+    ];
+
+    for (let d = 1; d <= data.maxDays; d++) {
+        const prefix = data.isProjectGrid ? `P${d}` : `D${d}`;
+        baseHeaders.push(`${prefix} Status`);
+        baseHeaders.push(`${prefix} LCs`);
+        baseHeaders.push(`${prefix} Match %`);
+        baseHeaders.push(`${prefix} Submitted At`);
+        baseHeaders.push(`${prefix} Responses`);
+    }
+
+    const rows = [baseHeaders.map(escapeCsv).join(',')];
+
+    data.learners.forEach(l => {
+        const statusLabel = l.isApproved ? 'Approved' : (l.isPending ? 'Pending' : 'In Progress');
+        const rowValues = [
+            escapeCsv(l.rank),
+            escapeCsv(l.name || 'Customer'),
+            escapeCsv(l.email || ''),
+            escapeCsv(l.phone || ''),
+            escapeCsv(l.college || l.institution || ''),
+            escapeCsv(statusLabel),
+            escapeCsv(`${l.completionPct || 0}%`),
+            escapeCsv(l.earnedLcs || 0),
+            escapeCsv(l.startDateStr || '')
+        ];
+
+        for (let d = 0; d < data.maxDays; d++) {
+            const sess = l.sessions[d];
+            if (sess && sess.status !== 'not_submitted') {
+                rowValues.push(escapeCsv(sess.status));
+                rowValues.push(escapeCsv(sess.lcReward || 0));
+                rowValues.push(escapeCsv(sess.matchPercentage !== null ? `${sess.matchPercentage}%` : ''));
+                rowValues.push(escapeCsv(sess.submittedAt || ''));
+
+                let summary = '';
+                if (Array.isArray(sess.responses) && sess.responses.length > 0) {
+                    summary = sess.responses.map(r => {
+                        const media = r.audioUrl ? ` [Audio: ${r.audioUrl}]` : (r.videoUrl ? ` [Video: ${r.videoUrl}]` : '');
+                        return `${r.title}: ${r.answer}${media}`;
+                    }).join(' | ');
+                } else if (sess.audioUrl) {
+                    summary = `Audio Reflection [${sess.audioUrl}]`;
+                } else if (sess.videoUrl) {
+                    summary = `Video Reflection [${sess.videoUrl}]`;
+                } else {
+                    summary = 'Completed';
+                }
+                rowValues.push(escapeCsv(summary));
+            } else {
+                rowValues.push(escapeCsv('Not Submitted'));
+                rowValues.push(escapeCsv(0));
+                rowValues.push(escapeCsv(''));
+                rowValues.push(escapeCsv(''));
+                rowValues.push(escapeCsv(''));
+            }
+        }
+
+        rows.push(rowValues.join(','));
+    });
+
+    const csvContent = '\uFEFF' + rows.join('\r\n');
+    downloadExportFile(csvContent, `cMPLiBe_Completion_Grid_${msTag}_${modTag}_${timestamp}.csv`, 'text/csv;charset=utf-8;');
+}
+window.exportCompletionGrid = exportCompletionGrid;
+window.exportCompletionGridCsv = () => exportCompletionGrid('matrix_csv');
+window.exportCompletionResponsesCsv = () => exportCompletionGrid('responses_csv');
+window.exportCompletionGridJson = () => exportCompletionGrid('json');
+
+function downloadExportFile(content, fileName, mimeType) {
+    if (typeof document === 'undefined') return;
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        if (a && a.parentNode) a.parentNode.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 1000);
+}
+window.downloadExportFile = downloadExportFile;
 
 function promptSetCustomerModuleStartDate(userId, userName, defaultMod) {
     const mod = prompt(`Select module to set Day 1 Start Date for ${userName}:\n(dip, pod, immerse, residency, problem_solution)`, defaultMod || activeAdminModule || 'pod');
@@ -19475,23 +19982,29 @@ function openCandidateDossier(candId) {
     }).catch(() => {});
 
     // Compute exact earned & max LCs to match Creator and Customer dashboards
-    let candEarned = candidate.totalLcsEarned || 0;
-    let candMax = 1452;
-    let candLq = candidate.lqScore;
-    let candZone = candidate.lqZone;
+    let candEarned = (candidate.totalLcsEarned !== undefined && candidate.totalLcsEarned !== null) ? Number(candidate.totalLcsEarned) : 0;
+    let candMax = (candidate.maxLcs !== undefined && candidate.maxLcs !== null) ? Number(candidate.maxLcs) : 1452;
+    let candLq = (candidate.lqScore !== undefined && candidate.lqScore !== null) ? Number(candidate.lqScore) : (candMax > 0 ? Math.min(100, Math.round((candEarned / candMax) * 100)) : 0);
+    let candZone = candidate.lqZone || (candLq >= 80 ? 'strong' : (candLq >= 50 ? 'average' : 'weak'));
 
     try {
         const allUsersPool = Array.from(new Map([...(Array.isArray(actualUsers) ? actualUsers : []), ...(Array.isArray(adminRealtimeUsers) ? adminRealtimeUsers : [])].map(u => [String(u._id || u.email), u])).values());
         const matchedUser = allUsersPool.find(u => String(u._id) === String(candId) || String(u.id) === String(candId) || (candidate.name && u.name === candidate.name) || (u.email && candidate.maskedEmail && candidate.maskedEmail.includes(u.email.substring(0, 2))));
         if (matchedUser && typeof computeLqStats === 'function') {
             const stats = computeLqStats(matchedUser, 1, 'all');
-            candEarned = stats.earned;
-            candMax = stats.max;
-            candLq = stats.pct;
-            candZone = stats.zone;
-            candidate.lqScore = candLq;
-            candidate.lqZone = candZone;
-            candidate.totalLcsEarned = candEarned;
+            // Only adopt client-side computeLqStats if it actually contains earned LCs in this browser session.
+            // In a recruiter session where student submissions are stored on the server and not in localStorage,
+            // never overwrite the authoritative server-calculated metrics with zeroes!
+            if (stats && stats.earned > 0) {
+                candEarned = stats.earned;
+                candMax = (stats.max && stats.max >= 1452) ? stats.max : (candidate.maxLcs || 1452);
+                candLq = stats.pct;
+                candZone = stats.zone;
+                candidate.lqScore = candLq;
+                candidate.lqZone = candZone;
+                candidate.totalLcsEarned = candEarned;
+                candidate.maxLcs = candMax;
+            }
         }
     } catch(e) {}
 
@@ -19638,7 +20151,8 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     const avgEl = document.getElementById('recruiterLcKpiVelocity') || document.getElementById('recruiterLcKpiDailyAverage');
     const streakEl = document.getElementById('recruiterLcKpiActiveDays');
 
-    if (totalEl) totalEl.textContent = `${data.totalCumulative} LCs`;
+    const displayTotalCumulative = (data.totalCumulative > 0) ? data.totalCumulative : (Number(candidate.totalLcsEarned) || 0);
+    if (totalEl) totalEl.textContent = `${displayTotalCumulative} LCs`;
     if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
     if (avgEl) avgEl.textContent = `${data.dailyAvg} LC/day`;
     if (streakEl) streakEl.textContent = `${streakDisplay} Days`;

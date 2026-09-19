@@ -230,6 +230,66 @@ Three automated test suites confirm all fixes without regressions:
      - `#recruiterLcKpiActiveDays`: `${streakDisplay} Days` (dynamically computed from candidate consistency days or active days in timeline).
   3. **Avatar Alt Attribute Escaping**: Escaped `alt="${escapeHtml(cand.name)}"` in candidate cards (`app.js:19391`).
 
+---
+
+## Part 5: Recruiter Speedometer Gauge Consistency & Completion Grid Export Engine
+
+### 1. Speedometer Needle & Score Inconsistency in Recruiter Modal (Img-1)
+- **Problem Diagnosed**:
+  - In Customer, Creator, and Campus Partner dashboards, the Learn Agility Quotient (LQ®) speedometer gauge reflects the learner's milestone progress (e.g. `425 / 1452 LCs (29%)` in the Weak Zone).
+  - However, when a Recruiter clicked on the candidate card to open the Candidate Dossier modal (`#candidateDossierModal`), the gauge needle reset to 0, the text showed `0 LCs`, `0 / 594 LCs (0%)`, and `Weak Zone (0%)`.
+- **Root Cause**:
+  - In `app.js:19483-19496` (`openCandidateDossier`), the function received the authoritative candidate payload from the server (`candidate.totalLcsEarned`, `candidate.maxLcs`, `candidate.lqScore`, `candidate.lqZone`, `candidate.dailyLcs`).
+  - However, it immediately called:
+    `const stats = computeLqStats(matchedUser, 1, 'all');`
+  - `computeLqStats()` inspects `getUserSubmissionsByUserId()`, which reads from client-side `localStorage`. In a recruiter session, `localStorage` contains no submissions for students.
+  - Furthermore, `getLqModuleMaxLcs(1, 'all', cleanId)` returned `594` (18 elapsed calendar days $\times 33$ LCs/day).
+  - As a result, `stats.earned = 0`, `stats.max = 594`, `stats.pct = 0`.
+  - It then unconditionally overwrote `candEarned = 0`, `candMax = 594`, and `candLq = 0`, clobbering the server's authoritative metrics!
+- **Architectural Solution**:
+  - In `openCandidateDossier` (`app.js:19488-19515`):
+    - Ground `candEarned`, `candMax`, `candLq`, `candZone` directly in `candidate.totalLcsEarned`, `candidate.maxLcs || 1452`, `candidate.lqScore`, and `candidate.lqZone`.
+    - Guard `computeLqStats` with `if (stats && stats.earned > 0)` so that client-side calculation never clobbers authoritative metrics with zeroes when running in a recruiter session.
+  - In `buildCumulativeLcTimeline` (`app.js:922-930`):
+    - Ingest `userObj.dailyLcs` map sent from `/api/employer/candidates` so that even when `localStorage` is empty, the Recruiter LC Growth Velocity widget chart renders the genuine timeline.
+  - In `renderRecruiterLcGrowthChart` (`app.js:19657`):
+    - Provide fallback to `candidate.totalLcsEarned` for `#recruiterLcKpiTotalCumulative`.
+
+---
+
+### 2. Completion Grid Data & Responses Export Engine
+- **Requirement**:
+  - In the Creator Level-Up Command Center (`#adminCompletionView`), creators inspect the real-time matrix of students and their check-in submissions.
+  - Enable full, comprehensive export of all data related to that dashboard (including detailed check-in questions, answers, reflections, audio/video media URLs, attempt counts, and AI evaluation feedback).
+- **Implementation**:
+  1. **Action Toolbar in `index.html:748-771`**:
+     - Added dedicated Export & Action Toolbar inside `#adminCompletionView`:
+       - `btnExportCompletionMatrixCsv`: "Export Grid CSV" (`exportCompletionGrid('matrix_csv')`)
+       - `btnExportCompletionResponsesCsv`: "Export Responses CSV" (`exportCompletionGrid('responses_csv')`)
+       - `btnExportCompletionJson`: "Export JSON" (`exportCompletionGrid('json')`)
+  2. **Data Extraction Engine (`app.js:8373-8680`)**:
+     - `extractSubmissionResponses(sub)`: Recursively extracts structured MCQ questions, selected options, text reflections, transcriptions, audio reflection links (`audioUrl`), video links (`videoUrl`), attempt counts, and AI feedback remarks.
+     - `getAdminCompletionGridData()`: Extracts and unifies the complete filtered cohort dataset matching active dashboard filters (`activeAdminMilestoneId`, `activeAdminModule`, `adminCohortFilter`, `adminStatusFilter`, `adminSearchUser`). Includes ALL matching learners (not capped at the 100-row DOM rendering limit).
+  3. **Export Formats (`exportCompletionGrid`)**:
+     - **Grid Matrix CSV (`matrix_csv`)**: Tabular spreadsheet matching the dashboard grid with student metadata (Rank, Name, Email, Phone, Campus, Approval Status, Completion %, Module LCs, Start Date) plus per-day columns (`D{d} Status`, `D{d} LCs`, `D{d} Match %`, `D{d} Submitted At`, `D{d} Responses`). Prefixed with UTF-8 BOM (`\uFEFF`) for Excel compatibility.
+     - **Responses Log CSV (`responses_csv`)**: Detailed row-by-row audit log of every question, response, reflection text, media link, attempt count, and AI feedback.
+     - **Full JSON (`json`)**: Structured hierarchical JSON payload containing export metadata, active filters, learner profiles, and full nested sessions and answers arrays.
+  4. **Browser Download Handler (`downloadExportFile`)**:
+     - Clean `Blob` + `<a download>` browser pipeline with automatic object URL cleanup.
+
+---
+
+## 5. Verification Results
+
+All 5 test suites pass at 100%:
+1. `node test_security_audit_hardening.js`: **30 / 30 Passed** ✅
+2. `node scratch/test_lq_telemetry_cv_enhancements.js`: **20 / 20 Passed** ✅
+3. `node scratch/test_user_refinements.js`: **17 / 17 Passed** ✅
+4. `node scratch/test_claude_round2_issues.js`: **3 / 3 Passed** ✅
+5. `node scratch/test_recruiter_speedometer_and_export.js`: **3 / 3 Passed** ✅
+- **Total: 73+ Verified Assertions Passing at 100%** ✅
+
+
 
 
 
