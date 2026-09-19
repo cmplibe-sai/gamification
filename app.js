@@ -8661,6 +8661,27 @@ function getAdminCompletionGridData() {
 }
 window.getAdminCompletionGridData = getAdminCompletionGridData;
 
+// OWASP CSV & Formula Injection Neutralization Engine
+function escapeCsvCell(val) {
+    if (val === null || val === undefined) return '""';
+    let str = String(val).replace(/\r?\n/g, ' ');
+
+    // If cell text begins with =, +, -, @, \t, or \r, prefix with apostrophe to prevent spreadsheet formula execution
+    const trimmed = str.trimStart();
+    if (trimmed.length > 0) {
+        const firstChar = trimmed[0];
+        if (firstChar === '=' || firstChar === '@' || firstChar === '\t' || firstChar === '\r') {
+            str = "'" + str;
+        } else if ((firstChar === '+' || firstChar === '-') && isNaN(Number(trimmed))) {
+            str = "'" + str;
+        }
+    }
+
+    const escaped = str.replace(/"/g, '""');
+    return `"${escaped}"`;
+}
+window.escapeCsvCell = escapeCsvCell;
+
 function exportCompletionGrid(format = 'matrix_csv') {
     const data = getAdminCompletionGridData();
     if (!data || !data.learners || data.learners.length === 0) {
@@ -8672,11 +8693,7 @@ function exportCompletionGrid(format = 'matrix_csv') {
     const msTag = `M${data.milestoneId}`;
     const modTag = data.moduleName || 'all';
 
-    const escapeCsv = (val) => {
-        if (val === null || val === undefined) return '""';
-        const str = String(val).replace(/"/g, '""').replace(/\r?\n/g, ' ');
-        return `"${str}"`;
-    };
+    const escapeCsv = escapeCsvCell;
 
     if (format === 'json') {
         const jsonExport = {
