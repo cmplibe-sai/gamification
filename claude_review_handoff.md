@@ -109,22 +109,47 @@ Three automated test suites confirm all fixes without regressions:
 
 ---
 
-## 6. Resolution of Claude's Review Findings
+## 7. Part 3: Corporate Discovery, Verified CVs, 3D LQ Speedometer & Campus Alerts
 
-Claude's independent code review identified 3 key points:
-1. **Iterative Stopword Stripping in `formatOptionSentence()`**:
-   - Single-pass replacement could leave trailing dangling prepositions when encountering consecutive stopwords (e.g. `"...in front of the"` leaving `"...in front of"`).
-   - **Resolution**: Replaced with an iterative `do...while` loop that continuously trims trailing punctuation and stopwords until a substantive word remains.
-2. **Elimination of `eval()` in `getLearnerBase()`**:
-   - `eval(match[1])` was used to evaluate `data.js`.
-   - **Resolution**: Replaced with `JSON.parse(match[1])`, parsing all 298 records without `eval()`.
-3. **Corporate Solution Scoping Enforcement (`permittedMangoes`)**:
-   - `permittedMangoes` was saved on employer records but was not enforced in `/api/employer/candidates`, making the checkboxes cosmetic.
-   - **Resolution**:
-     - Enforced `permittedMangoes` on `/api/employer/candidates` in `server.js`.
-     - Populated `mgmtEmployerSolutionsList` checkboxes dynamically from `allAdminMangos` in `app.js`.
-     - Added a dedicated **Learning Solution** filter in Recruiter Talent Arena (`index.html` & `app.js`), automatically scoped to the employer's permitted solutions.
-     - Reset `store.campusPartnersDB = {}` in `syncCampusPartnersDB()` to cleanly prune stale entries.
+### 1. Corporate Empanelment: Unrestricted Search
+- Removed `#mgmtEmployerSolutionsList` checkboxes from the Creator Hub empanelment form.
+- Removed `activeEmpPermitted` filter from `/api/employer/candidates` so corporate employers can freely search across all institutions and solutions without cohort restrictions.
 
-All 4 test suites (`test_claude_review_fixes.js`, `test_user_issues_verification.js`, `test_security_audit_hardening.js`, and `test_role_ui_and_auth.js`) pass with 100% assertions satisfied.
+### 2. Candidate Discovery Search: Multi-Token & Local-Part Matching
+- Fixed search in `server.js` to match across tokens, stripped-whitespace queries, and email local-parts (e.g. `"Chandra Sai 349"` or numeric `"349"` matching `chandrasai349@gmail.com`).
+- Enforces strict PII masking: `_rawEmail` is stripped before sending the response; recruiters only receive `maskedEmail` (`c***a@gmail.com`) and `maskedPhone` (`******7977`).
+
+### 3. Recruiter Candidate Inspection: 3D Speedometer Gauge
+- Wired `openCandidateDossier(candId)` in `app.js` to render the realistic 3D Speedometer Gauge (`ensureLqGaugeSvg('recruiterLq')`, `updateLqNeedle()`).
+- Displays verified academic credentials, milestone progress, and masked PII.
+- Omitted raw submission tables and audio reflections per user requirements.
+
+### 4. Unified Learn Agility Quotient (LQ®) Score
+- Eliminated score discrepancy (where Career Views showed 88% while recruiter/creator views showed 99%).
+- Root cause: `renderLearnerCareerViews()` checked `lqStats.overallLq` (undefined, defaulting to 88).
+- Standardized calculation across all views to use `calculateCustomerHealth(user).lqPct` (`computeLqStats`).
+
+### 5. Verified CV / Resume Upload & Download Pipeline
+- Persistent database storage via `store.studentCVs` with `POST /api/learner/cv` and `GET /api/learner/cv/:studentId`.
+- Students upload/replace verified PDF/DOCX resumes (max 5MB) in Career Views.
+- Recruiters can download verified CVs from candidate cards or the inspection dossier, triggering `cv_download` telemetry.
+
+### 6. Campus Partner Placement Notifications
+- Added placement notification bell with unread badge to `partnerNav` in `index.html`.
+- Added `#campusNotificationsModal` displaying recruiter connection requests and interview inquiries.
+- `loadCampusPartnerNotifications()` polls `/api/campus/placement-activity/:campusId`.
+
+### 7. Campus Partner Metrics Clarification
+- Clarified "Active in Challenge: 4 of 52 Enrolled" in `dynamicMsStatsBox`: 4 learners have actively submitted milestone challenges, while 48 are enrolled in the cohort on TagMango but have not yet started Milestone 1.
+
+### 8. Recruiter Page Reload Session Persistence
+- Updated DOMContentLoaded listener to restore recruiter state without re-triggering bare OTP verification or wiping the candidate grid.
+
+### Test Evidence
+- `scratch/test_user_refinements.js`: **17 / 17 Passed**
+- `test_security_audit_hardening.js`: **30 / 30 Passed**
+- `scratch/test_user_issues_verification.js`: **100% Passed**
+- `scratch/test_role_ui_and_auth.js`: **8 / 8 Passed**
+- `scratch/test_claude_review_fixes.js`: **100% Passed**
+
 
