@@ -20040,6 +20040,13 @@ function openCandidateDossier(candId) {
 
     window._activeDossierCandidate = candidate;
 
+    // Show the modal BEFORE building the LC Growth chart. Chart.js (responsive: true) measures
+    // the canvas's parent container at creation time — if the modal is still display:none, the
+    // container reports 0x0 and Chart.js snaps the canvas back to zero size, leaving it blank
+    // even if we set canvas.width/height manually beforehand.
+    const dossierModal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');
+    if (dossierModal) dossierModal.classList.remove('hidden');
+
     // Log Profile View telemetry for career views & profile inspection count
     const employerId = currentUser?.role === 'recruiter' ? currentUser._id : 'emp_preview';
     const companyName = currentUser?.companyName || 'Corporate Partner';
@@ -20196,9 +20203,7 @@ function openCandidateDossier(candId) {
 
     // Note: "Request Interview" button uses inline onclick="requestCandidateInterview()"
     // in index.html directly — no JS wiring needed here.
-
-    const modal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');
-    if (modal) modal.classList.remove('hidden');
+    // (Modal is already shown near the top of this function, before the chart renders.)
 }
 window.openCandidateDossier = openCandidateDossier;
 
@@ -20213,6 +20218,9 @@ function closeCandidateDossier() {
 }
 window.closeCandidateDossier = closeCandidateDossier;
 window.closeRecruiterDossierModal = closeCandidateDossier;
+
+var recruiterLcGrowthChartInstance = null;
+var currentRecruiterLcTimeframe = 30;
 
 // Timeframe toggle handler for recruiter candidate dossier
 function setRecruiterLcTimeframe(days) {
