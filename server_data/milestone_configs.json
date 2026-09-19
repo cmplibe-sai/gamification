@@ -4011,12 +4011,12 @@
         "questions": [
           {
             "id": "q_dyn_20260915_1",
-            "title": "According to the story, what core focus defines Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "According to the case study on Genius HRTech “Hiring Blind” Research Report, what core challenge or opportunity is addressed?",
             "options": [
-              "A remarkably similar paradox is",
-              "Imagine ordering a high-end smartphone",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of"
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "This compromise comes at a steep price",
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover the internal components are missing",
@@ -4025,12 +4025,12 @@
           },
           {
             "id": "q_dyn_20260915_2",
-            "title": "Which key operational strategy enables Genius HRTech: “Hiring Blind” Research Report to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "A remarkably similar paradox is",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders"
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
@@ -4039,12 +4039,12 @@
           },
           {
             "id": "q_dyn_20260915_3",
-            "title": "What primary business model or service approach underpins Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "Driven by fierce market competition"
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet",
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster than ever",
@@ -4053,660 +4053,408 @@
           },
           {
             "id": "q_dyn_20260915_4",
-            "title": "What key market or customer need is highlighted for Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What key customer need or market demand is addressed by Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "However, this relentless pursuit of",
-              "*Credential fraud** has become alarmingly"
+              "This compromise comes at a steep price",
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity! A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+            "explanation": "Based on the story: However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
             "category": "Finance & Scale",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_5",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "This compromise comes at a",
-              "Over 57% of HR leaders",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies"
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "It requires strategic risk assessment, process design, and vendor governance."
             ],
             "correctOption": 1,
-            "explanation": "Based on the story: Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet aggressive hiring timelines.",
+            "explanation": "Based on the story: A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
             "category": "Careers & Leadership",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_6",
-            "title": "Which capability is required to execute Genius HRTech: “Hiring Blind” Research Report successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "This compromise comes at a",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders"
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet",
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: This compromise comes at a steep price",
+            "explanation": "Based on the story: Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet aggressive hiring timelines.",
             "category": "Business Strategy",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_7",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "*Credential fraud** has become alarmingly"
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "This compromise comes at a steep price"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: *Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational degrees.",
+            "explanation": "Based on the story: This compromise comes at a steep price",
             "category": "Market & Customers",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_8",
-            "title": "What career path or functional role is discussed in the context of Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What career pathway or functional role is discussed in the context of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "An equal proportion flagged discrepancies",
-              "For management graduates entering the"
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "It requires strategic risk assessment, process design, and vendor governance.",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual employment or moonlighting** in hybrid work environments.",
+            "explanation": "Based on the story: *Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational degrees.",
             "category": "Operational Execution",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_9",
-            "title": "How does Genius HRTech: “Hiring Blind” Research Report differentiate its offering in the market?",
+            "title": "How does Genius HRTech “Hiring Blind” Research Report drive sustainable growth and execution in its market?",
             "options": [
-              "This structural challenge is transforming",
-              "Over 70% of business leaders",
-              "For management graduates entering the",
-              "Corporate HR is no longer"
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover"
             ],
             "correctOption": 1,
-            "explanation": "Based on the story: Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms to safeguard customer trust and operational security.",
+            "explanation": "Based on the story: An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual employment or moonlighting** in hybrid work environments.",
             "category": "Finance & Scale",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_10",
-            "title": "What overarching business principle defines the success of Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What overarching strategic principle defines the journey of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "This structural challenge is transforming",
-              "For management graduates entering the",
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment"
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today."
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk management function.",
+            "explanation": "Based on the story: Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms to safeguard customer trust and operational security.",
             "category": "Careers & Leadership",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_11",
-            "title": "According to the story, what core focus defines Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "According to the case study on Genius HRTech “Hiring Blind” Research Report, what core challenge or opportunity is addressed?",
             "options": [
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "For management graduates entering the"
+              "It requires strategic risk assessment, process design, and vendor governance.",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+            "explanation": "Based on the story: This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk management function.",
             "category": "Business Strategy",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_12",
-            "title": "Which key operational strategy enables Genius HRTech: “Hiring Blind” Research Report to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "Corporate HR is no longer",
-              "Entry-level professionals who combine strong"
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+            "explanation": "Based on the story: For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
             "category": "Market & Customers",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_13",
-            "title": "What primary business model or service approach underpins Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "Simultaneously, B2B sales and client",
-              "it requires strategic risk assessment",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a"
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide."
             ],
             "correctOption": 1,
-            "explanation": "Based on the story: it requires strategic risk assessment, process design, and vendor governance.",
+            "explanation": "Based on the story: Corporate HR is no longer just about conducting traditional interviews or managing payroll",
             "category": "Operational Execution",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_14",
-            "title": "What key market or customer need is highlighted for Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What key customer need or market demand is addressed by Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Simultaneously, B2B sales and client",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone"
+              "It requires strategic risk assessment, process design, and vendor governance.",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster",
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated verification platforms to enterprise clients.",
+            "explanation": "Based on the story: it requires strategic risk assessment, process design, and vendor governance.",
             "category": "Finance & Scale",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_15",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Entry-level professionals who combine strong"
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "This compromise comes at a steep price",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth in client-facing operational roles, client onboarding, and risk consulting.",
+            "explanation": "Based on the story: Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated verification platforms to enterprise clients.",
             "category": "Careers & Leadership",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_16",
-            "title": "Which capability is required to execute Genius HRTech: “Hiring Blind” Research Report successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Genius HRTech Limited is a",
-              "Driven by fierce market competition"
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background verification, flexi-staffing, payroll processing, and compliance management to mitigate hiring risks across corporate ecosystems.",
+            "explanation": "Based on the story: Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth in client-facing operational roles, client onboarding, and risk consulting.",
             "category": "Business Strategy",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_17",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "A remarkably similar paradox is",
-              "Imagine ordering a high-end smartphone",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of"
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background",
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet",
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual"
             ],
             "correctOption": 1,
-            "explanation": "Based on the story: Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover the internal components are missing",
+            "explanation": "Based on the story: Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background verification, flexi-staffing, payroll processing, and compliance management to mitigate hiring risks across corporate ecosystems.",
             "category": "Market & Customers",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_18",
-            "title": "What career path or functional role is discussed in the context of Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What career pathway or functional role is discussed in the context of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "A remarkably similar paradox is",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders"
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "This compromise comes at a steep price",
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+            "explanation": "Based on the story: Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover the internal components are missing",
             "category": "Operational Execution",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_19",
-            "title": "How does Genius HRTech: “Hiring Blind” Research Report differentiate its offering in the market?",
+            "title": "How does Genius HRTech “Hiring Blind” Research Report drive sustainable growth and execution in its market?",
             "options": [
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "Driven by fierce market competition"
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today."
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster than ever",
+            "explanation": "Based on the story: A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
             "category": "Finance & Scale",
             "pts": 11
           },
           {
             "id": "q_dyn_20260915_20",
-            "title": "What overarching business principle defines the success of Genius HRTech: “Hiring Blind” Research Report?",
+            "title": "What overarching strategic principle defines the journey of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "However, this relentless pursuit of",
-              "*Credential fraud** has become alarmingly"
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet",
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities."
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity! A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_21",
-            "title": "According to the story, what core focus defines Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "This compromise comes at a",
-              "Over 57% of HR leaders",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet aggressive hiring timelines.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_22",
-            "title": "Which key operational strategy enables Genius HRTech: “Hiring Blind” Research Report to scale?",
-            "options": [
-              "This compromise comes at a",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: This compromise comes at a steep price",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_23",
-            "title": "What primary business model or service approach underpins Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "*Credential fraud** has become alarmingly"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: *Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational degrees.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_24",
-            "title": "What key market or customer need is highlighted for Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "An equal proportion flagged discrepancies",
-              "For management graduates entering the"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual employment or moonlighting** in hybrid work environments.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_25",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "This structural challenge is transforming",
-              "Over 70% of business leaders",
-              "For management graduates entering the",
-              "Corporate HR is no longer"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms to safeguard customer trust and operational security.",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_26",
-            "title": "Which capability is required to execute Genius HRTech: “Hiring Blind” Research Report successfully?",
-            "options": [
-              "This structural challenge is transforming",
-              "For management graduates entering the",
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk management function.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_27",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "For management graduates entering the"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_28",
-            "title": "What career path or functional role is discussed in the context of Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "Corporate HR is no longer",
-              "Entry-level professionals who combine strong"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Corporate HR is no longer just about conducting traditional interviews or managing payroll",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_29",
-            "title": "How does Genius HRTech: “Hiring Blind” Research Report differentiate its offering in the market?",
-            "options": [
-              "Simultaneously, B2B sales and client",
-              "it requires strategic risk assessment",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: it requires strategic risk assessment, process design, and vendor governance.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_30",
-            "title": "What overarching business principle defines the success of Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "Simultaneously, B2B sales and client",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated verification platforms to enterprise clients.",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_31",
-            "title": "According to the story, what core focus defines Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Entry-level professionals who combine strong"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth in client-facing operational roles, client onboarding, and risk consulting.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_32",
-            "title": "Which key operational strategy enables Genius HRTech: “Hiring Blind” Research Report to scale?",
-            "options": [
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Genius HRTech Limited is a",
-              "Driven by fierce market competition"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background verification, flexi-staffing, payroll processing, and compliance management to mitigate hiring risks across corporate ecosystems.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_33",
-            "title": "What primary business model or service approach underpins Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "A remarkably similar paradox is",
-              "Imagine ordering a high-end smartphone",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover the internal components are missing",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_34",
-            "title": "What key market or customer need is highlighted for Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "A remarkably similar paradox is",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_35",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "Driven by fierce market competition"
-            ],
-            "correctOption": 3,
             "explanation": "Based on the story: Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster than ever",
             "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_36",
-            "title": "Which capability is required to execute Genius HRTech: “Hiring Blind” Research Report successfully?",
+            "id": "q_dyn_20260915_21",
+            "title": "According to the case study on Genius HRTech “Hiring Blind” Research Report, what core challenge or opportunity is addressed?",
             "options": [
-              "Over 57% of HR leaders",
-              "This compromise comes at a",
-              "However, this relentless pursuit of",
-              "*Credential fraud** has become alarmingly"
+              "This compromise comes at a steep price",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll"
             ],
-            "correctOption": 2,
-            "explanation": "Based on the story: However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity! A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+            "correctOption": 1,
+            "explanation": "Based on the story: However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
             "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_37",
-            "title": "What key operational lesson emerges from this story?",
+            "id": "q_dyn_20260915_22",
+            "title": "What primary value proposition or unique offering distinguishes Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "This compromise comes at a",
-              "Over 57% of HR leaders",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies"
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "It requires strategic risk assessment, process design, and vendor governance."
             ],
-            "correctOption": 1,
+            "correctOption": 0,
+            "explanation": "Based on the story: A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide.",
+            "category": "Market & Customers",
+            "pts": 11
+          },
+          {
+            "id": "q_dyn_20260915_23",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
+            "options": [
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet"
+            ],
+            "correctOption": 3,
             "explanation": "Based on the story: Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet aggressive hiring timelines.",
-            "category": "Market & Customers",
+            "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_38",
-            "title": "What career path or functional role is discussed in the context of Genius HRTech: “Hiring Blind” Research Report?",
+            "id": "q_dyn_20260915_24",
+            "title": "What key customer need or market demand is addressed by Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "This compromise comes at a",
-              "*Credential fraud** has become alarmingly",
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders"
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms",
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "This compromise comes at a steep price",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth"
             ],
-            "correctOption": 0,
+            "correctOption": 2,
             "explanation": "Based on the story: This compromise comes at a steep price",
-            "category": "Operational Execution",
+            "category": "Finance & Scale",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_39",
-            "title": "How does Genius HRTech: “Hiring Blind” Research Report differentiate its offering in the market?",
+            "id": "q_dyn_20260915_25",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "An equal proportion flagged discrepancies",
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "*Credential fraud** has become alarmingly"
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational",
+              "It requires strategic risk assessment, process design, and vendor governance.",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background"
             ],
-            "correctOption": 3,
+            "correctOption": 1,
             "explanation": "Based on the story: *Credential fraud** has become alarmingly widespread, with one in three employers discovering fake or inflated educational degrees.",
-            "category": "Finance & Scale",
+            "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_40",
-            "title": "What overarching business principle defines the success of Genius HRTech: “Hiring Blind” Research Report?",
+            "id": "q_dyn_20260915_26",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Over 70% of business leaders",
-              "This structural challenge is transforming",
-              "An equal proportion flagged discrepancies",
-              "For management graduates entering the"
+              "An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover"
             ],
-            "correctOption": 2,
+            "correctOption": 0,
             "explanation": "Based on the story: An equal proportion flagged discrepancies in **identity and address documentation, while over one-fifth encountered undisclosed dual employment or moonlighting** in hybrid work environments.",
-            "category": "Careers & Leadership",
+            "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_41",
-            "title": "According to the story, what core focus defines Genius HRTech: “Hiring Blind” Research Report?",
+            "id": "q_dyn_20260915_27",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "This structural challenge is transforming",
-              "Over 70% of business leaders",
-              "For management graduates entering the",
-              "Corporate HR is no longer"
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+              "Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms"
             ],
-            "correctOption": 1,
+            "correctOption": 3,
             "explanation": "Based on the story: Over 70% of business leaders now demand mandatory criminal and identity checks across all gig platforms to safeguard customer trust and operational security.",
-            "category": "Business Strategy",
+            "category": "Market & Customers",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_42",
-            "title": "Which key operational strategy enables Genius HRTech: “Hiring Blind” Research Report to scale?",
+            "id": "q_dyn_20260915_28",
+            "title": "What career pathway or functional role is discussed in the context of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "This structural challenge is transforming",
-              "For management graduates entering the",
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment"
+              "It requires strategic risk assessment, process design, and vendor governance.",
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background",
+              "This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster"
             ],
-            "correctOption": 0,
+            "correctOption": 2,
             "explanation": "Based on the story: This structural challenge is transforming background verification from a routine administrative chore into a high-stakes risk management function.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_43",
-            "title": "What primary business model or service approach underpins Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "Corporate HR is no longer",
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "For management graduates entering the"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
             "category": "Operational Execution",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_44",
-            "title": "What key market or customer need is highlighted for Genius HRTech: “Hiring Blind” Research Report?",
+            "id": "q_dyn_20260915_29",
+            "title": "How does Genius HRTech “Hiring Blind” Research Report drive sustainable growth and execution in its market?",
             "options": [
-              "it requires strategic risk assessment",
-              "Simultaneously, B2B sales and client",
-              "Corporate HR is no longer",
-              "Entry-level professionals who combine strong"
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity"
             ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+            "correctOption": 1,
+            "explanation": "Based on the story: For management graduates entering the corporate workforce, this shift signals a profound expansion of entry-level opportunities.",
             "category": "Finance & Scale",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_45",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "id": "q_dyn_20260915_30",
+            "title": "What overarching strategic principle defines the journey of Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Simultaneously, B2B sales and client",
-              "it requires strategic risk assessment",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a"
+              "Corporate HR is no longer just about conducting traditional interviews or managing payroll",
+              "Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth",
+              "A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
+              "A recent national survey by workforce solutions firm Genius HRTech highlights this growing divide."
             ],
-            "correctOption": 1,
-            "explanation": "Based on the story: it requires strategic risk assessment, process design, and vendor governance.",
+            "correctOption": 0,
+            "explanation": "Based on the story: Corporate HR is no longer just about conducting traditional interviews or managing payroll",
             "category": "Careers & Leadership",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_46",
-            "title": "Which capability is required to execute Genius HRTech: “Hiring Blind” Research Report successfully?",
+            "id": "q_dyn_20260915_31",
+            "title": "According to the case study on Genius HRTech “Hiring Blind” Research Report, what core challenge or opportunity is addressed?",
             "options": [
-              "Simultaneously, B2B sales and client",
-              "Entry-level professionals who combine strong",
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone"
+              "Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background",
+              "Driven by fierce market competition and aggressive operational targets, organizations are racing to onboard talent faster",
+              "Over 57% of HR leaders admitted that companies frequently compromise **background verification standards** simply to meet",
+              "It requires strategic risk assessment, process design, and vendor governance."
             ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated verification platforms to enterprise clients.",
+            "correctOption": 3,
+            "explanation": "Based on the story: it requires strategic risk assessment, process design, and vendor governance.",
             "category": "Business Strategy",
             "pts": 11
           },
           {
-            "id": "q_dyn_20260915_47",
-            "title": "What key operational lesson emerges from this story?",
+            "id": "q_dyn_20260915_32",
+            "title": "What primary value proposition or unique offering distinguishes Genius HRTech “Hiring Blind” Research Report?",
             "options": [
-              "Genius HRTech Limited is a",
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Entry-level professionals who combine strong"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Entry-level professionals who combine strong customer engagement skills with analytical problem-solving will find fast-track growth in client-facing operational roles, client onboarding, and risk consulting.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_48",
-            "title": "What career path or functional role is discussed in the context of Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "Imagine ordering a high-end smartphone",
-              "A remarkably similar paradox is",
-              "Genius HRTech Limited is a",
-              "Driven by fierce market competition"
+              "Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover",
+              "However, this relentless pursuit of speed is creating a dangerous vulnerability in workforce integrity",
+              "Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated",
+              "This compromise comes at a steep price"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: Genius HRTech Limited is a leading Indian workforce staffing and HR solutions provider offering tech-enabled background verification, flexi-staffing, payroll processing, and compliance management to mitigate hiring risks across corporate ecosystems.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_49",
-            "title": "How does Genius HRTech: “Hiring Blind” Research Report differentiate its offering in the market?",
-            "options": [
-              "A remarkably similar paradox is",
-              "Imagine ordering a high-end smartphone",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Imagine ordering a high-end smartphone online and receiving it within ten minutes, only to discover the internal components are missing",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260915_50",
-            "title": "What overarching business principle defines the success of Genius HRTech: “Hiring Blind” Research Report?",
-            "options": [
-              "A remarkably similar paradox is",
-              "Driven by fierce market competition",
-              "However, this relentless pursuit of",
-              "Over 57% of HR leaders"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: A remarkably similar paradox is playing out across corporate boardrooms and **human resource (HR)** departments today.",
-            "category": "Careers & Leadership",
+            "explanation": "Based on the story: Simultaneously, B2B sales and client acquisition roles within HR-tech firms are booming, as providers sell automated verification platforms to enterprise clients.",
+            "category": "Market & Customers",
             "pts": 11
           }
         ],
@@ -4733,12 +4481,12 @@
         "questions": [
           {
             "id": "q_dyn_20260916_1",
-            "title": "According to the story, what core focus defines NCDEX introduces RAINMUMBAI?",
+            "title": "According to the case study on NCDEX introduces RAINMUMBAI, what core challenge or opportunity is addressed?",
             "options": [
-              "Well, until May 2026, this",
-              "Have you heard of Rain",
-              "That changed when **NCDEX** (National",
-              "NDEX has partnered with IIT"
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
+              "Have you heard of Rain Traders",
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity",
+              "This price action demonstrates clear utility across diverse business models"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Have you heard of Rain Traders",
@@ -4747,12 +4495,12 @@
           },
           {
             "id": "q_dyn_20260916_2",
-            "title": "Which key operational strategy enables NCDEX introduces RAINMUMBAI to scale?",
+            "title": "What primary value proposition or unique offering distinguishes NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Well, until May 2026, this",
-              "That changed when **NCDEX** (National",
-              "NDEX has partnered with IIT",
-              "It relies on IMD’s rain"
+              "Well, until May 2026, this was known to none in India",
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June",
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Well, until May 2026, this was known to none in India",
@@ -4761,26 +4509,26 @@
           },
           {
             "id": "q_dyn_20260916_3",
-            "title": "What primary business model or service approach underpins NCDEX introduces RAINMUMBAI?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "NDEX has partnered with IIT",
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long",
-              "That changed when **NCDEX** (National"
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **“RAINMUMBAI” - Indias pioneer exchange-traded rainfall futures contract.**",
+            "explanation": "Based on the story: That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall futures contract.**",
             "category": "Operational Execution",
             "pts": 11
           },
           {
             "id": "q_dyn_20260916_4",
-            "title": "What key market or customer need is highlighted for NCDEX introduces RAINMUMBAI?",
+            "title": "What key customer need or market demand is addressed by NCDEX introduces RAINMUMBAI?",
             "options": [
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long",
-              "NDEX has partnered with IIT",
-              "Six weeks post-launch, price movements"
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity",
+              "This price action demonstrates clear utility across diverse business models",
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances."
             ],
             "correctOption": 2,
             "explanation": "Based on the story: NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
@@ -4789,12 +4537,12 @@
           },
           {
             "id": "q_dyn_20260916_5",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Anchored to a 30-year Long",
-              "It relies on IMD’s rain",
-              "Six weeks post-launch, price movements",
-              "Opening at Rs.2,120 on May"
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June",
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot",
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
@@ -4803,12 +4551,12 @@
           },
           {
             "id": "q_dyn_20260916_6",
-            "title": "Which capability is required to execute NCDEX introduces RAINMUMBAI successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Anchored to a 30-year Long",
-              "Six weeks post-launch, price movements",
-              "Opening at Rs.2,120 on May",
-              "When torrential downpours hit in"
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this **cash-settled financial product allows enterprises to hedge climate exposures instantly** without waiting on claims adjusters.",
@@ -4817,12 +4565,12 @@
           },
           {
             "id": "q_dyn_20260916_7",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "Opening at Rs.2,120 on May",
-              "When torrential downpours hit in",
-              "This price action demonstrates clear",
-              "Six weeks post-launch, price movements"
+              "This price action demonstrates clear utility across diverse business models",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity:",
@@ -4831,12 +4579,12 @@
           },
           {
             "id": "q_dyn_20260916_8",
-            "title": "What career path or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
+            "title": "What career pathway or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "When torrential downpours hit in",
-              "This price action demonstrates clear",
-              "Opening at Rs.2,120 on May",
-              "Construction & Infrastructure:** Builders facing"
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot",
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June as monsoons stalled across western India.",
@@ -4845,12 +4593,12 @@
           },
           {
             "id": "q_dyn_20260916_9",
-            "title": "How does NCDEX introduces RAINMUMBAI differentiate its offering in the market?",
+            "title": "How does NCDEX introduces RAINMUMBAI drive sustainable growth and execution in its market?",
             "options": [
-              "This price action demonstrates clear",
-              "When torrential downpours hit in",
-              "Construction & Infrastructure:** Builders facing",
-              "Agricultural Lenders:** Banks exposed to"
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this",
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract surged, touching a peak of Rs.2,765 before settling lower.",
@@ -4859,12 +4607,12 @@
           },
           {
             "id": "q_dyn_20260916_10",
-            "title": "What overarching business principle defines the success of NCDEX introduces RAINMUMBAI?",
+            "title": "What overarching strategic principle defines the journey of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "This price action demonstrates clear",
-              "Construction & Infrastructure:** Builders facing",
-              "Agricultural Lenders:** Banks exposed to",
-              "Hydroelectric Power Utilities:** Western Ghats"
+              "This price action demonstrates clear utility across diverse business models",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: This price action demonstrates clear utility across diverse business models:",
@@ -4873,12 +4621,12 @@
           },
           {
             "id": "q_dyn_20260916_11",
-            "title": "According to the story, what core focus defines NCDEX introduces RAINMUMBAI?",
+            "title": "According to the case study on NCDEX introduces RAINMUMBAI, what core challenge or opportunity is addressed?",
             "options": [
-              "Agricultural Lenders:** Banks exposed to",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift",
-              "Construction & Infrastructure:** Builders facing"
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds",
+              "Have you heard of Rain Traders",
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot, offsetting direct site labor losses.",
@@ -4887,12 +4635,12 @@
           },
           {
             "id": "q_dyn_20260916_12",
-            "title": "Which key operational strategy enables NCDEX introduces RAINMUMBAI to scale?",
+            "title": "What primary value proposition or unique offering distinguishes NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift",
-              "Agricultural Lenders:** Banks exposed to",
-              "*Climate risk** is now an"
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this",
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "Well, until May 2026, this was known to none in India"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins as a calculated premium against default risks.",
@@ -4901,12 +4649,12 @@
           },
           {
             "id": "q_dyn_20260916_13",
-            "title": "What primary business model or service approach underpins NCDEX introduces RAINMUMBAI?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "Rainfall derivatives mark a shift",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "*Climate risk** is now an",
-              "*Physical and Transition Risk Modeling:"
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain",
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
@@ -4915,12 +4663,12 @@
           },
           {
             "id": "q_dyn_20260916_14",
-            "title": "What key market or customer need is highlighted for NCDEX introduces RAINMUMBAI?",
+            "title": "What key customer need or market demand is addressed by NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Rainfall derivatives mark a shift",
-              "*Climate risk** is now an",
-              "*Physical and Transition Risk Modeling:",
-              "*Geospatial & Hydro-Meteorological Data Literacy:"
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds",
+              "Have you heard of Rain Traders",
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
@@ -4929,12 +4677,12 @@
           },
           {
             "id": "q_dyn_20260916_15",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "*Physical and Transition Risk Modeling:",
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "*Climate risk** is now an"
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)",
+              "Well, until May 2026, this was known to none in India",
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: *Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this **intersection of finance, data, and environmental strategy**, graduating students must build specific domain expertise and quantitative skill sets:-",
@@ -4943,12 +4691,12 @@
           },
           {
             "id": "q_dyn_20260916_16",
-            "title": "Which capability is required to execute NCDEX introduces RAINMUMBAI successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "*Physical and Transition Risk Modeling:",
-              "Building these competencies opens high-growth"
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain",
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall",
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: *Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts, seasonal delays) impact corporate earnings, asset valuations, and credit default rates.",
@@ -4957,12 +4705,12 @@
           },
           {
             "id": "q_dyn_20260916_17",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Building these competencies opens high-growth",
-              "Have you heard of Rain"
+              "Have you heard of Rain Traders",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds",
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: *Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds to map hyper-local facility vulnerabilities.",
@@ -4971,12 +4719,12 @@
           },
           {
             "id": "q_dyn_20260916_18",
-            "title": "What career path or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
+            "title": "What career pathway or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "Building these competencies opens high-growth",
-              "Have you heard of Rain",
-              "Well, until May 2026, this"
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)",
+              "Well, until May 2026, this was known to none in India",
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA) for structuring parametric insurance and hedging tools.",
@@ -4985,12 +4733,12 @@
           },
           {
             "id": "q_dyn_20260916_19",
-            "title": "How does NCDEX introduces RAINMUMBAI differentiate its offering in the market?",
+            "title": "How does NCDEX introduces RAINMUMBAI drive sustainable growth and execution in its market?",
             "options": [
-              "Have you heard of Rain",
-              "Well, until May 2026, this",
-              "That changed when **NCDEX** (National",
-              "Building these competencies opens high-growth"
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall",
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain consulting, and commodity exchanges.",
@@ -4999,12 +4747,12 @@
           },
           {
             "id": "q_dyn_20260916_20",
-            "title": "What overarching business principle defines the success of NCDEX introduces RAINMUMBAI?",
+            "title": "What overarching strategic principle defines the journey of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Well, until May 2026, this",
-              "That changed when **NCDEX** (National",
-              "Have you heard of Rain",
-              "NDEX has partnered with IIT"
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity",
+              "Have you heard of Rain Traders",
+              "This price action demonstrates clear utility across diverse business models"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Have you heard of Rain Traders",
@@ -5013,12 +4761,12 @@
           },
           {
             "id": "q_dyn_20260916_21",
-            "title": "According to the story, what core focus defines NCDEX introduces RAINMUMBAI?",
+            "title": "According to the case study on NCDEX introduces RAINMUMBAI, what core challenge or opportunity is addressed?",
             "options": [
-              "That changed when **NCDEX** (National",
-              "Well, until May 2026, this",
-              "NDEX has partnered with IIT",
-              "It relies on IMD’s rain"
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Well, until May 2026, this was known to none in India",
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June",
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Well, until May 2026, this was known to none in India",
@@ -5027,26 +4775,26 @@
           },
           {
             "id": "q_dyn_20260916_22",
-            "title": "Which key operational strategy enables NCDEX introduces RAINMUMBAI to scale?",
+            "title": "What primary value proposition or unique offering distinguishes NCDEX introduces RAINMUMBAI?",
             "options": [
-              "That changed when **NCDEX** (National",
-              "NDEX has partnered with IIT",
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long"
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall",
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **“RAINMUMBAI” - Indias pioneer exchange-traded rainfall futures contract.**",
+            "explanation": "Based on the story: That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall futures contract.**",
             "category": "Market & Customers",
             "pts": 11
           },
           {
             "id": "q_dyn_20260916_23",
-            "title": "What primary business model or service approach underpins NCDEX introduces RAINMUMBAI?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long",
-              "Six weeks post-launch, price movements",
-              "NDEX has partnered with IIT"
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity",
+              "This price action demonstrates clear utility across diverse business models",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
@@ -5055,12 +4803,12 @@
           },
           {
             "id": "q_dyn_20260916_24",
-            "title": "What key market or customer need is highlighted for NCDEX introduces RAINMUMBAI?",
+            "title": "What key customer need or market demand is addressed by NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Anchored to a 30-year Long",
-              "Six weeks post-launch, price movements",
-              "It relies on IMD’s rain",
-              "Opening at Rs.2,120 on May"
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June",
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot",
+              "It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
@@ -5069,12 +4817,12 @@
           },
           {
             "id": "q_dyn_20260916_25",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Six weeks post-launch, price movements",
-              "Anchored to a 30-year Long",
-              "Opening at Rs.2,120 on May",
-              "When torrential downpours hit in"
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this **cash-settled financial product allows enterprises to hedge climate exposures instantly** without waiting on claims adjusters.",
@@ -5083,12 +4831,12 @@
           },
           {
             "id": "q_dyn_20260916_26",
-            "title": "Which capability is required to execute NCDEX introduces RAINMUMBAI successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Six weeks post-launch, price movements",
-              "Opening at Rs.2,120 on May",
-              "When torrential downpours hit in",
-              "This price action demonstrates clear"
+              "Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity",
+              "This price action demonstrates clear utility across diverse business models",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity:",
@@ -5097,12 +4845,12 @@
           },
           {
             "id": "q_dyn_20260916_27",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "When torrential downpours hit in",
-              "This price action demonstrates clear",
-              "Construction & Infrastructure:** Builders facing",
-              "Opening at Rs.2,120 on May"
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot",
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds",
+              "Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June as monsoons stalled across western India.",
@@ -5111,12 +4859,12 @@
           },
           {
             "id": "q_dyn_20260916_28",
-            "title": "What career path or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
+            "title": "What career pathway or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "This price action demonstrates clear",
-              "Construction & Infrastructure:** Builders facing",
-              "When torrential downpours hit in",
-              "Agricultural Lenders:** Banks exposed to"
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins",
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this",
+              "When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract",
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract surged, touching a peak of Rs.2,765 before settling lower.",
@@ -5125,12 +4873,12 @@
           },
           {
             "id": "q_dyn_20260916_29",
-            "title": "How does NCDEX introduces RAINMUMBAI differentiate its offering in the market?",
+            "title": "How does NCDEX introduces RAINMUMBAI drive sustainable growth and execution in its market?",
             "options": [
-              "Construction & Infrastructure:** Builders facing",
-              "This price action demonstrates clear",
-              "Agricultural Lenders:** Banks exposed to",
-              "Hydroelectric Power Utilities:** Western Ghats"
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "This price action demonstrates clear utility across diverse business models",
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: This price action demonstrates clear utility across diverse business models:",
@@ -5139,12 +4887,12 @@
           },
           {
             "id": "q_dyn_20260916_30",
-            "title": "What overarching business principle defines the success of NCDEX introduces RAINMUMBAI?",
+            "title": "What overarching strategic principle defines the journey of NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Construction & Infrastructure:** Builders facing",
-              "Agricultural Lenders:** Banks exposed to",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift"
+              "Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot",
+              "Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
+              "Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds",
+              "Have you heard of Rain Traders"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot, offsetting direct site labor losses.",
@@ -5153,12 +4901,12 @@
           },
           {
             "id": "q_dyn_20260916_31",
-            "title": "According to the story, what core focus defines NCDEX introduces RAINMUMBAI?",
+            "title": "According to the case study on NCDEX introduces RAINMUMBAI, what core challenge or opportunity is addressed?",
             "options": [
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift",
-              "*Climate risk** is now an",
-              "Agricultural Lenders:** Banks exposed to"
+              "Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this",
+              "Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA)",
+              "Well, until May 2026, this was known to none in India",
+              "Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins as a calculated premium against default risks.",
@@ -5167,268 +4915,16 @@
           },
           {
             "id": "q_dyn_20260916_32",
-            "title": "Which key operational strategy enables NCDEX introduces RAINMUMBAI to scale?",
+            "title": "What primary value proposition or unique offering distinguishes NCDEX introduces RAINMUMBAI?",
             "options": [
-              "Rainfall derivatives mark a shift",
-              "*Climate risk** is now an",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "*Physical and Transition Risk Modeling:"
+              "Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts",
+              "Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain",
+              "Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
+              "That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **RAINMUMBAI - Indias pioneer exchange-traded rainfall"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Hydroelectric Power Utilities:** Western Ghats power generators locked in margins against seasonal runoff variances.",
             "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_33",
-            "title": "What primary business model or service approach underpins NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "*Climate risk** is now an",
-              "Rainfall derivatives mark a shift",
-              "*Physical and Transition Risk Modeling:",
-              "*Geospatial & Hydro-Meteorological Data Literacy:"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Rainfall derivatives mark a shift where macro climate risks become **quantifiable trading instruments**",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_34",
-            "title": "What key market or customer need is highlighted for NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "*Climate risk** is now an",
-              "*Physical and Transition Risk Modeling:",
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Derivative Pricing & Actuarial Fundamentals:"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: *Climate risk** is now an **asset class** requiring **specialized analytical capability.** To capture opportunities at this **intersection of finance, data, and environmental strategy**, graduating students must build specific domain expertise and quantitative skill sets:-",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_35",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "Building these competencies opens high-growth",
-              "*Physical and Transition Risk Modeling:"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: *Physical and Transition Risk Modeling: **how acute climate events (extreme rain, floods) and chronic shifts (droughts, seasonal delays) impact corporate earnings, asset valuations, and credit default rates.",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_36",
-            "title": "Which capability is required to execute NCDEX introduces RAINMUMBAI successfully?",
-            "options": [
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "Building these competencies opens high-growth",
-              "*Geospatial & Hydro-Meteorological Data Literacy:",
-              "Have you heard of Rain"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: *Geospatial & Hydro-Meteorological Data Literacy: **interpreting satellite imagery, GIS mapping, and IMD weather gauge feeds to map hyper-local facility vulnerabilities.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_37",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "Building these competencies opens high-growth",
-              "Derivative Pricing & Actuarial Fundamentals:",
-              "Have you heard of Rain",
-              "Well, until May 2026, this"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Derivative Pricing & Actuarial Fundamentals: cash-settled contract mechanics, correlation analysis, and long period averages (LPA) for structuring parametric insurance and hedging tools.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_38",
-            "title": "What career path or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "Building these competencies opens high-growth",
-              "Have you heard of Rain",
-              "Well, until May 2026, this",
-              "That changed when **NCDEX** (National"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Building these competencies opens high-growth career tracks across BFSI risk desks, ESG advisory firms, supply chain consulting, and commodity exchanges.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_39",
-            "title": "How does NCDEX introduces RAINMUMBAI differentiate its offering in the market?",
-            "options": [
-              "Well, until May 2026, this",
-              "That changed when **NCDEX** (National",
-              "NDEX has partnered with IIT",
-              "Have you heard of Rain"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Have you heard of Rain Traders",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_40",
-            "title": "What overarching business principle defines the success of NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "That changed when **NCDEX** (National",
-              "NDEX has partnered with IIT",
-              "Well, until May 2026, this",
-              "It relies on IMD’s rain"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Well, until May 2026, this was known to none in India",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_41",
-            "title": "According to the story, what core focus defines NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "NDEX has partnered with IIT",
-              "That changed when **NCDEX** (National",
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: That changed when **NCDEX** (National Commodity & Derivatives Exchange), introduced **“RAINMUMBAI” - Indias pioneer exchange-traded rainfall futures contract.**",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_42",
-            "title": "Which key operational strategy enables NCDEX introduces RAINMUMBAI to scale?",
-            "options": [
-              "NDEX has partnered with IIT",
-              "It relies on IMD’s rain",
-              "Anchored to a 30-year Long",
-              "Six weeks post-launch, price movements"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: NDEX has partnered with IIT Bombay and IMD (India Meteorological Department) for this",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_43",
-            "title": "What primary business model or service approach underpins NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "Anchored to a 30-year Long",
-              "Six weeks post-launch, price movements",
-              "Opening at Rs.2,120 on May",
-              "It relies on IMD’s rain"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: It relies on IMD’s rain gauges & IIT-B’s analytics & finance expertise.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_44",
-            "title": "What key market or customer need is highlighted for NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "Six weeks post-launch, price movements",
-              "Opening at Rs.2,120 on May",
-              "Anchored to a 30-year Long",
-              "When torrential downpours hit in"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Anchored to a 30-year Long Period Average (LPA) across the Colaba and Santacruz weather stations, this **cash-settled financial product allows enterprises to hedge climate exposures instantly** without waiting on claims adjusters.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_45",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "Opening at Rs.2,120 on May",
-              "Six weeks post-launch, price movements",
-              "When torrential downpours hit in",
-              "This price action demonstrates clear"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Six weeks post-launch, price movements tracked weather shifts with razor-sharp fidelity:",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_46",
-            "title": "Which capability is required to execute NCDEX introduces RAINMUMBAI successfully?",
-            "options": [
-              "Opening at Rs.2,120 on May",
-              "When torrential downpours hit in",
-              "This price action demonstrates clear",
-              "Construction & Infrastructure:** Builders facing"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Opening at Rs.2,120 on May 29, the contract steadily drifted down to Rs.1,921 by mid-June as monsoons stalled across western India.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_47",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "This price action demonstrates clear",
-              "Construction & Infrastructure:** Builders facing",
-              "Agricultural Lenders:** Banks exposed to",
-              "When torrential downpours hit in"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: When torrential downpours hit in July, logging 791 mm in seven days at Colaba, the contract surged, touching a peak of Rs.2,765 before settling lower.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_48",
-            "title": "What career path or functional role is discussed in the context of NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "Construction & Infrastructure:** Builders facing",
-              "Agricultural Lenders:** Banks exposed to",
-              "This price action demonstrates clear",
-              "Hydroelectric Power Utilities:** Western Ghats"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: This price action demonstrates clear utility across diverse business models:",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_49",
-            "title": "How does NCDEX introduces RAINMUMBAI differentiate its offering in the market?",
-            "options": [
-              "Agricultural Lenders:** Banks exposed to",
-              "Construction & Infrastructure:** Builders facing",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Construction & Infrastructure:** Builders facing halted projects used long positions to earn roughly Rs.22,000 per lot, offsetting direct site labor losses.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260916_50",
-            "title": "What overarching business principle defines the success of NCDEX introduces RAINMUMBAI?",
-            "options": [
-              "Agricultural Lenders:** Banks exposed to",
-              "Hydroelectric Power Utilities:** Western Ghats",
-              "Rainfall derivatives mark a shift",
-              "*Climate risk** is now an"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Agricultural Lenders:** Banks exposed to drought risks hedged through short positions, accepting contract margins as a calculated premium against default risks.",
-            "category": "Careers & Leadership",
             "pts": 11
           }
         ],
@@ -5455,12 +4951,12 @@
         "questions": [
           {
             "id": "q_dyn_20260917_1",
-            "title": "According to the story, what core focus defines Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "According to the case study on Eruditus Flipping Brain Drain to Brain Gain, what core challenge or opportunity is addressed?",
             "options": [
-              "Today, that massive educational outflow",
-              "For over a decade, hundreds",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants"
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year for cities like **Sydney, London, and Chicago**, spending crores on international tuition and living expenses",
@@ -5469,12 +4965,12 @@
           },
           {
             "id": "q_dyn_20260917_2",
-            "title": "Which key operational strategy enables Eruditus: Flipping Brain Drain to Brain Gain to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Today, that massive educational outflow",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework"
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Today, that massive educational outflow is experiencing a seismic structural reversal",
@@ -5483,12 +4979,12 @@
           },
           {
             "id": "q_dyn_20260917_3",
-            "title": "What primary business model or service approach underpins Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Edtech unicorn** Eruditus**, which initially"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates from** elite universities like MIT and Wharton**, is now bringing **physical campuses directly to Indian soil.**",
@@ -5497,12 +4993,12 @@
           },
           {
             "id": "q_dyn_20260917_4",
-            "title": "What key market or customer need is highlighted for Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What key customer need or market demand is addressed by Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Leveraging the UGC (University Grants",
-              "Capital commitments range between ₹100"
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions to set up domestic branch campuses, Eruditus has partnered with seven prominent global universities - including **UNSW Sydney, University of Bristol, and Illinois Tech** - to establish physical branch campuses across vibrant Indian economic hubs.",
@@ -5511,12 +5007,12 @@
           },
           {
             "id": "q_dyn_20260917_5",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Under this 51:49 ownership framework",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in"
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum design, faculty recruitment, and research standards.",
@@ -5525,12 +5021,12 @@
           },
           {
             "id": "q_dyn_20260917_6",
-            "title": "Which capability is required to execute Eruditus: Flipping Brain Drain to Brain Gain successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
@@ -5539,12 +5035,12 @@
           },
           {
             "id": "q_dyn_20260917_7",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "Capital commitments range between ₹100"
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years, **scaling intake from 250 students to 1,200 learners** per campus during the first five years.",
@@ -5553,12 +5049,12 @@
           },
           {
             "id": "q_dyn_20260917_8",
-            "title": "What career path or functional role is discussed in the context of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What career pathway or functional role is discussed in the context of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "By prioritizing industry-aligned degrees in",
-              "For fresh business management and"
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class credentials at a fraction of overseas costs.",
@@ -5567,12 +5063,12 @@
           },
           {
             "id": "q_dyn_20260917_9",
-            "title": "How does Eruditus: Flipping Brain Drain to Brain Gain differentiate its offering in the market?",
+            "title": "How does Eruditus Flipping Brain Drain to Brain Gain drive sustainable growth and execution in its market?",
             "options": [
-              "This is expected to surpass",
-              "Currently, India accounts for 25%",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational"
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates",
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages."
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Currently, India accounts for 25% of Erudituss overall revenue",
@@ -5581,12 +5077,12 @@
           },
           {
             "id": "q_dyn_20260917_10",
-            "title": "What overarching business principle defines the success of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What overarching strategic principle defines the journey of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "This is expected to surpass",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds"
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: This is expected to surpass 50% within five years as the company targets one billion dollars in annual revenue.",
@@ -5595,12 +5091,12 @@
           },
           {
             "id": "q_dyn_20260917_11",
-            "title": "According to the story, what core focus defines Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "According to the case study on Eruditus Flipping Brain Drain to Brain Gain, what core challenge or opportunity is addressed?",
             "options": [
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "For fresh business management and"
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across the edtech and higher education landscape:-",
@@ -5609,12 +5105,12 @@
           },
           {
             "id": "q_dyn_20260917_12",
-            "title": "Which key operational strategy enables Eruditus: Flipping Brain Drain to Brain Gain to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "Beyond back-office roles, initial operational",
-              "Edtech unicorn** Eruditus**, which initially"
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates",
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Currently, India accounts for 25% of Erudituss overall revenue"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student engagement, and client-facing advisory** profiles that directly connect specialized degree programs with enterprise talent acquisition teams.",
@@ -5623,12 +5119,12 @@
           },
           {
             "id": "q_dyn_20260917_13",
-            "title": "What primary business model or service approach underpins Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "Today, that massive educational outflow",
-              "For over a decade, hundreds",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants"
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year for cities like **Sydney, London, and Chicago**, spending crores on international tuition and living expenses",
@@ -5637,12 +5133,12 @@
           },
           {
             "id": "q_dyn_20260917_14",
-            "title": "What key market or customer need is highlighted for Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What key customer need or market demand is addressed by Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Today, that massive educational outflow",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework"
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Today, that massive educational outflow is experiencing a seismic structural reversal",
@@ -5651,12 +5147,12 @@
           },
           {
             "id": "q_dyn_20260917_15",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Edtech unicorn** Eruditus**, which initially"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates from** elite universities like MIT and Wharton**, is now bringing **physical campuses directly to Indian soil.**",
@@ -5665,12 +5161,12 @@
           },
           {
             "id": "q_dyn_20260917_16",
-            "title": "Which capability is required to execute Eruditus: Flipping Brain Drain to Brain Gain successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Leveraging the UGC (University Grants",
-              "Capital commitments range between ₹100"
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions to set up domestic branch campuses, Eruditus has partnered with seven prominent global universities - including **UNSW Sydney, University of Bristol, and Illinois Tech** - to establish physical branch campuses across vibrant Indian economic hubs.",
@@ -5679,12 +5175,12 @@
           },
           {
             "id": "q_dyn_20260917_17",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Under this 51:49 ownership framework",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in"
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum design, faculty recruitment, and research standards.",
@@ -5693,12 +5189,12 @@
           },
           {
             "id": "q_dyn_20260917_18",
-            "title": "What career path or functional role is discussed in the context of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What career pathway or functional role is discussed in the context of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
@@ -5707,12 +5203,12 @@
           },
           {
             "id": "q_dyn_20260917_19",
-            "title": "How does Eruditus: Flipping Brain Drain to Brain Gain differentiate its offering in the market?",
+            "title": "How does Eruditus Flipping Brain Drain to Brain Gain drive sustainable growth and execution in its market?",
             "options": [
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "Capital commitments range between ₹100"
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years, **scaling intake from 250 students to 1,200 learners** per campus during the first five years.",
@@ -5721,12 +5217,12 @@
           },
           {
             "id": "q_dyn_20260917_20",
-            "title": "What overarching business principle defines the success of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What overarching strategic principle defines the journey of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "By prioritizing industry-aligned degrees in",
-              "For fresh business management and"
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class credentials at a fraction of overseas costs.",
@@ -5735,12 +5231,12 @@
           },
           {
             "id": "q_dyn_20260917_21",
-            "title": "According to the story, what core focus defines Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "According to the case study on Eruditus Flipping Brain Drain to Brain Gain, what core challenge or opportunity is addressed?",
             "options": [
-              "This is expected to surpass",
-              "Currently, India accounts for 25%",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational"
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates",
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages."
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Currently, India accounts for 25% of Erudituss overall revenue",
@@ -5749,12 +5245,12 @@
           },
           {
             "id": "q_dyn_20260917_22",
-            "title": "Which key operational strategy enables Eruditus: Flipping Brain Drain to Brain Gain to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "This is expected to surpass",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds"
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: This is expected to surpass 50% within five years as the company targets one billion dollars in annual revenue.",
@@ -5763,12 +5259,12 @@
           },
           {
             "id": "q_dyn_20260917_23",
-            "title": "What primary business model or service approach underpins Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What operational approach or execution strategy is emphasized in this case study?",
             "options": [
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "For fresh business management and"
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across the edtech and higher education landscape:-",
@@ -5777,12 +5273,12 @@
           },
           {
             "id": "q_dyn_20260917_24",
-            "title": "What key market or customer need is highlighted for Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What key customer need or market demand is addressed by Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "Beyond back-office roles, initial operational",
-              "Edtech unicorn** Eruditus**, which initially"
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates",
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Currently, India accounts for 25% of Erudituss overall revenue"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student engagement, and client-facing advisory** profiles that directly connect specialized degree programs with enterprise talent acquisition teams.",
@@ -5791,12 +5287,12 @@
           },
           {
             "id": "q_dyn_20260917_25",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What strategic milestone or operational objective is highlighted?",
             "options": [
-              "Today, that massive educational outflow",
-              "For over a decade, hundreds",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants"
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year for cities like **Sydney, London, and Chicago**, spending crores on international tuition and living expenses",
@@ -5805,12 +5301,12 @@
           },
           {
             "id": "q_dyn_20260917_26",
-            "title": "Which capability is required to execute Eruditus: Flipping Brain Drain to Brain Gain successfully?",
+            "title": "Which capability or core competency is required to execute successfully?",
             "options": [
-              "Today, that massive educational outflow",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework"
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Today, that massive educational outflow is experiencing a seismic structural reversal",
@@ -5819,12 +5315,12 @@
           },
           {
             "id": "q_dyn_20260917_27",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key operational or managerial lesson emerges from this story?",
             "options": [
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Edtech unicorn** Eruditus**, which initially"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates from** elite universities like MIT and Wharton**, is now bringing **physical campuses directly to Indian soil.**",
@@ -5833,12 +5329,12 @@
           },
           {
             "id": "q_dyn_20260917_28",
-            "title": "What career path or functional role is discussed in the context of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What career pathway or functional role is discussed in the context of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Leveraging the UGC (University Grants",
-              "Capital commitments range between ₹100"
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years",
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions to set up domestic branch campuses, Eruditus has partnered with seven prominent global universities - including **UNSW Sydney, University of Bristol, and Illinois Tech** - to establish physical branch campuses across vibrant Indian economic hubs.",
@@ -5847,12 +5343,12 @@
           },
           {
             "id": "q_dyn_20260917_29",
-            "title": "How does Eruditus: Flipping Brain Drain to Brain Gain differentiate its offering in the market?",
+            "title": "How does Eruditus Flipping Brain Drain to Brain Gain drive sustainable growth and execution in its market?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Under this 51:49 ownership framework",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in"
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum",
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum design, faculty recruitment, and research standards.",
@@ -5861,12 +5357,12 @@
           },
           {
             "id": "q_dyn_20260917_30",
-            "title": "What overarching business principle defines the success of Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "What overarching strategic principle defines the journey of Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%"
+              "Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
+              "Currently, India accounts for 25% of Erudituss overall revenue",
+              "Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student",
+              "Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
@@ -5875,12 +5371,12 @@
           },
           {
             "id": "q_dyn_20260917_31",
-            "title": "According to the story, what core focus defines Eruditus: Flipping Brain Drain to Brain Gain?",
+            "title": "According to the case study on Eruditus Flipping Brain Drain to Brain Gain, what core challenge or opportunity is addressed?",
             "options": [
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "Capital commitments range between ₹100"
+              "This is expected to surpass 50% within five years as the company targets one billion dollars",
+              "For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year",
+              "Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions",
+              "Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years, **scaling intake from 250 students to 1,200 learners** per campus during the first five years.",
@@ -5889,268 +5385,16 @@
           },
           {
             "id": "q_dyn_20260917_32",
-            "title": "Which key operational strategy enables Eruditus: Flipping Brain Drain to Brain Gain to scale?",
+            "title": "What primary value proposition or unique offering distinguishes Eruditus Flipping Brain Drain to Brain Gain?",
             "options": [
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "By prioritizing industry-aligned degrees in",
-              "For fresh business management and"
+              "For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across",
+              "Today, that massive educational outflow is experiencing a seismic structural reversal",
+              "By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class",
+              "Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class credentials at a fraction of overseas costs.",
             "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_33",
-            "title": "What primary business model or service approach underpins Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "This is expected to surpass",
-              "Currently, India accounts for 25%",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Currently, India accounts for 25% of Erudituss overall revenue",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_34",
-            "title": "What key market or customer need is highlighted for Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "This is expected to surpass",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: This is expected to surpass 50% within five years as the company targets one billion dollars in annual revenue.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_35",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "For fresh business management and"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across the edtech and higher education landscape:-",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_36",
-            "title": "Which capability is required to execute Eruditus: Flipping Brain Drain to Brain Gain successfully?",
-            "options": [
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "Beyond back-office roles, initial operational",
-              "Edtech unicorn** Eruditus**, which initially"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student engagement, and client-facing advisory** profiles that directly connect specialized degree programs with enterprise talent acquisition teams.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_37",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "Today, that massive educational outflow",
-              "For over a decade, hundreds",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year for cities like **Sydney, London, and Chicago**, spending crores on international tuition and living expenses",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_38",
-            "title": "What career path or functional role is discussed in the context of Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "Today, that massive educational outflow",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Today, that massive educational outflow is experiencing a seismic structural reversal",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_39",
-            "title": "How does Eruditus: Flipping Brain Drain to Brain Gain differentiate its offering in the market?",
-            "options": [
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Edtech unicorn** Eruditus**, which initially"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Edtech unicorn** Eruditus**, which initially built a global business connecting working professionals with executive online certificates from** elite universities like MIT and Wharton**, is now bringing **physical campuses directly to Indian soil.**",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_40",
-            "title": "What overarching business principle defines the success of Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "Under this 51:49 ownership framework",
-              "Eruditus manages on-ground operations, physical",
-              "Leveraging the UGC (University Grants",
-              "Capital commitments range between ₹100"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Leveraging the UGC (University Grants Commission)’s 2023 regulatory framework permitting top foreign higher education institutions to set up domestic branch campuses, Eruditus has partnered with seven prominent global universities - including **UNSW Sydney, University of Bristol, and Illinois Tech** - to establish physical branch campuses across vibrant Indian economic hubs.",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_41",
-            "title": "According to the story, what core focus defines Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Under this 51:49 ownership framework",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Under this 51:49 ownership framework, foreign universities hold the majority stake and oversee academic governance, curriculum design, faculty recruitment, and research standards.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_42",
-            "title": "Which key operational strategy enables Eruditus: Flipping Brain Drain to Brain Gain to scale?",
-            "options": [
-              "Eruditus manages on-ground operations, physical",
-              "Capital commitments range between ₹100",
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Eruditus manages on-ground operations, physical infrastructure development, student housing, technology integration, and corporate placement linkages.",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_43",
-            "title": "What primary business model or service approach underpins Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "By prioritizing industry-aligned degrees in",
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "Capital commitments range between ₹100"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Capital commitments range between ₹100 crore and ₹200 crore per university over the initial five years, **scaling intake from 250 students to 1,200 learners** per campus during the first five years.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_44",
-            "title": "What key market or customer need is highlighted for Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "Currently, India accounts for 25%",
-              "This is expected to surpass",
-              "By prioritizing industry-aligned degrees in",
-              "For fresh business management and"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: By prioritizing industry-aligned degrees in artificial intelligence, cybersecurity, data science, and fintech, the partnership offers world-class credentials at a fraction of overseas costs.",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_45",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "This is expected to surpass",
-              "Currently, India accounts for 25%",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Currently, India accounts for 25% of Erudituss overall revenue",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_46",
-            "title": "Which capability is required to execute Eruditus: Flipping Brain Drain to Brain Gain successfully?",
-            "options": [
-              "This is expected to surpass",
-              "For fresh business management and",
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: This is expected to surpass 50% within five years as the company targets one billion dollars in annual revenue.",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_47",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "Beyond back-office roles, initial operational",
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "For fresh business management and"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: For fresh business management and commerce graduates, this unlocks diverse, high-impact career entry points across the edtech and higher education landscape:-",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_48",
-            "title": "What career path or functional role is discussed in the context of Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "For over a decade, hundreds",
-              "Today, that massive educational outflow",
-              "Beyond back-office roles, initial operational",
-              "Edtech unicorn** Eruditus**, which initially"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Beyond back-office roles, initial operational momentum will rely heavily on** B2C & B2B corporate sales, student engagement, and client-facing advisory** profiles that directly connect specialized degree programs with enterprise talent acquisition teams.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_49",
-            "title": "How does Eruditus: Flipping Brain Drain to Brain Gain differentiate its offering in the market?",
-            "options": [
-              "Today, that massive educational outflow",
-              "For over a decade, hundreds",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: For over a decade, hundreds of thousands of ambitious Indian students packed their bags every year for cities like **Sydney, London, and Chicago**, spending crores on international tuition and living expenses",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260917_50",
-            "title": "What overarching business principle defines the success of Eruditus: Flipping Brain Drain to Brain Gain?",
-            "options": [
-              "Today, that massive educational outflow",
-              "Edtech unicorn** Eruditus**, which initially",
-              "Leveraging the UGC (University Grants",
-              "Under this 51:49 ownership framework"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Today, that massive educational outflow is experiencing a seismic structural reversal",
-            "category": "Careers & Leadership",
             "pts": 11
           }
         ],

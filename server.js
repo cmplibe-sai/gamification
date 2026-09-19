@@ -2245,6 +2245,84 @@ function verifyEmployerAuth(req) {
     return null;
 }
 
+// Helper to check creator authorization (Bearer token, valid creator session, or direct secret)
+function checkCreatorAuth(req) {
+    if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
+    const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
+    if (sess && sess.role === 'creator') return true;
+    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret;
+    const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
+    if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;
+    return false;
+}
+
+// Privacy & PII Masking Helpers
+function maskEmail(email) {
+    if (!email || typeof email !== 'string' || !email.includes('@')) return '***@***.com';
+    const [user, domain] = email.split('@');
+    if (user.length <= 2) return `${user[0]}***@${domain}`;
+    return `${user[0]}***${user[user.length - 1]}@${domain}`;
+}
+
+function maskPhone(phone) {
+    if (!phone) return '******0000';
+    const clean = String(phone).replace(/\D/g, '');
+    if (clean.length < 4) return '******' + clean;
+    return '******' + clean.slice(-4);
+}
+
+function maskName(name) {
+    if (!name || typeof name !== 'string') return 'Learner';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) {
+        const p = parts[0];
+        if (p.length <= 2) return p;
+        return p[0] + '***' + p[p.length - 1];
+    }
+    return parts[0] + ' ' + parts[parts.length - 1][0] + '.';
+}
+
+// Authoritative Campus Coordinator Association Check
+// Generic / multi-campus shared cohorts (e.g. 6714e7d8eb97f72e99e3316c) do NOT confer campus association
+function isAuthorizedCampusCoordinator(session, targetUser) {
+    if (!session || session.role !== 'partner' || !session.campusId) return false;
+    if (!targetUser) return false;
+
+    const allCampuses = store.campuses || [];
+    const coordCampus = allCampuses.find(c => c.id === session.campusId);
+    if (!coordCampus) return false;
+
+    // Check 1: Institution / College text match
+    const instName = (targetUser.college || targetUser.institution || '').toLowerCase().trim();
+    if (instName && coordCampus.name) {
+        const cName = coordCampus.name.toLowerCase().trim();
+        const significantWords = cName.split(/[\s,.-]+/).filter(w => w.length > 3 && !['institute', 'technology', 'engineering', 'college', 'university'].includes(w));
+        const matchesName = instName.includes(cName) || cName.includes(instName) ||
+            (significantWords.length > 0 && significantWords.some(w => instName.includes(w)));
+        if (matchesName) return true;
+    }
+
+    // Check 2: Exclusively assigned campus-specific cohort mango ID
+    const userMangoes = Array.isArray(targetUser.subscribedMangoes) ? targetUser.subscribedMangoes : [];
+    const coordMangoes = Array.isArray(coordCampus.mangoIds) ? coordCampus.mangoIds : [];
+
+    const genericSharedMangoes = new Set(['6714e7d8eb97f72e99e3316c', '66ac8a14a04c8e9d18af993d']);
+    const mangoCampusCount = {};
+    allCampuses.forEach(cmp => {
+        (cmp.mangoIds || []).forEach(m => {
+            mangoCampusCount[m] = (mangoCampusCount[m] || 0) + 1;
+        });
+    });
+    Object.keys(mangoCampusCount).forEach(m => {
+        if (mangoCampusCount[m] > 1) genericSharedMangoes.add(m);
+    });
+
+    const exclusiveCoordMangoes = coordMangoes.filter(m => !genericSharedMangoes.has(m));
+    const hasExclusiveMango = exclusiveCoordMangoes.some(m => userMangoes.includes(m));
+    return hasExclusiveMango;
+}
+
+
 // REST Endpoints for Google Sheet Sync (Secured: syncing custom sheet IDs requires creator authentication)
 app.get(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], async (req, res) => {
     try {
@@ -2708,19 +2786,66 @@ app.post(['/api/user-module-start-date', '/gamification/api/user-module-start-da
 });
 
 
-// UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request)
+// UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request, strictly authenticated & PII-masked)
 app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
+    const isCreator = checkCreatorAuth(req);
+    const session = getAuthenticatedSession(req);
+    const employer = verifyEmployerAuth(req);
+
+    if (!isCreator && !session && !employer) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required: Please provide a valid session token, creator secret, or employer credentials.'
+        });
+    }
+
     const liveLevelUpAccess = getLevelUpAccessFromDb();
     
-    // Instant O(1) map enrichment without loop bottleneck
+    // Submissions enrichment with privacy & PII masking for non-creators
     const enrichedSubs = (store.submissions || []).map(s => {
         const matched = findActualUserFast(s.userId, s.userEmail, s.userPhone);
+        const uId = s.userId || (matched ? matched._id : 'usr_anon');
+        const rawEmail = s.userEmail || (matched ? matched.email : '');
+        const rawName = s.userName || (matched ? matched.name : 'Learner');
+        const rawPhone = s.userPhone || (matched ? matched.phone : '');
+
+        if (isCreator) {
+            return {
+                ...s,
+                userId: uId,
+                userEmail: rawEmail,
+                userName: rawName,
+                userPhone: rawPhone
+            };
+        }
+
+        // Student owner gets full details of their own submissions
+        const isOwner = session && session.role === 'customer' && (
+            String(session.userId) === String(uId) ||
+            (session.email && rawEmail && session.email.toLowerCase().trim() === rawEmail.toLowerCase().trim())
+        );
+
+        // Campus coordinator gets full details only if student genuinely belongs to their campus
+        const isCoord = isAuthorizedCampusCoordinator(session, matched);
+
+        if (isOwner || isCoord) {
+            return {
+                ...s,
+                userId: uId,
+                userEmail: rawEmail,
+                userName: rawName,
+                userPhone: rawPhone
+            };
+        }
+
+        // Masked for third parties (recruiters, other learners, non-affiliated campus partner)
         return {
             ...s,
-            userId: s.userId || (matched ? matched._id : 'usr_anon'),
-            userEmail: s.userEmail || (matched ? matched.email : ''),
-            userName: s.userName || (matched ? matched.name : 'Learner'),
-            userPhone: s.userPhone || (matched ? matched.phone : '')
+            userId: uId,
+            userEmail: maskEmail(rawEmail),
+            userName: maskName(rawName),
+            userPhone: maskPhone(rawPhone),
+            answers: []
         };
     });
 
@@ -2746,10 +2871,25 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
     });
 });
 
-// BULK SUBMISSIONS TWO-WAY SYNC (Instant O(1) merge)
+// BULK SUBMISSIONS TWO-WAY SYNC (Instant O(1) merge, authenticated)
 app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync'], (req, res) => {
     try {
-        const clientSubs = req.body.submissions || [];
+        const isCreator = checkCreatorAuth(req);
+        const session = getAuthenticatedSession(req);
+        if (!isCreator && !session) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+
+        let clientSubs = req.body.submissions || [];
+        if (!isCreator && session && session.role === 'customer') {
+            clientSubs = clientSubs.filter(sub => {
+                if (!sub) return false;
+                const matchesId = sub.userId && String(sub.userId) === String(session.userId);
+                const matchesEmail = sub.userEmail && session.email && sub.userEmail.toLowerCase().trim() === session.email.toLowerCase().trim();
+                return matchesId || matchesEmail;
+            });
+        }
+
         if (!store.submissions) store.submissions = [];
         let addedCount = 0;
 
@@ -4974,16 +5114,7 @@ app.get(['/api/config/geo', '/gamification/api/config/geo'], (req, res) => {
     });
 });
 
-// Helper to check creator authorization (Bearer token, valid creator session, or direct secret)
-function checkCreatorAuth(req) {
-    if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
-    const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
-    if (sess && sess.role === 'creator') return true;
-    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret;
-    const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
-    if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;
-    return false;
-}
+// (checkCreatorAuth is defined above in core security middleware)
 
 // -------------------------------------------------------------
 // 1. SIMPLYBE TEAM MANAGEMENT ENDPOINTS (Strictly Creator Gated)
@@ -5275,19 +5406,7 @@ app.delete(['/api/management/employers/:id', '/gamification/api/management/emplo
 // -------------------------------------------------------------
 // 4. CANDIDATE DISCOVERY & RECRUITER ARENA (PII Masking & Telemetry)
 // -------------------------------------------------------------
-function maskEmail(email) {
-    if (!email || typeof email !== 'string' || !email.includes('@')) return '***@***.com';
-    const [user, domain] = email.split('@');
-    if (user.length <= 2) return `${user[0]}***@${domain}`;
-    return `${user[0]}***${user[user.length - 1]}@${domain}`;
-}
-
-function maskPhone(phone) {
-    if (!phone) return '******0000';
-    const clean = String(phone).replace(/\D/g, '');
-    if (clean.length < 4) return '******' + clean;
-    return '******' + clean.slice(-4);
-}
+// (maskEmail, maskPhone, and maskName are defined above in core security middleware)
 
 // In-memory cache for learner base
 let cachedLearnerBase = null;
@@ -5598,21 +5717,7 @@ app.get(['/api/learner/cv/:studentId', '/gamification/api/learner/cv/:studentId'
         );
 
         // Strict Campus Scoping: Campus partner can only access CVs of learners belonging to their campus
-        let isAuthorizedCoordinator = false;
-        if (session && session.role === 'partner' && session.campusId) {
-            const coordCampus = (store.campuses || []).find(c => c.id === session.campusId);
-            const coordMangoes = coordCampus?.mangoIds || [];
-            if (matchedUser) {
-                const userMangoes = Array.isArray(matchedUser.subscribedMangoes) ? matchedUser.subscribedMangoes : [];
-                const sharesMango = coordMangoes.some(m => userMangoes.includes(m));
-                const instName = (matchedUser.college || matchedUser.institution || '').toLowerCase();
-                const campusNameMatch = coordCampus && instName && (instName.includes(coordCampus.name.toLowerCase()) || coordCampus.name.toLowerCase().includes(instName));
-
-                if (sharesMango || campusNameMatch) {
-                    isAuthorizedCoordinator = true;
-                }
-            }
-        }
+        const isAuthorizedCoordinator = isAuthorizedCampusCoordinator(session, matchedUser);
 
         if (!isCreator && !verifiedEmployer && !isStudentOwner && !isAuthorizedCoordinator) {
             return res.status(403).json({ success: false, error: 'Unauthorized: You do not have permission to view this student\'s CV.' });

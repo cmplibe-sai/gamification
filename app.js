@@ -19299,15 +19299,21 @@ async function renderRecruiterCandidates() {
         window._recruiterCandidatesCache = data.candidates;
 
         grid.innerHTML = data.candidates.map(cand => {
-            // Unify candidate LQ score & zone with canonical calculateCustomerHealth / computeLqStats
-            if (typeof calculateCustomerHealth === 'function') {
-                try {
-                    const health = calculateCustomerHealth(cand);
-                    if (health && health.lqPct !== undefined) {
-                        cand.lqScore = health.lqPct;
-                        cand.lqZone = health.zone || (health.lqPct >= 80 ? 'strong' : (health.lqPct >= 50 ? 'average' : 'weak'));
-                    }
-                } catch (e) {}
+            // Use canonical server-calculated LQ score and zone directly from /api/employer/candidates
+            // Fall back to client calculation only if not provided by server
+            if (cand.lqScore === undefined || cand.lqScore === null) {
+                if (typeof calculateCustomerHealth === 'function') {
+                    try {
+                        const health = calculateCustomerHealth(cand);
+                        if (health && health.lqPct !== undefined) {
+                            cand.lqScore = health.lqPct;
+                            cand.lqZone = health.zone || (health.lqPct >= 80 ? 'strong' : (health.lqPct >= 50 ? 'average' : 'weak'));
+                        }
+                    } catch (e) {}
+                }
+            }
+            if (!cand.lqZone) {
+                cand.lqZone = (Number(cand.lqScore) >= 80 ? 'strong' : (Number(cand.lqScore) >= 50 ? 'average' : 'weak'));
             }
 
             const lqColor = cand.lqZone === 'strong' ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30' : 
