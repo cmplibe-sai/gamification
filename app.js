@@ -16672,6 +16672,7 @@ function resolvePlatformUserRole(rawInput) {
                 phone: isValidPhone ? cleanPhone : matchedEmployer.phone,
                 industry: matchedEmployer.industry || 'Technology & Innovation',
                 designation: matchedEmployer.designation || 'Talent Acquisition',
+                permittedMangoes: Array.isArray(matchedEmployer.permittedMangoes) ? matchedEmployer.permittedMangoes : [],
                 role: 'recruiter'
             }
         };
@@ -16981,6 +16982,12 @@ async function verifyOTP() {
             if (sessData && sessData.success && sessData.token) {
                 localStorage.setItem('cmpli_session_token', sessData.token);
                 sessionStorage.setItem('cmpli_session_token', sessData.token);
+                if (sessData.employer && authUser) {
+                    if (Array.isArray(sessData.employer.permittedMangoes)) {
+                        authUser.permittedMangoes = sessData.employer.permittedMangoes;
+                    }
+                    if (sessData.employer.companyName) authUser.companyName = sessData.employer.companyName;
+                }
                 if (role === 'creator' && creatorSecretInput) {
                     sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
                     window._creatorAdminSecret = creatorSecretInput;
@@ -18619,6 +18626,17 @@ async function initManagementConsole() {
             `).join('');
         }
 
+        // Populate Solutions checkboxes for corporate employer empanelment
+        const empSolContainer = document.getElementById('mgmtEmployerSolutionsList');
+        if (empSolContainer && typeof allAdminMangos !== 'undefined' && Array.isArray(allAdminMangos)) {
+            empSolContainer.innerHTML = allAdminMangos.map(m => `
+                <label class="flex items-center gap-2 text-xs text-slate-300 hover:text-white cursor-pointer select-none">
+                    <input type="checkbox" value="${m.id || m._id}" class="emp-solution-check accent-cyan-500 rounded">
+                    <span class="truncate">${m.title || m.name || m.id}</span>
+                </label>
+            `).join('');
+        }
+
         // Fetch Team, Employers, and Campuses in parallel
         const [teamRes, empRes, cmpRes] = await Promise.all([
             apiFetch('/api/management/team').then(r => r.json()).catch(() => ({ success: false })),
@@ -18829,6 +18847,9 @@ function renderManagementCorporates() {
                 <button onclick="loginAsEmployerPreview('${e.id}')" class="flex-1 py-2 bg-cyan-600/20 hover:bg-cyan-600 text-cyan-300 hover:text-white rounded-xl text-xs font-bold transition-colors text-center border border-cyan-500/40">
                     <i class="fas fa-arrow-right-to-bracket mr-1.5"></i> Launch Talent Arena
                 </button>
+                <button onclick="editCorporateEmployer('${e.id}')" class="px-3 py-2 bg-slate-800 hover:bg-cyan-600/30 text-slate-300 hover:text-cyan-300 rounded-xl text-xs font-bold transition-colors border border-slate-700" title="Edit Partner Details & Solutions">
+                    <i class="fas fa-edit mr-1"></i> Edit
+                </button>
                 <button onclick="deleteCorporateEmployer('${e.id}')" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors" title="Delete Empanelment">
                     <i class="fas fa-trash-alt text-xs"></i>
                 </button>
@@ -18838,13 +18859,71 @@ function renderManagementCorporates() {
 }
 window.renderManagementCorporates = renderManagementCorporates;
 
+function editCorporateEmployer(id) {
+    const emp = (window._cachedEmployers || []).find(e => e.id === id);
+    if (!emp) return;
+
+    const idInput = document.getElementById('editingEmployerId');
+    if (idInput) idInput.value = emp.id;
+
+    if (document.getElementById('newEmpCompanyName')) document.getElementById('newEmpCompanyName').value = emp.companyName || '';
+    if (document.getElementById('newEmpIndustry')) document.getElementById('newEmpIndustry').value = emp.industry || '';
+    if (document.getElementById('newEmpRecruiterName')) document.getElementById('newEmpRecruiterName').value = emp.recruiterName || '';
+    if (document.getElementById('newEmpEmail')) document.getElementById('newEmpEmail').value = emp.email || '';
+    if (document.getElementById('newEmpPhone')) document.getElementById('newEmpPhone').value = emp.phone || '';
+    if (document.getElementById('newEmpDesignation')) document.getElementById('newEmpDesignation').value = emp.designation || '';
+
+    // Set solution checkboxes
+    const allowed = Array.isArray(emp.permittedMangoes) ? emp.permittedMangoes : [];
+    document.querySelectorAll('.emp-solution-check').forEach(cb => {
+        cb.checked = allowed.includes(cb.value);
+    });
+
+    const heading = document.getElementById('mgmtEmployerFormHeading');
+    if (heading) heading.innerText = 'Edit Hiring Partner';
+    const badge = document.getElementById('mgmtEmployerEditBadge');
+    if (badge) badge.classList.remove('hidden');
+    const btnText = document.getElementById('btnSaveEmployerText');
+    if (btnText) btnText.innerText = 'Update Corporate Partner';
+    const cancelBtn = document.getElementById('btnCancelEmployerEdit');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+    document.getElementById('mgmtSubTab-corporates')?.scrollIntoView({ behavior: 'smooth' });
+}
+window.editCorporateEmployer = editCorporateEmployer;
+
+function cancelCorporateEdit() {
+    const idInput = document.getElementById('editingEmployerId');
+    if (idInput) idInput.value = '';
+
+    if (document.getElementById('newEmpCompanyName')) document.getElementById('newEmpCompanyName').value = '';
+    if (document.getElementById('newEmpIndustry')) document.getElementById('newEmpIndustry').value = '';
+    if (document.getElementById('newEmpRecruiterName')) document.getElementById('newEmpRecruiterName').value = '';
+    if (document.getElementById('newEmpEmail')) document.getElementById('newEmpEmail').value = '';
+    if (document.getElementById('newEmpPhone')) document.getElementById('newEmpPhone').value = '';
+    if (document.getElementById('newEmpDesignation')) document.getElementById('newEmpDesignation').value = '';
+    document.querySelectorAll('.emp-solution-check').forEach(cb => cb.checked = false);
+
+    const heading = document.getElementById('mgmtEmployerFormHeading');
+    if (heading) heading.innerText = 'Empanel Hiring Partner';
+    const badge = document.getElementById('mgmtEmployerEditBadge');
+    if (badge) badge.classList.add('hidden');
+    const btnText = document.getElementById('btnSaveEmployerText');
+    if (btnText) btnText.innerText = 'Empanel & Activate Partner';
+    const cancelBtn = document.getElementById('btnCancelEmployerEdit');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+}
+window.cancelCorporateEdit = cancelCorporateEdit;
+
 async function saveCorporateEmployer() {
+    const id = document.getElementById('editingEmployerId')?.value.trim();
     const companyName = document.getElementById('newEmpCompanyName')?.value.trim();
     const recruiterName = document.getElementById('newEmpRecruiterName')?.value.trim();
     const email = document.getElementById('newEmpEmail')?.value.trim();
     const phone = document.getElementById('newEmpPhone')?.value.trim();
     const industry = document.getElementById('newEmpIndustry')?.value.trim();
     const designation = document.getElementById('newEmpDesignation')?.value.trim();
+    const permittedMangoes = Array.from(document.querySelectorAll('.emp-solution-check:checked')).map(cb => cb.value);
 
     if (!companyName || !email) {
         alert("Please provide the company name and recruiter email.");
@@ -18852,24 +18931,21 @@ async function saveCorporateEmployer() {
     }
 
     try {
+        const payload = { companyName, recruiterName, email, phone, industry, designation, permittedMangoes };
+        if (id) payload.id = id;
+
         const res = await apiFetch('/api/management/employers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ companyName, recruiterName, email, phone, industry, designation })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
-            document.getElementById('newEmpCompanyName').value = '';
-            document.getElementById('newEmpRecruiterName').value = '';
-            document.getElementById('newEmpEmail').value = '';
-            document.getElementById('newEmpPhone').value = '';
-            document.getElementById('newEmpIndustry').value = '';
-            document.getElementById('newEmpDesignation').value = '';
-
+            cancelCorporateEdit();
             const updated = await apiFetch('/api/management/employers').then(r => r.json());
             if (updated.success) window._cachedEmployers = updated.employers;
             renderManagementCorporates();
-            alert("Corporate hiring partner empanelled and activated!");
+            alert(id ? "Corporate partner updated successfully!" : "Corporate hiring partner empanelled and activated!");
         } else {
             alert("Error empanelling partner: " + (data.error || 'Server error'));
         }
@@ -18952,9 +19028,14 @@ function renderManagementCampuses() {
                         </div>
                         <h4 class="text-base font-extrabold text-white font-heading">${c.name || 'Partner College'}</h4>
                     </div>
-                    <button onclick="deleteCampusPartnerRecord('${c.id}')" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors self-end sm:self-auto" title="Delete Institution">
-                        <i class="fas fa-trash-alt text-xs"></i>
-                    </button>
+                    <div class="flex items-center gap-2 self-end sm:self-auto">
+                        <button onclick="editCampusPartnerRecord('${c.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-emerald-600/30 text-slate-300 hover:text-emerald-300 rounded-xl text-xs font-bold transition-colors border border-slate-700" title="Edit Institution & Solutions">
+                            <i class="fas fa-edit mr-1"></i> Edit
+                        </button>
+                        <button onclick="deleteCampusPartnerRecord('${c.id}')" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center transition-colors" title="Delete Institution">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 text-xs grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -18975,7 +19056,73 @@ function renderManagementCampuses() {
 }
 window.renderManagementCampuses = renderManagementCampuses;
 
+function editCampusPartnerRecord(id) {
+    const campus = (window._cachedCampuses || []).find(c => c.id === id);
+    if (!campus) return;
+
+    const idInput = document.getElementById('editingCampusId');
+    if (idInput) idInput.value = campus.id;
+
+    const stateEl = document.getElementById('mgmtCampusState');
+    if (stateEl) {
+        stateEl.value = campus.state || 'Karnataka';
+        populateMgmtDistrictOptions();
+    }
+    const distEl = document.getElementById('mgmtCampusDistrict');
+    if (distEl) distEl.value = campus.district || '';
+
+    if (document.getElementById('mgmtCampusName')) document.getElementById('mgmtCampusName').value = campus.name || '';
+
+    const coords = Array.isArray(campus.coordinators) ? campus.coordinators : [];
+    const primaryCoord = coords[0] || {};
+    if (document.getElementById('mgmtCoordName')) document.getElementById('mgmtCoordName').value = primaryCoord.name || '';
+    if (document.getElementById('mgmtCoordEmail')) document.getElementById('mgmtCoordEmail').value = primaryCoord.email || '';
+    if (document.getElementById('mgmtCoordPhone')) document.getElementById('mgmtCoordPhone').value = primaryCoord.phone || '';
+    if (document.getElementById('mgmtCoordDesignation')) document.getElementById('mgmtCoordDesignation').value = primaryCoord.designation || '';
+
+    // Check permitted solutions checkboxes
+    const allowed = Array.isArray(campus.mangoIds) ? campus.mangoIds : [];
+    document.querySelectorAll('.campus-solution-check').forEach(cb => {
+        cb.checked = allowed.includes(cb.value);
+    });
+
+    const heading = document.getElementById('mgmtCampusFormHeading');
+    if (heading) heading.innerText = 'Edit Partner College';
+    const badge = document.getElementById('mgmtCampusEditBadge');
+    if (badge) badge.classList.remove('hidden');
+    const btnText = document.getElementById('btnSaveCampusText');
+    if (btnText) btnText.innerText = 'Update Campus Partner';
+    const cancelBtn = document.getElementById('btnCancelCampusEdit');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+    document.getElementById('mgmtSubTab-campuses')?.scrollIntoView({ behavior: 'smooth' });
+}
+window.editCampusPartnerRecord = editCampusPartnerRecord;
+
+function cancelCampusEdit() {
+    const idInput = document.getElementById('editingCampusId');
+    if (idInput) idInput.value = '';
+
+    if (document.getElementById('mgmtCampusName')) document.getElementById('mgmtCampusName').value = '';
+    if (document.getElementById('mgmtCoordName')) document.getElementById('mgmtCoordName').value = '';
+    if (document.getElementById('mgmtCoordEmail')) document.getElementById('mgmtCoordEmail').value = '';
+    if (document.getElementById('mgmtCoordPhone')) document.getElementById('mgmtCoordPhone').value = '';
+    if (document.getElementById('mgmtCoordDesignation')) document.getElementById('mgmtCoordDesignation').value = '';
+    document.querySelectorAll('.campus-solution-check').forEach(cb => cb.checked = false);
+
+    const heading = document.getElementById('mgmtCampusFormHeading');
+    if (heading) heading.innerText = 'Register Partner College';
+    const badge = document.getElementById('mgmtCampusEditBadge');
+    if (badge) badge.classList.add('hidden');
+    const btnText = document.getElementById('btnSaveCampusText');
+    if (btnText) btnText.innerText = 'Register Campus Partner';
+    const cancelBtn = document.getElementById('btnCancelCampusEdit');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+}
+window.cancelCampusEdit = cancelCampusEdit;
+
 async function saveCampusPartnerRecord() {
+    const id = document.getElementById('editingCampusId')?.value.trim();
     const state = document.getElementById('mgmtCampusState')?.value || 'Karnataka';
     const district = document.getElementById('mgmtCampusDistrict')?.value || '';
     const name = document.getElementById('mgmtCampusName')?.value.trim();
@@ -18999,24 +19146,22 @@ async function saveCampusPartnerRecord() {
     }];
 
     try {
+        const payload = { state, district, name, coordinators, mangoIds: checkedMangos };
+        if (id) payload.id = id;
+
         const res = await apiFetch('/api/management/campuses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ state, district, name, coordinators, mangoIds: checkedMangos })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
-            document.getElementById('mgmtCampusName').value = '';
-            document.getElementById('mgmtCoordName').value = '';
-            document.getElementById('mgmtCoordEmail').value = '';
-            document.getElementById('mgmtCoordPhone').value = '';
-            document.getElementById('mgmtCoordDesignation').value = '';
-            document.querySelectorAll('.campus-solution-check').forEach(cb => cb.checked = false);
+            cancelCampusEdit();
 
             const updated = await apiFetch('/api/management/campuses').then(r => r.json());
             if (updated.success) window._cachedCampuses = updated.campuses;
             renderManagementCampuses();
-            alert("Partner college registered and mapped to district hierarchy!");
+            alert(id ? "Campus partner updated successfully!" : "Partner college registered and mapped to district hierarchy!");
         } else {
             alert("Error registering campus: " + (data.error || 'Server error'));
         }
@@ -19074,6 +19219,17 @@ async function initRecruiterPortal() {
                 window._cachedCampuses.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         }
 
+        // Populate Solutions dropdown for Recruiter Arena
+        const solSelect = document.getElementById('recruiterFilterSolution');
+        if (solSelect && typeof allAdminMangos !== 'undefined' && Array.isArray(allAdminMangos)) {
+            const permitted = currentUser?.permittedMangoes || currentUser?.employer?.permittedMangoes;
+            const allowedList = (Array.isArray(permitted) && permitted.length > 0)
+                ? allAdminMangos.filter(s => permitted.includes(s.id || s._id))
+                : allAdminMangos;
+            solSelect.innerHTML = '<option value="all" selected>All Solutions</option>' + 
+                allowedList.map(s => `<option value="${s.id || s._id}">${s.title || s.name || s.id}</option>`).join('');
+        }
+
         onRecruiterStateChange();
         renderRecruiterCandidates();
     } catch (e) {
@@ -19083,7 +19239,7 @@ async function initRecruiterPortal() {
 window.initRecruiterPortal = initRecruiterPortal;
 
 function onRecruiterStateChange() {
-    const state = document.getElementById('recruiterFilterState')?.value || 'Karnataka';
+    const state = document.getElementById('recruiterFilterState')?.value || 'all';
     const distSelect = document.getElementById('recruiterFilterDistrict');
     if (!distSelect) return;
 
@@ -19108,6 +19264,7 @@ async function renderRecruiterCandidates() {
     const state = document.getElementById('recruiterFilterState')?.value || 'all';
     const district = document.getElementById('recruiterFilterDistrict')?.value || 'all';
     const campusId = document.getElementById('recruiterFilterCampus')?.value || 'all';
+    const solutionId = document.getElementById('recruiterFilterSolution')?.value || 'all';
     const minLq = document.getElementById('recruiterFilterMinLq')?.value || '0';
     const search = document.getElementById('recruiterFilterSearch')?.value || '';
 
@@ -19120,6 +19277,7 @@ async function renderRecruiterCandidates() {
             state,
             district,
             campusId,
+            solutionId,
             minLq,
             search,
             employerId,

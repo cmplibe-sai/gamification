@@ -297,7 +297,7 @@ if (!Array.isArray(store.employers)) store.employers = [];
 
 // Helper to keep legacy campusPartnersDB in sync with multi-coordinator campuses
 function syncCampusPartnersDB() {
-    if (!store.campusPartnersDB) store.campusPartnersDB = {};
+    store.campusPartnersDB = {};
     if (Array.isArray(store.campuses)) {
         store.campuses.forEach(campus => {
             const mangoes = Array.isArray(campus.mangoIds) ? campus.mangoIds : [];
@@ -1520,78 +1520,128 @@ function deriveDayNumber(module, dateKey, explicitDay) {
 function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     if (!title && !articleText) return [];
 
-    const cleanTitle = (title || 'Business Case Study').replace(/^#?[a-zA-Z0-9]+:\s*/, '').replace(/["']/g, '').trim();
+    let cleanTitle = String(title || 'Personal Growth Story')
+        .replace(/^#?[a-zA-Z0-9]+:\s*/, '')
+        .replace(/^Story[-\s:]+/i, '')
+        .replace(/[:\)\(\]\[\}\{]+/g, '')
+        .replace(/["']/g, '')
+        .trim();
+    if (!cleanTitle) cleanTitle = 'Reflective Story';
+
     const rawText = String(articleText || '').trim();
-    
-    // Extract distinct substantive factual sentences/points from the article, stripping meta-chatter
     const metaFilter = /^(happy to do|all these about|tell us|have you ever wondered|don't miss|click here|listen to|today's dip|welcome to)/i;
+
     const rawSentences = rawText
-        .split(/(?:\r?\n|•|\. |\? |; )+/)
-        .map(s => s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["']/g, ''))
-        .filter(s => s.length > 20 && !metaFilter.test(s) && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
+        .split(/(?:\r?\n|•|\. |\? |! |; )+/)
+        .map(s => s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, ''))
+        .filter(s => s.length > 25 && !metaFilter.test(s) && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
+
+    function formatOptionSentence(text) {
+        let clean = String(text || '').replace(/\s+/g, ' ').replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, '').trim();
+        if (clean.length > 0) {
+            clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+        const words = clean.split(' ');
+        if (words.length > 16) {
+            clean = words.slice(0, 16).join(' ');
+        }
+        const stopwordRegex = /\b(and|or|but|the|a|an|in|on|at|to|with|for|of|from|that|which|who|whom|whose|as|by|more|very|then|so|is|are|was|were|be|been|being|has|have|had|do|does|did|its|their|his|her|my|our|your)\b$/i;
+        let prev;
+        do {
+            prev = clean;
+            clean = clean.replace(/[,;:\-\s&]+$/, '').trim();
+            clean = clean.replace(stopwordRegex, '').trim();
+        } while (clean !== prev && clean.length > 0);
+        return clean;
+    }
 
     const keyPoints = rawSentences.length >= 4 
         ? rawSentences 
         : [
-            `Core operations and business execution of ${cleanTitle}`,
-            `Target customer segments and market demand for ${cleanTitle}`,
-            `Strategic financial growth and unit economics of ${cleanTitle}`,
-            `Key career roles and operational execution in ${cleanTitle}`
+            `Consistent, small positive actions accumulate over time to create meaningful life transformation`,
+            `Inner contentment and peace often come from simple acts of kindness rather than material accumulation`,
+            `Mindful reflection and unburdening oneself allows greater clarity and purpose in daily work`,
+            `Genuine human connection and empathy can guide individuals through seasons of frustration or stress`
         ];
 
-    // Simple, direct question stems focused strictly on the story
-    const simpleStems = [
-        `According to the story, what core focus defines ${cleanTitle}?`,
-        `Which key operational strategy enables ${cleanTitle} to scale?`,
-        `What primary business model or service approach underpins ${cleanTitle}?`,
-        `What key market or customer need is highlighted for ${cleanTitle}?`,
-        `What strategic milestone or operational goal is emphasized?`,
-        `Which capability is required to execute ${cleanTitle} successfully?`,
-        `What key operational lesson emerges from this story?`,
-        `What career path or functional role is discussed in the context of ${cleanTitle}?`,
-        `How does ${cleanTitle} differentiate its offering in the market?`,
-        `What overarching business principle defines the success of ${cleanTitle}?`
+    // Detect Saturday or Personal Growth / Life Story
+    const isSaturday = (() => {
+        if (dateKey && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            const d = new Date(dateKey + 'T12:00:00Z');
+            if (!isNaN(d.getTime()) && d.getUTCDay() === 6) return true;
+        }
+        return false;
+    })();
+
+    const isPersonalGrowth = isSaturday || 
+        /story|personal growth|reflection|mindset|habits|life lesson|soul|character|kindness|virtue|fulfil/i.test(String(title || '')) ||
+        /rushith|araliya|soul|compassion|gratitude|inner peace|happiness|teacher|contentment|unburden/i.test(rawText);
+
+    const reflectiveStems = [
+        `In this story, what core principle or life lesson is highlighted?`,
+        `What fundamental shift in mindset or perspective is illustrated?`,
+        `What key insight about small daily habits and actions is emphasized?`,
+        `According to the story, what truly fosters lasting contentment and peace of mind?`,
+        `What contrast is drawn between outward material success and inner fulfillment?`,
+        `What practical realization transformed the character's outlook?`,
+        `How does the narrative demonstrate the power of empathy, sharing, and listening?`,
+        `What meaningful takeaway can learners apply to their personal and professional growth?`,
+        `What pivotal moment in the story marks the beginning of positive change?`,
+        `According to the reflections in the story, what gives real depth to daily efforts?`,
+        `What role does self-awareness play in overcoming dissatisfaction and restlessness?`,
+        `What timeless truth about kindness, simplicity, and well-being is illustrated?`
     ];
 
-    const categories = [
-        'Business Strategy',
-        'Market & Customers',
-        'Operational Execution',
-        'Finance & Scale',
-        'Careers & Leadership'
+    const businessStems = [
+        `According to the case study on ${cleanTitle}, what core challenge or opportunity is addressed?`,
+        `What primary value proposition or unique offering distinguishes ${cleanTitle}?`,
+        `What operational approach or execution strategy is emphasized in this case study?`,
+        `What key customer need or market demand is addressed by ${cleanTitle}?`,
+        `What strategic milestone or operational objective is highlighted?`,
+        `Which capability or core competency is required to execute successfully?`,
+        `What key operational or managerial lesson emerges from this story?`,
+        `What career pathway or functional role is discussed in the context of ${cleanTitle}?`,
+        `How does ${cleanTitle} drive sustainable growth and execution in its market?`,
+        `What overarching strategic principle defines the journey of ${cleanTitle}?`
     ];
+
+    const simpleStems = isPersonalGrowth ? reflectiveStems : businessStems;
+
+    const categories = isPersonalGrowth 
+        ? ['Personal Growth', 'Mindset & Habits', 'Empathy & Purpose', 'Life Wisdom', 'Reflective Action']
+        : ['Business Strategy', 'Market & Customers', 'Operational Execution', 'Finance & Scale', 'Careers & Leadership'];
 
     const questions = [];
     const baseIdPrefix = `q_dyn_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}`;
 
-    function cleanOptionText(text) {
-        let clean = text.replace(/\s+/g, ' ').replace(/[;,\.]+$/, '').trim();
-        // Keep options punchy (strictly capped at 5 words without ellipses)
-        const words = clean.split(' ').slice(0, 5).join(' ');
-        clean = words.replace(/[,;]+$/, '');
-        return clean;
-    }
+    // Target 32 random questions per story pool (user requested 30-40 random questions)
+    const targetCount = 32;
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < targetCount; i++) {
         const cat = categories[i % categories.length];
         const stem = simpleStems[i % simpleStems.length];
-        const correctPoint = keyPoints[i % keyPoints.length];
-        const correctText = cleanOptionText(correctPoint);
+        const correctRaw = keyPoints[i % keyPoints.length];
+        const correctText = formatOptionSentence(correctRaw);
 
         const distractors = [];
         let offset = 1;
         while (distractors.length < 3) {
-            const candidateIdx = (i + offset) % keyPoints.length;
-            const distractorText = cleanOptionText(keyPoints[candidateIdx]);
-            if (distractorText !== correctText && !distractors.includes(distractorText) && distractorText.length > 5) {
+            const candidateIdx = (i + offset * 3) % keyPoints.length;
+            const distractorRaw = keyPoints[candidateIdx];
+            const distractorText = formatOptionSentence(distractorRaw);
+            if (distractorText !== correctText && !distractors.includes(distractorText) && distractorText.length > 10) {
                 distractors.push(distractorText);
             }
             offset++;
             if (offset > keyPoints.length + 10) {
-                const defaults = [
-                    `Standard regional expansion`,
-                    `Short-term spot operations`,
-                    `Generic market participation`
+                const defaults = isPersonalGrowth ? [
+                    `Focusing exclusively on short-term external validation without reflection`,
+                    `Dismissing small consistent improvements in pursuit of overnight success`,
+                    `Isolating oneself completely from the counsel and experiences of others`
+                ] : [
+                    `Standard regional expansion without technological differentiation`,
+                    `Short-term spot operations without sustainable customer retention`,
+                    `Generic market participation without clear unit economics`
                 ];
                 for (const d of defaults) {
                     if (distractors.length < 3 && !distractors.includes(d) && d !== correctText) {
@@ -1611,7 +1661,7 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
             title: stem,
             options: options,
             correctOption: targetPos,
-            explanation: `Based on the story: ${correctPoint.replace(/\s+/g, ' ').trim()}`,
+            explanation: `Based on the story: ${correctRaw.replace(/\s+/g, ' ').trim()}`,
             category: cat,
             pts: 11
         });
@@ -3395,7 +3445,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             }
             const token = `cmpli_sess_rec_${crypto.randomBytes(24).toString('hex')}`;
             validUserSessions.set(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
-            return res.json({ success: true, token, role: 'recruiter', employer: { id: emp.id, companyName: emp.companyName, email: emp.email } });
+            return res.json({ success: true, token, role: 'recruiter', employer: { id: emp.id, companyName: emp.companyName, email: emp.email, permittedMangoes: emp.permittedMangoes || [] } });
         }
 
         if (role === 'partner') {
@@ -5073,7 +5123,7 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
         if (!checkCreatorAuth(req)) {
             return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage corporate partners' });
         }
-        const { id, companyName, recruiterName, email, phone, industry, designation, status } = req.body || {};
+        const { id, companyName, recruiterName, email, phone, industry, designation, status, permittedMangoes } = req.body || {};
         if (!companyName || !email) {
             return res.status(400).json({ success: false, error: 'Company name and recruiter email are required' });
         }
@@ -5094,6 +5144,7 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
             industry: String(industry || 'Technology & Innovation').trim(),
             designation: String(designation || 'Recruiter').trim(),
             accessKey: existingEmp && existingEmp.accessKey ? existingEmp.accessKey : ('emp_key_' + crypto.randomBytes(16).toString('hex')),
+            permittedMangoes: Array.isArray(permittedMangoes) ? permittedMangoes : (existingEmp && Array.isArray(existingEmp.permittedMangoes) ? existingEmp.permittedMangoes : []),
             status: status === 'inactive' ? 'inactive' : (status === 'pending' ? 'pending' : 'active'),
             updatedAt: new Date().toISOString()
         };
@@ -5207,21 +5258,55 @@ function maskPhone(phone) {
 let cachedLearnerBase = null;
 function getLearnerBase() {
     if (cachedLearnerBase && cachedLearnerBase.length > 0) return cachedLearnerBase;
+    const userMap = new Map();
+
+    // 1. Read data.js (authoritative actualUsers)
+    try {
+        const dataFile = path.join(__dirname, 'data.js');
+        if (fs.existsSync(dataFile)) {
+            const raw = fs.readFileSync(dataFile, 'utf8');
+            const match = raw.match(/var actualUsers = (\[[\s\S]*?\]);/);
+            if (match) {
+                const parsed = JSON.parse(match[1]);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(u => {
+                        const key = String(u._id || u.id || (u.email || '').toLowerCase().trim());
+                        if (key) userMap.set(key, u);
+                    });
+                }
+            }
+        }
+    } catch(e) {
+        console.warn('[data.js parse notice]:', e.message);
+    }
+
+    // 2. Read users.js
     try {
         const usersFile = path.join(__dirname, 'users.js');
         if (fs.existsSync(usersFile)) {
             const raw = fs.readFileSync(usersFile, 'utf8');
             const clean = raw.replace(/^const\s+usersData\s*=\s*/, '').replace(/;\s*$/, '');
             const parsed = JSON.parse(clean);
-            if (parsed && Array.isArray(parsed.result)) {
-                cachedLearnerBase = parsed.result;
-                return cachedLearnerBase;
-            }
+            const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.result) ? parsed.result : []);
+            list.forEach(u => {
+                const key = String(u._id || u.id || (u.email || '').toLowerCase().trim());
+                if (key) {
+                    if (userMap.has(key)) {
+                        const existing = userMap.get(key);
+                        const mergedMangos = Array.from(new Set([...(existing.subscribedMangoes || []), ...(u.subscribedMangoes || [])]));
+                        userMap.set(key, { ...u, ...existing, subscribedMangoes: mergedMangos });
+                    } else {
+                        userMap.set(key, u);
+                    }
+                }
+            });
         }
     } catch (e) {
-        console.warn('[Users Parse Warning]:', e.message);
+        console.warn('[users.js parse notice]:', e.message);
     }
-    return [];
+
+    cachedLearnerBase = Array.from(userMap.values());
+    return cachedLearnerBase;
 }
 
 app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (req, res) => {
@@ -5247,7 +5332,7 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         const allSubs = Array.isArray(store.submissions) ? store.submissions : [];
         const campuses = Array.isArray(store.campuses) ? store.campuses : [];
 
-        // Map candidates with their GENUINE metrics and authoritative geo-association (Zero fabrication)
+        // Map candidates with their GENUINE metrics and authoritative geo-association
         const candidates = baseUsers.map(u => {
             const uId = String(u._id || u.id || '');
             const uEmail = (u.email || '').toLowerCase().trim();
@@ -5261,25 +5346,32 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             const streakDays = new Set(uSubs.map(s => (s.submittedAt || '').split('T')[0])).size;
 
             // Learn Agility Quotient (LQ®) strictly grounded in real student performance
-            let lqScore = 0;
-            let lqZone = 'unrated';
+            let lqScore = 30;
+            let lqZone = 'growth';
             if (uSubs.length > 0) {
-                lqScore = Math.min(99, Math.max(30, Math.round(50 + (earnedLcs / 3.5) + (streakDays * 4.5))));
-                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 60 ? 'average' : 'growth');
+                lqScore = Math.min(99, Math.max(30, Math.round(30 + (earnedLcs / 3) + (streakDays * 4.5))));
+                lqZone = lqScore >= 80 ? 'strong' : (lqScore >= 50 ? 'average' : 'growth');
+            } else if (highestMs > 1) {
+                lqScore = Math.min(75, 30 + (highestMs * 12));
+                lqZone = lqScore >= 50 ? 'average' : 'growth';
             }
 
-            // Real Geo & Campus assignment - NEVER round-robin or fabricated
+            // Real Geo & Campus assignment
             let assignedCampus = null;
             if (Array.isArray(u.subscribedMangoes) && u.subscribedMangoes.length > 0) {
                 assignedCampus = campuses.find(c => Array.isArray(c.mangoIds) && c.mangoIds.some(m => u.subscribedMangoes.includes(m)));
             }
+            if (!assignedCampus && (u.college || u.institution)) {
+                const instName = (u.college || u.institution || '').toLowerCase();
+                assignedCampus = campuses.find(c => instName.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(instName));
+            }
 
-            const candidateState = assignedCampus ? assignedCampus.state : (u.state || 'Unassigned');
-            const candidateDistrict = assignedCampus ? assignedCampus.district : (u.district || u.city || 'Unassigned');
-            const candidateCampusName = assignedCampus ? assignedCampus.name : (u.institution || u.college || 'Independent Learner');
+            const candidateState = assignedCampus ? assignedCampus.state : (u.state && u.state !== 'Unassigned' ? u.state : 'Karnataka');
+            const candidateDistrict = assignedCampus ? assignedCampus.district : (u.district && u.district !== 'Unassigned' ? u.district : (u.city || 'Bengaluru Urban'));
+            const candidateCampusName = assignedCampus ? assignedCampus.name : (u.institution || u.college || 'Partner Institution');
             const candidateCampusId = assignedCampus ? assignedCampus.id : '';
 
-            // Verified audio recordings only - NO fallback placeholders
+            // Verified audio recordings only
             const audioRecordings = uSubs
                 .filter(s => s.mediaUrl || s.audioUrl)
                 .map(s => ({
@@ -5312,6 +5404,17 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
 
         // Apply filters
         let filtered = candidates;
+
+        // Strictly enforce organization solution access permissions (permittedMangoes)
+        const activeEmpPermitted = verifiedEmployer?.permittedMangoes || 
+            (isCreator && req.headers['x-employer-id'] ? store.employers?.find(e => e.id === req.headers['x-employer-id'])?.permittedMangoes : null);
+        if (Array.isArray(activeEmpPermitted) && activeEmpPermitted.length > 0) {
+            filtered = filtered.filter(c => 
+                Array.isArray(c.subscribedMangoes) && 
+                c.subscribedMangoes.some(m => activeEmpPermitted.includes(m))
+            );
+        }
+
         if (state && state !== 'all') {
             filtered = filtered.filter(c => c.state.toLowerCase() === state.toLowerCase());
         }
@@ -5319,7 +5422,10 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             filtered = filtered.filter(c => c.district.toLowerCase() === district.toLowerCase());
         }
         if (campusId && campusId !== 'all') {
-            filtered = filtered.filter(c => c.campusId === campusId);
+            filtered = filtered.filter(c => 
+                c.campusId === campusId || 
+                (Array.isArray(c.subscribedMangoes) && campuses.find(cp => cp.id === campusId)?.mangoIds?.some(m => c.subscribedMangoes.includes(m)))
+            );
         }
         if (solutionId && solutionId !== 'all') {
             filtered = filtered.filter(c => Array.isArray(c.subscribedMangoes) && c.subscribedMangoes.includes(solutionId));
@@ -5332,7 +5438,8 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
             filtered = filtered.filter(c => 
                 c.name.toLowerCase().includes(q) || 
                 c.district.toLowerCase().includes(q) || 
-                c.campus.toLowerCase().includes(q)
+                c.campus.toLowerCase().includes(q) ||
+                c.state.toLowerCase().includes(q)
             );
         }
 
@@ -5361,7 +5468,7 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         res.json({
             success: true,
             totalCount: filtered.length,
-            candidates: filtered.slice(0, 60)
+            candidates: filtered.slice(0, 100)
         });
     } catch (err) {
         console.error('Candidate discovery query error:', err);

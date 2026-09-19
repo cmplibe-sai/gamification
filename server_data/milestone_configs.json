@@ -6177,702 +6177,450 @@
         "questions": [
           {
             "id": "q_dyn_20260919_1",
-            "title": "According to the story, what core focus defines Story- Small actions create big changes :)?",
+            "title": "In this story, what core principle or life lesson is highlighted?",
             "options": [
-              "Rushith, a successful businessman, known",
-              "This is the story of",
-              "Rushith’s life, despite its outward",
-              "Despite his luxuries, he could"
+              "Despite his luxuries, he could not get sleep every night",
+              "This is the story of two people (wonderful souls) who lived in the bustling town",
+              "Her small house was filled with laughter, warmth, and the fragrance of freshly cooked meals",
+              "Araliya opened the door & welcomed him with a warm smile, offering him dry clothes"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: This is the story of two people (wonderful souls) who lived in the bustling town of Harshapura",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_2",
-            "title": "Which key operational strategy enables Story- Small actions create big changes :) to scale?",
+            "title": "What fundamental shift in mindset or perspective is illustrated?",
             "options": [
-              "Rushith, a successful businessman, known",
-              "Rushith’s life, despite its outward",
-              "Despite his luxuries, he could",
-              "His days were filled with"
+              "Rushith, a successful businessman, known for his shrewdness and material wealth, and Araliya, a school teacher",
+              "His days were filled with meetings, decisions, and the relentless pursuit of more wealth",
+              "One particularly stormy night, Rushith’s car broke down near Araliya’s house",
+              "As they sat in her cozy living room, Rushith noticed a pile of neatly folded papers"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Rushith, a successful businessman, known for his shrewdness and material wealth, and Araliya, a school teacher who was admired for her simplicity and kindness.",
-            "category": "Market & Customers",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_3",
-            "title": "What primary business model or service approach underpins Story- Small actions create big changes :)?",
+            "title": "What key insight about small daily habits and actions is emphasized?",
             "options": [
-              "Despite his luxuries, he could",
-              "His days were filled with",
-              "Araliya, on the other hand",
-              "Rushith’s life, despite its outward"
+              "Araliya, on the other hand, lived a modest life",
+              "Frustrated, he knocked on her door, seeking shelter",
+              "With curiosity he asked What are these?",
+              "Rushith’s life, despite its outward success, felt very incomplete"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Rushith’s life, despite its outward success, felt very incomplete",
-            "category": "Operational Execution",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_4",
-            "title": "What key market or customer need is highlighted for Story- Small actions create big changes :)?",
+            "title": "According to the story, what truly fosters lasting contentment and peace of mind?",
             "options": [
-              "His days were filled with",
-              "Araliya, on the other hand",
-              "Despite his luxuries, he could",
-              "Her small house was filled"
+              "Her small house was filled with laughter, warmth, and the fragrance of freshly cooked meals",
+              "Araliya opened the door & welcomed him with a warm smile, offering him dry clothes",
+              "Despite his luxuries, he could not get sleep every night",
+              "These are my letters to God- Araliya smiled and replied"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Despite his luxuries, he could not get sleep every night",
-            "category": "Finance & Scale",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_5",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What contrast is drawn between outward material success and inner fulfillment?",
             "options": [
-              "Araliya, on the other hand",
-              "His days were filled with",
-              "Her small house was filled",
-              "One particularly stormy night, Rushith’s"
+              "One particularly stormy night, Rushith’s car broke down near Araliya’s house",
+              "His days were filled with meetings, decisions, and the relentless pursuit of more wealth",
+              "As they sat in her cozy living room, Rushith noticed a pile of neatly folded papers",
+              "Do you really believe He reads them? - Rushith chuckled."
             ],
             "correctOption": 1,
             "explanation": "Based on the story: His days were filled with meetings, decisions, and the relentless pursuit of more wealth",
-            "category": "Careers & Leadership",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_6",
-            "title": "Which capability is required to execute Story- Small actions create big changes :) successfully?",
+            "title": "What practical realization transformed the character's outlook?",
             "options": [
-              "Araliya, on the other hand",
-              "Her small house was filled",
-              "One particularly stormy night, Rushith’s",
-              "Frustrated, he knocked on her"
+              "Araliya, on the other hand, lived a modest life",
+              "Frustrated, he knocked on her door, seeking shelter",
+              "With curiosity he asked What are these?",
+              "Araliya’s eyes sparkled with sincerity"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Araliya, on the other hand, lived a modest life",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_7",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "How does the narrative demonstrate the power of empathy, sharing, and listening?",
             "options": [
-              "One particularly stormy night, Rushith’s",
-              "Frustrated, he knocked on her",
-              "Araliya opened the door &",
-              "Her small house was filled"
+              "Araliya opened the door & welcomed him with a warm smile, offering him dry clothes",
+              "These are my letters to God- Araliya smiled and replied",
+              "It’s not about whether He reads them, Rushith",
+              "Her small house was filled with laughter, warmth, and the fragrance of freshly cooked meals"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Her small house was filled with laughter, warmth, and the fragrance of freshly cooked meals",
-            "category": "Market & Customers",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_8",
-            "title": "What career path or functional role is discussed in the context of Story- Small actions create big changes :)?",
+            "title": "What meaningful takeaway can learners apply to their personal and professional growth?",
             "options": [
-              "Frustrated, he knocked on her",
-              "Araliya opened the door &",
-              "One particularly stormy night, Rushith’s",
-              "As they sat in her"
+              "As they sat in her cozy living room, Rushith noticed a pile of neatly folded papers",
+              "Do you really believe He reads them? - Rushith chuckled.",
+              "One particularly stormy night, Rushith’s car broke down near Araliya’s house",
+              "It’s about unburdening my heart, finding clarity, and seeking guidance"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: One particularly stormy night, Rushith’s car broke down near Araliya’s house",
-            "category": "Operational Execution",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_9",
-            "title": "How does Story- Small actions create big changes :) differentiate its offering in the market?",
+            "title": "What pivotal moment in the story marks the beginning of positive change?",
             "options": [
-              "Araliya opened the door &",
-              "Frustrated, he knocked on her",
-              "As they sat in her",
-              "With curiosity he asked “What"
+              "With curiosity he asked What are these?",
+              "Frustrated, he knocked on her door, seeking shelter",
+              "Araliya’s eyes sparkled with sincerity",
+              "It’s my way of feeling connected to something greater."
             ],
             "correctOption": 1,
             "explanation": "Based on the story: Frustrated, he knocked on her door, seeking shelter",
-            "category": "Finance & Scale",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_10",
-            "title": "What overarching business principle defines the success of Story- Small actions create big changes :)?",
+            "title": "According to the reflections in the story, what gives real depth to daily efforts?",
             "options": [
-              "Araliya opened the door &",
-              "As they sat in her",
-              "With curiosity he asked “What",
-              "“These are my letters to"
+              "Araliya opened the door & welcomed him with a warm smile, offering him dry clothes",
+              "These are my letters to God- Araliya smiled and replied",
+              "It’s not about whether He reads them, Rushith",
+              "Every evening, I sit by here by this window, and write letters to God"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: Araliya opened the door & welcomed him with a warm smile, offering him dry clothes and a cup of hot tea",
-            "category": "Careers & Leadership",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_11",
-            "title": "According to the story, what core focus defines Story- Small actions create big changes :)?",
+            "title": "What role does self-awareness play in overcoming dissatisfaction and restlessness?",
             "options": [
-              "With curiosity he asked “What",
-              "“These are my letters to",
-              "Do you really believe He",
-              "As they sat in her"
+              "Do you really believe He reads them? - Rushith chuckled.",
+              "It’s about unburdening my heart, finding clarity, and seeking guidance",
+              "These letters are not any requests to God, but conversations, reflections on my day, expressions",
+              "As they sat in her cozy living room, Rushith noticed a pile of neatly folded papers"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: As they sat in her cozy living room, Rushith noticed a pile of neatly folded papers on the table",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_12",
-            "title": "Which key operational strategy enables Story- Small actions create big changes :) to scale?",
+            "title": "What timeless truth about kindness, simplicity, and well-being is illustrated?",
             "options": [
-              "“These are my letters to",
-              "Do you really believe He",
-              "With curiosity he asked “What",
-              "Araliya’s eyes sparkled with sincerity"
+              "Araliya’s eyes sparkled with sincerity",
+              "It’s my way of feeling connected to something greater.",
+              "With curiosity he asked What are these?",
+              "That night, after thanking Araliya for her hospitality, Rushith drove home, her words echoing in his"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: With curiosity he asked “What are these?”",
-            "category": "Market & Customers",
+            "explanation": "Based on the story: With curiosity he asked What are these?",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_13",
-            "title": "What primary business model or service approach underpins Story- Small actions create big changes :)?",
+            "title": "In this story, what core principle or life lesson is highlighted?",
             "options": [
-              "Do you really believe He",
-              "“These are my letters to",
-              "Araliya’s eyes sparkled with sincerity",
-              "“It’s not about whether He"
+              "It’s not about whether He reads them, Rushith",
+              "These are my letters to God- Araliya smiled and replied",
+              "Every evening, I sit by here by this window, and write letters to God",
+              "He couldn’t shake off the image of those letters"
             ],
             "correctOption": 1,
-            "explanation": "Based on the story: “These are my letters to God”- Araliya smiled and replied",
-            "category": "Operational Execution",
+            "explanation": "Based on the story: These are my letters to God- Araliya smiled and replied",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_14",
-            "title": "What key market or customer need is highlighted for Story- Small actions create big changes :)?",
+            "title": "What fundamental shift in mindset or perspective is illustrated?",
             "options": [
-              "Do you really believe He",
-              "Araliya’s eyes sparkled with sincerity",
-              "“It’s not about whether He",
-              "It’s about unburdening my heart"
+              "Do you really believe He reads them? - Rushith chuckled.",
+              "It’s about unburdening my heart, finding clarity, and seeking guidance",
+              "These letters are not any requests to God, but conversations, reflections on my day, expressions",
+              "A part of him envied Araliya’s peace and contentment"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: Do you really believe He reads them?” - Rushith chuckled.",
-            "category": "Finance & Scale",
+            "explanation": "Based on the story: Do you really believe He reads them? - Rushith chuckled.",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_15",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "What key insight about small daily habits and actions is emphasized?",
             "options": [
-              "“It’s not about whether He",
-              "It’s about unburdening my heart",
-              "It’s my way of feeling",
+              "It’s my way of feeling connected to something greater.",
+              "That night, after thanking Araliya for her hospitality, Rushith drove home, her words echoing in his",
+              "Days turned into weeks, and Rushith’s restlessness grew",
               "Araliya’s eyes sparkled with sincerity"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Araliya’s eyes sparkled with sincerity",
-            "category": "Careers & Leadership",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_16",
-            "title": "Which capability is required to execute Story- Small actions create big changes :) successfully?",
+            "title": "According to the story, what truly fosters lasting contentment and peace of mind?",
             "options": [
-              "It’s about unburdening my heart",
-              "It’s my way of feeling",
-              "“It’s not about whether He",
-              "“Every evening, I sit by"
+              "Every evening, I sit by here by this window, and write letters to God",
+              "He couldn’t shake off the image of those letters",
+              "It’s not about whether He reads them, Rushith",
+              "One evening, as he sat in his grand but empty living room, he decided to give"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: “It’s not about whether He reads them, Rushith",
-            "category": "Business Strategy",
+            "explanation": "Based on the story: It’s not about whether He reads them, Rushith",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_17",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What contrast is drawn between outward material success and inner fulfillment?",
             "options": [
-              "It’s my way of feeling",
-              "It’s about unburdening my heart",
-              "“Every evening, I sit by",
-              "These letters are not any"
+              "These letters are not any requests to God, but conversations, reflections on my day, expressions",
+              "It’s about unburdening my heart, finding clarity, and seeking guidance",
+              "A part of him envied Araliya’s peace and contentment",
+              "He picked up a pen and paper and began to write."
             ],
             "correctOption": 1,
             "explanation": "Based on the story: It’s about unburdening my heart, finding clarity, and seeking guidance",
-            "category": "Market & Customers",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_18",
-            "title": "What career path or functional role is discussed in the context of Story- Small actions create big changes :)?",
+            "title": "What practical realization transformed the character's outlook?",
             "options": [
-              "It’s my way of feeling",
-              "“Every evening, I sit by",
-              "These letters are not any",
-              "That night, after thanking Araliya"
+              "It’s my way of feeling connected to something greater.",
+              "That night, after thanking Araliya for her hospitality, Rushith drove home, her words echoing in his",
+              "Days turned into weeks, and Rushith’s restlessness grew",
+              "Dear God, he hesitated, feeling foolish"
             ],
             "correctOption": 0,
-            "explanation": "Based on the story: It’s my way of feeling connected to something greater.”",
-            "category": "Operational Execution",
+            "explanation": "Based on the story: It’s my way of feeling connected to something greater.",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_19",
-            "title": "How does Story- Small actions create big changes :) differentiate its offering in the market?",
+            "title": "How does the narrative demonstrate the power of empathy, sharing, and listening?",
             "options": [
-              "These letters are not any",
-              "That night, after thanking Araliya",
-              "He couldn’t shake off the",
-              "“Every evening, I sit by"
+              "He couldn’t shake off the image of those letters",
+              "One evening, as he sat in his grand but empty living room, he decided to give",
+              "He wrote about his fears, his regrets, his desires, and the emptiness he couldn’t understand",
+              "Every evening, I sit by here by this window, and write letters to God"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: “Every evening, I sit by here by this window, and write letters to God",
-            "category": "Finance & Scale",
+            "explanation": "Based on the story: Every evening, I sit by here by this window, and write letters to God",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_20",
-            "title": "What overarching business principle defines the success of Story- Small actions create big changes :)?",
+            "title": "What meaningful takeaway can learners apply to their personal and professional growth?",
             "options": [
-              "That night, after thanking Araliya",
-              "He couldn’t shake off the",
-              "These letters are not any",
-              "A part of him envied"
+              "A part of him envied Araliya’s peace and contentment",
+              "He picked up a pen and paper and began to write.",
+              "These letters are not any requests to God, but conversations, reflections on my day, expressions",
+              "As he wrote, he felt a strange sense of relief, as if a burden was being"
             ],
             "correctOption": 2,
-            "explanation": "Based on the story: These letters are not any requests to God, but conversations, reflections on my day, expressions of gratitude, and sometimes, silent prayers for guidance”- she elaborated.",
-            "category": "Careers & Leadership",
+            "explanation": "Based on the story: These letters are not any requests to God, but conversations, reflections on my day, expressions of gratitude, and sometimes, silent prayers for guidance- she elaborated.",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_21",
-            "title": "According to the story, what core focus defines Story- Small actions create big changes :)?",
+            "title": "What pivotal moment in the story marks the beginning of positive change?",
             "options": [
-              "He couldn’t shake off the",
-              "That night, after thanking Araliya",
-              "A part of him envied",
-              "Days turned into weeks, and"
+              "Days turned into weeks, and Rushith’s restlessness grew",
+              "That night, after thanking Araliya for her hospitality, Rushith drove home, her words echoing in his",
+              "Dear God, he hesitated, feeling foolish",
+              "This became every night ritual"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: That night, after thanking Araliya for her hospitality, Rushith drove home, her words echoing in his mind",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_22",
-            "title": "Which key operational strategy enables Story- Small actions create big changes :) to scale?",
+            "title": "According to the reflections in the story, what gives real depth to daily efforts?",
             "options": [
-              "He couldn’t shake off the",
-              "A part of him envied",
-              "Days turned into weeks, and",
-              "One evening, as he sat"
+              "He couldn’t shake off the image of those letters",
+              "One evening, as he sat in his grand but empty living room, he decided to give",
+              "He wrote about his fears, his regrets, his desires, and the emptiness he couldn’t understand",
+              "Each letter seemed to peel away a layer of his worries, revealing a part of himself"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: He couldn’t shake off the image of those letters",
-            "category": "Market & Customers",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_23",
-            "title": "What primary business model or service approach underpins Story- Small actions create big changes :)?",
+            "title": "What role does self-awareness play in overcoming dissatisfaction and restlessness?",
             "options": [
-              "Days turned into weeks, and",
-              "One evening, as he sat",
-              "He picked up a pen",
-              "A part of him envied"
+              "He picked up a pen and paper and began to write.",
+              "As he wrote, he felt a strange sense of relief, as if a burden was being",
+              "He started feeling lighter, more at peace",
+              "A part of him envied Araliya’s peace and contentment"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: A part of him envied Araliya’s peace and contentment",
-            "category": "Operational Execution",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_24",
-            "title": "What key market or customer need is highlighted for Story- Small actions create big changes :)?",
+            "title": "What timeless truth about kindness, simplicity, and well-being is illustrated?",
             "options": [
-              "One evening, as he sat",
-              "He picked up a pen",
-              "Days turned into weeks, and",
-              "“Dear God,” he hesitated, feeling"
+              "Dear God, he hesitated, feeling foolish",
+              "This became every night ritual",
+              "Days turned into weeks, and Rushith’s restlessness grew",
+              "His decisions at work became less driven by greed and more by a genuine desire"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: Days turned into weeks, and Rushith’s restlessness grew",
-            "category": "Finance & Scale",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_25",
-            "title": "What strategic milestone or operational goal is emphasized?",
+            "title": "In this story, what core principle or life lesson is highlighted?",
             "options": [
-              "He picked up a pen",
-              "One evening, as he sat",
-              "“Dear God,” he hesitated, feeling",
-              "He wrote about his fears"
+              "He wrote about his fears, his regrets, his desires, and the emptiness he couldn’t understand",
+              "One evening, as he sat in his grand but empty living room, he decided to give",
+              "Each letter seemed to peel away a layer of his worries, revealing a part of himself",
+              "One day, Rushith received a letter from an old friend, inviting him to a charity event"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: One evening, as he sat in his grand but empty living room, he decided to give it a try",
-            "category": "Careers & Leadership",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_26",
-            "title": "Which capability is required to execute Story- Small actions create big changes :) successfully?",
+            "title": "What fundamental shift in mindset or perspective is illustrated?",
             "options": [
-              "He picked up a pen",
-              "“Dear God,” he hesitated, feeling",
-              "He wrote about his fears",
-              "As he wrote, he felt"
+              "He picked up a pen and paper and began to write.",
+              "As he wrote, he felt a strange sense of relief, as if a burden was being",
+              "He started feeling lighter, more at peace",
+              "Normally, he would have dismissed it, but something compelled him to go"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: He picked up a pen and paper and began to write.",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_27",
-            "title": "What key operational lesson emerges from this story?",
+            "title": "What key insight about small daily habits and actions is emphasized?",
             "options": [
-              "He wrote about his fears",
-              "As he wrote, he felt",
               "This became every night ritual",
-              "“Dear God,” he hesitated, feeling"
+              "His decisions at work became less driven by greed and more by a genuine desire",
+              "For the first time in years, he felt a sense of purpose",
+              "Dear God, he hesitated, feeling foolish"
             ],
             "correctOption": 3,
-            "explanation": "Based on the story: “Dear God,” he hesitated, feeling foolish",
-            "category": "Market & Customers",
+            "explanation": "Based on the story: Dear God, he hesitated, feeling foolish",
+            "category": "Mindset & Habits",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_28",
-            "title": "What career path or functional role is discussed in the context of Story- Small actions create big changes :)?",
+            "title": "According to the story, what truly fosters lasting contentment and peace of mind?",
             "options": [
-              "As he wrote, he felt",
-              "This became every night ritual",
-              "He wrote about his fears",
-              "Each letter seemed to peel"
+              "Each letter seemed to peel away a layer of his worries, revealing a part of himself",
+              "One day, Rushith received a letter from an old friend, inviting him to a charity event",
+              "He wrote about his fears, his regrets, his desires, and the emptiness he couldn’t understand",
+              "He began to contribute not just financially but also with his time and effort"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: He wrote about his fears, his regrets, his desires, and the emptiness he couldn’t understand",
-            "category": "Operational Execution",
+            "category": "Empathy & Purpose",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_29",
-            "title": "How does Story- Small actions create big changes :) differentiate its offering in the market?",
+            "title": "What contrast is drawn between outward material success and inner fulfillment?",
             "options": [
-              "This became every night ritual",
-              "As he wrote, he felt",
-              "Each letter seemed to peel",
-              "He started feeling lighter, more"
+              "He started feeling lighter, more at peace",
+              "As he wrote, he felt a strange sense of relief, as if a burden was being",
+              "Normally, he would have dismissed it, but something compelled him to go",
+              "His employees found him more approachable and compassionate"
             ],
             "correctOption": 1,
             "explanation": "Based on the story: As he wrote, he felt a strange sense of relief, as if a burden was being lifted off his shoulders.",
-            "category": "Finance & Scale",
+            "category": "Life Wisdom",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_30",
-            "title": "What overarching business principle defines the success of Story- Small actions create big changes :)?",
+            "title": "What practical realization transformed the character's outlook?",
             "options": [
               "This became every night ritual",
-              "Each letter seemed to peel",
-              "He started feeling lighter, more",
-              "His decisions at work became"
+              "His decisions at work became less driven by greed and more by a genuine desire",
+              "For the first time in years, he felt a sense of purpose",
+              "He started initiatives to improve their working conditions and their lives"
             ],
             "correctOption": 0,
             "explanation": "Based on the story: This became every night ritual",
-            "category": "Careers & Leadership",
+            "category": "Reflective Action",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_31",
-            "title": "According to the story, what core focus defines Story- Small actions create big changes :)?",
+            "title": "How does the narrative demonstrate the power of empathy, sharing, and listening?",
             "options": [
-              "He started feeling lighter, more",
-              "His decisions at work became",
-              "One day, Rushith received a",
-              "Each letter seemed to peel"
+              "One day, Rushith received a letter from an old friend, inviting him to a charity event",
+              "He began to contribute not just financially but also with his time and effort",
+              "Araliya, too, noticed the change",
+              "Each letter seemed to peel away a layer of his worries, revealing a part of himself"
             ],
             "correctOption": 3,
             "explanation": "Based on the story: Each letter seemed to peel away a layer of his worries, revealing a part of himself he had long forgotten",
-            "category": "Business Strategy",
+            "category": "Personal Growth",
             "pts": 11
           },
           {
             "id": "q_dyn_20260919_32",
-            "title": "Which key operational strategy enables Story- Small actions create big changes :) to scale?",
+            "title": "What meaningful takeaway can learners apply to their personal and professional growth?",
             "options": [
-              "His decisions at work became",
-              "One day, Rushith received a",
-              "He started feeling lighter, more",
-              "Normally, he would have dismissed"
+              "Normally, he would have dismissed it, but something compelled him to go",
+              "His employees found him more approachable and compassionate",
+              "He started feeling lighter, more at peace",
+              "She often crossed paths with Rushith at community events"
             ],
             "correctOption": 2,
             "explanation": "Based on the story: He started feeling lighter, more at peace",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_33",
-            "title": "What primary business model or service approach underpins Story- Small actions create big changes :)?",
-            "options": [
-              "One day, Rushith received a",
-              "His decisions at work became",
-              "Normally, he would have dismissed",
-              "For the first time in"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: His decisions at work became less driven by greed and more by a genuine desire to do good.",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_34",
-            "title": "What key market or customer need is highlighted for Story- Small actions create big changes :)?",
-            "options": [
-              "One day, Rushith received a",
-              "Normally, he would have dismissed",
-              "For the first time in",
-              "He began to contribute not"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: One day, Rushith received a letter from an old friend, inviting him to a charity event",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_35",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "For the first time in",
-              "He began to contribute not",
-              "His employees found him more",
-              "Normally, he would have dismissed"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Normally, he would have dismissed it, but something compelled him to go",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_36",
-            "title": "Which capability is required to execute Story- Small actions create big changes :) successfully?",
-            "options": [
-              "He began to contribute not",
-              "His employees found him more",
-              "For the first time in",
-              "He started initiatives to improve"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: For the first time in years, he felt a sense of purpose",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_37",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "His employees found him more",
-              "He began to contribute not",
-              "He started initiatives to improve",
-              "Araliya, too, noticed the change"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: He began to contribute not just financially but also with his time and effort",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_38",
-            "title": "What career path or functional role is discussed in the context of Story- Small actions create big changes :)?",
-            "options": [
-              "His employees found him more",
-              "He started initiatives to improve",
-              "Araliya, too, noticed the change",
-              "She often crossed paths with"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: His employees found him more approachable and compassionate",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_39",
-            "title": "How does Story- Small actions create big changes :) differentiate its offering in the market?",
-            "options": [
-              "Araliya, too, noticed the change",
-              "She often crossed paths with",
-              "One evening, as they stood",
-              "He started initiatives to improve"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: He started initiatives to improve their working conditions and their lives",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_40",
-            "title": "What overarching business principle defines the success of Story- Small actions create big changes :)?",
-            "options": [
-              "She often crossed paths with",
-              "One evening, as they stood",
-              "Araliya, too, noticed the change",
-              "Araliya smiled warmly"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Araliya, too, noticed the change",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_41",
-            "title": "According to the story, what core focus defines Story- Small actions create big changes :)?",
-            "options": [
-              "One evening, as they stood",
-              "She often crossed paths with",
-              "Araliya smiled warmly",
-              "“It wasn’t the letters, Rushith"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: She often crossed paths with Rushith at community events",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_42",
-            "title": "Which key operational strategy enables Story- Small actions create big changes :) to scale?",
-            "options": [
-              "One evening, as they stood",
-              "Araliya smiled warmly",
-              "“It wasn’t the letters, Rushith",
-              "It was you, seeking and"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: One evening, as they stood together, watching children play in the newly built park funded by Rushith’s charity, he turned to her and said, “letters to God… they changed my life.”",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_43",
-            "title": "What primary business model or service approach underpins Story- Small actions create big changes :)?",
-            "options": [
-              "“It wasn’t the letters, Rushith",
-              "It was you, seeking and",
-              "Years passed, and Rushith continued",
-              "Araliya smiled warmly"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: Araliya smiled warmly",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_44",
-            "title": "What key market or customer need is highlighted for Story- Small actions create big changes :)?",
-            "options": [
-              "It was you, seeking and",
-              "Years passed, and Rushith continued",
-              "“It wasn’t the letters, Rushith",
-              "His life was no longer"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: “It wasn’t the letters, Rushith",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_45",
-            "title": "What strategic milestone or operational goal is emphasized?",
-            "options": [
-              "Years passed, and Rushith continued",
-              "It was you, seeking and",
-              "His life was no longer",
-              "Message from the story"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: It was you, seeking and being open to change",
-            "category": "Careers & Leadership",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_46",
-            "title": "Which capability is required to execute Story- Small actions create big changes :) successfully?",
-            "options": [
-              "Years passed, and Rushith continued",
-              "His life was no longer",
-              "Message from the story",
-              "Writing letters to God is"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: Years passed, and Rushith continued his practice of writing letters",
-            "category": "Business Strategy",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_47",
-            "title": "What key operational lesson emerges from this story?",
-            "options": [
-              "Message from the story",
-              "Writing letters to God is",
-              "It helps us connect with",
-              "His life was no longer"
-            ],
-            "correctOption": 3,
-            "explanation": "Based on the story: His life was no longer defined by his wealth but by the lives he touched and the joy he spread",
-            "category": "Market & Customers",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_48",
-            "title": "What career path or functional role is discussed in the context of Story- Small actions create big changes :)?",
-            "options": [
-              "Writing letters to God is",
-              "It helps us connect with",
-              "Message from the story",
-              "Through this simple yet profound"
-            ],
-            "correctOption": 2,
-            "explanation": "Based on the story: Message from the story",
-            "category": "Operational Execution",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_49",
-            "title": "How does Story- Small actions create big changes :) differentiate its offering in the market?",
-            "options": [
-              "It helps us connect with",
-              "Writing letters to God is",
-              "Through this simple yet profound",
-              "Even the smallest actions can"
-            ],
-            "correctOption": 1,
-            "explanation": "Based on the story: Writing letters to God is a powerful practice to unburden oneself and seek guidance",
-            "category": "Finance & Scale",
-            "pts": 11
-          },
-          {
-            "id": "q_dyn_20260919_50",
-            "title": "What overarching business principle defines the success of Story- Small actions create big changes :)?",
-            "options": [
-              "It helps us connect with",
-              "Through this simple yet profound",
-              "Even the smallest actions can",
-              "That is how A Small"
-            ],
-            "correctOption": 0,
-            "explanation": "Based on the story: It helps us connect with our true selves, find clarity, and draw closer to the divine",
-            "category": "Careers & Leadership",
+            "category": "Mindset & Habits",
             "pts": 11
           }
         ],
