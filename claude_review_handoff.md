@@ -464,4 +464,74 @@ Claude Desktop independently audited the Part 6 changes by reading actual code (
   - `node scratch/test_recruiter_chart_fix.js`: **All Tests Passed** ✅
   - `node test_security_audit_hardening.js`: **30 / 30 Passed** ✅
 
+---
+
+## Part 11: Modular Restructuring — cMPLi-ai & cMPLi Insight Engine Project Architecture
+
+### 1. Architectural Scope & Mandate
+- **Untouched Foundation**:
+  - The first 3 daily reflection & check-in modules (`cMPLi POD`, `cMPLi Dip`, `cMPLi Immerse`) are **100% UNTOUCHED** — their calendar engines, session day maps, Google Sheet sync, dynamic audio/video quiz generation, and prerequisite gating remain fully preserved.
+- **Legacy Replacement**:
+  - The three older peripheral modules (`corporate residency`, `problem briefing`, `real-world execution`) are superseded by two new modern, project-driven modules:
+    1. **`cMPLi-ai`** (Code: `cmpli_ai` | Icon: `fa-robot text-purple-400` | Title: `cMPLi-ai`)
+    2. **`cMPLi Insight Engine`** (Code: `insight_engine` | Icon: `fa-chart-pie text-emerald-400` | Title: `cMPLi Insight Engine`)
+- **Interactive Project Paradigm**:
+  - Both new modules operate on an interactive project deliverable model:
+    - **Creators/Admins**: Under Check-ins Setup, the module tabs route to a dedicated Project Builder where creators define custom projects (Title, Sector/Domain, Duration, LC Reward, Context/Rules, and an arbitrary list of Deliverable Questions with types: `text`, `doc`, `audio`, `video`).
+    - **Learners/Students**: In the Customer Milestone View, clicking `cMPLi-ai` or `cMPLi Insight Engine` opens an interactive Project Workspace displaying project status, progress bars, deliverables checklist, and a dedicated deliverable submission modal (`#studentProjectModal`) with in-browser WebRTC audio/video capture.
+    - **Submissions & LC Rewards**: Learner submissions are validated, synchronized both to `allUserSubmissionsDB` and `/api/project/submit`, synced to TagMango points wallet, rewarded with confetti, and mapped into the Admin Cohort Matrix.
+
+### 2. Files Modified & Technical Implementation
+1. **[data.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/data.js)**:
+   - Updated `ALL_PLATFORM_MODULES` to define the 5 canonical modules: `pod`, `dip`, `immerse`, `cmpli_ai`, `insight_engine`.
+   - Updated `milestoneConfig` across Milestones 1 to 4:
+     - MS1: Foundation (`pod`, `dip`, `immerse`)
+     - MS2: Expansion (`pod`, `dip`, `immerse`, `cmpli_ai`)
+     - MS3 & MS4: Mastery (`pod`, `dip`, `immerse`, `cmpli_ai`, `insight_engine`).
+2. **[server_data/module_access.json](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/server_data/module_access.json)**:
+   - Configured persistent progressive access maps: MS1 (`pod`, `dip`, `immerse`), MS2 (adds `cmpli_ai`), MS3 & MS4 (adds `insight_engine`).
+3. **[server.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/server.js)**:
+   - Updated `MODULE_ACCESS_DEFAULTS` and `CANONICAL_MODULE_ORDER`.
+   - Added REST endpoints:
+     - `GET /api/custom-projects`: Returns all custom projects organized by milestone.
+     - `POST /api/custom-projects`: Persists project modifications and additions to `server_data/custom_projects.json`.
+     - `POST /api/project/submit`: Receives learner deliverable submissions, writes to persistent submissions store, and returns verification acknowledgement.
+4. **[index.html](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/index.html)**:
+   - Implemented `#studentProjectModal` modal markup featuring project badges, sector/duration chips, dynamic deliverable container `#studentProjModalBody`, WebRTC media controls, and submit trigger.
+5. **[app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js)**:
+   - **Type Normalization**: Enhanced `normalizeLevelUpType` to map `cmpli_ai`, `cmpli-ai`, `simply_ai`, `projects` -> `cmpli_ai`, and `insight_engine`, `insight-engine`, `simply_insight_engine`, `problem_solution`, `residency` -> `insight_engine`.
+   - **Admin Project Builder**: Upgraded `renderAdminProjectsList`, `createNewAdminProject`, `loadAdminProjectEditor`, `saveAdminProject`, and `deleteAdminProject` to isolate and segregate projects by module (`p.module === 'insight_engine'` vs `p.module === 'cmpli_ai'`).
+   - **Admin Cohort Matrix & Export**: In `renderAdminCohortSubmissions` and `getAdminCompletionGridData`, updated `isProjectGrid` to evaluate `['cmpli_ai', 'insight_engine', 'projects'].includes(activeAdminModule)` and filter project columns and user submissions by active project module.
+   - **Student Project Workspace**:
+     - Implemented `renderCustomerProjectsView(moduleName, container)` with responsive progress cards, completion percentages, deliverable counts, and status badges.
+     - Wired `switchMilestoneTab` to call `renderCustomerProjectsView` immediately when selecting `cmpli_ai` or `insight_engine`.
+     - Implemented `openStudentProjectModal`, `closeStudentProjectModal`, and `submitActiveStudentProject` with live WebRTC recording integration and automatic TagMango wallet sync.
+     - Updated `viewMySubmission` to resolve project submissions directly by `projectId` or `day`.
+
+### 3. Verification & Validation Evidence
+- **Automated Test Suite ([scratch/test_new_modules_structure.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/scratch/test_new_modules_structure.js))**:
+  - `Test 1: data.js Module Definitions & Untouched Legacy`: **PASSED** (Pod, Dip, Immerse 100% untouched; 5 canonical modules configured).
+  - `Test 2: module_access.json Access Controls`: **PASSED** (Progressive unlocking verified across MS1 to MS4).
+  - `Test 3: API /api/custom-projects Endpoints & Atomic Saves`: **PASSED** (Segregated project creation and atomic patching for `cmpli_ai` and `insight_engine`).
+  - `Test 4: WebRTC Media Upload Engine`: **PASSED** (Media audio/video Blobs converted and hosted at `/gamification/uploads/...`).
+  - `Test 5: API /api/project/submit Deliverable Submission & Media Tracking`: **PASSED** (Deliverables recorded with playable media URLs and +500 LCs).
+  - `Test 6: Atomic Project Deletion`: **PASSED** (Single project deleted atomically without data loss for concurrent projects).
+  - `Test 7: index.html Student Project Modal`: **PASSED** (Modal DOM elements and submission handlers verified).
+- **Security & Integrity Regression Suite ([test_security_audit_hardening.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/test_security_audit_hardening.js))**:
+  - **30 / 30 ASSERTIONS PASSED** (Zero regressions in session security, candidate privacy, recruiter verification, or role access controls).
+
+### 4. Claude Code Review Follow-Up & Hardening Addendum
+Following Claude's comprehensive review, three targeted enhancements were applied:
+1. **Client-Side Project Hydration (`syncCustomProjectsDBFromServer`)**:
+   - `customProjectsDB` is now dynamically hydrated from `GET /api/custom-projects` on app initialization (`DOMContentLoaded`), upon entering the Project Builder (`renderAdminCheckinsList`), and inside the student project view (`renderCustomerProjectsView`).
+   - Cross-device/multi-browser consistency is guaranteed; students and creators on fresh devices immediately load the canonical server state.
+2. **Atomic Project Mutation & Collision Prevention**:
+   - `saveAdminProject` and `deleteAdminProject` now pass `action: 'save_project'` and `action: 'delete_project'` along with the target project ID to `POST /api/custom-projects`.
+   - The server applies surgical patch/delete operations to `store.customProjectsDB[msKey]`, preventing an out-of-sync client from overwriting concurrent projects or other modules.
+3. **WebRTC Media Blob Hosting Integration (`uploadProjectMediaBlob`)**:
+   - In `submitActiveStudentProject()`, when a student records audio or video via WebRTC, `globalMediaBlobs[idx]` is asynchronously converted and uploaded to `/api/upload-media`.
+   - The resulting persistent media URL (e.g. `/gamification/uploads/project_deliverable_...webm`) is recorded in the deliverable response, attached to `subRecord.videoUrl` / `subRecord.audioUrl`, and made available for playback by coordinators and recruiters.
+
+
+
 

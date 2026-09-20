@@ -443,8 +443,12 @@ function getLqModuleMaxLcs(msId, moduleCode, userId) {
         const eligibleDays = isPastMilestone ? targetDays : getLqEligibleDays(userId, msId, 'immerse');
         return Math.min(targetDays, eligibleDays) * perDay;
     }
-    if (cleanMod === 'projects') {
-        const projects = customProjectsDB[msId] || customProjectsDB[String(msId)] || [];
+    if (cleanMod === 'cmpli_ai' || cleanMod === 'projects') {
+        const projects = (customProjectsDB[msId] || customProjectsDB[String(msId)] || []).filter(p => !p.module || p.module === 'cmpli_ai' || p.module === 'projects');
+        if (projects.length > 0) return projects.reduce((sum, p) => sum + (Number(p.pts) || 0), 0);
+    }
+    if (cleanMod === 'insight_engine') {
+        const projects = (customProjectsDB[msId] || customProjectsDB[String(msId)] || []).filter(p => p.module === 'insight_engine');
         if (projects.length > 0) return projects.reduce((sum, p) => sum + (Number(p.pts) || 0), 0);
     }
     return 0;
@@ -1985,13 +1989,17 @@ function normalizeLevelUpType(type) {
     if (t.includes('immerse') || t.includes('mus')) return 'immerse';
     if (t.includes('pod')) return 'pod';
     if (t.includes('dip') || t.includes('dep') || t.includes('deep')) return 'dip';
+    if (t.includes('insight')) return 'insight_engine';
+    if (t.includes('cmpli_ai') || t.includes('cmpli-ai') || t === 'ai') return 'cmpli_ai';
     const map = {
         'daily': 'dip', 'checkin': 'dip', 'check-in': 'dip', 'check_in': 'dip',
         'podcast': 'pod', 'audio': 'pod',
         'immersion': 'immerse', 'video': 'immerse',
-        'projects': 'projects', 'project': 'projects', 'real-world': 'projects', 'realworld': 'projects',
-        'problem_solution': 'problem_solution', 'problem-solution': 'problem_solution', 'problemsolution': 'problem_solution', 'briefing': 'problem_solution',
-        'residency': 'residency', 'corporate': 'residency', 'corporate_residency': 'residency',
+        'cmpli_ai': 'cmpli_ai', 'cmpli-ai': 'cmpli_ai', 'ai': 'cmpli_ai', 'simply_ai': 'cmpli_ai', 'simply-ai': 'cmpli_ai',
+        'projects': 'cmpli_ai', 'project': 'cmpli_ai', 'real-world': 'cmpli_ai', 'realworld': 'cmpli_ai',
+        'insight_engine': 'insight_engine', 'insight-engine': 'insight_engine', 'insight': 'insight_engine', 'simply_insight_engine': 'insight_engine',
+        'problem_solution': 'insight_engine', 'problem-solution': 'insight_engine', 'problemsolution': 'insight_engine', 'briefing': 'insight_engine',
+        'residency': 'insight_engine', 'corporate': 'insight_engine', 'corporate_residency': 'insight_engine',
         'ios': 'ios'
     };
     return map[t] || t;
@@ -2451,9 +2459,8 @@ var ALL_PLATFORM_MODULES = [
     { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400' },
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
-    { code: 'projects', name: 'Real-World Execution', icon: 'fa-briefcase text-purple-400' },
-    { code: 'problem_solution', name: 'Problem-Solution Briefing', icon: 'fa-brain text-emerald-400' },
-    { code: 'residency', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
+    { code: 'cmpli_ai', name: 'cMPLi-ai', icon: 'fa-robot text-purple-400' },
+    { code: 'insight_engine', name: 'cMPLi Insight Engine', icon: 'fa-chart-pie text-emerald-400' }
 ];
 window.ALL_PLATFORM_MODULES = ALL_PLATFORM_MODULES;
 var tempLoginId = '';
@@ -2500,6 +2507,35 @@ function isTestUser(u) {
 window.isTestUser = isTestUser;
 
 var customProjectsDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+var _isSyncingCustomProjects = false;
+
+async function syncCustomProjectsDBFromServer() {
+    if (_isSyncingCustomProjects) return customProjectsDB;
+    _isSyncingCustomProjects = true;
+    try {
+        const res = await apiFetch('/api/custom-projects');
+        const json = await res.json();
+        if (json && json.success && json.data && typeof json.data === 'object') {
+            const serverDB = json.data;
+            const localDB = JSON.parse(localStorage.getItem('customProjectsDB')) || {};
+            const merged = { ...localDB, ...serverDB };
+            // Ensure server data takes precedence per milestone
+            Object.keys(serverDB).forEach(ms => {
+                if (Array.isArray(serverDB[ms]) && serverDB[ms].length > 0) {
+                    merged[ms] = serverDB[ms];
+                }
+            });
+            customProjectsDB = merged;
+            localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
+        }
+    } catch(err) {
+        console.warn('Could not sync custom projects from server:', err);
+    } finally {
+        _isSyncingCustomProjects = false;
+    }
+    return customProjectsDB;
+}
+window.syncCustomProjectsDBFromServer = syncCustomProjectsDBFromServer;
 
 // High-Performance In-Memory Cache for Submissions DB
 let _cachedAllUserSubmissionsDB = null;
@@ -6419,7 +6455,7 @@ function getEnabledModulesForMilestone(msId) {
     // 2. cMPLi Dip ('dip')
     // 3. cMPLi Immerse ('immerse')
     // followed by any advanced capstone modules
-    const canonicalOrder = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
+    const canonicalOrder = ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine', 'projects', 'problem_solution', 'residency'];
     mods.sort((a, b) => {
         const idxA = canonicalOrder.indexOf(a);
         const idxB = canonicalOrder.indexOf(b);
@@ -6438,7 +6474,7 @@ function getEnabledModulesForMilestone(msId) {
 // Helper to determine the unit of completion for each platform module
 function getModuleCompletionUnit(moduleCode) {
     const code = normalizeLevelUpType(moduleCode || 'dip');
-    if (code === 'projects' || code === 'problem_solution' || code === 'residency') {
+    if (code === 'cmpli_ai' || code === 'insight_engine' || code === 'projects' || code === 'problem_solution' || code === 'residency') {
         return 'Projects';
     }
     if (code === 'immerse') {
@@ -6623,6 +6659,8 @@ function getModulePrereqUnitLabel(modCode) {
     if (m === 'dip') return 'check-in activities';
     if (m === 'pod') return 'POD sessions';
     if (m === 'immerse') return 'Immerse sessions';
+    if (m === 'cmpli_ai') return 'cMPLi-ai Projects';
+    if (m === 'insight_engine') return 'Insight Engine Projects';
     if (m === 'projects') return 'Real-World Execution Projects';
     return 'activities';
 }
@@ -7118,7 +7156,7 @@ async function toggleMilestoneModuleAccess(msId, moduleCode) {
     } else {
         current.push(moduleCode);
     }
-    const canonicalOrder = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
+    const canonicalOrder = ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine', 'projects', 'problem_solution', 'residency'];
     current.sort((a, b) => {
         const idxA = canonicalOrder.indexOf(a);
         const idxB = canonicalOrder.indexOf(b);
@@ -7556,7 +7594,7 @@ function switchAdminModuleTab(mod) {
         const currentDateVal = (dateInput && dateInput.value) ? dateInput.value : getLocalDateKey(new Date());
         activeAdminDateKey = currentDateVal;
         renderAdminCheckinsList();
-        if (mod !== 'projects' && typeof loadAdminCheckinEditor === 'function') {
+        if (mod !== 'cmpli_ai' && mod !== 'insight_engine' && mod !== 'projects' && typeof loadAdminCheckinEditor === 'function') {
             loadAdminCheckinEditor(activeAdminDateKey);
         }
     } else if (!document.getElementById('adminCompletionView')?.classList.contains('hidden')) {
@@ -7575,7 +7613,8 @@ function getAvailablePrecedingModules(modCode) {
         { code: 'dip', name: 'cMPLi Dip' },
         { code: 'pod', name: 'cMPLi POD' },
         { code: 'immerse', name: 'cMPLi Immerse' },
-        { code: 'projects', name: 'Real-World Execution' }
+        { code: 'cmpli_ai', name: 'cMPLi-ai' },
+        { code: 'insight_engine', name: 'cMPLi Insight Engine' }
     ]);
     const currentModIdx = allMods.findIndex(m => m.code === modCode);
     // Strict canonical ordering: only modules appearing prior to the current module can be prerequisites
@@ -7880,26 +7919,44 @@ window.dismissAdminModuleClampNotice = dismissAdminModuleClampNotice;
 function renderAdminCheckinsList() {
     const list = document.getElementById('adminCheckinDaysList');
     
-    // IF PROJECTS: Reroute to the new Project Builder Architecture!
-    if (activeAdminModule === 'projects') {
-        renderAdminProjectsList();
-        
-        // Trigger the initial editor load for projects without causing an infinite loop
-        const projectsList = customProjectsDB[activeAdminMilestoneId] || [];
-        if (activeAdminProjectId) {
-            loadAdminProjectEditor(activeAdminProjectId);
-        } else if (projectsList.length > 0) {
-            loadAdminProjectEditor(projectsList[0].id);
-        } else {
-            document.getElementById('adminCheckinEditor').innerHTML = `
-                <div class="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl">
-                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
-                        <i class="fas fa-folder-plus text-2xl text-emerald-500"></i>
-                    </div>
-                    <h4 class="text-lg font-bold text-white mb-2">No Projects Yet</h4>
-                    <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first real-world application.</p>
-                </div>`;
-        }
+    // IF PROJECTS (cMPLi-ai or Insight Engine): Reroute to the Project Builder Architecture!
+    if (activeAdminModule === 'cmpli_ai' || activeAdminModule === 'insight_engine' || activeAdminModule === 'projects') {
+        const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+        const refreshProjectBuilderUi = () => {
+            renderAdminProjectsList();
+            const projectsList = (customProjectsDB[activeAdminMilestoneId] || []).filter(p => {
+                if (activeMod === 'insight_engine') return p.module === 'insight_engine';
+                return !p.module || p.module === 'cmpli_ai' || p.module === 'projects';
+            });
+            if (activeAdminProjectId && projectsList.some(p => p.id === activeAdminProjectId)) {
+                loadAdminProjectEditor(activeAdminProjectId);
+            } else if (projectsList.length > 0) {
+                loadAdminProjectEditor(projectsList[0].id);
+            } else {
+                const modLabel = activeMod === 'insight_engine' ? 'Insight Engine' : 'cMPLi-ai';
+                const editorEl = document.getElementById('adminCheckinEditor');
+                if (editorEl) {
+                    editorEl.innerHTML = `
+                        <div class="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-slate-700 rounded-2xl">
+                            <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4 shadow-lg">
+                                <i class="fas ${activeMod === 'insight_engine' ? 'fa-chart-pie' : 'fa-robot'} text-2xl text-emerald-500"></i>
+                            </div>
+                            <h4 class="text-lg font-bold text-white mb-2">No ${modLabel} Projects Yet</h4>
+                            <p class="text-sm text-slate-400 mb-6">Click "Create New Project" on the left to add your first ${modLabel} application for Milestone ${activeAdminMilestoneId}.</p>
+                        </div>`;
+                }
+            }
+        };
+
+        // Render from memory immediately
+        refreshProjectBuilderUi();
+
+        // Hydrate from server in background to sync any changes from other sessions/devices
+        syncCustomProjectsDBFromServer().then(() => {
+            if (activeAdminModule === 'cmpli_ai' || activeAdminModule === 'insight_engine' || activeAdminModule === 'projects') {
+                refreshProjectBuilderUi();
+            }
+        });
         return;
     }
 
@@ -8207,14 +8264,18 @@ function renderAdminCohortSubmissions() {
 
     // Calculate max display days based on Milestone AND active module
     let maxDays = 21;
-    let isProjectGrid = (activeAdminModule === 'projects');
+    let isProjectGrid = (activeAdminModule === 'cmpli_ai' || activeAdminModule === 'insight_engine' || activeAdminModule === 'projects');
     let projectHeaders = [];
 
     const activePrereqCfg = getMilestonePrereqConfig(activeAdminMilestoneId || 1);
     const activeModDaysRule = (activePrereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === normalizeLevelUpType(activeAdminModule) && p.type === 'days');
 
     if (isProjectGrid) {
-        projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []);
+        const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+        projectHeaders = (customProjectsDB[activeAdminMilestoneId || 1] || []).filter(p => {
+            if (activeMod === 'insight_engine') return p.module === 'insight_engine';
+            return !p.module || p.module === 'cmpli_ai' || p.module === 'projects';
+        });
         maxDays = projectHeaders.length; 
     } else if (activeModDaysRule && activeModDaysRule.targetValue > 0) {
         maxDays = activeModDaysRule.targetValue;
@@ -8295,15 +8356,20 @@ function renderAdminCohortSubmissions() {
         `;
 
         if (isProjectGrid) {
-            const userProjectSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === 'projects');
+            const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+            const userProjectSubs = subs.filter(entry => {
+                const norm = normalizeLevelUpType(entry.type);
+                if (activeMod === 'insight_engine') return norm === 'insight_engine';
+                return norm === 'cmpli_ai' || norm === 'projects';
+            });
             for (let i = 0; i < maxDays; i++) {
-                const matchingSub = userProjectSubs[i];
+                const projectDef = projectHeaders[i] || {};
+                const matchingSub = userProjectSubs.find(s => String(s.day) === String(projectDef.id) || String(s.projectId) === String(projectDef.id)) || userProjectSubs[i];
                 if (matchingSub) {
-                    const originalProjId = matchingSub.day; 
-                    const projectDef = projectHeaders.find(p => String(p.id) === String(originalProjId)) || {};
+                    const originalProjId = matchingSub.day || matchingSub.projectId || projectDef.id; 
                     const lcReward = matchingSub.lcReward || projectDef.pts || 0;
                     const tooltip = `${new Date(matchingSub.submittedAt || matchingSub.timestamp).toLocaleDateString('en-GB')} • ${lcReward} LCs`;
-                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${originalProjId}', 'projects')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${lcReward} LCs</span></div></td>`;
+                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewCustomerSubmission('${user._id}', '${originalProjId}', '${activeMod}')"><div class="flex flex-col items-center gap-1"><i class="fas fa-check-circle text-emerald-400 text-lg shadow-emerald"></i><span class="text-[10px] text-slate-300">${lcReward} LCs</span></div></td>`;
                 } else {
                     rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
                 }
@@ -8556,13 +8622,17 @@ function getAdminCompletionGridData() {
     });
 
     let maxDays = 21;
-    let isProjectGrid = (activeAdminModule === 'projects');
+    let isProjectGrid = (activeAdminModule === 'cmpli_ai' || activeAdminModule === 'insight_engine' || activeAdminModule === 'projects');
     let projectHeaders = [];
 
     const activeModDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'days');
 
     if (isProjectGrid) {
-        projectHeaders = (typeof customProjectsDB !== 'undefined' && customProjectsDB[msId]) || [];
+        const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+        projectHeaders = ((typeof customProjectsDB !== 'undefined' && customProjectsDB[msId]) || []).filter(p => {
+            if (activeMod === 'insight_engine') return p.module === 'insight_engine';
+            return !p.module || p.module === 'cmpli_ai' || p.module === 'projects';
+        });
         maxDays = projectHeaders.length; 
     } else if (activeModDaysRule && activeModDaysRule.targetValue > 0) {
         maxDays = activeModDaysRule.targetValue;
@@ -8580,10 +8650,15 @@ function getAdminCompletionGridData() {
         const sessions = [];
 
         if (isProjectGrid) {
-            const userProjectSubs = subs.filter(entry => normalizeLevelUpType(entry.type) === 'projects');
+            const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+            const userProjectSubs = subs.filter(entry => {
+                const norm = normalizeLevelUpType(entry.type);
+                if (activeMod === 'insight_engine') return norm === 'insight_engine';
+                return norm === 'cmpli_ai' || norm === 'projects';
+            });
             for (let i = 0; i < maxDays; i++) {
-                const matchingSub = userProjectSubs[i] || null;
                 const projectDef = projectHeaders[i] || {};
+                const matchingSub = userProjectSubs.find(s => String(s.day) === String(projectDef.id) || String(s.projectId) === String(projectDef.id)) || userProjectSubs[i] || null;
                 const projNum = i + 1;
                 const projTitle = projectDef.title || `Project ${projNum}`;
                 if (matchingSub) {
@@ -8955,7 +9030,7 @@ function downloadExportFile(content, fileName, mimeType) {
 window.downloadExportFile = downloadExportFile;
 
 function promptSetCustomerModuleStartDate(userId, userName, defaultMod) {
-    const mod = prompt(`Select module to set Day 1 Start Date for ${userName}:\n(dip, pod, immerse, residency, problem_solution)`, defaultMod || activeAdminModule || 'pod');
+    const mod = prompt(`Select module to set Day 1 Start Date for ${userName}:\n(dip, pod, immerse, cmpli_ai, insight_engine)`, defaultMod || activeAdminModule || 'pod');
     if (!mod) return;
     const normalizedMod = normalizeLevelUpType(mod);
     const msId = activeAdminMilestoneId || 1;
@@ -11038,21 +11113,29 @@ let activeAdminProjectId = null;
 function renderAdminProjectsList() {
     const list = document.getElementById('adminCheckinDaysList');
     if (!customProjectsDB[activeAdminMilestoneId]) customProjectsDB[activeAdminMilestoneId] = [];
-    const projectsList = customProjectsDB[activeAdminMilestoneId];
+    const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+    const allList = customProjectsDB[activeAdminMilestoneId];
+    const projectsList = allList.filter(p => {
+        if (activeMod === 'insight_engine') return p.module === 'insight_engine';
+        return !p.module || p.module === 'cmpli_ai' || p.module === 'projects';
+    });
+    
+    const modTitle = activeMod === 'insight_engine' ? 'Insight Engine' : 'cMPLi-ai';
+    const modIcon = activeMod === 'insight_engine' ? 'fa-chart-pie' : 'fa-robot';
     
     let html = `
         <div class="mb-5 p-4 bg-slate-900 rounded-2xl border border-emerald-500/30">
-            <h4 class="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2"><i class="fas fa-briefcase mr-1"></i> Project Builder</h4>
+            <h4 class="block text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2"><i class="fas ${modIcon} mr-1"></i> ${modTitle} Project Builder</h4>
             <button onclick="createNewAdminProject()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg transition-all">
                 <i class="fas fa-plus mr-1"></i> Create New Project
             </button>
-            <p class="text-[10px] text-slate-400 mt-2">Projects act as standalone tasks grouped by sector.</p>
+            <p class="text-[10px] text-slate-400 mt-2">${modTitle} projects act as hands-on challenges and portfolio deliverables.</p>
         </div>
         <div class="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
     `;
 
     if (projectsList.length === 0) {
-        html += `<div class="text-xs text-slate-500 text-center p-4">No projects created for this milestone.</div>`;
+        html += `<div class="text-xs text-slate-500 text-center p-4">No ${modTitle} projects created yet for Milestone ${activeAdminMilestoneId}.</div>`;
     } else {
         projectsList.forEach((proj) => {
             const isActive = proj.id === activeAdminProjectId;
@@ -11062,8 +11145,8 @@ function renderAdminProjectsList() {
                     <span class="text-xs font-bold ${isActive ? 'text-white' : 'text-slate-300'} line-clamp-1">${proj.title || 'Untitled'}</span>
                 </div>
                 <div class="flex gap-2 mt-1">
-                    <span class="text-[9px] bg-slate-900 text-emerald-400 px-1.5 rounded">${proj.sector}</span>
-                    <span class="text-[9px] bg-slate-900 text-indigo-400 px-1.5 rounded">${proj.pts} LCs</span>
+                    <span class="text-[9px] bg-slate-900 text-emerald-400 px-1.5 rounded">${proj.sector || 'General'}</span>
+                    <span class="text-[9px] bg-slate-900 text-indigo-400 px-1.5 rounded">${proj.pts || 500} LCs</span>
                 </div>
             </div>`;
         });
@@ -11074,13 +11157,15 @@ function renderAdminProjectsList() {
 }
 
 function createNewAdminProject() {
-    activeAdminProjectId = 'proj_' + Date.now();
+    const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+    activeAdminProjectId = 'proj_' + activeMod + '_' + Date.now();
     renderAdminProjectsList(); // Render the new button state on the left
     loadAdminProjectEditor(activeAdminProjectId, true); // Load the empty editor on the right
 }
 
 function loadAdminProjectEditor(projectId, isNew = false) {
     activeAdminProjectId = projectId;
+    const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
     
     let proj = null;
     if (!isNew && customProjectsDB[activeAdminMilestoneId]) {
@@ -11090,25 +11175,28 @@ function loadAdminProjectEditor(projectId, isNew = false) {
     if (!proj) {
         proj = { 
             id: projectId, 
+            module: activeMod,
             title: '', 
-            sector: 'Sports Tech', 
+            sector: activeMod === 'insight_engine' ? 'Strategic Intelligence' : 'Generative AI & ML', 
             spec: '', 
-            code: '[PROJ]', 
+            code: activeMod === 'insight_engine' ? '[INSIGHT]' : '[AI-PROJ]', 
             pts: 500, 
             duration: '15 Days', 
             desc: '', 
-            questions: [{ title: 'Upload Final Report', type: 'doc' }] 
+            questions: [{ title: 'Upload Final Deliverable / Report', type: 'doc' }] 
         };
     }
 
     const editor = document.getElementById('adminCheckinEditor');
     if (!editor) return;
 
+    const modLabel = activeMod === 'insight_engine' ? 'cMPLi Insight Engine' : 'cMPLi-ai';
+
     editor.innerHTML = `
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 border-b border-slate-700 pb-4">
             <div>
-                <h4 class="text-xl font-bold text-white">Project Configuration</h4>
-                <p class="text-xs text-emerald-400 font-bold tracking-wide uppercase mt-1">Real-World Applications</p>
+                <h4 class="text-xl font-bold text-white">${modLabel} Project Configuration</h4>
+                <p class="text-xs text-emerald-400 font-bold tracking-wide uppercase mt-1">Milestone ${activeAdminMilestoneId} &bull; Hand-Crafted Projects</p>
             </div>
             <div class="flex gap-2 items-center">
                 ${!isNew ? `<button onclick="deleteAdminProject('${proj.id}')" class="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-500/50 font-bold text-xs rounded-lg shadow-lg transition-all"><i class="fas fa-trash mr-1"></i> Delete</button>` : ''}
@@ -11119,14 +11207,16 @@ function loadAdminProjectEditor(projectId, isNew = false) {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="md:col-span-2">
                 <label class="block text-xs font-bold text-slate-400 mb-1">1. Project Title <span class="text-red-500">*</span></label>
-                <input type="text" id="projTitle" value="${proj.title}" placeholder="e.g., Event Unit-Economics Model: 2,000-participant fitness race" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                <input type="text" id="projTitle" value="${proj.title || ''}" placeholder="e.g., Enterprise Customer Churn Predictor: Fine-Tuned LLM Pipeline" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
             </div>
             
             <div>
-                <label class="block text-xs font-bold text-slate-400 mb-1">2. Sector <span class="text-red-500">*</span></label>
+                <label class="block text-xs font-bold text-slate-400 mb-1">2. Sector / Domain <span class="text-red-500">*</span></label>
                 <select id="projSector" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
-                    <option value="Sports Tech" ${proj.sector === 'Sports Tech' ? 'selected' : ''}>Sports Tech</option>
+                    <option value="Generative AI & ML" ${proj.sector === 'Generative AI & ML' ? 'selected' : ''}>Generative AI & ML</option>
+                    <option value="Strategic Intelligence" ${proj.sector === 'Strategic Intelligence' ? 'selected' : ''}>Strategic Intelligence</option>
                     <option value="Fintech" ${proj.sector === 'Fintech' ? 'selected' : ''}>Fintech</option>
+                    <option value="Sports Tech" ${proj.sector === 'Sports Tech' ? 'selected' : ''}>Sports Tech</option>
                     <option value="MarTech" ${proj.sector === 'MarTech' ? 'selected' : ''}>MarTech</option>
                     <option value="Food Tech" ${proj.sector === 'Food Tech' ? 'selected' : ''}>Food Tech</option>
                     <option value="Supply Chain" ${proj.sector === 'Supply Chain' ? 'selected' : ''}>Supply Chain</option>
@@ -11137,40 +11227,40 @@ function loadAdminProjectEditor(projectId, isNew = false) {
 
             <div>
                 <label class="block text-xs font-bold text-slate-400 mb-1">Specialization (Optional)</label>
-                <input type="text" id="projSpec" value="${proj.spec || ''}" placeholder="e.g., Marketing, Strategy" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                <input type="text" id="projSpec" value="${proj.spec || ''}" placeholder="e.g., Natural Language Processing, Market Entry Strategy" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
             </div>
             
             <div class="flex gap-3 md:col-span-2">
                 <div class="w-1/2">
                     <label class="block text-xs font-bold text-slate-400 mb-1">3. LC Reward <span class="text-red-500">*</span></label>
-                    <input type="number" id="projPts" value="${proj.pts}" placeholder="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                    <input type="number" id="projPts" value="${proj.pts || 500}" placeholder="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
                 </div>
                 <div class="w-1/2">
-                    <label class="block text-xs font-bold text-slate-400 mb-1">4. Expected Duration (Days) <span class="text-red-500">*</span></label>
-                    <input type="text" id="projDuration" value="${proj.duration}" placeholder="e.g., 15 Days, 10 Days" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                    <label class="block text-xs font-bold text-slate-400 mb-1">4. Expected Duration <span class="text-red-500">*</span></label>
+                    <input type="text" id="projDuration" value="${proj.duration || '15 Days'}" placeholder="e.g., 15 Days, 10 Days" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
                 </div>
             </div>
         </div>
 
         <div class="mb-8 border border-slate-700 rounded-xl p-4 bg-slate-900/50 shadow-inner">
-            <label class="block text-xs font-bold text-emerald-400 mb-1">5. The "Real Thing" (Rules & Context) <span class="text-red-500">*</span></label>
-            <p class="text-[10px] text-slate-400 mb-3">Outline exactly what needs to be done. Include formatting guidelines, required word count, and context.</p>
-            <textarea id="projDesc" rows="8" placeholder="Paste your detailed project instructions, steps, and rules here..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-4 text-sm text-white focus:border-emerald-500 custom-scrollbar leading-relaxed">${proj.desc}</textarea>
+            <label class="block text-xs font-bold text-emerald-400 mb-1">5. The "Real Thing" (Rules, Context &amp; Objective) <span class="text-red-500">*</span></label>
+            <p class="text-[10px] text-slate-400 mb-3">Outline exactly what learners must research, design, code, or present. Include submission guidelines, technical constraints, and evaluation criteria.</p>
+            <textarea id="projDesc" rows="8" placeholder="Paste your detailed project instructions, problem framing, and rules here..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-4 text-sm text-white focus:border-emerald-500 custom-scrollbar leading-relaxed">${proj.desc || ''}</textarea>
         </div>
 
         <div class="mb-4 flex justify-between items-end border-b border-slate-700 pb-2">
             <div>
-                <h5 class="text-sm font-bold text-emerald-400">6. Required Deliverables & Custom Questions</h5>
-                <p class="text-[10px] text-slate-400 mt-0.5">Determine how many questions and what type of files the customer must upload.</p>
+                <h5 class="text-sm font-bold text-emerald-400">6. Required Deliverables &amp; Questions</h5>
+                <p class="text-[10px] text-slate-400 mt-0.5">Determine how many deliverables the customer must submit (Text answers, Documents, Voice/Video recordings).</p>
             </div>
-            <button onclick="addAdminProjectQuestion()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-700/50 transition-colors"><i class="fas fa-plus mr-1"></i> Add Question Field</button>
+            <button onclick="addAdminProjectQuestion()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-700/50 transition-colors"><i class="fas fa-plus mr-1"></i> Add Deliverable Field</button>
         </div>
 
         <div id="adminProjQuestionsContainer" class="space-y-3 pb-4">
-            ${proj.questions.map(q => `
+            ${(proj.questions || []).map(q => `
                 <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
                     <i class="fas fa-grip-vertical text-slate-500 cursor-move"></i>
-                    <input type="text" value="${q.title}" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-emerald-500 rounded px-2 py-1 transition-colors">
+                    <input type="text" value="${q.title || ''}" placeholder="e.g. Executive Summary Report" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-emerald-500 rounded px-2 py-1 transition-colors">
                     <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-emerald-500 transition-colors">
                         <option value="text" ${q.type === 'text' ? 'selected' : ''}>Text Box</option>
                         <option value="audio" ${q.type === 'audio' ? 'selected' : ''}>Audio (.mp3)</option>
@@ -11187,7 +11277,7 @@ function loadAdminProjectEditor(projectId, isNew = false) {
         div.classList.replace('border-emerald-500', 'border-slate-700');
         div.classList.replace('bg-emerald-900/20', 'bg-slate-800');
     });
-    const newActiveDiv = Array.from(document.querySelectorAll('#adminCheckinDaysList > div.space-y-2 > div')).find(el => el.getAttribute('onclick').includes(projectId));
+    const newActiveDiv = Array.from(document.querySelectorAll('#adminCheckinDaysList > div.space-y-2 > div')).find(el => el.getAttribute('onclick')?.includes(projectId));
     if (newActiveDiv) {
         newActiveDiv.classList.replace('border-slate-700', 'border-emerald-500');
         newActiveDiv.classList.replace('bg-slate-800', 'bg-emerald-900/20');
@@ -11201,7 +11291,7 @@ function addAdminProjectQuestion() {
     const fieldHtml = `
         <div class="flex gap-2 items-center bg-slate-900 p-3 rounded-lg border border-slate-700 group animation-fade-in">
             <i class="fas fa-grip-vertical text-slate-500 cursor-move"></i>
-            <input type="text" placeholder="e.g. Upload Excel Model" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-emerald-500 rounded px-2 py-1">
+            <input type="text" placeholder="e.g. Upload PDF / Excel Deliverable" class="flex-1 bg-transparent border-none outline-none text-sm text-white font-medium focus:ring-1 ring-emerald-500 rounded px-2 py-1">
             <select class="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-600 outline-none focus:border-emerald-500">
                 <option value="text">Text Box</option>
                 <option value="audio">Audio (.mp3)</option>
@@ -11216,15 +11306,16 @@ function addAdminProjectQuestion() {
 
 function saveAdminProject(projectId) {
     if (!customProjectsDB[activeAdminMilestoneId]) customProjectsDB[activeAdminMilestoneId] = [];
-    
+    const activeMod = (activeAdminModule === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
     const sector = document.getElementById('projSector').value;
     
     const newProj = {
         id: projectId,
+        module: activeMod,
         title: document.getElementById('projTitle').value || 'Untitled Project',
         sector: sector,
         spec: document.getElementById('projSpec').value || '',
-        code: '[PROJ]',
+        code: activeMod === 'insight_engine' ? '[INSIGHT]' : '[AI-PROJ]',
         pts: parseInt(document.getElementById('projPts').value, 10) || 500,
         duration: document.getElementById('projDuration').value || '15 Days',
         desc: document.getElementById('projDesc').value || '',
@@ -11236,9 +11327,13 @@ function saveAdminProject(projectId) {
         const titleInput = row.querySelector('input[type="text"]');
         const typeSelect = row.querySelector('select');
         if (titleInput && typeSelect && titleInput.value.trim() !== "") {
-            newProj.questions.push({ title: titleInput.value, type: typeSelect.value });
+            newProj.questions.push({ title: titleInput.value.trim(), type: typeSelect.value });
         }
     });
+
+    if (newProj.questions.length === 0) {
+        newProj.questions.push({ title: 'Final Project Deliverable', type: 'doc' });
+    }
 
     const existingIndex = customProjectsDB[activeAdminMilestoneId].findIndex(p => p.id === projectId);
     if (existingIndex > -1) {
@@ -11250,11 +11345,30 @@ function saveAdminProject(projectId) {
     localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
     renderAdminProjectsList();
     
+    // Background sync to server with atomic action to prevent overwrites
+    apiFetch('/api/custom-projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            milestoneId: activeAdminMilestoneId, 
+            action: 'save_project',
+            project: newProj,
+            projects: customProjectsDB[activeAdminMilestoneId] 
+        })
+    }).then(r => r.json()).then(res => {
+        if (res && res.success && res.data) {
+            customProjectsDB = res.data;
+            localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
+        }
+    }).catch(() => {});
+
     const btn = document.getElementById('btnSaveProj');
-    const oldHtml = btn.innerHTML;
-    btn.innerHTML = `<i class="fas fa-check mr-1"></i> Saved!`;
-    btn.classList.replace('bg-emerald-600', 'bg-emerald-400');
-    setTimeout(() => { btn.innerHTML = oldHtml; btn.classList.replace('bg-emerald-400', 'bg-emerald-600'); }, 1500);
+    if (btn) {
+        const oldHtml = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-check mr-1"></i> Saved!`;
+        btn.classList.replace('bg-emerald-600', 'bg-emerald-400');
+        setTimeout(() => { btn.innerHTML = oldHtml; btn.classList.replace('bg-emerald-400', 'bg-emerald-600'); }, 1500);
+    }
 }
 
 function deleteAdminProject(projectId) {
@@ -11264,6 +11378,22 @@ function deleteAdminProject(projectId) {
         customProjectsDB[activeAdminMilestoneId] = customProjectsDB[activeAdminMilestoneId].filter(p => p.id !== projectId);
         localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
         
+        apiFetch('/api/custom-projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                milestoneId: activeAdminMilestoneId, 
+                action: 'delete_project',
+                projectId: projectId,
+                projects: customProjectsDB[activeAdminMilestoneId] 
+            })
+        }).then(r => r.json()).then(res => {
+            if (res && res.success && res.data) {
+                customProjectsDB = res.data;
+                localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
+            }
+        }).catch(() => {});
+
         activeAdminProjectId = null;
         renderAdminProjectsList();
     }
@@ -15787,6 +15917,496 @@ function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, mod
 }
 window.calculateModuleStreak = calculateModuleStreak;
 
+// ==============================================================
+// STUDENT PROJECT WORKSPACE (cMPLi-ai & Insight Engine)
+// ==============================================================
+window._activeStudentProject = null;
+window._activeStudentProjectModule = null;
+
+function renderCustomerProjectsView(moduleName, targetContainer) {
+    const container = targetContainer || document.getElementById('milestoneTimelinesContent') || document.getElementById('milestoneTimeline');
+    if (!container) return;
+
+    const normMod = (moduleName === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+    window._activeCustomerProjectsModule = normMod;
+
+    // Proactive server hydration to ensure students across devices see newly published projects
+    if (!window._lastCustomProjectsSyncTime || (Date.now() - window._lastCustomProjectsSyncTime > 15000)) {
+        window._lastCustomProjectsSyncTime = Date.now();
+        syncCustomProjectsDBFromServer().then(() => {
+            if (window._activeCustomerProjectsModule === normMod && container.isConnected) {
+                renderCustomerProjectsView(normMod, container);
+            }
+        });
+    }
+
+    const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normMod)) || { 
+        name: normMod === 'insight_engine' ? 'cMPLi Insight Engine' : 'cMPLi-ai', 
+        icon: normMod === 'insight_engine' ? 'fa-chart-pie text-emerald-400' : 'fa-robot text-purple-400' 
+    };
+
+    const msId = activeMilestoneId || 1;
+    if (!customProjectsDB[msId]) customProjectsDB[msId] = [];
+    const allList = customProjectsDB[msId];
+    const projectsList = allList.filter(p => {
+        if (normMod === 'insight_engine') return p.module === 'insight_engine';
+        return !p.module || p.module === 'cmpli_ai' || p.module === 'projects';
+    });
+
+    const allUserSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser) : [];
+    const modSubs = allUserSubs.filter(s => {
+        const t = normalizeLevelUpType(s.type || s.moduleType);
+        return (t === normMod || (normMod === 'cmpli_ai' && t === 'projects')) && String(s.milestoneId || 1) === String(msId);
+    });
+
+    const completedProjectsCount = projectsList.filter(p => modSubs.some(s => (s.projectId === p.id || s.day === p.id) && s.status === 'completed')).length;
+    const earnedLcsInMod = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+    const progressPct = projectsList.length > 0 ? Math.min(100, Math.round((completedProjectsCount / projectsList.length) * 100)) : 0;
+
+    let html = `
+        <div class="space-y-6 animate-fade-in">
+            <!-- Header Banner -->
+            <div class="glass-card p-5 sm:p-6 rounded-2xl border ${normMod === 'insight_engine' ? 'border-emerald-500/40 bg-gradient-to-r from-emerald-950/40 via-slate-900/90 to-cyan-950/30' : 'border-purple-500/40 bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-indigo-950/30'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg ${normMod === 'insight_engine' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'} flex items-center justify-center text-sm">
+                            <i class="fas ${modObj.icon.split(' ')[0]}"></i>
+                        </span>
+                        <h3 class="text-xl sm:text-2xl font-black text-white font-heading">${modObj.name}</h3>
+                        <span class="badge-pill ${normMod === 'insight_engine' ? 'badge-emerald' : 'badge-indigo'} text-[10px] uppercase tracking-wider font-bold">Milestone ${msId}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                        ${normMod === 'insight_engine' 
+                            ? 'Strategic problem intelligence, business analytics, and executive briefing capstones. Analyze cross-functional dynamics and deliver strategic solutions.' 
+                            : 'Applied AI challenges, model experimentation, prompt engineering, and intelligent product prototypes built for real-world enterprise needs.'}
+                    </p>
+                </div>
+
+                <!-- Stats Badges -->
+                <div class="flex items-center gap-2.5 sm:gap-3 shrink-0 flex-wrap">
+                    <div class="px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-center shadow-inner min-w-[90px]">
+                        <span class="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Completed</span>
+                        <span class="text-base font-black text-white font-mono">${completedProjectsCount} / ${projectsList.length}</span>
+                    </div>
+                    <div class="px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-center shadow-inner min-w-[90px]">
+                        <span class="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Earned LCs</span>
+                        <span class="text-base font-black ${normMod === 'insight_engine' ? 'text-emerald-400' : 'text-purple-400'} font-mono">+${earnedLcsInMod}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-300"><i class="fas fa-tasks mr-1.5 ${normMod === 'insight_engine' ? 'text-emerald-400' : 'text-purple-400'}"></i> Overall Module Completion</span>
+                    <span class="font-mono font-bold text-white">${progressPct}% (${completedProjectsCount} of ${projectsList.length} Projects Done)</span>
+                </div>
+                <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800/80">
+                    <div class="h-full rounded-full transition-all duration-500 ${normMod === 'insight_engine' ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' : 'bg-gradient-to-r from-purple-500 to-indigo-500'}" style="width: ${progressPct}%"></div>
+                </div>
+            </div>
+
+            <!-- Projects Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    `;
+
+    if (projectsList.length === 0) {
+        html += `
+            <div class="md:col-span-2 p-12 text-center border-2 border-dashed border-slate-800 rounded-2xl space-y-3 bg-slate-900/30">
+                <div class="w-16 h-16 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500 text-2xl shadow-inner">
+                    <i class="fas ${modObj.icon.split(' ')[0]}"></i>
+                </div>
+                <h4 class="text-base font-bold text-white">No Projects Published Yet</h4>
+                <p class="text-xs text-slate-400 max-w-md mx-auto">The Creator has not yet posted active projects for ${modObj.name} in Milestone ${msId}. Complete your check-in reflections while new challenges are prepared.</p>
+            </div>
+        `;
+    } else {
+        projectsList.forEach((proj) => {
+            const sub = modSubs.find(s => (s.projectId === proj.id || s.day === proj.id) && s.status === 'completed');
+            const isCompleted = Boolean(sub);
+            const pts = Number(proj.pts) || 500;
+            const deliverablesCount = (Array.isArray(proj.questions) && proj.questions.length > 0) ? proj.questions.length : 1;
+
+            html += `
+                <div class="glass-card p-5 rounded-2xl border ${isCompleted ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'} flex flex-col justify-between gap-4 transition-all shadow-lg hover:shadow-xl">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                <i class="fas fa-tag mr-1 text-slate-400"></i> ${proj.sector || 'General'}
+                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-500/40' : 'bg-indigo-950/80 text-indigo-300 border border-indigo-800/50'}">
+                                    +${pts} LCs
+                                </span>
+                                <span class="text-[10px] text-slate-400"><i class="fas fa-clock mr-1"></i> ${proj.duration || '15 Days'}</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-base font-bold text-white font-heading">${proj.title || 'Untitled Project'}</h4>
+                            ${proj.spec ? `<p class="text-[11px] font-medium text-slate-400 mt-0.5">${proj.spec}</p>` : ''}
+                        </div>
+
+                        <p class="text-xs text-slate-300/90 leading-relaxed line-clamp-3">
+                            ${proj.desc || 'No detailed instructions provided.'}
+                        </p>
+
+                        <div class="text-[11px] text-slate-400 flex items-center gap-2 pt-1 border-t border-slate-800/60">
+                            <i class="fas fa-paperclip text-slate-500"></i> ${deliverablesCount} Deliverable${deliverablesCount > 1 ? 's' : ''} Required
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
+                        <div>
+                            ${isCompleted 
+                                ? `<span class="text-xs font-bold text-emerald-400 flex items-center gap-1"><i class="fas fa-check-circle"></i> Verified &amp; Completed</span>`
+                                : `<span class="text-xs font-bold text-amber-400 flex items-center gap-1"><i class="fas fa-circle-dot animate-pulse"></i> Open for Submission</span>`
+                            }
+                        </div>
+                        <div>
+                            ${isCompleted
+                                ? `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', true)" class="btn-secondary py-1.5 px-3.5 text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5">
+                                    <i class="fas fa-eye"></i> View Submission
+                                   </button>`
+                                : `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', false)" class="btn-primary py-2 px-4 text-xs font-bold ${normMod === 'insight_engine' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'} text-white shadow-md flex items-center gap-1.5">
+                                    <i class="fas fa-rocket"></i> Open Workspace
+                                   </button>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+window.renderCustomerProjectsView = renderCustomerProjectsView;
+
+function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
+    if (!currentUser) return alert('Please login to access project workspace.');
+    const msId = activeMilestoneId || 1;
+    const normMod = (moduleName === 'insight_engine') ? 'insight_engine' : 'cmpli_ai';
+    const allList = customProjectsDB[msId] || [];
+    const proj = allList.find(p => p.id === projectId);
+    if (!proj) return alert('Project not found.');
+
+    window._activeStudentProject = proj;
+    window._activeStudentProjectModule = normMod;
+
+    const modal = document.getElementById('studentProjectModal');
+    if (!modal) return;
+
+    // Header updates
+    const titleEl = document.getElementById('studentProjModalTitle');
+    const sectorEl = document.getElementById('studentProjModalSector');
+    const ptsEl = document.getElementById('studentProjModalPts');
+    const durEl = document.getElementById('studentProjModalDuration');
+    const iconWrapper = document.getElementById('studentProjModalIconWrapper');
+    const iconEl = document.getElementById('studentProjModalIcon');
+    const submitBtn = document.getElementById('btnSubmitStudentProject');
+
+    if (titleEl) titleEl.textContent = proj.title || 'Project Workspace';
+    if (sectorEl) sectorEl.textContent = proj.sector || 'General';
+    if (ptsEl) ptsEl.textContent = `+${proj.pts || 500} LCs`;
+    if (durEl) durEl.textContent = proj.duration || '15 Days';
+    if (iconEl) iconEl.className = normMod === 'insight_engine' ? 'fas fa-chart-pie text-lg text-emerald-400' : 'fas fa-robot text-lg text-purple-400';
+    if (iconWrapper) iconWrapper.className = normMod === 'insight_engine' ? 'w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center shrink-0' : 'w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center shrink-0';
+
+    // Find existing submission if any
+    const allUserSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser) : [];
+    const existingSub = allUserSubs.find(s => (s.projectId === proj.id || s.day === proj.id) && s.status === 'completed');
+
+    const bodyEl = document.getElementById('studentProjModalBody');
+    if (!bodyEl) return;
+
+    let bodyHtml = `
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+            <h5 class="text-xs font-bold text-emerald-400 uppercase tracking-widest"><i class="fas fa-file-lines mr-1.5"></i> The "Real Thing" &mdash; Briefing &amp; Rules</h5>
+            <div class="text-xs sm:text-sm text-slate-300 whitespace-pre-line leading-relaxed font-sans">${proj.desc || 'Review the requirements and complete all required deliverables below.'}</div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="border-b border-slate-800 pb-2">
+                <h5 class="text-sm font-bold text-white font-heading">Required Deliverables</h5>
+                <p class="text-xs text-slate-400">Complete all question fields below to earn your +${proj.pts || 500} LCs.</p>
+            </div>
+    `;
+
+    const questions = (Array.isArray(proj.questions) && proj.questions.length > 0) 
+        ? proj.questions 
+        : [{ title: 'Final Project Deliverable / Summary', type: 'text' }];
+
+    questions.forEach((q, idx) => {
+        const qTitle = q.title || `Deliverable #${idx + 1}`;
+        const qType = q.type || 'text';
+        const existingAns = (existingSub && Array.isArray(existingSub.responses) && existingSub.responses[idx]) ? existingSub.responses[idx].answer : '';
+
+        bodyHtml += `
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3" data-q-index="${idx}" data-q-type="${qType}">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-white flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full bg-slate-800 text-indigo-400 text-[10px] flex items-center justify-center font-bold">${idx + 1}</span>
+                        ${qTitle}
+                    </label>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 uppercase font-mono">${qType.toUpperCase()}</span>
+                </div>
+        `;
+
+        if (isViewOnly && existingSub) {
+            const respObj = (existingSub && Array.isArray(existingSub.responses) && existingSub.responses[idx]) ? existingSub.responses[idx] : {};
+            const mediaUrl = respObj.mediaUrl || respObj.videoUrl || respObj.audioUrl || (existingAns && (existingAns.startsWith('http') || existingAns.startsWith('/gamification/')) ? existingAns : '');
+            const isVideo = qType === 'video' || (mediaUrl && (mediaUrl.includes('.webm') || mediaUrl.includes('.mp4')));
+            const isAudio = qType === 'audio' || (mediaUrl && (mediaUrl.includes('.mp3') || mediaUrl.includes('.wav') || mediaUrl.includes('.ogg')));
+
+            bodyHtml += `
+                <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs text-slate-200 space-y-2">
+                    ${mediaUrl && (isVideo || isAudio) ? `
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
+                            ${isVideo ? `
+                                <video src="${mediaUrl}" controls class="w-full max-w-md rounded-lg shadow-md border border-slate-700"></video>
+                            ` : `
+                                <audio src="${mediaUrl}" controls class="w-full max-w-md"></audio>
+                            `}
+                            <div class="flex items-center justify-between pt-1">
+                                <span class="text-[10px] text-slate-400 font-mono break-all line-clamp-1">${mediaUrl}</span>
+                                <a href="${mediaUrl}" target="_blank" download class="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold shrink-0 ml-2 inline-flex items-center gap-1">
+                                    <i class="fas fa-download"></i> Download Media
+                                </a>
+                            </div>
+                        </div>
+                    ` : (existingAns && (existingAns.startsWith('http://') || existingAns.startsWith('https://'))) ? `
+                        <div class="flex items-center justify-between gap-2 p-2 bg-slate-900 rounded border border-slate-800">
+                            <span class="text-slate-300 break-all font-mono text-[11px]">${existingAns}</span>
+                            <a href="${existingAns}" target="_blank" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] shrink-0 inline-flex items-center gap-1">
+                                <i class="fas fa-external-link-alt"></i> Open Link
+                            </a>
+                        </div>
+                    ` : existingAns ? `
+                        <p class="whitespace-pre-line text-slate-200">${existingAns}</p>
+                    ` : `
+                        <span class="text-slate-500 italic">No answer content recorded</span>
+                    `}
+                </div>
+            `;
+        } else if (qType === 'text') {
+            bodyHtml += `
+                <textarea id="proj_ans_${idx}" rows="4" placeholder="Write your answer, analysis, or executive reflections..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:border-indigo-500 custom-scrollbar"></textarea>
+            `;
+        } else if (qType === 'doc') {
+            bodyHtml += `
+                <div class="space-y-2">
+                    <input type="text" id="proj_ans_${idx}" placeholder="Paste Google Drive / OneDrive / GitHub / Document Share link..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500">
+                    <p class="text-[10px] text-slate-400">Make sure document link sharing is set to "Anyone with the link can view".</p>
+                </div>
+            `;
+        } else if (qType === 'audio' || qType === 'video') {
+            bodyHtml += `
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="btn_record_${idx}" onclick="startMediaRecording(${idx}, '${qType}')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors">
+                            <i class="fas ${qType === 'video' ? 'fa-video' : 'fa-microphone'}"></i> Record ${qType === 'video' ? 'Video' : 'Audio'} in Browser
+                        </button>
+                        <button type="button" id="btn_stop_${idx}" onclick="stopMediaRecording(${idx})" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors hidden animate-pulse">
+                            <i class="fas fa-stop"></i> Stop Recording
+                        </button>
+                    </div>
+                    <div id="media_preview_container_${idx}" class="hidden p-2 rounded-lg bg-slate-950 border border-slate-800"></div>
+                    <input type="text" id="proj_ans_${idx}" placeholder="Or paste ${qType} recording URL here..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500">
+                </div>
+            `;
+        }
+
+        bodyHtml += `</div>`;
+    });
+
+    bodyHtml += `</div>`;
+    bodyEl.innerHTML = bodyHtml;
+
+    if (submitBtn) {
+        submitBtn.style.display = isViewOnly ? 'none' : 'inline-flex';
+    }
+
+    modal.classList.remove('hidden');
+}
+window.openStudentProjectModal = openStudentProjectModal;
+
+function closeStudentProjectModal() {
+    const modal = document.getElementById('studentProjectModal');
+    if (modal) modal.classList.add('hidden');
+    window._activeStudentProject = null;
+    window._activeStudentProjectModule = null;
+}
+window.closeStudentProjectModal = closeStudentProjectModal;
+
+async function uploadProjectMediaBlob(blob, type, projId, idx) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const dataUrl = e.target.result;
+            try {
+                const res = await apiFetch('/api/upload-media', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dataUrl: dataUrl,
+                        prefix: 'project_deliverable',
+                        filename: `project_${projId}_q${idx}_${Date.now()}.webm`
+                    })
+                });
+                const data = await res.json();
+                if (data && data.success && data.url) {
+                    resolve(data.url);
+                    return;
+                }
+            } catch(err) {
+                console.warn('Deliverable media upload warning:', err);
+            }
+            resolve(dataUrl);
+        };
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function submitActiveStudentProject() {
+    const proj = window._activeStudentProject;
+    const normMod = window._activeStudentProjectModule || 'cmpli_ai';
+    if (!proj || !currentUser) return;
+
+    const submitBtn = document.getElementById('btnSubmitStudentProject');
+    let origBtnHtml = '';
+    if (submitBtn) {
+        origBtnHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-1.5"></i> Uploading & Submitting...`;
+    }
+
+    const msId = activeMilestoneId || 1;
+    const questions = (Array.isArray(proj.questions) && proj.questions.length > 0) 
+        ? proj.questions 
+        : [{ title: 'Final Deliverable', type: 'text' }];
+
+    const responses = [];
+    let hasAnswer = false;
+    let resolvedVideoUrl = '';
+    let resolvedAudioUrl = '';
+
+    for (let idx = 0; idx < questions.length; idx++) {
+        const q = questions[idx];
+        const inputEl = document.getElementById(`proj_ans_${idx}`);
+        let answerVal = inputEl ? inputEl.value.trim() : '';
+        let mediaUrl = '';
+
+        if (globalMediaBlobs && globalMediaBlobs[idx]) {
+            mediaUrl = await uploadProjectMediaBlob(globalMediaBlobs[idx], q.type, proj.id, idx);
+            if (mediaUrl) {
+                answerVal = mediaUrl;
+                if (q.type === 'video' && !resolvedVideoUrl) resolvedVideoUrl = mediaUrl;
+                if (q.type === 'audio' && !resolvedAudioUrl) resolvedAudioUrl = mediaUrl;
+            }
+        } else if (answerVal && (answerVal.startsWith('http') || answerVal.startsWith('data:'))) {
+            if (q.type === 'video' && !resolvedVideoUrl) resolvedVideoUrl = answerVal;
+            if (q.type === 'audio' && !resolvedAudioUrl) resolvedAudioUrl = answerVal;
+        }
+
+        if (answerVal) hasAnswer = true;
+        const respItem = {
+            question: q.title || `Deliverable #${idx + 1}`,
+            type: q.type || 'text',
+            answer: answerVal
+        };
+        if (mediaUrl) {
+            respItem.mediaUrl = mediaUrl;
+            if (q.type === 'video') respItem.videoUrl = mediaUrl;
+            if (q.type === 'audio') respItem.audioUrl = mediaUrl;
+        }
+        responses.push(respItem);
+    }
+
+    if (!hasAnswer) {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origBtnHtml;
+        }
+        alert('Please provide at least one deliverable response before submitting.');
+        return;
+    }
+
+    const subId = `sub_proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const pts = Number(proj.pts) || 500;
+    const nowIso = new Date().toISOString();
+
+    const subRecord = {
+        id: subId,
+        submissionId: subId,
+        userId: String(currentUser._id || currentUser.id || ''),
+        userEmail: (currentUser.email || '').toLowerCase().trim(),
+        userName: currentUser.name || 'Learner',
+        userPhone: currentUser.phone || '',
+        milestoneId: Number(msId),
+        type: normMod,
+        moduleType: normMod,
+        day: String(proj.id),
+        projectId: String(proj.id),
+        projectTitle: proj.title || 'Project Deliverable',
+        responses: responses,
+        videoUrl: resolvedVideoUrl,
+        audioUrl: resolvedAudioUrl,
+        lcReward: pts,
+        status: 'completed',
+        submittedAt: nowIso,
+        timestamp: Date.now()
+    };
+
+    // Save locally
+    let allSubs = [];
+    try { allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
+    allSubs = allSubs.filter(s => !(s.userId === subRecord.userId && String(s.milestoneId) === String(msId) && (s.projectId === String(proj.id) || s.day === String(proj.id))));
+    allSubs.push(subRecord);
+    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
+    _cachedAllUserSubmissionsDB = null;
+
+    // Post to server
+    try {
+        await apiFetch('/api/project/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subRecord)
+        });
+    } catch(e) {
+        console.warn('Project submission server notice:', e);
+    }
+
+    // Award TagMango points if function available
+    if (typeof assignTagMangoPointsOnServer === 'function') {
+        assignTagMangoPointsOnServer(currentUser._id, pts, `${proj.title} Completion`);
+    }
+
+    // Confetti celebration!
+    if (typeof confetti === 'function') {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    }
+
+    globalMediaBlobs = {};
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = origBtnHtml;
+    }
+
+    closeStudentProjectModal();
+    alert(`🎉 Project Deliverables Submitted! You earned +${pts} LCs!`);
+
+    // Refresh view
+    renderCustomerProjectsView(normMod);
+}
+window.submitActiveStudentProject = submitActiveStudentProject;
+
 function switchMilestoneTab(moduleName, btnElement) {
     if (btnElement) {
         document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
@@ -15946,6 +16566,12 @@ function switchMilestoneTab(moduleName, btnElement) {
         `;
         return;
     }
+
+    if (normalizedMod === 'cmpli_ai' || normalizedMod === 'insight_engine' || normalizedMod === 'projects') {
+        renderCustomerProjectsView(normalizedMod, container);
+        return;
+    }
+
     const milestoneJoinDate = (typeof getUserMilestoneJoinDate === 'function') ? getUserMilestoneJoinDate(currentUser ? currentUser._id : null, activeMilestoneId) : null;
     let userJoinDateStr = (typeof getUserModuleStartDate === 'function' ? getUserModuleStartDate(currentUser ? currentUser._id : null, activeMilestoneId, normalizedMod) : null);
     
@@ -16398,6 +17024,22 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleNameOrD
 
     const isImmerse = (normalizedMod === 'immerse');
     const totalSessions = isImmerse ? (msId === 1 ? 9 : 12) : ((msId === 1) ? 21 : 30);
+
+    const isProjectMod = (normalizedMod === 'cmpli_ai' || normalizedMod === 'insight_engine' || normalizedMod === 'projects');
+    if (isProjectMod) {
+        let projSub = typeSubs.find(s => String(s.projectId) === String(dayNumber) || String(s.day) === String(dayNumber))
+            || subs.find(s => normalizeLevelUpType(s.type) === normalizedMod && (String(s.projectId) === String(dayNumber) || String(s.day) === String(dayNumber)));
+        if (!projSub) {
+            try {
+                const allSubs = (typeof getAllUserSubmissions === 'function') ? getAllUserSubmissions() : [];
+                projSub = allSubs.find(s => ((String(s.userId) === String(targetUserId)) || (s.userEmail && currentUser.email && s.userEmail.toLowerCase() === currentUser.email.toLowerCase())) && String(s.milestoneId || 1) === String(msId) && normalizeLevelUpType(s.type) === normalizedMod && (String(s.projectId) === String(dayNumber) || String(s.day) === String(dayNumber)));
+            } catch(e) {}
+        }
+        if (projSub) {
+            renderSubmissionDetailModal(projSub, targetUserId, dayNumber, moduleName);
+            return;
+        }
+    }
 
     const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, normalizedMod, totalSessions, msId);
 
@@ -21143,6 +21785,12 @@ window.renderLearnerCareerViews = renderLearnerCareerViews;
 
 // Check if user reloaded page with Recruiter role active
 document.addEventListener('DOMContentLoaded', () => {
+    try {
+        if (typeof syncCustomProjectsDBFromServer === 'function') {
+            syncCustomProjectsDBFromServer();
+        }
+    } catch(e) {}
+
     try {
         const isRecruiter = localStorage.getItem('isRecruiterLogin') === 'true' || sessionStorage.getItem('isRecruiterLogin') === 'true';
         if (isRecruiter) {

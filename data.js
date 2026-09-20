@@ -3516,9 +3516,8 @@ var ALL_PLATFORM_MODULES = [
     { code: 'pod', name: 'cMPLi POD', icon: 'fa-podcast text-indigo-400' },
     { code: 'dip', name: 'cMPLi Dip', icon: 'fa-sun text-amber-400' },
     { code: 'immerse', name: 'cMPLi Immerse', icon: 'fa-water text-cyan-400' },
-    { code: 'ios', name: 'Industry Oriented Session (IOS)', icon: 'fa-chalkboard-teacher text-emerald-400' },
-    { code: 'projects', name: 'Real-World (cMPLi-ai) Projects', icon: 'fa-briefcase text-purple-400' },
-    { code: 'corporate', name: 'Corporate Residency', icon: 'fa-building text-blue-400' }
+    { code: 'cmpli_ai', name: 'cMPLi-ai', icon: 'fa-robot text-purple-400' },
+    { code: 'insight_engine', name: 'cMPLi Insight Engine', icon: 'fa-chart-pie text-emerald-400' }
 ];
 
 var milestoneConfig = [
@@ -3526,29 +3525,29 @@ var milestoneConfig = [
         id: 1,
         name: 'cMPLi Challenge Embracer',
         desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
-        defaultModules: ['pod', 'dip'],
-        modules: ['pod', 'dip']
+        defaultModules: ['pod', 'dip', 'immerse'],
+        modules: ['pod', 'dip', 'immerse']
     },
     {
         id: 2,
         name: 'cMPLi Curious',
-        desc: 'Deep dive into Industry-Oriented Sessions, immerse reflections, and real-world projects.',
-        defaultModules: ['pod', 'dip', 'immerse', 'projects'],
-        modules: ['pod', 'dip', 'immerse', 'projects']
+        desc: 'Deep dive into immerse reflections and AI-driven real-world cMPLi-ai projects.',
+        defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai'],
+        modules: ['pod', 'dip', 'immerse', 'cmpli_ai']
     },
     {
         id: 3,
         name: 'cMPLi Committed',
-        desc: 'Problem-Solution briefing, strategic problem framing, and advanced cross-functional mastery.',
-        defaultModules: ['pod', 'dip', 'immerse', 'projects', 'problem_solution'],
-        modules: ['pod', 'dip', 'immerse', 'projects', 'problem_solution']
+        desc: 'Strategic problem framing with cMPLi-ai projects and cMPLi Insight Engine analysis.',
+        defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine'],
+        modules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine']
     },
     {
         id: 4,
         name: 'cMPLi futuREadi earliTalent',
-        desc: 'Corporate residency, institutional capstones, and industry readiness deployment.',
-        defaultModules: ['pod', 'dip', 'immerse', 'projects', 'residency'],
-        modules: ['pod', 'dip', 'immerse', 'projects', 'residency']
+        desc: 'Advanced industry readiness deployment with full cMPLi-ai and Insight Engine capstones.',
+        defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine'],
+        modules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine']
     }
 ];
 window.milestoneConfig = milestoneConfig;var defaultPodQuestionsPool = [

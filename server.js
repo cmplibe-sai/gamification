@@ -1142,13 +1142,13 @@ app.post(['/api/level-up-access', '/gamification/api/level-up-access'], handlePo
 const MODULE_ACCESS_FILE = path.join(DATA_DIR, 'module_access.json');
 
 const MODULE_ACCESS_DEFAULTS = {
-    "1": ["pod", "dip"],
-    "2": ["pod", "dip", "immerse", "projects"],
-    "3": ["pod", "dip", "immerse", "projects", "problem_solution"],
-    "4": ["pod", "dip", "immerse", "projects", "residency"]
+    "1": ["pod", "dip", "immerse"],
+    "2": ["pod", "dip", "immerse", "cmpli_ai"],
+    "3": ["pod", "dip", "immerse", "cmpli_ai", "insight_engine"],
+    "4": ["pod", "dip", "immerse", "cmpli_ai", "insight_engine"]
 };
 
-const CANONICAL_MODULE_ORDER = ['pod', 'dip', 'immerse', 'projects', 'problem_solution', 'residency'];
+const CANONICAL_MODULE_ORDER = ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine', 'projects', 'problem_solution', 'residency'];
 
 function sortModuleList(list) {
     if (!Array.isArray(list)) return list;
@@ -1229,6 +1229,153 @@ app.post(['/api/milestone-module-access', '/api/module-access', '/gamification/a
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+// ==============================================================
+// CUSTOM PROJECTS & PROJECT SUBMISSION ENGINE (cMPLi-ai & Insight Engine)
+// ==============================================================
+app.get(['/api/custom-projects', '/gamification/api/custom-projects'], (req, res) => {
+    try {
+        if (!store.customProjectsDB || typeof store.customProjectsDB !== 'object') {
+            store.customProjectsDB = {};
+        }
+        res.json({ success: true, data: store.customProjectsDB });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/custom-projects', '/gamification/api/custom-projects'], (req, res) => {
+    try {
+        const { milestoneId, projects, allProjects, action, project, projectId } = req.body;
+        if (!store.customProjectsDB || typeof store.customProjectsDB !== 'object') {
+            store.customProjectsDB = {};
+        }
+
+        const msKey = String(milestoneId || 1);
+        if (!Array.isArray(store.customProjectsDB[msKey])) {
+            store.customProjectsDB[msKey] = [];
+        }
+
+        if (action === 'save_project' && project && project.id) {
+            const list = store.customProjectsDB[msKey];
+            const idx = list.findIndex(p => p.id === project.id);
+            if (idx > -1) {
+                list[idx] = project;
+            } else {
+                list.push(project);
+            }
+        } else if (action === 'delete_project' && projectId) {
+            store.customProjectsDB[msKey] = store.customProjectsDB[msKey].filter(p => p.id !== projectId);
+        } else if (allProjects && typeof allProjects === 'object') {
+            store.customProjectsDB = allProjects;
+        } else if (milestoneId && Array.isArray(projects)) {
+            // Smart merge by id to preserve concurrent work or projects of other modules
+            const currentList = store.customProjectsDB[msKey] || [];
+            const incomingIds = new Set(projects.map(p => p.id));
+            const merged = [...projects];
+            currentList.forEach(existingP => {
+                if (!incomingIds.has(existingP.id)) {
+                    const incomingModules = new Set(projects.map(p => p.module || 'cmpli_ai'));
+                    const existingMod = existingP.module || 'cmpli_ai';
+                    if (!incomingModules.has(existingMod)) {
+                        merged.push(existingP);
+                    }
+                }
+            });
+            store.customProjectsDB[msKey] = merged;
+        }
+
+        saveStore();
+        res.json({ success: true, data: store.customProjectsDB });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req, res) => {
+    try {
+        const { userId, userEmail, userName, userPhone, milestoneId, moduleType, projectId, projectTitle, responses, lcReward, audioUrl, videoUrl } = req.body;
+        if (!userId && !userEmail) {
+            return res.status(400).json({ success: false, error: 'User identifier required' });
+        }
+        if (!projectId) {
+            return res.status(400).json({ success: false, error: 'Project ID required' });
+        }
+
+        // Comprehensive normalization matching normalizeLevelUpType
+        const rawMod = String(moduleType || req.body.type || '').toLowerCase().trim();
+        const isInsight = rawMod === 'insight_engine' || rawMod === 'insight-engine' || rawMod.includes('insight') || 
+            rawMod === 'problem_solution' || rawMod === 'problem-solution' || rawMod === 'problemsolution' ||
+            rawMod.includes('problem') || rawMod.includes('briefing') || rawMod === 'residency' || rawMod.includes('corporate');
+        const normMod = isInsight ? 'insight_engine' : 'cmpli_ai';
+
+        const subId = `sub_proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const pts = Number(lcReward) || 500;
+        const nowIso = new Date().toISOString();
+
+        if (!Array.isArray(store.submissions)) store.submissions = [];
+
+        // Check if existing submission for this project by this user
+        const existingIdx = store.submissions.findIndex(s => 
+            (s.userId === String(userId) || (userEmail && s.userEmail === userEmail.toLowerCase().trim())) &&
+            String(s.milestoneId) === String(milestoneId || 1) &&
+            (s.projectId === String(projectId) || String(s.day) === String(projectId))
+        );
+
+        const respList = Array.isArray(responses) ? responses : [];
+        let resolvedVideoUrl = videoUrl || '';
+        let resolvedAudioUrl = audioUrl || '';
+        respList.forEach(r => {
+            if (!resolvedVideoUrl && (r.videoUrl || (r.type === 'video' && r.answer && (r.answer.startsWith('http') || r.answer.startsWith('data:'))))) {
+                resolvedVideoUrl = r.videoUrl || r.answer;
+            }
+            if (!resolvedAudioUrl && (r.audioUrl || (r.type === 'audio' && r.answer && (r.answer.startsWith('http') || r.answer.startsWith('data:'))))) {
+                resolvedAudioUrl = r.audioUrl || r.answer;
+            }
+        });
+
+        const subRecord = {
+            id: subId,
+            submissionId: subId,
+            userId: String(userId || ''),
+            userEmail: (userEmail || '').toLowerCase().trim(),
+            userName: userName || 'Learner',
+            userPhone: userPhone || '',
+            milestoneId: Number(milestoneId) || 1,
+            type: normMod,
+            moduleType: normMod,
+            day: String(projectId),
+            projectId: String(projectId),
+            projectTitle: projectTitle || 'Project Deliverable',
+            responses: respList,
+            videoUrl: resolvedVideoUrl,
+            audioUrl: resolvedAudioUrl,
+            lcReward: pts,
+            status: 'completed',
+            submittedAt: nowIso,
+            timestamp: Date.now()
+        };
+
+        if (existingIdx > -1) {
+            store.submissions[existingIdx] = Object.assign({}, store.submissions[existingIdx], subRecord);
+        } else {
+            store.submissions.push(subRecord);
+        }
+
+        store.submissionsRevision = Date.now();
+        saveStore();
+
+        res.json({
+            success: true,
+            message: 'Project deliverables submitted successfully!',
+            submission: subRecord
+        });
+    } catch (err) {
+        console.error('[Project Submission Error]:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // ==============================================================
 // DEDICATED MODULE ACTIVATION DATES DATABASE ENGINE
