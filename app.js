@@ -6508,31 +6508,36 @@ var DEFAULT_MILESTONE_PREREQS = {
             { id: "prereq_1_pod", module: "pod", type: "days", targetValue: 21 },
             { id: "prereq_1_immerse", module: "immerse", type: "days", targetValue: 0 }
         ],
-        targetDips: 21, targetPod: 21, targetImmerse: 0, minLCs: 0, autoUnlockNext: false
+        targetDips: 21, targetPod: 21, targetImmerse: 0, targetCmpliAi: 0, targetInsightEngine: 0, minLCs: 0, autoUnlockNext: false
     },
     "2": {
         prerequisites: [
             { id: "prereq_2_dip", module: "dip", type: "days", targetValue: 30 },
             { id: "prereq_2_pod", module: "pod", type: "days", targetValue: 30 },
-            { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 }
+            { id: "prereq_2_immerse", module: "immerse", type: "days", targetValue: 12 },
+            { id: "prereq_2_cmpli_ai", module: "cmpli_ai", type: "projects", targetValue: 5 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, targetCmpliAi: 5, targetInsightEngine: 0, minLCs: 0, autoUnlockNext: false
     },
     "3": {
         prerequisites: [
             { id: "prereq_3_dip", module: "dip", type: "days", targetValue: 30 },
             { id: "prereq_3_pod", module: "pod", type: "days", targetValue: 30 },
-            { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 }
+            { id: "prereq_3_immerse", module: "immerse", type: "days", targetValue: 12 },
+            { id: "prereq_3_cmpli_ai", module: "cmpli_ai", type: "projects", targetValue: 5 },
+            { id: "prereq_3_insight_engine", module: "insight_engine", type: "projects", targetValue: 2 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, targetCmpliAi: 5, targetInsightEngine: 2, minLCs: 0, autoUnlockNext: false
     },
     "4": {
         prerequisites: [
             { id: "prereq_4_dip", module: "dip", type: "days", targetValue: 30 },
             { id: "prereq_4_pod", module: "pod", type: "days", targetValue: 30 },
-            { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 }
+            { id: "prereq_4_immerse", module: "immerse", type: "days", targetValue: 12 },
+            { id: "prereq_4_cmpli_ai", module: "cmpli_ai", type: "projects", targetValue: 5 },
+            { id: "prereq_4_insight_engine", module: "insight_engine", type: "projects", targetValue: 3 }
         ],
-        targetDips: 30, targetPod: 30, targetImmerse: 12, minLCs: 0, autoUnlockNext: false
+        targetDips: 30, targetPod: 30, targetImmerse: 12, targetCmpliAi: 5, targetInsightEngine: 3, minLCs: 0, autoUnlockNext: false
     }
 };
 window.DEFAULT_MILESTONE_PREREQS = DEFAULT_MILESTONE_PREREQS;
@@ -6545,13 +6550,19 @@ function normalizeMilestonePrereqs(rawCfg) {
         const tDip = (cfg.targetDips !== undefined) ? Number(cfg.targetDips) : 21;
         const tPod = (cfg.targetPod !== undefined) ? Number(cfg.targetPod) : 21;
         const tImmerse = (cfg.targetImmerse !== undefined) ? Number(cfg.targetImmerse) : 0;
+        const tCmpliAi = (cfg.targetCmpliAi !== undefined) ? Number(cfg.targetCmpliAi) : 0;
+        const tInsight = (cfg.targetInsightEngine !== undefined) ? Number(cfg.targetInsightEngine) : 0;
         if (tDip > 0) prereqs.push({ id: 'prereq_dip_legacy', module: 'dip', type: 'days', targetValue: tDip });
         if (tPod > 0) prereqs.push({ id: 'prereq_pod_legacy', module: 'pod', type: 'days', targetValue: tPod });
         if (tImmerse > 0) prereqs.push({ id: 'prereq_immerse_legacy', module: 'immerse', type: 'days', targetValue: tImmerse });
+        if (tCmpliAi > 0) prereqs.push({ id: 'prereq_cmpli_ai_legacy', module: 'cmpli_ai', type: 'projects', targetValue: tCmpliAi });
+        if (tInsight > 0) prereqs.push({ id: 'prereq_insight_legacy', module: 'insight_engine', type: 'projects', targetValue: tInsight });
     }
     const dipDays = prereqs.find(p => p.module === 'dip' && p.type === 'days')?.targetValue || 0;
     const podDays = prereqs.find(p => p.module === 'pod' && p.type === 'days')?.targetValue || 0;
     const immerseDays = prereqs.find(p => p.module === 'immerse' && p.type === 'days')?.targetValue || 0;
+    const cmpliAiProjects = prereqs.find(p => normalizeLevelUpType(p.module) === 'cmpli_ai' && (p.type === 'projects' || p.type === 'days'))?.targetValue || (cfg.targetCmpliAi !== undefined ? Number(cfg.targetCmpliAi) : 0);
+    const insightEngineProjects = prereqs.find(p => normalizeLevelUpType(p.module) === 'insight_engine' && (p.type === 'projects' || p.type === 'days'))?.targetValue || (cfg.targetInsightEngine !== undefined ? Number(cfg.targetInsightEngine) : 0);
 
     return {
         ...cfg,
@@ -6559,10 +6570,31 @@ function normalizeMilestonePrereqs(rawCfg) {
         targetDips: dipDays,
         targetPod: podDays,
         targetImmerse: immerseDays,
+        targetCmpliAi: cmpliAiProjects,
+        targetInsightEngine: insightEngineProjects,
         minLCs: (cfg.minLCs !== undefined) ? Number(cfg.minLCs) : 0,
         autoUnlockNext: Boolean(cfg.autoUnlockNext)
     };
 }
+window.normalizeMilestonePrereqs = normalizeMilestonePrereqs;
+
+function getModulePrereqTarget(msId, modCode) {
+    const norm = normalizeLevelUpType(modCode || 'cmpli_ai');
+    const prereqCfg = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(msId) : null;
+    if (prereqCfg && Array.isArray(prereqCfg.prerequisites)) {
+        const found = prereqCfg.prerequisites.find(p => normalizeLevelUpType(p.module) === norm);
+        if (found && Number(found.targetValue) > 0) return Number(found.targetValue);
+    }
+    if (prereqCfg) {
+        if (norm === 'cmpli_ai' && prereqCfg.targetCmpliAi !== undefined && Number(prereqCfg.targetCmpliAi) > 0) return Number(prereqCfg.targetCmpliAi);
+        if (norm === 'insight_engine' && prereqCfg.targetInsightEngine !== undefined && Number(prereqCfg.targetInsightEngine) > 0) return Number(prereqCfg.targetInsightEngine);
+    }
+    const mNum = Number(msId || 1);
+    if (norm === 'cmpli_ai') return mNum >= 2 ? 5 : 0;
+    if (norm === 'insight_engine') return mNum >= 4 ? 3 : (mNum === 3 ? 2 : 0);
+    return 3;
+}
+window.getModulePrereqTarget = getModulePrereqTarget;
 window.normalizeMilestonePrereqs = normalizeMilestonePrereqs;
 
 function getMilestonePrereqConfig(msId) {
@@ -8231,7 +8263,12 @@ function renderAdminCohortSubmissions() {
         } else if (modLcsRule && modLcsRule.targetValue > 0) {
             completionPct = Math.min(100, Math.round((earnedLcs / modLcsRule.targetValue) * 100));
         } else {
-            const effectiveMax = Math.max(1, (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21)));
+            const effectiveMax = Math.max(1, 
+                cleanMod === 'cmpli_ai' ? (prereqCfg.targetCmpliAi || 5) : 
+                cleanMod === 'insight_engine' ? (prereqCfg.targetInsightEngine || 2) : 
+                (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : 
+                (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21))
+            );
             completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
         }
 
@@ -8598,7 +8635,12 @@ function getAdminCompletionGridData() {
         } else if (modLcsRule && modLcsRule.targetValue > 0) {
             completionPct = Math.min(100, Math.round((earnedLcs / modLcsRule.targetValue) * 100));
         } else {
-            const effectiveMax = Math.max(1, (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21)));
+            const effectiveMax = Math.max(1, 
+                cleanMod === 'cmpli_ai' ? (prereqCfg.targetCmpliAi || 5) : 
+                cleanMod === 'insight_engine' ? (prereqCfg.targetInsightEngine || 2) : 
+                (cleanMod === 'immerse') ? (prereqCfg.targetImmerse || 10) : 
+                (cleanMod === 'pod' ? (prereqCfg.targetPod || 21) : (prereqCfg.targetDips || 21))
+            );
             completionPct = Math.min(100, Math.round((targetModuleSubs.length / effectiveMax) * 100));
         }
 
@@ -11213,44 +11255,55 @@ function loadAdminProjectEditor(projectId, isNew = false) {
             <div>
                 <label class="block text-xs font-bold text-slate-400 mb-1">2. Sector / Domain <span class="text-red-500">*</span></label>
                 <select id="projSector" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                    <option value="PropTech" ${proj.sector === 'PropTech' ? 'selected' : ''}>PropTech</option>
+                    <option value="RetailTech" ${proj.sector === 'RetailTech' ? 'selected' : ''}>RetailTech</option>
+                    <option value="Supply Chain Tech" ${proj.sector === 'Supply Chain Tech' ? 'selected' : ''}>Supply Chain Tech</option>
+                    <option value="Logistics Tech" ${proj.sector === 'Logistics Tech' ? 'selected' : ''}>Logistics Tech</option>
+                    <option value="FinTech" ${proj.sector === 'FinTech' || proj.sector === 'Fintech' ? 'selected' : ''}>FinTech</option>
+                    <option value="EdTech" ${proj.sector === 'EdTech' ? 'selected' : ''}>EdTech</option>
+                    <option value="HealthTech" ${proj.sector === 'HealthTech' ? 'selected' : ''}>HealthTech</option>
+                    <option value="Automotive Tech" ${proj.sector === 'Automotive Tech' ? 'selected' : ''}>Automotive Tech</option>
+                    <option value="E-Commerce" ${proj.sector === 'E-Commerce' ? 'selected' : ''}>E-Commerce</option>
                     <option value="Generative AI & ML" ${proj.sector === 'Generative AI & ML' ? 'selected' : ''}>Generative AI & ML</option>
                     <option value="Strategic Intelligence" ${proj.sector === 'Strategic Intelligence' ? 'selected' : ''}>Strategic Intelligence</option>
-                    <option value="Fintech" ${proj.sector === 'Fintech' ? 'selected' : ''}>Fintech</option>
-                    <option value="Sports Tech" ${proj.sector === 'Sports Tech' ? 'selected' : ''}>Sports Tech</option>
-                    <option value="MarTech" ${proj.sector === 'MarTech' ? 'selected' : ''}>MarTech</option>
-                    <option value="Food Tech" ${proj.sector === 'Food Tech' ? 'selected' : ''}>Food Tech</option>
-                    <option value="Supply Chain" ${proj.sector === 'Supply Chain' ? 'selected' : ''}>Supply Chain</option>
-                    <option value="Logistics Tech" ${proj.sector === 'Logistics Tech' ? 'selected' : ''}>Logistics Tech</option>
-                    <option value="General Management" ${proj.sector === 'General Management' ? 'selected' : ''}>General Management</option>
+                    <option value="General" ${(!proj.sector || proj.sector === 'General') ? 'selected' : ''}>General</option>
                 </select>
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-slate-400 mb-1">Specialization (Optional)</label>
-                <input type="text" id="projSpec" value="${proj.spec || ''}" placeholder="e.g., Natural Language Processing, Market Entry Strategy" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                <label class="block text-xs font-bold text-slate-400 mb-1">3. Specialization <span class="text-red-500">*</span></label>
+                <select id="projSpec" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
+                    <option value="Marketing" ${(proj.specialization === 'Marketing' || proj.spec === 'Marketing') ? 'selected' : ''}>Marketing</option>
+                    <option value="Finance" ${(proj.specialization === 'Finance' || proj.spec === 'Finance') ? 'selected' : ''}>Finance</option>
+                    <option value="HR & People Ops" ${(proj.specialization === 'HR & People Ops' || proj.spec === 'HR & People Ops') ? 'selected' : ''}>HR & People Ops</option>
+                    <option value="Data Analytics & AI" ${(proj.specialization === 'Data Analytics & AI' || proj.spec === 'Data Analytics & AI') ? 'selected' : ''}>Data Analytics & AI</option>
+                    <option value="General Management" ${(proj.specialization === 'General Management' || proj.spec === 'General Management' || (!proj.specialization && !proj.spec)) ? 'selected' : ''}>General Management</option>
+                    <option value="Product & Strategy" ${(proj.specialization === 'Product & Strategy' || proj.spec === 'Product & Strategy') ? 'selected' : ''}>Product & Strategy</option>
+                    <option value="Operations & Logistics" ${(proj.specialization === 'Operations & Logistics' || proj.spec === 'Operations & Logistics') ? 'selected' : ''}>Operations & Logistics</option>
+                </select>
             </div>
             
             <div class="flex gap-3 md:col-span-2">
                 <div class="w-1/2">
-                    <label class="block text-xs font-bold text-slate-400 mb-1">3. LC Reward <span class="text-red-500">*</span></label>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">4. LC Reward <span class="text-red-500">*</span></label>
                     <input type="number" id="projPts" value="${proj.pts || 500}" placeholder="500" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
                 </div>
                 <div class="w-1/2">
-                    <label class="block text-xs font-bold text-slate-400 mb-1">4. Expected Duration <span class="text-red-500">*</span></label>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">5. Expected Duration <span class="text-red-500">*</span></label>
                     <input type="text" id="projDuration" value="${proj.duration || '15 Days'}" placeholder="e.g., 15 Days, 10 Days" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:border-emerald-500 transition-colors">
                 </div>
             </div>
         </div>
 
         <div class="mb-8 border border-slate-700 rounded-xl p-4 bg-slate-900/50 shadow-inner">
-            <label class="block text-xs font-bold text-emerald-400 mb-1">5. The "Real Thing" (Rules, Context &amp; Objective) <span class="text-red-500">*</span></label>
+            <label class="block text-xs font-bold text-emerald-400 mb-1">6. The "Real Thing" (Rules, Context &amp; Objective) <span class="text-red-500">*</span></label>
             <p class="text-[10px] text-slate-400 mb-3">Outline exactly what learners must research, design, code, or present. Include submission guidelines, technical constraints, and evaluation criteria.</p>
             <textarea id="projDesc" rows="8" placeholder="Paste your detailed project instructions, problem framing, and rules here..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-4 text-sm text-white focus:border-emerald-500 custom-scrollbar leading-relaxed">${proj.desc || ''}</textarea>
         </div>
 
         <div class="mb-4 flex justify-between items-end border-b border-slate-700 pb-2">
             <div>
-                <h5 class="text-sm font-bold text-emerald-400">6. Required Deliverables &amp; Questions</h5>
+                <h5 class="text-sm font-bold text-emerald-400">7. Required Deliverables &amp; Questions</h5>
                 <p class="text-[10px] text-slate-400 mt-0.5">Determine how many deliverables the customer must submit (Text answers, Documents, Voice/Video recordings).</p>
             </div>
             <button onclick="addAdminProjectQuestion()" class="text-xs font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-900/30 px-3 py-1.5 rounded-lg border border-emerald-700/50 transition-colors"><i class="fas fa-plus mr-1"></i> Add Deliverable Field</button>
@@ -11314,7 +11367,8 @@ function saveAdminProject(projectId) {
         module: activeMod,
         title: document.getElementById('projTitle').value || 'Untitled Project',
         sector: sector,
-        spec: document.getElementById('projSpec').value || '',
+        spec: document.getElementById('projSpec').value || 'General Management',
+        specialization: document.getElementById('projSpec').value || 'General Management',
         code: activeMod === 'insight_engine' ? '[INSIGHT]' : '[AI-PROJ]',
         pts: parseInt(document.getElementById('projPts').value, 10) || 500,
         duration: document.getElementById('projDuration').value || '15 Days',
@@ -15919,9 +15973,322 @@ window.calculateModuleStreak = calculateModuleStreak;
 
 // ==============================================================
 // STUDENT PROJECT WORKSPACE (cMPLi-ai & Insight Engine)
+// Advanced Project Engine:
+// - Prerequisite-Driven Required Projects Target & Credential Tracking
+// - 3-Stage Lifecycle: Available -> In Progress (7-Day Sprint) -> Completed
+// - Dual-Axis Filtering: Sector-wise & Specialization-wise
+// - Direct Device File Uploads (.pdf, .doc, .ppt, .xls, audio, video)
+// - Real-time Draft Auto-Save & Crash-Resilient Recovery
 // ==============================================================
 window._activeStudentProject = null;
 window._activeStudentProjectModule = null;
+window._activeProjectLifecycleTab = 'available'; // 'in_progress' | 'available' | 'completed'
+window._projectFilterMode = 'sector'; // 'sector' | 'specialization'
+window._projectFilterVal = 'all';
+
+function getUserProjectLifecycle(projectId) {
+    if (!currentUser) return { status: 'available' };
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const allSubs = (typeof getAllUserSubmissions === 'function') ? getAllUserSubmissions() : [];
+    const hasCompleted = allSubs.some(s => 
+        (String(s.userId) === String(uId) || (currentUser.email && String(s.userEmail).toLowerCase() === String(currentUser.email).toLowerCase())) && 
+        (s.projectId === projectId || s.day === projectId) && 
+        s.status === 'completed'
+    );
+    if (hasCompleted) return { status: 'completed' };
+
+    const storeKey = `user_project_lifecycle_${uId}`;
+    let lifecycle = {};
+    try { lifecycle = JSON.parse(localStorage.getItem(storeKey)) || {}; } catch(e) {}
+    if (lifecycle[projectId] && lifecycle[projectId].status === 'in_progress') {
+        const startedAt = lifecycle[projectId].startedAt || Date.now();
+        const deadline = lifecycle[projectId].deadline || (startedAt + 7 * 86400000);
+        const msRemaining = deadline - Date.now();
+        const isExpired = msRemaining <= 0;
+        const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+        const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
+        const overdueDays = isExpired ? Math.max(1, Math.ceil(Math.abs(msRemaining) / (1000 * 60 * 60 * 24))) : 0;
+        return {
+            status: 'in_progress',
+            startedAt,
+            deadline,
+            daysRemaining,
+            hoursRemaining,
+            isExpired,
+            overdueDays
+        };
+    }
+    return { status: 'available' };
+}
+window.getUserProjectLifecycle = getUserProjectLifecycle;
+
+async function syncUserProjectLifecycleFromServer(userId) {
+    if (!userId) return;
+    try {
+        const res = await apiFetch(`/api/project/lifecycle?userId=${encodeURIComponent(userId)}`);
+        if (res.ok) {
+            const json = await res.json();
+            if (json && json.success && json.data && typeof json.data === 'object') {
+                const storeKey = `user_project_lifecycle_${userId}`;
+                let local = {};
+                try { local = JSON.parse(localStorage.getItem(storeKey)) || {}; } catch(e) {}
+                const merged = Object.assign({}, local, json.data);
+                localStorage.setItem(storeKey, JSON.stringify(merged));
+            }
+        }
+    } catch(err) {
+        console.warn('[Lifecycle Sync Error]', err);
+    }
+}
+window.syncUserProjectLifecycleFromServer = syncUserProjectLifecycleFromServer;
+
+async function startStudentProject(projectId, moduleName) {
+    if (!currentUser) return alert('Please login to start this project.');
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const storeKey = `user_project_lifecycle_${uId}`;
+    let lifecycle = {};
+    try { lifecycle = JSON.parse(localStorage.getItem(storeKey)) || {}; } catch(e) {}
+
+    const startedAt = Date.now();
+    const deadline = startedAt + 7 * 86400000;
+
+    lifecycle[projectId] = {
+        status: 'in_progress',
+        startedAt,
+        deadline,
+        module: moduleName
+    };
+    localStorage.setItem(storeKey, JSON.stringify(lifecycle));
+
+    // Cross-device sync to server
+    try {
+        apiFetch('/api/project/lifecycle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: uId,
+                projectId,
+                status: 'in_progress',
+                startedAt,
+                deadline,
+                module: moduleName
+            })
+        }).catch(e => console.warn('[Lifecycle Sync Warning]', e));
+    } catch(e) {}
+
+    alert('🚀 7-Day Sprint Started! This project is now in your "In Progress" tab. You have 7 days to complete and upload your deliverables.');
+
+    window._activeProjectLifecycleTab = 'in_progress';
+    renderCustomerProjectsView(moduleName);
+    openStudentProjectModal(projectId, moduleName, false);
+}
+window.startStudentProject = startStudentProject;
+
+function setProjectFilterMode(mode) {
+    window._projectFilterMode = mode;
+    window._projectFilterVal = 'all';
+    renderCustomerProjectsView(window._activeCustomerProjectsModule || 'cmpli_ai');
+}
+window.setProjectFilterMode = setProjectFilterMode;
+
+function setProjectFilterVal(val) {
+    window._projectFilterVal = val;
+    renderCustomerProjectsView(window._activeCustomerProjectsModule || 'cmpli_ai');
+}
+window.setProjectFilterVal = setProjectFilterVal;
+
+function setProjectLifecycleTab(tab) {
+    window._activeProjectLifecycleTab = tab;
+    window._projectFilterVal = 'all';
+    renderCustomerProjectsView(window._activeCustomerProjectsModule || 'cmpli_ai');
+}
+window.setProjectLifecycleTab = setProjectLifecycleTab;
+
+function saveCurrentProjectDraft() {
+    if (!currentUser || !window._activeStudentProject) return;
+    const msId = activeMilestoneId || 1;
+    const proj = window._activeStudentProject;
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const draftKey = `proj_draft_${uId}_${msId}_${proj.id}`;
+
+    const answers = {};
+    const chipsHtml = {};
+    const questions = (Array.isArray(proj.questions) && proj.questions.length > 0) ? proj.questions : [{ type: 'text' }];
+    questions.forEach((q, idx) => {
+        const input = document.getElementById(`proj_ans_${idx}`);
+        if (input) answers[idx] = input.value;
+        const chip = document.getElementById(`proj_file_chip_${idx}`);
+        if (chip && !chip.classList.contains('hidden')) chipsHtml[idx] = chip.innerHTML;
+    });
+
+    const draftData = {
+        projectId: proj.id,
+        answers,
+        chipsHtml,
+        updatedAt: Date.now()
+    };
+    localStorage.setItem(draftKey, JSON.stringify(draftData));
+}
+window.saveCurrentProjectDraft = saveCurrentProjectDraft;
+
+function restoreCurrentProjectDraft() {
+    if (!currentUser || !window._activeStudentProject) return false;
+    const msId = activeMilestoneId || 1;
+    const proj = window._activeStudentProject;
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const draftKey = `proj_draft_${uId}_${msId}_${proj.id}`;
+    const raw = localStorage.getItem(draftKey);
+    if (!raw) return false;
+    try {
+        const draft = JSON.parse(raw);
+        if (!draft || !draft.answers) return false;
+
+        let hasRestoredAny = false;
+        Object.keys(draft.answers).forEach(idx => {
+            const val = draft.answers[idx];
+            const input = document.getElementById(`proj_ans_${idx}`);
+            if (input && val) {
+                input.value = val;
+                hasRestoredAny = true;
+                const prev = document.getElementById(`media_preview_container_${idx}`);
+                if (prev && (val.includes('.webm') || val.includes('.mp4') || val.includes('.mp3') || val.includes('.wav'))) {
+                    prev.classList.remove('hidden');
+                    if (val.includes('.mp4') || val.includes('.webm')) {
+                        prev.innerHTML = `<video src="${val}" controls class="w-full max-w-sm rounded-lg border border-emerald-500 shadow-lg mt-2"></video>`;
+                    } else {
+                        prev.innerHTML = `<audio src="${val}" controls class="w-full max-w-sm mt-2"></audio>`;
+                    }
+                }
+            }
+        });
+
+        if (draft.chipsHtml) {
+            Object.keys(draft.chipsHtml).forEach(idx => {
+                const chip = document.getElementById(`proj_file_chip_${idx}`);
+                if (chip && draft.chipsHtml[idx]) {
+                    chip.classList.remove('hidden');
+                    chip.innerHTML = draft.chipsHtml[idx];
+                }
+            });
+        }
+        return hasRestoredAny;
+    } catch(e) {
+        return false;
+    }
+}
+window.restoreCurrentProjectDraft = restoreCurrentProjectDraft;
+
+function clearCurrentProjectDraft(projectId) {
+    if (!currentUser) return;
+    const msId = activeMilestoneId || 1;
+    const pId = projectId || (window._activeStudentProject && window._activeStudentProject.id);
+    if (!pId) return;
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const draftKey = `proj_draft_${uId}_${msId}_${pId}`;
+    localStorage.removeItem(draftKey);
+    
+    // Clear inputs in DOM if modal open
+    const proj = window._activeStudentProject;
+    if (proj && proj.id === pId) {
+        (proj.questions || [{}]).forEach((q, idx) => {
+            const input = document.getElementById(`proj_ans_${idx}`);
+            if (input) input.value = '';
+            const chip = document.getElementById(`proj_file_chip_${idx}`);
+            if (chip) { chip.innerHTML = ''; chip.classList.add('hidden'); }
+            const prev = document.getElementById(`media_preview_container_${idx}`);
+            if (prev) { prev.innerHTML = ''; prev.classList.add('hidden'); }
+        });
+        document.getElementById('projectDraftNoticeBanner')?.remove();
+    }
+}
+window.clearCurrentProjectDraft = clearCurrentProjectDraft;
+
+async function handleProjectDeliverableUpload(idx, type, fileInputEl) {
+    const file = fileInputEl.files && fileInputEl.files[0];
+    if (!file) return;
+
+    const safeFileName = String(file.name || 'deliverable').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const chip = document.getElementById(`proj_file_chip_${idx}`);
+    if (chip) {
+        chip.classList.remove('hidden');
+        chip.innerHTML = `<span class="text-xs text-indigo-400 font-bold flex items-center gap-1.5"><i class="fas fa-spinner fa-spin"></i> Uploading ${safeFileName} (${Math.round(file.size / 1024)} KB)...</span>`;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const dataUrl = e.target.result;
+        try {
+            const res = await apiFetch('/api/upload-media', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dataUrl,
+                    prefix: 'project_deliverable',
+                    filename: file.name
+                })
+            });
+            const data = await res.json();
+            if (data && data.success && data.url) {
+                const ansInput = document.getElementById(`proj_ans_${idx}`);
+                if (ansInput) ansInput.value = data.url;
+
+                const prev = document.getElementById(`media_preview_container_${idx}`);
+                if (prev && (type === 'video' || type === 'audio' || file.type.startsWith('video') || file.type.startsWith('audio'))) {
+                    prev.classList.remove('hidden');
+                    if (type === 'video' || file.type.startsWith('video')) {
+                        prev.innerHTML = `<video src="${data.url}" controls class="w-full max-w-sm rounded-lg border border-emerald-500 shadow-lg mt-2"></video>`;
+                    } else {
+                        prev.innerHTML = `<audio src="${data.url}" controls class="w-full max-w-sm mt-2"></audio>`;
+                    }
+                }
+
+                if (chip) {
+                    chip.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-check-circle text-emerald-400"></i>
+                            <span class="font-bold text-white text-xs truncate max-w-[220px]">${safeFileName}</span>
+                            <span class="text-[10px] text-slate-400">(${Math.round(file.size / 1024)} KB)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="${data.url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold" title="Open Uploaded File"><i class="fas fa-external-link-alt"></i></a>
+                            <button type="button" onclick="removeProjectDeliverableFile(${idx})" class="text-red-400 hover:text-red-300 text-xs" title="Remove File"><i class="fas fa-times"></i></button>
+                        </div>
+                    `;
+                }
+                saveCurrentProjectDraft();
+            } else {
+                throw new Error('Upload response missing url');
+            }
+        } catch(err) {
+            console.error('File upload error:', err);
+            if (chip) chip.innerHTML = `<span class="text-xs text-red-400"><i class="fas fa-exclamation-circle mr-1"></i> Upload failed. Please try again or paste link.</span>`;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+window.handleProjectDeliverableUpload = handleProjectDeliverableUpload;
+
+function removeProjectDeliverableFile(idx) {
+    const input = document.getElementById(`proj_ans_${idx}`);
+    if (input) input.value = '';
+    const chip = document.getElementById(`proj_file_chip_${idx}`);
+    if (chip) {
+        chip.innerHTML = '';
+        chip.classList.add('hidden');
+    }
+    const prev = document.getElementById(`media_preview_container_${idx}`);
+    if (prev) {
+        prev.innerHTML = '';
+        prev.classList.add('hidden');
+    }
+    const fileInput = document.getElementById(`proj_file_${idx}`);
+    if (fileInput) fileInput.value = '';
+    const mediaFileInput = document.getElementById(`proj_media_file_${idx}`);
+    if (mediaFileInput) mediaFileInput.value = '';
+    saveCurrentProjectDraft();
+}
+window.removeProjectDeliverableFile = removeProjectDeliverableFile;
 
 function renderCustomerProjectsView(moduleName, targetContainer) {
     const container = targetContainer || document.getElementById('milestoneTimelinesContent') || document.getElementById('milestoneTimeline');
@@ -15938,6 +16305,18 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                 renderCustomerProjectsView(normMod, container);
             }
         });
+    }
+
+    if (currentUser) {
+        const uId = currentUser._id || currentUser.id;
+        if (uId && (!window._lastLifecycleSyncTime || (Date.now() - window._lastLifecycleSyncTime > 15000))) {
+            window._lastLifecycleSyncTime = Date.now();
+            syncUserProjectLifecycleFromServer(uId).then(() => {
+                if (window._activeCustomerProjectsModule === normMod && container.isConnected) {
+                    renderCustomerProjectsView(normMod, container);
+                }
+            });
+        }
     }
 
     const modObj = (typeof ALL_PLATFORM_MODULES !== 'undefined' && ALL_PLATFORM_MODULES.find(m => m.code === normMod)) || { 
@@ -15961,7 +16340,58 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
 
     const completedProjectsCount = projectsList.filter(p => modSubs.some(s => (s.projectId === p.id || s.day === p.id) && s.status === 'completed')).length;
     const earnedLcsInMod = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
-    const progressPct = projectsList.length > 0 ? Math.min(100, Math.round((completedProjectsCount / projectsList.length) * 100)) : 0;
+
+    // Prerequisite-Driven Target Completion
+    const targetCount = (typeof getModulePrereqTarget === 'function') ? getModulePrereqTarget(msId, normMod) : 5;
+    const isTargetAchieved = completedProjectsCount >= targetCount;
+    const remainingToTarget = Math.max(0, targetCount - completedProjectsCount);
+    const progressPct = targetCount > 0 ? Math.min(100, Math.round((completedProjectsCount / targetCount) * 100)) : 100;
+
+    // Segment projects into 3 lifecycle categories
+    const inProgressProjects = [];
+    const availableProjects = [];
+    const completedProjects = [];
+
+    projectsList.forEach(proj => {
+        const lifecycle = getUserProjectLifecycle(proj.id);
+        if (lifecycle.status === 'completed') {
+            completedProjects.push({ ...proj, lifecycle });
+        } else if (lifecycle.status === 'in_progress') {
+            inProgressProjects.push({ ...proj, lifecycle });
+        } else {
+            availableProjects.push({ ...proj, lifecycle });
+        }
+    });
+
+    let currentTab = window._activeProjectLifecycleTab || 'available';
+    // Fallback if tab is empty
+    if (currentTab === 'in_progress' && inProgressProjects.length === 0 && availableProjects.length > 0) {
+        currentTab = 'available';
+        window._activeProjectLifecycleTab = 'available';
+    }
+
+    // Determine current tab list
+    let tabBaseList = [];
+    if (currentTab === 'in_progress') tabBaseList = inProgressProjects;
+    else if (currentTab === 'completed') tabBaseList = completedProjects;
+    else tabBaseList = availableProjects;
+
+    // Collect Unique Sectors & Specializations for Filter Bar
+    const allSectors = Array.from(new Set(projectsList.map(p => p.sector || 'General'))).sort();
+    const allSpecs = Array.from(new Set(projectsList.map(p => p.specialization || p.spec || 'General Management'))).sort();
+
+    const filterMode = window._projectFilterMode || 'sector';
+    const activeFilterVal = window._projectFilterVal || 'all';
+
+    // Apply Filter
+    let filteredList = [...tabBaseList];
+    if (activeFilterVal !== 'all') {
+        if (filterMode === 'sector') {
+            filteredList = filteredList.filter(p => (p.sector || 'General') === activeFilterVal);
+        } else {
+            filteredList = filteredList.filter(p => (p.specialization || p.spec || 'General Management') === activeFilterVal);
+        }
+    }
 
     let html = `
         <div class="space-y-6 animate-fade-in">
@@ -15977,63 +16407,140 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                     </div>
                     <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
                         ${normMod === 'insight_engine' 
-                            ? 'Strategic problem intelligence, business analytics, and executive briefing capstones. Analyze cross-functional dynamics and deliver strategic solutions.' 
-                            : 'Applied AI challenges, model experimentation, prompt engineering, and intelligent product prototypes built for real-world enterprise needs.'}
+                            ? 'Strategic problem intelligence and executive briefing capstones. Complete your elective project targets to earn your milestone credential.' 
+                            : 'Applied AI challenges and intelligent prototypes. Choose real-world projects matching your domain interest to fulfill your credential target.'}
                     </p>
                 </div>
 
-                <!-- Stats Badges -->
+                <!-- Prerequisite Target Stats Badges -->
                 <div class="flex items-center gap-2.5 sm:gap-3 shrink-0 flex-wrap">
-                    <div class="px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-center shadow-inner min-w-[90px]">
-                        <span class="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Completed</span>
-                        <span class="text-base font-black text-white font-mono">${completedProjectsCount} / ${projectsList.length}</span>
+                    <div class="px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-center shadow-inner min-w-[110px]">
+                        <span class="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">Credential Target</span>
+                        <span class="text-base font-black text-white font-mono">${completedProjectsCount} / ${targetCount}</span>
+                        <span class="text-[9px] text-emerald-400 font-medium block">Required Projects</span>
                     </div>
                     <div class="px-3.5 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-center shadow-inner min-w-[90px]">
-                        <span class="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Earned LCs</span>
+                        <span class="text-[9px] text-slate-400 block font-bold uppercase tracking-wider">Earned LCs</span>
                         <span class="text-base font-black ${normMod === 'insight_engine' ? 'text-emerald-400' : 'text-purple-400'} font-mono">+${earnedLcsInMod}</span>
+                        <span class="text-[9px] text-slate-400 font-medium block">Total Gained</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Progress Bar -->
+            <!-- Prerequisite Target Progress Bar -->
             <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                    <span class="font-bold text-slate-300"><i class="fas fa-tasks mr-1.5 ${normMod === 'insight_engine' ? 'text-emerald-400' : 'text-purple-400'}"></i> Overall Module Completion</span>
-                    <span class="font-mono font-bold text-white">${progressPct}% (${completedProjectsCount} of ${projectsList.length} Projects Done)</span>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                    <span class="font-bold text-slate-300 flex items-center gap-1.5">
+                        <i class="fas fa-bullseye ${normMod === 'insight_engine' ? 'text-emerald-400' : 'text-purple-400'}"></i> 
+                        Milestone Credential Requirement: <span class="text-white font-mono">${completedProjectsCount} of ${targetCount} Projects Completed</span>
+                    </span>
+                    <div>
+                        ${isTargetAchieved 
+                            ? `<span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Milestone Requirement Fulfilled!</span>` 
+                            : `<span class="text-amber-300 font-bold">${remainingToTarget} more project${remainingToTarget > 1 ? 's' : ''} needed to unlock credential</span>`
+                        }
+                    </div>
                 </div>
                 <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800/80">
                     <div class="h-full rounded-full transition-all duration-500 ${normMod === 'insight_engine' ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' : 'bg-gradient-to-r from-purple-500 to-indigo-500'}" style="width: ${progressPct}%"></div>
                 </div>
             </div>
 
-            <!-- Projects Grid -->
+            <!-- Lifecycle Navigation Tabs (In Progress, Available, Completed) -->
+            <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto custom-scrollbar">
+                <button onclick="setProjectLifecycleTab('in_progress')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${currentTab === 'in_progress' ? 'bg-amber-600 text-white shadow-lg' : 'bg-slate-900/80 text-slate-400 hover:text-white'}">
+                    <i class="fas fa-clock animate-pulse"></i> In Progress
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] ${currentTab === 'in_progress' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'} font-mono">${inProgressProjects.length}</span>
+                </button>
+                <button onclick="setProjectLifecycleTab('available')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${currentTab === 'available' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-900/80 text-slate-400 hover:text-white'}">
+                    <i class="fas fa-compass"></i> Available Projects
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] ${currentTab === 'available' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'} font-mono">${availableProjects.length}</span>
+                </button>
+                <button onclick="setProjectLifecycleTab('completed')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${currentTab === 'completed' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-900/80 text-slate-400 hover:text-white'}">
+                    <i class="fas fa-check-circle"></i> Completed
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] ${currentTab === 'completed' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'} font-mono">${completedProjects.length}</span>
+                </button>
+            </div>
+
+            <!-- Dual-Axis Filter Bar: Sector & Specialization -->
+            <div class="p-3.5 sm:p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-800/80 pb-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Browse Filter:</span>
+                        <button onclick="setProjectFilterMode('sector')" class="px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterMode === 'sector' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                            <i class="fas fa-building mr-1"></i> By Sector
+                        </button>
+                        <button onclick="setProjectFilterMode('specialization')" class="px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterMode === 'specialization' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                            <i class="fas fa-crosshairs mr-1"></i> By Specialization
+                        </button>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono">${filteredList.length} of ${tabBaseList.length} Projects in view</span>
+                </div>
+
+                <!-- Filter Chips Row -->
+                <div class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+                    <button onclick="setProjectFilterVal('all')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${activeFilterVal === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                        All ${filterMode === 'sector' ? 'Sectors' : 'Specializations'} (${tabBaseList.length})
+                    </button>
+                    ${(filterMode === 'sector' ? allSectors : allSpecs).map(item => {
+                        const countInTab = tabBaseList.filter(p => (filterMode === 'sector' ? (p.sector || 'General') : (p.specialization || p.spec || 'General Management')) === item).length;
+                        const isSelected = activeFilterVal === item;
+                        return `
+                            <button onclick="setProjectFilterVal('${item.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${isSelected ? 'bg-indigo-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                                ${item} <span class="opacity-70 font-mono text-[10px]">(${countInTab})</span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Projects Cards Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     `;
 
-    if (projectsList.length === 0) {
+    if (filteredList.length === 0) {
+        let emptyMsg = '';
+        if (currentTab === 'in_progress') {
+            emptyMsg = `You have zero active sprints in progress right now. Switch to the <strong>"Available Projects"</strong> tab and click <strong>"Review &amp; Start"</strong> to pick a challenge!`;
+        } else if (currentTab === 'completed') {
+            emptyMsg = `No completed projects yet in Milestone ${msId}. Start and complete your first sprint to earn verified LCs!`;
+        } else {
+            emptyMsg = activeFilterVal !== 'all' 
+                ? `No available projects matched the selected filter <em>"${activeFilterVal}"</em>. Switch filter or select "All" to browse all.` 
+                : `No active projects published yet for Milestone ${msId}. New industry challenges are updated regularly.`;
+        }
+
         html += `
-            <div class="md:col-span-2 p-12 text-center border-2 border-dashed border-slate-800 rounded-2xl space-y-3 bg-slate-900/30">
-                <div class="w-16 h-16 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500 text-2xl shadow-inner">
-                    <i class="fas ${modObj.icon.split(' ')[0]}"></i>
+            <div class="md:col-span-2 p-10 text-center border-2 border-dashed border-slate-800 rounded-2xl space-y-3 bg-slate-900/30">
+                <div class="w-14 h-14 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto text-slate-500 text-xl shadow-inner">
+                    <i class="fas ${currentTab === 'in_progress' ? 'fa-clock' : (currentTab === 'completed' ? 'fa-check' : 'fa-compass')}"></i>
                 </div>
-                <h4 class="text-base font-bold text-white">No Projects Published Yet</h4>
-                <p class="text-xs text-slate-400 max-w-md mx-auto">The Creator has not yet posted active projects for ${modObj.name} in Milestone ${msId}. Complete your check-in reflections while new challenges are prepared.</p>
+                <h4 class="text-base font-bold text-white">${currentTab === 'in_progress' ? 'No Active Sprints' : (currentTab === 'completed' ? 'No Completed Projects' : 'No Projects Found')}</h4>
+                <p class="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">${emptyMsg}</p>
             </div>
         `;
     } else {
-        projectsList.forEach((proj) => {
-            const sub = modSubs.find(s => (s.projectId === proj.id || s.day === proj.id) && s.status === 'completed');
-            const isCompleted = Boolean(sub);
+        filteredList.forEach((proj) => {
+            const lifecycle = proj.lifecycle || getUserProjectLifecycle(proj.id);
+            const isCompleted = lifecycle.status === 'completed';
+            const isInProgress = lifecycle.status === 'in_progress';
             const pts = Number(proj.pts) || 500;
             const deliverablesCount = (Array.isArray(proj.questions) && proj.questions.length > 0) ? proj.questions.length : 1;
+            const sector = proj.sector || 'General';
+            const specialization = proj.specialization || proj.spec || 'General Management';
 
             html += `
-                <div class="glass-card p-5 rounded-2xl border ${isCompleted ? 'border-emerald-500/40 bg-emerald-950/10' : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700'} flex flex-col justify-between gap-4 transition-all shadow-lg hover:shadow-xl">
+                <div class="glass-card p-5 rounded-2xl border ${isCompleted ? 'border-emerald-500/40 bg-emerald-950/10' : (isInProgress ? 'border-amber-500/40 bg-amber-950/10' : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700')} flex flex-col justify-between gap-4 transition-all shadow-lg hover:shadow-xl">
                     <div class="space-y-3">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                                <i class="fas fa-tag mr-1 text-slate-400"></i> ${proj.sector || 'General'}
-                            </span>
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
+                                    <i class="fas fa-tag mr-1 text-slate-400"></i> ${sector}
+                                </span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-purple-400 border border-slate-700">
+                                    <i class="fas fa-crosshairs mr-1 text-slate-400"></i> ${specialization}
+                                </span>
+                            </div>
                             <div class="flex items-center gap-1.5">
                                 <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-500/40' : 'bg-indigo-950/80 text-indigo-300 border border-indigo-800/50'}">
                                     +${pts} LCs
@@ -16044,15 +16551,20 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
 
                         <div>
                             <h4 class="text-base font-bold text-white font-heading">${proj.title || 'Untitled Project'}</h4>
-                            ${proj.spec ? `<p class="text-[11px] font-medium text-slate-400 mt-0.5">${proj.spec}</p>` : ''}
                         </div>
 
                         <p class="text-xs text-slate-300/90 leading-relaxed line-clamp-3">
-                            ${proj.desc || 'No detailed instructions provided.'}
+                            ${proj.desc || 'Review the project requirements and complete all deliverables.'}
                         </p>
 
-                        <div class="text-[11px] text-slate-400 flex items-center gap-2 pt-1 border-t border-slate-800/60">
-                            <i class="fas fa-paperclip text-slate-500"></i> ${deliverablesCount} Deliverable${deliverablesCount > 1 ? 's' : ''} Required
+                        <div class="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+                            <span><i class="fas fa-paperclip text-slate-500 mr-1"></i> ${deliverablesCount} Deliverable${deliverablesCount > 1 ? 's' : ''} Required</span>
+                            ${isInProgress 
+                                ? (lifecycle.isExpired 
+                                    ? `<span class="text-rose-400 font-bold font-mono text-[10px] flex items-center gap-1"><i class="fas fa-triangle-exclamation"></i> Sprint Overdue (${lifecycle.overdueDays || 1}d ago)</span>`
+                                    : `<span class="text-amber-400 font-bold font-mono text-[10px]"><i class="fas fa-stopwatch mr-1"></i> ${lifecycle.daysRemaining} days remaining</span>`
+                                )
+                                : ''}
                         </div>
                     </div>
 
@@ -16060,7 +16572,13 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                         <div>
                             ${isCompleted 
                                 ? `<span class="text-xs font-bold text-emerald-400 flex items-center gap-1"><i class="fas fa-check-circle"></i> Verified &amp; Completed</span>`
-                                : `<span class="text-xs font-bold text-amber-400 flex items-center gap-1"><i class="fas fa-circle-dot animate-pulse"></i> Open for Submission</span>`
+                                : (isInProgress 
+                                    ? (lifecycle.isExpired 
+                                        ? `<span class="text-xs font-bold text-rose-400 flex items-center gap-1"><i class="fas fa-triangle-exclamation"></i> Sprint Overdue</span>`
+                                        : `<span class="text-xs font-bold text-amber-400 flex items-center gap-1"><i class="fas fa-stopwatch animate-pulse"></i> Sprint Active</span>`
+                                    )
+                                    : `<span class="text-xs font-bold text-slate-400 flex items-center gap-1"><i class="fas fa-circle-dot"></i> Not Started</span>`
+                                )
                             }
                         </div>
                         <div>
@@ -16068,9 +16586,14 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                                 ? `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', true)" class="btn-secondary py-1.5 px-3.5 text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5">
                                     <i class="fas fa-eye"></i> View Submission
                                    </button>`
-                                : `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', false)" class="btn-primary py-2 px-4 text-xs font-bold ${normMod === 'insight_engine' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'} text-white shadow-md flex items-center gap-1.5">
-                                    <i class="fas fa-rocket"></i> Open Workspace
-                                   </button>`
+                                : (isInProgress
+                                    ? `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', false)" class="btn-primary py-2 px-4 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow-md flex items-center gap-1.5">
+                                        <i class="fas fa-pen-to-square"></i> Continue &amp; Submit
+                                       </button>`
+                                    : `<button onclick="openStudentProjectModal('${proj.id}', '${normMod}', false)" class="btn-primary py-2 px-4 text-xs font-bold ${normMod === 'insight_engine' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500'} text-white rounded-lg shadow-md flex items-center gap-1.5">
+                                        <i class="fas fa-rocket"></i> Review &amp; Start
+                                       </button>`
+                                )
                             }
                         </div>
                     </div>
@@ -16102,6 +16625,11 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
     const modal = document.getElementById('studentProjectModal');
     if (!modal) return;
 
+    const lifecycle = getUserProjectLifecycle(proj.id);
+    const isCompleted = lifecycle.status === 'completed' || isViewOnly;
+    const isInProgress = lifecycle.status === 'in_progress' && !isCompleted;
+    const isAvailable = lifecycle.status === 'available' && !isCompleted;
+
     // Header updates
     const titleEl = document.getElementById('studentProjModalTitle');
     const sectorEl = document.getElementById('studentProjModalSector');
@@ -16112,13 +16640,13 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
     const submitBtn = document.getElementById('btnSubmitStudentProject');
 
     if (titleEl) titleEl.textContent = proj.title || 'Project Workspace';
-    if (sectorEl) sectorEl.textContent = proj.sector || 'General';
+    if (sectorEl) sectorEl.textContent = `${proj.sector || 'General'} • ${proj.specialization || proj.spec || 'General Management'}`;
     if (ptsEl) ptsEl.textContent = `+${proj.pts || 500} LCs`;
     if (durEl) durEl.textContent = proj.duration || '15 Days';
     if (iconEl) iconEl.className = normMod === 'insight_engine' ? 'fas fa-chart-pie text-lg text-emerald-400' : 'fas fa-robot text-lg text-purple-400';
     if (iconWrapper) iconWrapper.className = normMod === 'insight_engine' ? 'w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center shrink-0' : 'w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center shrink-0';
 
-    // Find existing submission if any
+    // Find existing submission if completed
     const allUserSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser) : [];
     const existingSub = allUserSubs.find(s => (s.projectId === proj.id || s.day === proj.id) && s.status === 'completed');
 
@@ -16126,25 +16654,76 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
     if (!bodyEl) return;
 
     let bodyHtml = `
+        <!-- Project Briefing & Rules Banner -->
         <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
-            <h5 class="text-xs font-bold text-emerald-400 uppercase tracking-widest"><i class="fas fa-file-lines mr-1.5"></i> The "Real Thing" &mdash; Briefing &amp; Rules</h5>
+            <div class="flex items-center justify-between gap-2">
+                <h5 class="text-xs font-bold text-emerald-400 uppercase tracking-widest"><i class="fas fa-file-lines mr-1.5"></i> The "Real Thing" &mdash; Briefing &amp; Rules</h5>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-indigo-400 font-mono font-bold">${proj.specialization || proj.spec || 'Domain Capstone'}</span>
+            </div>
             <div class="text-xs sm:text-sm text-slate-300 whitespace-pre-line leading-relaxed font-sans">${proj.desc || 'Review the requirements and complete all required deliverables below.'}</div>
         </div>
+    `;
 
+    // Lifecycle State Banners
+    if (isAvailable) {
+        bodyHtml += `
+            <div class="p-4 rounded-xl bg-gradient-to-r from-indigo-950/70 to-purple-950/60 border border-indigo-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                <div class="space-y-0.5">
+                    <h5 class="text-xs font-bold text-white flex items-center gap-1.5"><i class="fas fa-stopwatch text-indigo-400"></i> 7-Day Sprint Window</h5>
+                    <p class="text-[11px] text-slate-300">Ready to tackle this real-world sprint? Clicking start moves it to your "In Progress" tab and unlocks deliverable uploads.</p>
+                </div>
+                <button onclick="startStudentProject('${proj.id}', '${normMod}')" class="btn-primary py-2.5 px-5 text-xs font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl shadow-lg shrink-0 flex items-center gap-1.5 transition-all">
+                    <i class="fas fa-play"></i> Start This Project
+                </button>
+            </div>
+        `;
+    } else if (isInProgress) {
+        const isOverdue = lifecycle.isExpired;
+        bodyHtml += `
+            <div class="p-3.5 rounded-xl ${isOverdue ? 'bg-rose-950/40 border border-rose-500/50' : 'bg-amber-950/30 border border-amber-500/40'} flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-lg ${isOverdue ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'} flex items-center justify-center text-xs">
+                        <i class="fas ${isOverdue ? 'fa-triangle-exclamation animate-bounce' : 'fa-stopwatch animate-pulse'}"></i>
+                    </span>
+                    <div>
+                        <span class="text-xs font-bold ${isOverdue ? 'text-rose-300' : 'text-amber-300'}">
+                            ${isOverdue 
+                                ? `⚠️ Sprint Overdue by ${lifecycle.overdueDays || 1} day(s)! Submit now to earn your credential.` 
+                                : `Sprint Active: ${lifecycle.daysRemaining} day(s) remaining`}
+                        </span>
+                        <p class="text-[10px] text-slate-400">Started on ${new Date(lifecycle.startedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} • 7-Day Sprint Target</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${isOverdue ? `<span class="text-[10px] text-rose-300 font-bold bg-rose-900/40 border border-rose-700/50 px-2 py-0.5 rounded">Overdue Submission Window</span>` : ''}
+                    <span class="text-[10px] text-slate-400 font-mono bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">Auto-save draft active</span>
+                </div>
+            </div>
+            <div id="projectDraftNoticeBanner" class="hidden p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between gap-2">
+                <span class="text-xs text-indigo-300"><i class="fas fa-floppy-disk mr-1.5"></i> Unsaved draft restored. You can continue editing or discard.</span>
+                <button type="button" onclick="clearCurrentProjectDraft('${proj.id}')" class="text-[10px] font-bold text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-950/30 border border-red-800/40">Discard Draft</button>
+            </div>
+        `;
+    }
+
+    bodyHtml += `
         <div class="space-y-4">
-            <div class="border-b border-slate-800 pb-2">
-                <h5 class="text-sm font-bold text-white font-heading">Required Deliverables</h5>
-                <p class="text-xs text-slate-400">Complete all question fields below to earn your +${proj.pts || 500} LCs.</p>
+            <div class="border-b border-slate-800 pb-2 flex items-center justify-between">
+                <div>
+                    <h5 class="text-sm font-bold text-white font-heading">Required Deliverables</h5>
+                    <p class="text-xs text-slate-400">Upload your work or record audio/video to claim your +${proj.pts || 500} LCs.</p>
+                </div>
+                ${isInProgress ? `<span class="text-[10px] text-slate-400 italic">Changes save automatically</span>` : ''}
             </div>
     `;
 
     const questions = (Array.isArray(proj.questions) && proj.questions.length > 0) 
         ? proj.questions 
-        : [{ title: 'Final Project Deliverable / Summary', type: 'text' }];
+        : [{ title: 'Final Project Deliverable / Summary', type: 'doc' }];
 
     questions.forEach((q, idx) => {
         const qTitle = q.title || `Deliverable #${idx + 1}`;
-        const qType = q.type || 'text';
+        const qType = q.type || 'doc';
         const existingAns = (existingSub && Array.isArray(existingSub.responses) && existingSub.responses[idx]) ? existingSub.responses[idx].answer : '';
 
         bodyHtml += `
@@ -16158,7 +16737,7 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
                 </div>
         `;
 
-        if (isViewOnly && existingSub) {
+        if (isCompleted && existingSub) {
             const respObj = (existingSub && Array.isArray(existingSub.responses) && existingSub.responses[idx]) ? existingSub.responses[idx] : {};
             const mediaUrl = respObj.mediaUrl || respObj.videoUrl || respObj.audioUrl || (existingAns && (existingAns.startsWith('http') || existingAns.startsWith('/gamification/')) ? existingAns : '');
             const isVideo = qType === 'video' || (mediaUrl && (mediaUrl.includes('.webm') || mediaUrl.includes('.mp4')));
@@ -16180,11 +16759,11 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
                                 </a>
                             </div>
                         </div>
-                    ` : (existingAns && (existingAns.startsWith('http://') || existingAns.startsWith('https://'))) ? `
+                    ` : (existingAns && (existingAns.startsWith('http://') || existingAns.startsWith('https://') || existingAns.startsWith('/gamification/'))) ? `
                         <div class="flex items-center justify-between gap-2 p-2 bg-slate-900 rounded border border-slate-800">
                             <span class="text-slate-300 break-all font-mono text-[11px]">${existingAns}</span>
                             <a href="${existingAns}" target="_blank" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] shrink-0 inline-flex items-center gap-1">
-                                <i class="fas fa-external-link-alt"></i> Open Link
+                                <i class="fas fa-external-link-alt"></i> Open Document
                             </a>
                         </div>
                     ` : existingAns ? `
@@ -16194,30 +16773,56 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
                     `}
                 </div>
             `;
+        } else if (isAvailable) {
+            // Preview only for unstarted project
+            bodyHtml += `
+                <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 text-xs text-slate-400 flex items-center justify-between">
+                    <span><i class="fas fa-lock mr-1.5 text-slate-500"></i> ${qType === 'doc' ? 'Document upload required (PDF, Word, PPT)' : (qType === 'audio' || qType === 'video' ? `Audio/Video recording or upload required` : 'Text response required')}</span>
+                    <span class="text-[10px] text-indigo-400">Click "Start This Project" above to unlock</span>
+                </div>
+            `;
         } else if (qType === 'text') {
             bodyHtml += `
-                <textarea id="proj_ans_${idx}" rows="4" placeholder="Write your answer, analysis, or executive reflections..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:border-indigo-500 custom-scrollbar"></textarea>
+                <textarea id="proj_ans_${idx}" rows="4" oninput="saveCurrentProjectDraft()" placeholder="Write your answer, analysis, or executive reflections..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:border-indigo-500 custom-scrollbar"></textarea>
             `;
         } else if (qType === 'doc') {
             bodyHtml += `
-                <div class="space-y-2">
-                    <input type="text" id="proj_ans_${idx}" placeholder="Paste Google Drive / OneDrive / GitHub / Document Share link..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:border-indigo-500">
-                    <p class="text-[10px] text-slate-400">Make sure document link sharing is set to "Anyone with the link can view".</p>
+                <div class="space-y-2.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <label class="cursor-pointer px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white flex items-center gap-2 transition-all shadow-md">
+                            <i class="fas fa-cloud-arrow-up text-indigo-400"></i> Upload File from Device
+                            <input type="file" id="proj_file_${idx}" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,image/*" onchange="handleProjectDeliverableUpload(${idx}, 'doc', this)" class="hidden">
+                        </label>
+                        <span class="text-[10px] text-slate-400">Supported: PDF, Word, PPT, Excel, Zip</span>
+                    </div>
+                    <div id="proj_file_chip_${idx}" class="hidden p-2 rounded-lg bg-slate-950 border border-indigo-500/40 text-xs text-slate-200 flex items-center justify-between"></div>
+                    <div class="relative">
+                        <span class="text-[10px] text-slate-400 font-bold block mb-1">Or paste shareable document link:</span>
+                        <input type="text" id="proj_ans_${idx}" oninput="saveCurrentProjectDraft()" placeholder="https://docs.google.com/... or GitHub / OneDrive link" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500">
+                    </div>
                 </div>
             `;
         } else if (qType === 'audio' || qType === 'video') {
             bodyHtml += `
-                <div class="space-y-2">
-                    <div class="flex items-center gap-2">
+                <div class="space-y-2.5">
+                    <div class="flex flex-wrap items-center gap-2">
                         <button type="button" id="btn_record_${idx}" onclick="startMediaRecording(${idx}, '${qType}')" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors">
                             <i class="fas ${qType === 'video' ? 'fa-video' : 'fa-microphone'}"></i> Record ${qType === 'video' ? 'Video' : 'Audio'} in Browser
                         </button>
                         <button type="button" id="btn_stop_${idx}" onclick="stopMediaRecording(${idx})" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors hidden animate-pulse">
                             <i class="fas fa-stop"></i> Stop Recording
                         </button>
+                        <label class="cursor-pointer px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-white flex items-center gap-1.5 transition-colors shadow-md">
+                            <i class="fas fa-upload text-indigo-400"></i> Upload ${qType === 'video' ? 'Video' : 'Audio'} File
+                            <input type="file" id="proj_media_file_${idx}" accept="${qType === 'video' ? 'video/*' : 'audio/*'}" onchange="handleProjectDeliverableUpload(${idx}, '${qType}', this)" class="hidden">
+                        </label>
                     </div>
                     <div id="media_preview_container_${idx}" class="hidden p-2 rounded-lg bg-slate-950 border border-slate-800"></div>
-                    <input type="text" id="proj_ans_${idx}" placeholder="Or paste ${qType} recording URL here..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500">
+                    <div id="proj_file_chip_${idx}" class="hidden p-2 rounded-lg bg-slate-950 border border-indigo-500/40 text-xs text-slate-200 flex items-center justify-between"></div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold block mb-1">Or paste media link:</span>
+                        <input type="text" id="proj_ans_${idx}" oninput="saveCurrentProjectDraft()" placeholder="Or paste ${qType} URL (Loom, YouTube, Drive)..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white focus:border-indigo-500">
+                    </div>
                 </div>
             `;
         }
@@ -16228,8 +16833,17 @@ function openStudentProjectModal(projectId, moduleName, isViewOnly = false) {
     bodyHtml += `</div>`;
     bodyEl.innerHTML = bodyHtml;
 
+    // Submit Button Visibility
     if (submitBtn) {
-        submitBtn.style.display = isViewOnly ? 'none' : 'inline-flex';
+        submitBtn.style.display = isInProgress ? 'inline-flex' : 'none';
+    }
+
+    // Auto-restore draft if in-progress
+    if (isInProgress) {
+        const hasRestored = restoreCurrentProjectDraft();
+        if (hasRestored) {
+            document.getElementById('projectDraftNoticeBanner')?.classList.remove('hidden');
+        }
     }
 
     modal.classList.remove('hidden');
@@ -16290,7 +16904,7 @@ async function submitActiveStudentProject() {
     const msId = activeMilestoneId || 1;
     const questions = (Array.isArray(proj.questions) && proj.questions.length > 0) 
         ? proj.questions 
-        : [{ title: 'Final Deliverable', type: 'text' }];
+        : [{ title: 'Final Deliverable', type: 'doc' }];
 
     const responses = [];
     let hasAnswer = false;
@@ -16307,10 +16921,10 @@ async function submitActiveStudentProject() {
             mediaUrl = await uploadProjectMediaBlob(globalMediaBlobs[idx], q.type, proj.id, idx);
             if (mediaUrl) {
                 answerVal = mediaUrl;
-                if (q.type === 'video' && !resolvedVideoUrl) resolvedVideoUrl = mediaUrl;
-                if (q.type === 'audio' && !resolvedAudioUrl) resolvedAudioUrl = mediaUrl;
+                if (q.type === 'video') resolvedVideoUrl = mediaUrl;
+                if (q.type === 'audio') resolvedAudioUrl = mediaUrl;
             }
-        } else if (answerVal && (answerVal.startsWith('http') || answerVal.startsWith('data:'))) {
+        } else if (answerVal && (answerVal.startsWith('http') || answerVal.startsWith('data:') || answerVal.startsWith('/gamification/'))) {
             if (q.type === 'video' && !resolvedVideoUrl) resolvedVideoUrl = answerVal;
             if (q.type === 'audio' && !resolvedAudioUrl) resolvedAudioUrl = answerVal;
         }
@@ -16318,7 +16932,7 @@ async function submitActiveStudentProject() {
         if (answerVal) hasAnswer = true;
         const respItem = {
             question: q.title || `Deliverable #${idx + 1}`,
-            type: q.type || 'text',
+            type: q.type || 'doc',
             answer: answerVal
         };
         if (mediaUrl) {
@@ -16334,7 +16948,7 @@ async function submitActiveStudentProject() {
             submitBtn.disabled = false;
             submitBtn.innerHTML = origBtnHtml;
         }
-        alert('Please provide at least one deliverable response before submitting.');
+        alert('Please provide at least one deliverable response or upload a file before submitting.');
         return;
     }
 
@@ -16372,6 +16986,17 @@ async function submitActiveStudentProject() {
     localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
     _cachedAllUserSubmissionsDB = null;
 
+    // Update user project lifecycle to completed
+    const uId = currentUser._id || currentUser.id || 'guest';
+    const storeKey = `user_project_lifecycle_${uId}`;
+    let lifecycle = {};
+    try { lifecycle = JSON.parse(localStorage.getItem(storeKey)) || {}; } catch(e) {}
+    lifecycle[proj.id] = { status: 'completed', completedAt: Date.now() };
+    localStorage.setItem(storeKey, JSON.stringify(lifecycle));
+
+    // Clear saved draft
+    clearCurrentProjectDraft(proj.id);
+
     // Post to server
     try {
         await apiFetch('/api/project/submit', {
@@ -16402,7 +17027,8 @@ async function submitActiveStudentProject() {
     closeStudentProjectModal();
     alert(`🎉 Project Deliverables Submitted! You earned +${pts} LCs!`);
 
-    // Refresh view
+    // Switch view to completed tab and re-render
+    window._activeProjectLifecycleTab = 'completed';
     renderCustomerProjectsView(normMod);
 }
 window.submitActiveStudentProject = submitActiveStudentProject;
@@ -21788,6 +22414,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         if (typeof syncCustomProjectsDBFromServer === 'function') {
             syncCustomProjectsDBFromServer();
+        }
+        const savedUser = JSON.parse(localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser') || 'null');
+        if (savedUser && (savedUser._id || savedUser.id) && typeof syncUserProjectLifecycleFromServer === 'function') {
+            syncUserProjectLifecycleFromServer(savedUser._id || savedUser.id);
         }
     } catch(e) {}
 

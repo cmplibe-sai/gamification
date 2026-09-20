@@ -532,6 +532,84 @@ Following Claude's comprehensive review, three targeted enhancements were applie
    - In `submitActiveStudentProject()`, when a student records audio or video via WebRTC, `globalMediaBlobs[idx]` is asynchronously converted and uploaded to `/api/upload-media`.
    - The resulting persistent media URL (e.g. `/gamification/uploads/project_deliverable_...webm`) is recorded in the deliverable response, attached to `subRecord.videoUrl` / `subRecord.audioUrl`, and made available for playback by coordinators and recruiters.
 
+---
+
+## Part 12: Project Engine Enhancements — Direct File Uploads, Draft Recovery, Prerequisite Targets, Dual-Axis Filtering & 7-Day Sprint Lifecycle
+
+### 1. Architectural Goal & Context
+Following user requirements, the **cMPLi-ai** (`cmpli_ai`) and **cMPLi Insight Engine** (`insight_engine`) project architecture has been enriched with:
+1. **Direct Device File Uploads & Draft Recovery**:
+   - Deliverables allow students to upload files (.pdf, .doc, .docx, .ppt, .xls, audio, video) directly from their device to `/api/upload-media` in addition to pasting external links.
+   - Comprehensive crash-resilient draft auto-save and restore (`saveCurrentProjectDraft`, `restoreCurrentProjectDraft`, `clearCurrentProjectDraft`) so students can pause or close the browser and resume without losing entered text or uploaded files.
+2. **Prerequisite-Driven Completion Target & Credential Progress**:
+   - Decoupled completion metrics from total catalog size (e.g. 50+ published projects).
+   - Driven by the creator's configured prerequisite target for that module (`getModulePrereqTarget(msId, normMod)`): displays `completed / target Required Projects` and calculates remaining projects needed for the milestone credential.
+3. **Dual-Axis Filtering (Sector & Specialization)**:
+   - Creator Project Builder supports standardized **Sector** and **Specialization** taxonomy.
+   - Student catalog provides mode toggle buttons (`[ 🏢 By Sector ]` and `[ 🎯 By Specialization ]`) with horizontal filter chips and real-time count badges.
+4. **Structured Project Lifecycle & 7-Day Sprint Model**:
+   - 3-stage lifecycle: **Available** $\rightarrow$ **In Progress (7-Day Sprint Window)** $\rightarrow$ **Completed**.
+   - Available projects display the briefing and rules with a **"Start This Project (7-Day Sprint)"** action.
+   - In-progress projects display active countdown timers (`⏰ 5 days remaining`), auto-save drafts, file uploaders, and a **"Submit Deliverables"** action.
+   - Completed projects display verified badges, earned LCs, and rich media player / file links.
+
+### 2. Files Modified
+- **[app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js)**:
+  - Added `DEFAULT_MILESTONE_PREREQS` targets: MS2 `targetCmpliAi: 5`, MS3 `targetCmpliAi: 5, targetInsightEngine: 2`, MS4 `targetCmpliAi: 5, targetInsightEngine: 3`.
+  - Added `getModulePrereqTarget`, `getUserProjectLifecycle`, `startStudentProject`, `setProjectFilterMode`, `setProjectFilterVal`, `setProjectLifecycleTab`.
+  - Implemented `handleProjectDeliverableUpload`, `removeProjectDeliverableFile`, `saveCurrentProjectDraft`, `restoreCurrentProjectDraft`, `clearCurrentProjectDraft`.
+  - Upgraded `loadAdminProjectEditor` and `saveAdminProject` with Sector and Specialization selects.
+  - Upgraded `renderCustomerProjectsView` with Prerequisite Target KPIs, 3 Lifecycle Navigation Tabs, Dual-Axis Filter Bar, and status cards.
+  - Upgraded `openStudentProjectModal` with briefing, 7-day sprint starter, file uploaders, WebRTC recording, and draft notice banner.
+  - Upgraded cohort completion calculation `effectiveMax` for `cmpli_ai` and `insight_engine`.
+- **[scratch/test_new_modules_structure.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/scratch/test_new_modules_structure.js)**:
+  - Added test suites for sector & specialization persistence, PDF document uploads, deliverable submission with file URLs, and lifecycle & target helpers.
+
+### 3. Verification Evidence
+- **Automated Suite ([scratch/test_new_modules_structure.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/scratch/test_new_modules_structure.js))**:
+  - **8 / 8 SUITES PASSED**.
+- **Security Audit ([test_security_audit_hardening.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/test_security_audit_hardening.js))**:
+  - **30 / 30 ASSERTIONS PASSED**.
+- Core modules (`pod`, `dip`, `immerse`) remain 100% untouched.
+
+---
+
+## 4. Post-Review Hardening & Bug Fixes (Addressed from Claude Review)
+
+### 🔴 Fix 1: Document Upload Extension (.bin bug resolved)
+- **Problem**: In [server.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/server.js), `saveBase64MediaToFile` previously only checked audio/video MIME headers and omitted the `originalFilename` argument, falling through to `.bin`.
+- **Resolution**:
+  1. Updated `saveBase64MediaToFile(dataUrl, prefix, originalFilename)` to inspect `originalFilename` extension via `path.extname`.
+  2. Expanded fallback MIME map to include `.pdf`, `.docx`, `.doc`, `.pptx`, `.ppt`, `.xlsx`, `.xls`, `.zip`, `.png`, `.jpg`, `.webp`, `.svg`, `.gif`.
+  3. Node server restarted; PDF upload verified saving as `.pdf` and DOCX upload verified saving as `.docx`.
+
+### 🟡 Fix 2: Server-Side Sprint Lifecycle Persistence & Multi-Device Sync
+- **Problem**: Sprint lifecycle was stored strictly in `localStorage` (`user_project_lifecycle_${uId}`), causing sprints to reset when changing devices or clearing cache.
+- **Resolution**:
+  1. Implemented `GET /api/project/lifecycle?userId=...` and `POST /api/project/lifecycle` endpoints in [server.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/server.js).
+  2. Submitting deliverables via `/api/project/submit` automatically records `status: 'completed'` in `store.userProjectLifecycles`.
+  3. Added `syncUserProjectLifecycleFromServer(userId)` in [app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js), invoked on `DOMContentLoaded` and within `renderCustomerProjectsView`.
+  4. Updated `startStudentProject` to asynchronously POST lifecycle updates to the server.
+
+### 🟡 Fix 3: 7-Day Sprint Urgency & Overdue State Handling
+- **Problem**: `isExpired` was computed but unreferenced, leaving expired sprints showing "0 days remaining" with no urgency or status distinction.
+- **Resolution**:
+  1. `getUserProjectLifecycle` now computes `overdueDays = isExpired ? Math.max(1, Math.ceil(Math.abs(msRemaining) / (1000 * 60 * 60 * 24))) : 0;`.
+  2. Project cards in [app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js) render a prominent `⚠️ Sprint Overdue (Xd ago)` badge and status indicator.
+  3. The workspace modal displays an alert banner `⚠️ Sprint Overdue by X day(s)! Submit now to earn your credential.` with an overdue submission warning.
+
+### 🟢 Fix 4: Self-XSS Sanitization on File Upload Chips
+- **Problem**: `handleProjectDeliverableUpload` inserted `file.name` directly into `chip.innerHTML`.
+- **Resolution**:
+  - Sanitized `file.name` via HTML entity encoding before rendering inside `proj_file_chip_${idx}`.
+
+### Verification Status
+- `node scratch/test_new_modules_structure.js`: **8 / 8 PASSED** (including PDF upload verification).
+- `node test_security_audit_hardening.js`: **30 / 30 PASSED**.
+- Manual API verification confirmed `POST /api/project/lifecycle`, `GET /api/project/lifecycle`, and DOCX upload preserving `.docx`.
+
+
+
 
 
 

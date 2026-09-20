@@ -130,7 +130,7 @@ try {
     console.warn('[Seed Asset Warning]', seedErr.message);
 }
 
-function saveBase64MediaToFile(dataUrl, prefix) {
+function saveBase64MediaToFile(dataUrl, prefix, originalFilename) {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return dataUrl;
     try {
         const commaIndex = dataUrl.indexOf(',');
@@ -140,17 +140,42 @@ function saveBase64MediaToFile(dataUrl, prefix) {
         const base64Data = dataUrl.substring(commaIndex + 1);
         const buffer = Buffer.from(base64Data, 'base64');
         
-        let ext = 'bin';
-        if (header.includes('audio/mp4') || header.includes('m4a') || header.includes('x-m4a')) ext = 'm4a';
-        else if (header.includes('audio/webm') || header.includes('webm')) ext = 'webm';
-        else if (header.includes('audio/mpeg') || header.includes('mp3')) ext = 'mp3';
-        else if (header.includes('audio/wav') || header.includes('wave')) ext = 'wav';
-        else if (header.includes('audio/ogg')) ext = 'ogg';
-        else if (header.includes('video/mp4')) ext = 'mp4';
-        else if (header.includes('video/webm')) ext = 'webm';
-        else if (header.includes('video/quicktime') || header.includes('mov')) ext = 'mov';
-        else if (header.includes('audio')) ext = 'm4a';
-        else if (header.includes('video')) ext = 'mp4';
+        let ext = '';
+        // 1. Check originalFilename extension if provided
+        if (originalFilename && typeof originalFilename === 'string') {
+            const parsedExt = path.extname(originalFilename).replace('.', '').toLowerCase().trim();
+            if (parsedExt && /^[a-z0-9]{2,5}$/.test(parsedExt)) {
+                ext = parsedExt;
+            }
+        }
+
+        // 2. Map known MIME types if extension wasn't derived from filename
+        if (!ext) {
+            if (header.includes('application/pdf')) ext = 'pdf';
+            else if (header.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) ext = 'docx';
+            else if (header.includes('application/msword')) ext = 'doc';
+            else if (header.includes('application/vnd.openxmlformats-officedocument.presentationml.presentation')) ext = 'pptx';
+            else if (header.includes('application/vnd.ms-powerpoint')) ext = 'ppt';
+            else if (header.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) ext = 'xlsx';
+            else if (header.includes('application/vnd.ms-excel')) ext = 'xls';
+            else if (header.includes('application/zip') || header.includes('x-zip-compressed')) ext = 'zip';
+            else if (header.includes('image/png')) ext = 'png';
+            else if (header.includes('image/jpeg') || header.includes('image/jpg')) ext = 'jpg';
+            else if (header.includes('image/webp')) ext = 'webp';
+            else if (header.includes('image/svg')) ext = 'svg';
+            else if (header.includes('image/gif')) ext = 'gif';
+            else if (header.includes('audio/mp4') || header.includes('m4a') || header.includes('x-m4a')) ext = 'm4a';
+            else if (header.includes('audio/webm') || header.includes('webm')) ext = 'webm';
+            else if (header.includes('audio/mpeg') || header.includes('mp3')) ext = 'mp3';
+            else if (header.includes('audio/wav') || header.includes('wave')) ext = 'wav';
+            else if (header.includes('audio/ogg')) ext = 'ogg';
+            else if (header.includes('video/mp4')) ext = 'mp4';
+            else if (header.includes('video/webm')) ext = 'webm';
+            else if (header.includes('video/quicktime') || header.includes('mov')) ext = 'mov';
+            else if (header.includes('audio')) ext = 'm4a';
+            else if (header.includes('video')) ext = 'mp4';
+            else ext = 'bin';
+        }
         
         const filename = `${prefix || 'media'}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
         const filePath = path.join(UPLOADS_DIR, filename);
@@ -1362,6 +1387,17 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
             store.submissions.push(subRecord);
         }
 
+        if (!store.userProjectLifecycles) store.userProjectLifecycles = {};
+        const uId = String(userId || '');
+        if (uId) {
+            if (!store.userProjectLifecycles[uId]) store.userProjectLifecycles[uId] = {};
+            store.userProjectLifecycles[uId][String(projectId)] = {
+                status: 'completed',
+                completedAt: Date.now(),
+                module: normMod
+            };
+        }
+
         store.submissionsRevision = Date.now();
         saveStore();
 
@@ -1372,6 +1408,40 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
         });
     } catch (err) {
         console.error('[Project Submission Error]:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get(['/api/project/lifecycle', '/gamification/api/project/lifecycle'], (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ success: false, error: 'userId required' });
+        if (!store.userProjectLifecycles) store.userProjectLifecycles = {};
+        const userLifecycle = store.userProjectLifecycles[String(userId)] || {};
+        res.json({ success: true, data: userLifecycle });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/project/lifecycle', '/gamification/api/project/lifecycle'], (req, res) => {
+    try {
+        const { userId, projectId, status, startedAt, deadline, module } = req.body;
+        if (!userId || !projectId) return res.status(400).json({ success: false, error: 'userId and projectId required' });
+        if (!store.userProjectLifecycles) store.userProjectLifecycles = {};
+        const uId = String(userId);
+        if (!store.userProjectLifecycles[uId]) store.userProjectLifecycles[uId] = {};
+        
+        store.userProjectLifecycles[uId][String(projectId)] = {
+            status: status || 'in_progress',
+            startedAt: Number(startedAt) || Date.now(),
+            deadline: Number(deadline) || (Date.now() + 7 * 86400000),
+            module: module || 'cmpli_ai',
+            updatedAt: Date.now()
+        };
+        saveStore();
+        res.json({ success: true, data: store.userProjectLifecycles[uId][String(projectId)] });
+    } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -3616,7 +3686,7 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
     try {
         const { dataUrl, prefix, filename } = req.body;
         if (!dataUrl) return res.status(400).json({ success: false, error: 'dataUrl required' });
-        const savedPath = saveBase64MediaToFile(dataUrl, prefix || 'audio_rec');
+        const savedPath = saveBase64MediaToFile(dataUrl, prefix || 'audio_rec', filename);
         // Also return the absolute disk path so the submission handler can transcribe it
         const absoluteDiskPath = savedPath
             ? path.join(UPLOADS_DIR, savedPath.replace('/gamification/uploads/', '').replace('/uploads/', ''))
