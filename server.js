@@ -5550,7 +5550,17 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
                 return false;
             });
 
-            const earnedLcs = uSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
+            const earnedLcsFromSubs = uSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);
+            // Reconcile against the TagMango wallet's cached lifetime point total so candidates with
+            // verified ledger activity (e.g. community engagement, daily check-ins synced from TagMango
+            // but never recorded as a local `store.submissions` entry) are never displayed with a
+            // misleading "0 LCs" figure. This only raises the informational totalLcsEarned figure below —
+            // the canonical milestone LQ® score/zone further down is intentionally left untouched, since
+            // it measures curriculum milestone attainment specifically, a different signal from lifetime
+            // wallet points.
+            const ledgerCollective = tagMangoCollectivePointsCache.points ? tagMangoCollectivePointsCache.points[uId] : null;
+            const ledgerLifetimeLcs = ledgerCollective ? (typeof ledgerCollective === 'number' ? ledgerCollective : (Number(ledgerCollective.total) || 0)) : 0;
+            const earnedLcs = Math.max(earnedLcsFromSubs, ledgerLifetimeLcs);
             const highestMs = uSubs.reduce((max, s) => Math.max(max, Number(s.milestoneId) || 1), 1);
             const msSubs = uSubs.filter(s => String(s.milestoneId || 1) === String(highestMs));
             const msEarned = msSubs.reduce((acc, s) => acc + (Number(s.lcReward) || 0), 0);

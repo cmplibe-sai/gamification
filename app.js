@@ -18707,6 +18707,11 @@ async function switchTab(tab) {
         if (typeof initRecruiterPortal === 'function') {
             initRecruiterPortal();
         }
+        setTimeout(() => {
+            if (typeof renderRecruiterDashboardLcGrowthChart === 'function') {
+                renderRecruiterDashboardLcGrowthChart(currentRecruiterDashboardLcTimeframe);
+            }
+        }, 100);
     }
 
     if (tab === 'leaderboardTab') {
@@ -19943,12 +19948,20 @@ async function renderRecruiterCandidates() {
             grid.innerHTML = '';
             if (empty) empty.classList.remove('hidden');
             if (countEl) countEl.innerText = "0 Candidates";
+            window._recruiterCandidatesCache = [];
+            if (typeof renderRecruiterDashboardLcGrowthChart === 'function') {
+                renderRecruiterDashboardLcGrowthChart(currentRecruiterDashboardLcTimeframe);
+            }
             return;
         }
 
         if (empty) empty.classList.add('hidden');
         if (countEl) countEl.innerText = `${data.totalCount || data.candidates.length} Candidates Qualified`;
         window._recruiterCandidatesCache = data.candidates;
+
+        if (typeof renderRecruiterDashboardLcGrowthChart === 'function') {
+            renderRecruiterDashboardLcGrowthChart(currentRecruiterDashboardLcTimeframe);
+        }
 
         grid.innerHTML = data.candidates.map(cand => {
             // Use canonical server-calculated LQ score and zone directly from /api/employer/candidates
@@ -20045,7 +20058,10 @@ function openCandidateDossier(candId) {
     // container reports 0x0 and Chart.js snaps the canvas back to zero size, leaving it blank
     // even if we set canvas.width/height manually beforehand.
     const dossierModal = document.getElementById('candidateDossierModal') || document.getElementById('recruiterDossierModal');
-    if (dossierModal) dossierModal.classList.remove('hidden');
+    if (dossierModal) {
+        dossierModal.classList.remove('hidden');
+        void dossierModal.offsetHeight; // Force layout calculation
+    }
 
     // Log Profile View telemetry for career views & profile inspection count
     const employerId = currentUser?.role === 'recruiter' ? currentUser._id : 'emp_preview';
@@ -20143,6 +20159,17 @@ function openCandidateDossier(candId) {
     // Render Cumulative LC Growth Velocity Chart
     try {
         renderRecruiterLcGrowthChart(candidate, currentRecruiterLcTimeframe || 30);
+        // Secondary passes to ensure canvas renders with correct pixel geometry once modal layout settles
+        requestAnimationFrame(() => {
+            if (window._activeDossierCandidate && window._activeDossierCandidate.id === candidate.id) {
+                renderRecruiterLcGrowthChart(window._activeDossierCandidate, currentRecruiterLcTimeframe || 30);
+            }
+        });
+        setTimeout(() => {
+            if (window._activeDossierCandidate && window._activeDossierCandidate.id === candidate.id) {
+                renderRecruiterLcGrowthChart(window._activeDossierCandidate, currentRecruiterLcTimeframe || 30);
+            }
+        }, 80);
     } catch (err) {
         console.error("Error rendering recruiter growth chart:", err);
     }
@@ -20237,7 +20264,7 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     currentRecruiterLcTimeframe = days;
 
     // Update active state of pill buttons
-    [7, 14, 30, 90].forEach(d => {
+    [7, 14, 30, 90, 180].forEach(d => {
         const btn = document.getElementById(`recruiterLcTf-${d}`) || document.getElementById(`recruiterLcTf${d}`);
         if (btn) {
             if (d === days) {
@@ -20284,9 +20311,26 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
         }
     }
 
-    const data = (typeof buildCumulativeLcTimeline === 'function') 
+    const data = (typeof buildCumulativeLcTimeline === 'function')
         ? buildCumulativeLcTimeline(userObj, days)
         : { labels: [], cumulativeData: [], dailyData: [], totalCumulative: candidate.totalLcsEarned || 0, gainedInPeriod: 0, dailyAvg: 0 };
+
+    // Reconcile the speedometer's displayed LC count with the ledger's authoritative lifetime total.
+    // buildCumulativeLcTimeline's totalCumulative already folds in the TagMango ledger (which can resolve
+    // asynchronously after the dossier's gauge was first painted with a lower/zero submission-based figure),
+    // so once it settles higher we push it back into the gauge. LQ score/zone are left untouched — they
+    // are governed by canonical milestone-submission logic in openCandidateDossier, a different signal.
+    const reconciledEarned = Math.max(Number(candidate.totalLcsEarned) || 0, Number(data.totalCumulative) || 0);
+    if (reconciledEarned > (Number(candidate.totalLcsEarned) || 0)) {
+        candidate.totalLcsEarned = reconciledEarned;
+        if (window._activeDossierCandidate && String(window._activeDossierCandidate.id) === String(candidate.id)) {
+            const lcBadge = document.getElementById('recruiterLqLcBadge');
+            if (lcBadge) lcBadge.innerText = `${reconciledEarned} LCs Earned`;
+            if (typeof updateLqCenterNumbers === 'function') {
+                updateLqCenterNumbers(reconciledEarned, Number(candidate.maxLcs) || 1452, Number(candidate.lqScore) || 0, 'recruiterLq');
+            }
+        }
+    }
 
     // Calculate active streak / consistency days
     const activeDaysInPeriod = Array.isArray(data.dailyData) ? data.dailyData.filter(v => Number(v) > 0).length : 0;
@@ -20314,8 +20358,6 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
     }
 
     const ctx = canvas.getContext('2d');
-    // Explicitly set canvas pixel dimensions — clientHeight/Width are 0 when modal was hidden.
-    // Read from the parent container's actual rendered size as the reliable fallback.
     const containerEl = canvas.parentElement;
     const resolvedWidth = (containerEl && containerEl.clientWidth > 0) ? containerEl.clientWidth : 600;
     const resolvedHeight = (containerEl && containerEl.clientHeight > 0) ? containerEl.clientHeight : 220;
@@ -20380,8 +20422,8 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
                     padding: 10,
                     displayColors: false,
                     callbacks: {
-                        label: function(ctx) {
-                            return `Cumulative: ${ctx.parsed.y} LCs`;
+                        label: function(tooltipCtx) {
+                            return `Cumulative: ${tooltipCtx.parsed.y} LCs`;
                         }
                     }
                 }
@@ -20392,15 +20434,174 @@ function renderRecruiterLcGrowthChart(candidate, daysBack = 30) {
                     ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
                 },
                 y: {
-                    beginAtZero: false,
+                    beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: 10,
                     grid: { color: 'rgba(51, 65, 85, 0.25)', drawBorder: false },
-                    ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => `${v} LC` }
+                    ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => `${v} LCs` }
                 }
             }
         }
     });
 }
 window.renderRecruiterLcGrowthChart = renderRecruiterLcGrowthChart;
+
+// ==============================================================
+// 6b. RECRUITER DASHBOARD COHORT LC GROWTH VELOCITY ENGINE
+// ==============================================================
+var recruiterDashboardLcGrowthChartInstance = null;
+var currentRecruiterDashboardLcTimeframe = '30d';
+
+function renderRecruiterDashboardLcGrowthChart(timeframe) {
+    if (timeframe) currentRecruiterDashboardLcTimeframe = timeframe;
+    const canvas = document.getElementById('recruiterDashboardLcGrowthChart');
+    if (!canvas) return;
+
+    const timeframeMap = { '7d': 7, '30d': 30, '90d': 90, '180d': 180 };
+    const days = timeframeMap[currentRecruiterDashboardLcTimeframe] || 30;
+
+    // Aggregate daily LCs across all qualified candidates currently in recruiter cache
+    const candidates = Array.isArray(window._recruiterCandidatesCache) ? window._recruiterCandidatesCache : [];
+    const aggregatedDailyLcs = {};
+    let fallbackTotal = 0;
+
+    candidates.forEach(c => {
+        fallbackTotal += (Number(c.totalLcsEarned) || 0);
+        if (c.dailyLcs && typeof c.dailyLcs === 'object') {
+            Object.keys(c.dailyLcs).forEach(dateKey => {
+                const val = Number(c.dailyLcs[dateKey]) || 0;
+                if (val > 0) {
+                    aggregatedDailyLcs[dateKey] = (aggregatedDailyLcs[dateKey] || 0) + val;
+                }
+            });
+        }
+    });
+
+    const proxyUserObj = {
+        _id: 'recruiter_cohort_aggregate',
+        dailyLcs: aggregatedDailyLcs,
+        totalLcsEarned: fallbackTotal
+    };
+
+    const data = (typeof buildCumulativeLcTimeline === 'function')
+        ? buildCumulativeLcTimeline(proxyUserObj, days)
+        : { labels: [], cumulativeData: [], dailyData: [], totalCumulative: fallbackTotal, gainedInPeriod: 0, dailyAvg: 0 };
+
+    // Update Dashboard KPI tiles
+    const totalEl = document.getElementById('recruiterDashboardLcKpiTotal');
+    const gainedEl = document.getElementById('recruiterDashboardLcKpiGained');
+    const avgEl = document.getElementById('recruiterDashboardLcKpiVelocity');
+    const selectEl = document.getElementById('recruiterDashboardLcTimeframeFilter');
+
+    const displayTotal = (data.totalCumulative > 0) ? data.totalCumulative : fallbackTotal;
+    if (totalEl) totalEl.textContent = `${displayTotal} LCs`;
+    if (gainedEl) gainedEl.textContent = `${data.gainedInPeriod >= 0 ? '+' : ''}${data.gainedInPeriod} LCs`;
+    if (avgEl) avgEl.textContent = `${data.dailyAvg} LCs/day`;
+    if (selectEl && selectEl.value !== currentRecruiterDashboardLcTimeframe) {
+        selectEl.value = currentRecruiterDashboardLcTimeframe;
+    }
+
+    if (typeof Chart === 'undefined') return;
+
+    if (recruiterDashboardLcGrowthChartInstance) {
+        try { recruiterDashboardLcGrowthChartInstance.destroy(); } catch (e) {}
+        recruiterDashboardLcGrowthChartInstance = null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const containerEl = canvas.parentElement;
+    const resolvedWidth = (containerEl && containerEl.clientWidth > 0) ? containerEl.clientWidth : 800;
+    const resolvedHeight = (containerEl && containerEl.clientHeight > 0) ? containerEl.clientHeight : 260;
+    canvas.width = resolvedWidth;
+    canvas.height = resolvedHeight;
+    const canvasHeight = resolvedHeight;
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.45)');
+    gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.18)');
+    gradient.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+
+    let pointRadius = 4;
+    let pointHoverRadius = 7;
+    if (days > 30) {
+        pointRadius = days > 90 ? 0 : 2;
+        pointHoverRadius = 6;
+    }
+
+    recruiterDashboardLcGrowthChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Cohort Cumulative LCs',
+                data: data.cumulativeData,
+                borderColor: '#22d3ee',
+                borderWidth: 3,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.35,
+                pointRadius: pointRadius,
+                pointHoverRadius: pointHoverRadius,
+                pointBackgroundColor: '#06b6d4',
+                pointBorderColor: '#0f172a',
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#38bdf8',
+                pointHoverBorderColor: '#ffffff',
+                pointHoverBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 650,
+                easing: 'easeOutQuart'
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleColor: '#e2e8f0',
+                    bodyColor: '#38bdf8',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(tooltipCtx) {
+                            return `Cohort Cumulative: ${tooltipCtx.parsed.y} LCs`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(51, 65, 85, 0.2)', drawBorder: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }
+                },
+                y: {
+                    beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: 10,
+                    grid: { color: 'rgba(51, 65, 85, 0.25)', drawBorder: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => `${v} LCs` }
+                }
+            }
+        }
+    });
+}
+window.renderRecruiterDashboardLcGrowthChart = renderRecruiterDashboardLcGrowthChart;
+
+function changeRecruiterDashboardLcTimeframe(timeframe) {
+    currentRecruiterDashboardLcTimeframe = timeframe;
+    renderRecruiterDashboardLcGrowthChart(timeframe);
+}
+window.changeRecruiterDashboardLcTimeframe = changeRecruiterDashboardLcTimeframe;
 
 async function downloadCandidateCv(candId) {
     const id = candId || window._activeDossierCandidate?.id;

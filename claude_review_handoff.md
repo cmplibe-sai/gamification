@@ -396,3 +396,72 @@ Claude Desktop independently audited the Part 6 changes by reading actual code (
 ### Updated Verification Status
 - `node scratch/test_dashboard_consistency_and_export_sanitization.js`: **32 / 32 Passed** ✅ (post-fix)
 - All other suites: unchanged at 100%.
+
+---
+
+## Part 9: Corporate / Recruiter Cumulative LC Growth Velocity Performance Graph Resolution
+
+### 1. Problem Diagnosed
+- In the **Corporate / Recruiter view** (`#recruiterTab`), the **Cumulative LC Growth Velocity** performance graph was rendering blank across timeframes (7d, 14d, 30d, 90d, 180d).
+- Meanwhile, the Cumulative LC Growth graph worked as expected across Customer, Creator, and Campus Partner views.
+
+### 2. Root Causes Identified
+1. **Zero-Delta Tick Computation Collapse in Chart.js v4**:
+   - In `renderRecruiterLcGrowthChart()`, the y-axis configuration had `beginAtZero: false` and no suggested bounds.
+   - For candidates whose total LCs remained flat over a chosen timeframe (e.g. 7-day window where all points were earned in earlier weeks, such as Chandra's 349 LCs), `min === max`.
+   - Chart.js linear scale engine divided by zero calculating tick intervals on identical non-zero bounds, resulting in an unrendered canvas without throwing fatal JS exceptions.
+2. **Modal Reflow & Canvas Sizing Collision**:
+   - `openCandidateDossier()` instantiated the chart immediately upon removing the `hidden` class from `#recruiterDossierModal`.
+   - Because display transitions are asynchronous, Chart.js (`responsive: true`) sampled the canvas parent when its bounding box was still `0x0`, collapsing canvas geometry.
+3. **Missing 180D Timeframe Option**:
+   - The dossier modal only contained buttons for 7D, 14D, 30D, and 90D (lacking 180D).
+   - In `app.js`, the active button styling loop checked only `[7, 14, 30, 90]`.
+4. **Dashboard View Asymmetry**:
+   - Unlike Customer, Creator, and Campus Partner dashboards which featured a top-level Cumulative LC Growth card with timeframe selector, the Recruiter Dashboard tab lacked this cohort-level timeline card entirely.
+
+### 3. Implementation Summary
+1. **[index.html](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/index.html)**:
+   - Added complete **"Cumulative Learning Currencies (LCs) Growth Timeline"** analytics card to `#recruiterTab` (`lines 1258-1314`) with timeframe dropdown (`#recruiterDashboardLcTimeframeFilter`), 3 live KPI tiles (Total Cohort LCs, Period LCs Gained, and Cohort Velocity), and canvas `#recruiterDashboardLcGrowthChart`.
+   - In `#recruiterDossierModal` (`lines 1403-1430`), added `#recruiterLcTf-180` button (`180D`) and upgraded canvas container to responsive proportions (`h-[200px] sm:h-[240px]`).
+2. **[app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js)**:
+   - Hardened `renderRecruiterLcGrowthChart()` with `beginAtZero: true`, `suggestedMin: 0`, and `suggestedMax: 10`.
+   - Stabilized modal layout in `openCandidateDossier()` with `void dossierModal.offsetHeight`, `requestAnimationFrame`, and an 80ms delayed render.
+   - Added `180` to the timeframe button array `[7, 14, 30, 90, 180]`.
+   - Implemented `renderRecruiterDashboardLcGrowthChart(timeframe)` and `changeRecruiterDashboardLcTimeframe(timeframe)` to dynamically aggregate cohort LC progression across all qualified candidates in `_recruiterCandidatesCache`.
+   - Linked chart refresh into `renderRecruiterCandidates()` and `switchTab('recruiterTab')`.
+
+### 4. Verification Evidence
+- `node scratch/test_recruiter_chart_fix.js`: **All Tests Passed** ✅ (DOM elements, wiring, timeframe math across 7d/14d/30d/90d/180d for active and zero-LC learners, and cohort aggregation).
+- `node test_security_audit_hardening.js`: **30 / 30 Passed** ✅ (No regressions in authentication, IDOR protection, telemetry, or PII masking).
+
+---
+
+## Part 10: Candidate Dossier Speedometer & TagMango Wallet Ledger Reconciliation
+
+### 1. Problem Diagnosed
+- When inspecting candidates such as **Pooja L** (`poojalp10@gmail.com`) or **SHREYA A** (`shreyapoojari7082@gmail.com`), the Candidate Dossier modal displayed:
+  - **Speedometer Gauge & Badge**: `0 LCs Earned` / `0 / 1452 LCs (0%) Weak Zone`
+  - **Growth Velocity Timeline below**: `1843 LCs` (for Pooja L) / `589 LCs` (for SHREYA A)
+- **Root Cause**:
+  1. `/api/employer/candidates` computed candidate `totalLcsEarned` exclusively from `store.submissions`. Learners whose activity was recorded via TagMango wallet points in earlier cohorts (August–November 2025) had 0 local challenge check-in submissions.
+  2. In the Candidate Dossier modal, `renderRecruiterLcGrowthChart()` asynchronously fetched `/api/tagmango/ledger/:userId` and correctly plotted `1843 LCs` on the timeline, but never updated the speedometer numbers or the `#recruiterLqLcBadge` rendered at the top of the modal.
+
+### 2. Architectural Solution Implemented
+1. **Server-Side Reconciliation ([server.js:5553-5563](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/server.js#L5553-L5563))**:
+   - `/api/employer/candidates` now reconciles `totalLcsEarned`:
+     `const earnedLcs = Math.max(earnedLcsFromSubs, ledgerLifetimeLcs);`
+     where `ledgerLifetimeLcs` reads from the server's warm `tagMangoCollectivePointsCache` (`server_data/tagmango_collective_points.json`).
+   - The canonical milestone LQ® score/zone (`msEarned`, `lqScore`, `lqZone`) remains governed strictly by curriculum check-in attainment (1452 LCs target), preserving intentional separation between curriculum grading and wallet balance.
+2. **Client-Side Reconciliation ([app.js:20318-20334](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js#L20318-L20334))**:
+   - In `renderRecruiterLcGrowthChart()`, once `buildCumulativeLcTimeline()` computes `data.totalCumulative` from the TagMango ledger and resolves higher than `candidate.totalLcsEarned`, it immediately pushes the reconciled value to `#recruiterLqLcBadge` and updates the gauge center number via `updateLqCenterNumbers()`.
+   - Guarded to ensure DOM updates only apply if the active candidate dossier matches.
+
+### 3. Verification Evidence
+- **Browser Live Verification**:
+  - Pooja L: Server returns `totalLcsEarned: 1843`, `lqScore: 0 / lqZone: 'weak'`.
+  - Dossier gauge displays `1843 LCs Earned` matching the `Total Cumulative: 1843 LCs` growth chart below.
+- **Automated Verification Suites**:
+  - `node scratch/test_recruiter_chart_fix.js`: **All Tests Passed** ✅
+  - `node test_security_audit_hardening.js`: **30 / 30 Passed** ✅
+
+

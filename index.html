@@ -1255,6 +1255,63 @@
                     </div>
                 </div>
 
+                <!-- Recruiter Dashboard: Cumulative Learning Currencies (LCs) Growth Timeline -->
+                <div class="glass-card p-4 sm:p-6 md:p-8 border-slate-800">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-5 pb-4 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-lg sm:text-xl font-bold text-white font-heading flex items-center gap-2">
+                                <i class="fas fa-chart-line text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"></i> Cumulative LC Growth Velocity
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-0.5 sm:mt-1">Talent pool daily progression of earned Learning Currencies (LCs) across qualified candidates.</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <label for="recruiterDashboardLcTimeframeFilter" class="text-xs font-bold text-slate-400">Timeline:</label>
+                            <select id="recruiterDashboardLcTimeframeFilter" onchange="changeRecruiterDashboardLcTimeframe(this.value)" class="bg-slate-900/90 text-xs font-bold text-cyan-300 border border-slate-700/80 rounded-xl px-3 py-1.5 sm:px-3.5 sm:py-2 hover:border-cyan-500/50 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer shadow-inner">
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d" selected>Last 30 Days</option>
+                                <option value="90d">Last 90 Days</option>
+                                <option value="180d">Last 180 Days</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Metric Highlights Banner -->
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Total Cohort LCs</p>
+                                <p id="recruiterDashboardLcKpiTotal" class="text-xs sm:text-lg md:text-xl font-extrabold text-white font-mono mt-0.5 truncate">0 LCs</p>
+                            </div>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-indigo-500/15 border border-indigo-500/30 items-center justify-center text-indigo-400 shrink-0 ml-1">
+                                <i class="fas fa-coins text-xs md:text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Gained in Period</p>
+                                <p id="recruiterDashboardLcKpiGained" class="text-xs sm:text-lg md:text-xl font-extrabold text-emerald-400 font-mono mt-0.5 truncate">+0 LCs</p>
+                            </div>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 items-center justify-center text-emerald-400 shrink-0 ml-1">
+                                <i class="fas fa-arrow-trend-up text-xs md:text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="glass p-2 sm:p-3.5 rounded-xl border border-slate-800/80 bg-slate-900/40 flex items-center justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[8px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">Growth Velocity</p>
+                                <p id="recruiterDashboardLcKpiVelocity" class="text-xs sm:text-lg md:text-xl font-extrabold text-cyan-300 font-mono mt-0.5 truncate">0.0/d</p>
+                            </div>
+                            <div class="hidden sm:flex w-8 h-8 md:w-9 md:h-9 rounded-lg bg-cyan-500/15 border border-cyan-500/30 items-center justify-center text-cyan-400 shrink-0 ml-1">
+                                <i class="fas fa-bolt text-xs md:text-sm"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Line Chart Canvas -->
+                    <div class="relative w-full h-[220px] sm:h-[260px] md:h-[300px]">
+                        <canvas id="recruiterDashboardLcGrowthChart"></canvas>
+                    </div>
+                </div>
+
                 <!-- Talent Candidates Stream -->
                 <div class="space-y-4">
                     <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -1346,6 +1403,7 @@
                             <button onclick="setRecruiterLcTimeframe(14)" id="recruiterLcTf-14" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">14D</button>
                             <button onclick="setRecruiterLcTimeframe(30)" id="recruiterLcTf-30" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors bg-cyan-600 text-white shadow-md">30D</button>
                             <button onclick="setRecruiterLcTimeframe(90)" id="recruiterLcTf-90" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">90D</button>
+                            <button onclick="setRecruiterLcTimeframe(180)" id="recruiterLcTf-180" class="px-2 py-0.5 text-[10px] font-bold rounded-lg transition-colors text-slate-400 hover:text-white">180D</button>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1366,7 +1424,7 @@
                             <p id="recruiterLcKpiActiveDays" class="text-sm font-extrabold text-amber-400 font-mono mt-0.5">0 Days</p>
                         </div>
                     </div>
-                    <div class="relative w-full h-44 sm:h-52 bg-slate-950/60 rounded-2xl p-2 border border-slate-800/80">
+                    <div class="relative w-full h-[200px] sm:h-[240px] bg-slate-950/60 rounded-2xl border border-slate-800/80 p-2 overflow-hidden">
                         <canvas id="recruiterLcGrowthCanvas"></canvas>
                     </div>
                 </div>
