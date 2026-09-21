@@ -4093,9 +4093,11 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
                 (String(u._id || u.id) === cleanLogin) ||
                 (cleanPhone && u.phone && String(u.phone).replace(/\D/g, '').endsWith(cleanPhone))
             );
-            // Allow isolated synthetic test accounts with test_ prefix for automated testing without polluting real users
-            if (!learner && (cleanLogin.startsWith('test_') || cleanLogin.includes('@test.'))) {
-                learner = { _id: cleanLogin, email: cleanLogin.includes('@') ? cleanLogin : `${cleanLogin}@test.local`, name: 'Synthetic Test Learner' };
+            // Allow isolated synthetic test accounts strictly when authorized by Creator credentials or test env
+            if (!learner && (cleanLogin.startsWith('test_') || cleanLogin.endsWith('@test.local'))) {
+                if (checkCreatorAuth(req) || process.env.NODE_ENV === 'test') {
+                    learner = { _id: cleanLogin, email: cleanLogin.includes('@') ? cleanLogin : `${cleanLogin}@test.local`, name: 'Synthetic Test Learner' };
+                }
             }
             if (!learner || otp !== '1234') {
                 return res.status(403).json({ success: false, error: 'Unauthorized: Learner credentials invalid' });
