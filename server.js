@@ -321,6 +321,7 @@ if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
 if (!Array.isArray(store.campuses)) store.campuses = [];
 if (!Array.isArray(store.employers)) store.employers = [];
 if (!store.studentCVs || typeof store.studentCVs !== 'object') store.studentCVs = {};
+if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
 
 // Helper to keep legacy campusPartnersDB in sync with multi-coordinator campuses
 function syncCampusPartnersDB() {
@@ -2843,18 +2844,166 @@ app.get(['/api/certificate-approvals', '/gamification/api/certificate-approvals'
 // POST — { key, approved, credentialId, issuedAt } for one user+milestone, or { allApprovals } for bulk merge
 app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals'], (req, res) => {
     try {
-        const { key, approved, credentialId, issuedAt, allApprovals } = req.body;
+        const { key, approved, credentialId, issuedAt, allApprovals, milestoneId, userId } = req.body;
         const current = getCertificateApprovalsFromDb();
 
         if (allApprovals && typeof allApprovals === 'object') {
             Object.assign(current, allApprovals);
         } else if (key) {
-            current[String(key)] = approved === false ? false : { approved: true, credentialId: credentialId || null, issuedAt: issuedAt || new Date().toISOString() };
+            const isAppr = approved === true;
+            const existing = current[String(key)] || {};
+            if (isAppr) {
+                const uId = userId || existing.userId || (String(key).includes('_MS') ? String(key).split('_MS')[0] : null);
+                const msNum = Number(milestoneId || existing.milestoneId || (String(key).includes('_MS') ? String(key).split('_MS')[1] : 1));
+
+                current[String(key)] = {
+                    ...existing,
+                    status: 'approved',
+                    approved: true,
+                    credentialId: credentialId || existing.credentialId || `CMPLI-MS${msNum}-${Date.now().toString().slice(-6)}`,
+                    issuedAt: issuedAt || existing.issuedAt || new Date().toISOString(),
+                    approvedAt: Date.now(),
+                    userId: uId,
+                    milestoneId: msNum
+                };
+
+                // Advance highestUnlocked for this learner so Milestone N+1 unlocks
+                if (uId && typeof getUserMilestoneStateFromDb === 'function') {
+                    const uStates = getUserMilestoneStateFromDb();
+                    if (!uStates[uId]) uStates[uId] = { highestUnlocked: 1 };
+                    uStates[uId].highestUnlocked = Math.max(uStates[uId].highestUnlocked || 1, msNum + 1);
+                    saveUserMilestoneStateToDb(uStates);
+                }
+
+                // Resolve corresponding creator notification
+                if (Array.isArray(store.creatorNotifications)) {
+                    store.creatorNotifications.forEach(n => {
+                        if (n.type === 'credential_claim' && String(n.userId) === String(uId) && Number(n.milestoneId) === Number(msNum)) {
+                            n.resolved = true;
+                            n.approved = true;
+                            n.read = true;
+                        }
+                    });
+                    saveStore();
+                }
+            } else if (approved === false) {
+                current[String(key)] = false;
+            } else if (req.body.status) {
+                current[String(key)] = {
+                    ...existing,
+                    status: req.body.status,
+                    approved: Boolean(req.body.approved)
+                };
+            }
         }
 
         const saved = saveCertificateApprovalsToDb(current);
         res.json({ success: true, data: saved });
     } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/credential/claim-request — Customer submits credential claim to Creator for verification
+app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-request'], (req, res) => {
+    try {
+        const { userId, userName, userEmail, milestoneId, prereqSummary } = req.body;
+        if (!userId || !milestoneId) {
+            return res.status(400).json({ success: false, error: 'userId and milestoneId required' });
+        }
+
+        const current = getCertificateApprovalsFromDb();
+        const key = `${userId}_MS${milestoneId}`;
+        const msNum = Number(milestoneId);
+
+        const msTitles = {
+            1: 'cMPLi Challenge Embracer',
+            2: 'cMPLi Curious',
+            3: 'cMPLi Committed',
+            4: 'cMPLi futuREadi earliTalent'
+        };
+        const msTitle = msTitles[msNum] || `Milestone ${msNum}`;
+
+        const existing = current[key] || {};
+        if (existing && existing.approved === true) {
+            return res.json({ success: true, message: 'Credential already approved and issued', data: existing });
+        }
+
+        const claimRecord = {
+            status: 'pending_approval',
+            approved: false,
+            requestedAt: Date.now(),
+            userId: String(userId),
+            userName: userName || 'Learner',
+            userEmail: (userEmail || '').toLowerCase(),
+            milestoneId: msNum,
+            milestoneTitle: msTitle,
+            prereqSummary: prereqSummary || null
+        };
+
+        current[key] = claimRecord;
+        saveCertificateApprovalsToDb(current);
+
+        // Append to Creator Notifications
+        if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
+        
+        // Remove duplicate unread notification for same user and milestone
+        store.creatorNotifications = store.creatorNotifications.filter(n => 
+            !(n.type === 'credential_claim' && String(n.userId) === String(userId) && Number(n.milestoneId) === msNum && !n.resolved)
+        );
+
+        const notif = {
+            id: 'notif_cred_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            type: 'credential_claim',
+            title: `Credential Request: Milestone ${msNum} (${msTitle})`,
+            message: `${userName || 'Learner'} has completed all prerequisites and requested official credential approval for Milestone ${msNum}.`,
+            userId: String(userId),
+            userName: userName || 'Learner',
+            userEmail: userEmail || '',
+            milestoneId: msNum,
+            milestoneTitle: msTitle,
+            timestamp: Date.now(),
+            read: false,
+            resolved: false
+        };
+
+        store.creatorNotifications.unshift(notif);
+        if (store.creatorNotifications.length > 100) store.creatorNotifications = store.creatorNotifications.slice(0, 100);
+        saveStore();
+
+        console.log(`[Credential Claim Request] Received from ${userName} (${userId}) for Milestone ${msNum}`);
+        res.json({ success: true, message: 'Credential claim submitted to Creator for review', claim: claimRecord, data: claimRecord });
+    } catch(err) {
+        console.error('[Credential Claim Error]:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/creator/notifications — List creator notifications
+app.get(['/api/creator/notifications', '/gamification/api/creator/notifications'], (req, res) => {
+    try {
+        if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
+        const unreadCount = store.creatorNotifications.filter(n => !n.read && !n.resolved).length;
+        res.json({ success: true, notifications: store.creatorNotifications, data: store.creatorNotifications, unreadCount });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/creator/notifications/mark-read — Mark creator notifications as read
+app.post(['/api/creator/notifications/mark-read', '/gamification/api/creator/notifications/mark-read'], (req, res) => {
+    try {
+        const { notifId, markAll } = req.body || {};
+        if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
+        if (notifId) {
+            const found = store.creatorNotifications.find(n => n.id === notifId);
+            if (found) found.read = true;
+        } else {
+            store.creatorNotifications.forEach(n => { n.read = true; });
+        }
+        saveStore();
+        res.json({ success: true, data: store.creatorNotifications });
+    } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });

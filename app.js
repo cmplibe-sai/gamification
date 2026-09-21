@@ -143,6 +143,10 @@ function updateDashboardUI() {
         renderDashboardLeaderboardWidget();
     }
 
+    if (typeof renderCustomerDashboardCredentials === 'function') {
+        renderCustomerDashboardCredentials();
+    }
+
     const welcomeEl = document.getElementById('dashWelcomeName');
     if (welcomeEl) welcomeEl.innerHTML = 'Learner <span class="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Performance</span>';
 
@@ -6856,13 +6860,13 @@ window.persistUserMilestoneState = persistUserMilestoneState;
 
 async function persistCertificateApproval(userId, msId, approved, credentialId) {
     const key = `${userId}_MS${msId}`;
-    mockApprovedCertificates[key] = approved ? { approved: true, credentialId: credentialId || null, issuedAt: new Date().toISOString() } : false;
+    mockApprovedCertificates[key] = approved ? { status: 'approved', approved: true, credentialId: credentialId || null, issuedAt: new Date().toISOString(), approvedAt: Date.now() } : false;
     try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
     try {
         await apiFetch('/api/certificate-approvals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, approved, credentialId })
+            body: JSON.stringify({ key, approved, credentialId, userId, milestoneId: msId })
         });
     } catch(e) { console.warn('Failed to sync certificate approval to server:', e); }
 }
@@ -6883,9 +6887,7 @@ function getCertificateId(userId, msId) {
 }
 
 // Admin "Approve" click in the Completion Grid Matrix — issues the credential
-// for that learner+milestone and, since this action only appears when the
-// Creator has configured admin-approval (not auto-unlock) as the gate,
-// advances the learner's highestUnlocked so Milestone N+1 becomes available.
+// for that learner+milestone and advances the learner's highestUnlocked so Milestone N+1 becomes available.
 async function adminApproveCredential(userId, msId) {
     const credentialId = getCertificateId(userId, msId);
     await persistCertificateApproval(userId, msId, true, credentialId);
@@ -6898,15 +6900,139 @@ async function adminApproveCredential(userId, msId) {
     await persistUserMilestoneState(userId, { highestUnlocked: newHighest });
 
     if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+    if (typeof loadCreatorNotifications === 'function') loadCreatorNotifications();
+    if (typeof renderCustomerDashboardCredentials === 'function') renderCustomerDashboardCredentials();
+    if (typeof renderMilestoneGrid === 'function') renderMilestoneGrid();
 }
 window.adminApproveCredential = adminApproveCredential;
 window.getCertificateId = getCertificateId;
 
 // ==============================================================
+// CREATOR NOTIFICATIONS & CREDENTIAL CLAIM MANAGEMENT
+// ==============================================================
+var creatorNotificationsList = [];
+
+async function loadCreatorNotifications() {
+    try {
+        const res = await apiFetch('/api/creator/notifications');
+        const data = await res.json();
+        if (data && data.success) {
+            creatorNotificationsList = data.notifications || [];
+            updateCreatorNotificationBadge();
+            const modal = document.getElementById('adminNotificationsModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                renderAdminNotificationsList();
+            }
+        }
+    } catch(e) {
+        updateCreatorNotificationBadge();
+    }
+}
+window.loadCreatorNotifications = loadCreatorNotifications;
+
+function updateCreatorNotificationBadge() {
+    const badge = document.getElementById('adminNotifBadge');
+    if (!badge) return;
+    const unread = (creatorNotificationsList || []).filter(n => !n.read).length;
+    if (unread > 0) {
+        badge.innerText = unread > 99 ? '99+' : unread;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+window.updateCreatorNotificationBadge = updateCreatorNotificationBadge;
+
+function openAdminNotificationsModal() {
+    const modal = document.getElementById('adminNotificationsModal');
+    if (!modal) return;
+    renderAdminNotificationsList();
+    modal.classList.remove('hidden');
+}
+window.openAdminNotificationsModal = openAdminNotificationsModal;
+
+function closeAdminNotificationsModal() {
+    const modal = document.getElementById('adminNotificationsModal');
+    if (modal) modal.classList.add('hidden');
+}
+window.closeAdminNotificationsModal = closeAdminNotificationsModal;
+
+async function markAllAdminNotificationsRead() {
+    try {
+        await apiFetch('/api/creator/notifications/mark-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+    } catch(e) {}
+    (creatorNotificationsList || []).forEach(n => { n.read = true; });
+    updateCreatorNotificationBadge();
+    renderAdminNotificationsList();
+}
+window.markAllAdminNotificationsRead = markAllAdminNotificationsRead;
+
+function renderAdminNotificationsList() {
+    const container = document.getElementById('adminNotificationsList');
+    if (!container) return;
+
+    if (!creatorNotificationsList || creatorNotificationsList.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-slate-500">
+                <i class="fas fa-bell-slash text-3xl mb-2 text-slate-600 block"></i>
+                <p class="text-xs font-semibold">No notifications right now.</p>
+                <p class="text-[10px] text-slate-500 mt-0.5">Learner credential claims will appear here instantly.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = creatorNotificationsList.map(notif => {
+        const isApproved = isCertificateApproved(notif.userId, notif.milestoneId);
+        const timeAgo = notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently';
+
+        return `
+            <div class="p-3.5 rounded-xl border ${notif.read ? 'border-slate-800 bg-slate-900/60' : 'border-amber-500/40 bg-gradient-to-r from-amber-950/20 to-slate-900/80 shadow-md'} flex flex-col gap-2 transition-all">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-full ${isApproved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'} flex items-center justify-center text-xs shrink-0">
+                            <i class="fas ${isApproved ? 'fa-check' : 'fa-award'}"></i>
+                        </div>
+                        <div>
+                            <h5 class="text-xs font-bold text-white leading-tight">${notif.title || 'Credential Claim Alert'}</h5>
+                            <span class="text-[10px] text-slate-400 font-mono">${timeAgo}</span>
+                        </div>
+                    </div>
+                    ${isApproved 
+                        ? `<span class="badge-pill badge-emerald text-[9px] font-bold"><i class="fas fa-check-circle mr-1"></i>Approved</span>`
+                        : `<span class="badge-pill badge-amber text-[9px] font-extrabold animate-pulse"><i class="fas fa-clock mr-1"></i>Action Required</span>`
+                    }
+                </div>
+                <p class="text-xs text-slate-300 pl-9">${notif.message}</p>
+                <div class="pl-9 pt-1 flex items-center gap-2">
+                    ${!isApproved ? `
+                        <button onclick="adminApproveCredential('${notif.userId}', ${notif.milestoneId}); renderAdminNotificationsList();" class="btn-primary py-1.5 px-3 text-[11px] bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-500 hover:to-emerald-500 text-white font-extrabold rounded-lg shadow flex items-center gap-1.5 transition-all">
+                            <i class="fas fa-certificate text-amber-300"></i> Approve &amp; Issue Credential
+                        </button>
+                    ` : `
+                        <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <i class="fas fa-id-badge"></i> Credential ${getCertificateId(notif.userId, notif.milestoneId)} active on candidate's dashboard
+                        </span>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+window.renderAdminNotificationsList = renderAdminNotificationsList;
+
+// ==============================================================
 // CLAIM CREDENTIAL MODAL — dynamically evaluates the Creator's
-// configured prerequisites for the active milestone and shows either
-// a "Prerequisites Incomplete" progress card or a "Credential
-// Authenticated" card with PDF download + milestone advancement.
+// configured prerequisites for the active milestone and supports
+// the full 3-state workflow:
+// 1. Prerequisites Incomplete (Cannot claim yet)
+// 2. Prerequisites 100% Satisfied -> "Claim My Credential" (Submits approval request to Creator)
+// 3. Claim Pending Creator Approval -> Shows pending badge & timestamp
+// 4. Credential Approved & Issued -> Shows official badge image, Certificate ID & PDF download
 // ==============================================================
 function openClaimCredentialModal() {
     const modal = document.getElementById('claimCredentialModal');
@@ -6925,6 +7051,7 @@ function openClaimCredentialModal() {
         const ms = milestoneConfig.find(m => m.id === msId) || milestoneConfig[0];
         const cleanName = (ms.name || '').replace(/^Milestone \d+:\s*/i, '');
         const cfg = getMilestonePrereqConfig(msId);
+        const badgeImg = ms.badgeImage || `assets/credentials/milestone_${msId}_credential.jpg`;
 
         const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId));
         const totalEarnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
@@ -6965,39 +7092,39 @@ function openClaimCredentialModal() {
         });
 
         const meetsAllPrereqs = rows.length > 0 ? rows.every(r => r.ok) : true;
-        const isAdminApproved = isCertificateApproved(currentUser._id, msId);
-        const isCredentialIssued = meetsAllPrereqs && (cfg.autoUnlockNext || isAdminApproved);
+        const certRecord = mockApprovedCertificates[`${currentUser._id}_MS${msId}`];
+        const isApproved = isCertificateApproved(currentUser._id, msId);
+        const isClaimPending = Boolean(certRecord && certRecord.status === 'pending_approval' && !isApproved);
+        const isCredentialIssued = isApproved;
 
         if (isCredentialIssued) {
-            if (cfg.autoUnlockNext && !isAdminApproved) {
-                persistCertificateApproval(currentUser._id, msId, true, getCertificateId(currentUser._id, msId));
-            }
             const credentialId = getCertificateId(currentUser._id, msId);
             const nextMs = milestoneConfig.find(m => m.id === msId + 1);
 
             content.innerHTML = `
-                <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/50 shadow-lg text-3xl mb-3 animate-bounce">
-                    <i class="fas fa-award text-amber-300"></i>
+                <div class="relative w-32 h-32 mx-auto mb-3 flex items-center justify-center">
+                    <img src="${badgeImg}" alt="${cleanName}" class="w-full h-full object-contain rounded-2xl drop-shadow-[0_10px_25px_rgba(16,185,129,0.35)] animate-bounce" onerror="this.src='assets/logo.png'">
                 </div>
-                <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-bold">Verified &amp; Authenticated</span>
+                <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-extrabold"><i class="fas fa-check-circle mr-1"></i> Verified &amp; Authenticated</span>
                 <h3 class="text-2xl font-extrabold text-white font-heading mt-2">Congratulations, ${currentUser.name || 'Learner'}!</h3>
-                <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have fulfilled every completion prerequisite for <b>Milestone ${msId}: ${cleanName}</b>.</p>
+                <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have fulfilled every prerequisite and officially earned the <b>Milestone ${msId}: ${cleanName}</b> credential.</p>
 
-                <div class="glass p-5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 text-left space-y-2.5 mt-4">
-                    <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-indigo-400 font-bold">${credentialId}</span></div>
+                <div class="glass p-5 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 text-left space-y-2.5 mt-4">
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Credential ID:</span><span class="font-mono text-emerald-400 font-bold">${credentialId}</span></div>
                     <div class="flex justify-between text-xs"><span class="text-slate-400">Recipient Name:</span><span class="text-white font-bold">${currentUser.name || 'Learner'}</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Milestone Title:</span><span class="text-amber-300 font-bold">${cleanName}</span></div>
                     ${rows.map(r => `
                         <div class="flex justify-between text-xs">
                             <span class="text-slate-400">${r.label}:</span>
                             <span class="text-emerald-400 font-mono font-bold">${r.have} / ${r.need} ${r.unit}</span>
                         </div>
                     `).join('')}
-                    <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued &amp; Authenticated</span></div>
+                    <div class="flex justify-between text-xs"><span class="text-slate-400">Status:</span><span class="text-emerald-400 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Issued &amp; Visible on Dashboard</span></div>
                 </div>
 
                 <div class="flex gap-3 pt-2">
-                    <button onclick="downloadCredentialPDF(${msId}, '${credentialId}')" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg">
-                        <i class="fas fa-download mr-1.5"></i> Download Credential Certificate
+                    <button onclick="downloadCredentialPDF(${msId}, '${credentialId}')" class="flex-1 btn-primary py-3 text-xs bg-emerald-600 hover:bg-emerald-500 font-bold shadow-lg flex items-center justify-center gap-1.5">
+                        <i class="fas fa-download mr-1.5"></i> Download Certificate PDF
                     </button>
                     <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="btn-secondary py-3 px-4 text-xs font-bold">Close</button>
                 </div>
@@ -7005,19 +7132,85 @@ function openClaimCredentialModal() {
                 <button onclick="unlockAndProceedToNextMilestone(${msId})" class="btn-primary w-full py-3 text-xs bg-gradient-to-r from-indigo-600 to-cyan-600 border-indigo-500 font-bold shadow-lg mt-1">
                     <i class="fas fa-unlock mr-1.5"></i> Unlock &amp; Proceed to Milestone ${msId + 1}
                 </button>` : `
-                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-bold text-xs mt-1"><i class="fas fa-trophy mr-1"></i> Final Milestone Complete!</div>`}
+                <div class="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-400 font-bold text-xs mt-1 text-center"><i class="fas fa-trophy mr-1 text-amber-400"></i> Final Milestone Complete!</div>`}
             `;
             if (typeof triggerCredentialConfetti === 'function') triggerCredentialConfetti();
-        } else {
-            const pendingAdminReview = meetsAllPrereqs && !cfg.autoUnlockNext && !isAdminApproved;
-
+        } else if (isClaimPending) {
             content.innerHTML = `
-                <div class="w-16 h-16 ${pendingAdminReview ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40' : 'bg-amber-500/20 text-amber-400 border-amber-500/40'} rounded-full flex items-center justify-center mx-auto border text-2xl mb-3">
-                    <i class="fas ${pendingAdminReview ? 'fa-hourglass-half fa-spin' : 'fa-exclamation-triangle'}"></i>
+                <div class="relative w-28 h-28 mx-auto mb-3 flex items-center justify-center">
+                    <img src="${badgeImg}" alt="${cleanName}" class="w-full h-full object-contain rounded-2xl opacity-90 drop-shadow-[0_10px_20px_rgba(245,158,11,0.3)]" onerror="this.src='assets/logo.png'">
+                    <div class="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-sm font-bold shadow-lg">
+                        <i class="fas fa-hourglass-half fa-spin"></i>
+                    </div>
                 </div>
-                <span class="badge-pill ${pendingAdminReview ? 'badge-indigo' : 'badge-amber'} uppercase tracking-wider text-[10px] font-bold">${pendingAdminReview ? 'Pending Admin Review' : 'Prerequisites Incomplete'}</span>
-                <h3 class="text-xl font-extrabold text-white font-heading mt-2">${pendingAdminReview ? 'Credential Awaiting Approval' : 'Cannot Claim Credential Yet'}</h3>
-                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">${pendingAdminReview ? 'You have met every requirement — the Creator reviews and approves each credential before it is issued. Check back shortly.' : 'You must fulfill all milestone completion prerequisites before claiming your official credential.'}</p>
+                <span class="badge-pill badge-amber uppercase tracking-wider text-[10px] font-extrabold flex items-center gap-1 justify-center w-fit mx-auto">
+                    <i class="fas fa-clock"></i> Claim Request Pending Creator Approval
+                </span>
+                <h3 class="text-xl font-extrabold text-white font-heading mt-2">Credential Claim Under Review</h3>
+                <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">You have fulfilled every prerequisite for <b>Milestone ${msId}: ${cleanName}</b>! Your verification request has been dispatched to the Creator with an alert notification. Once approved, this credential badge will appear on your Home Dashboard.</p>
+
+                <div class="glass p-5 rounded-2xl border border-slate-800 text-left space-y-3 mt-4">
+                    <div class="flex justify-between items-center text-xs pb-2 border-b border-slate-700/60">
+                        <span class="text-slate-400">Claim Requested:</span>
+                        <span class="text-amber-300 font-mono font-bold">${certRecord.requestedAt ? new Date(certRecord.requestedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recently'}</span>
+                    </div>
+                    <div class="space-y-2 text-xs">
+                        ${rows.map(r => `
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300"><i class="fas ${r.icon} mr-1.5"></i> ${r.label}:</span>
+                                <span class="font-mono font-bold text-emerald-400">${r.have} / ${r.need} ${r.unit} <i class="fas fa-check-circle ml-1"></i></span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-3">
+                    <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="flex-1 btn-secondary py-2.5 text-xs font-bold">
+                        <i class="fas fa-arrow-left mr-1.5"></i> Return to Milestone
+                    </button>
+                </div>
+            `;
+        } else if (meetsAllPrereqs) {
+            content.innerHTML = `
+                <div class="relative w-28 h-28 mx-auto mb-3 flex items-center justify-center">
+                    <img src="${badgeImg}" alt="${cleanName}" class="w-full h-full object-contain rounded-2xl drop-shadow-[0_10px_20px_rgba(99,102,241,0.35)]" onerror="this.src='assets/logo.png'">
+                    <div class="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-sm font-bold shadow-lg">
+                        <i class="fas fa-check"></i>
+                    </div>
+                </div>
+                <span class="badge-pill badge-emerald uppercase tracking-wider text-[10px] font-extrabold flex items-center gap-1 justify-center w-fit mx-auto">
+                    <i class="fas fa-check-double"></i> Prerequisites 100% Satisfied
+                </span>
+                <h3 class="text-2xl font-black text-white font-heading mt-2">Ready to Claim Your Credential!</h3>
+                <p class="text-xs text-slate-300 mt-1 max-w-md mx-auto">Outstanding work! You have satisfied all completion prerequisites for <b>Milestone ${msId}: ${cleanName}</b>. Click below to submit your claim to the Creator for official verification and badge issuance.</p>
+
+                <div class="glass p-5 rounded-2xl border border-slate-800 text-left space-y-3 mt-4">
+                    <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/60 pb-1.5">Verified Completion Checklist</h5>
+                    <div class="space-y-2 text-xs">
+                        ${rows.map(r => `
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300"><i class="fas ${r.icon} mr-1.5"></i> ${r.label}:</span>
+                                <span class="font-mono font-bold text-emerald-400">${r.have} / ${r.need} ${r.unit} <i class="fas fa-check-circle ml-1"></i></span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-3">
+                    <button id="btnSubmitClaimRequest" onclick="submitCredentialClaim(${msId})" class="flex-1 btn-primary py-3.5 text-xs bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black shadow-xl rounded-xl flex items-center justify-center gap-2 transition-all">
+                        <i class="fas fa-certificate text-amber-300 text-sm"></i> Claim My Credential &mdash; Submit for Approval
+                    </button>
+                    <button onclick="document.getElementById('claimCredentialModal').classList.add('hidden')" class="btn-secondary py-3.5 px-4 text-xs font-bold rounded-xl">Cancel</button>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `
+                <div class="w-16 h-16 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-2xl mb-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <span class="badge-pill badge-amber uppercase tracking-wider text-[10px] font-bold">Prerequisites Incomplete</span>
+                <h3 class="text-xl font-extrabold text-white font-heading mt-2">Cannot Claim Credential Yet</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">You must fulfill all milestone completion prerequisites before claiming your official credential.</p>
 
                 <div class="glass p-5 rounded-2xl border border-slate-800 text-left space-y-3.5 mt-4">
                     <h5 class="text-[11px] font-bold text-slate-300 uppercase tracking-wider border-b border-slate-700/60 pb-1.5">Milestone ${msId} Completion Requirements</h5>
@@ -7046,6 +7239,221 @@ function openClaimCredentialModal() {
     }
 }
 window.openClaimCredentialModal = openClaimCredentialModal;
+
+async function submitCredentialClaim(msId) {
+    if (!currentUser) return alert('Please log in to claim your credential.');
+    const uId = currentUser._id || currentUser.id;
+    const btn = document.getElementById('btnSubmitClaimRequest');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i> Submitting to Creator...';
+    }
+
+    const cfg = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(msId) : { prerequisites: [] };
+    const userSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId)) : [];
+    const prereqSummary = (cfg.prerequisites || []).map(p => {
+        const modCode = normalizeLevelUpType(p.module || 'dip');
+        const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === modCode);
+        return {
+            module: modCode,
+            have: modSubs.length,
+            need: p.targetValue,
+            type: p.type
+        };
+    });
+
+    try {
+        const res = await apiFetch('/api/credential/claim-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: uId,
+                userName: currentUser.name || 'Learner',
+                userEmail: currentUser.email || '',
+                milestoneId: Number(msId),
+                prereqSummary
+            })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            const key = `${uId}_MS${msId}`;
+            mockApprovedCertificates[key] = {
+                status: 'pending_approval',
+                approved: false,
+                requestedAt: Date.now(),
+                userId: uId,
+                userName: currentUser.name || 'Learner',
+                userEmail: currentUser.email || '',
+                milestoneId: Number(msId)
+            };
+            try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
+
+            if (typeof playCredentialChime === 'function') playCredentialChime();
+            openClaimCredentialModal();
+            if (typeof renderCustomerDashboardCredentials === 'function') renderCustomerDashboardCredentials();
+        } else {
+            alert(data?.error || 'Failed to submit credential claim.');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-certificate text-amber-300 mr-1.5"></i> Claim My Credential &mdash; Submit for Approval';
+            }
+        }
+    } catch(err) {
+        console.error('Submit credential claim error:', err);
+        alert('Network error submitting claim. Please check your connection.');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-certificate text-amber-300 mr-1.5"></i> Claim My Credential &mdash; Submit for Approval';
+        }
+    }
+}
+window.submitCredentialClaim = submitCredentialClaim;
+
+function openAwardedCredentialPreview(msId) {
+    if (typeof activeMilestoneId !== 'undefined') {
+        activeMilestoneId = Number(msId);
+    }
+    openClaimCredentialModal();
+}
+window.openAwardedCredentialPreview = openAwardedCredentialPreview;
+
+function renderCustomerDashboardCredentials() {
+    const grid = document.getElementById('customerCredentialsGrid');
+    const badgeCount = document.getElementById('dashCredCountBadge');
+    if (!grid) return;
+
+    if (!currentUser) {
+        grid.innerHTML = '<div class="col-span-full text-center py-6 text-slate-500 text-xs">Please log in to view earned credentials.</div>';
+        return;
+    }
+
+    const uId = currentUser._id || currentUser.id;
+    const msList = (typeof milestoneConfig !== 'undefined' && Array.isArray(milestoneConfig)) ? milestoneConfig : [];
+    
+    let earnedCount = 0;
+
+    const cardsHtml = msList.map(ms => {
+        const msId = ms.id;
+        const cleanName = (ms.name || `Milestone ${msId}`).replace(/^Milestone \d+:\s*/i, '');
+        const isApproved = isCertificateApproved(uId, msId);
+        const certRecord = (typeof mockApprovedCertificates !== 'undefined' && mockApprovedCertificates[`${uId}_MS${msId}`]) || {};
+        const isPending = Boolean(certRecord && certRecord.status === 'pending_approval' && !isApproved);
+        const credentialId = getCertificateId(uId, msId);
+
+        if (isApproved) earnedCount++;
+
+        // Calculate progress toward prerequisites
+        const cfg = (typeof getMilestonePrereqConfig === 'function') ? getMilestonePrereqConfig(msId) : { prerequisites: [] };
+        const userSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId)) : [];
+        const prereqs = cfg.prerequisites || [];
+        
+        let metCount = 0;
+        prereqs.forEach(p => {
+            const modCode = normalizeLevelUpType(p.module || 'dip');
+            const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === modCode);
+            const targetVal = Number(p.targetValue) || 0;
+            if (p.type === 'lcs') {
+                const earnedLcs = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+                if (targetVal === 0 || earnedLcs >= targetVal) metCount++;
+            } else {
+                if (targetVal === 0 || modSubs.length >= targetVal) metCount++;
+            }
+        });
+        const totalPrereqs = prereqs.length || 1;
+        const prereqPct = Math.min(100, Math.round((metCount / totalPrereqs) * 100));
+
+        const badgeImg = ms.badgeImage || `assets/credentials/milestone_${msId}_credential.jpg`;
+
+        if (isApproved) {
+            return `
+                <div class="glass-card p-4 rounded-2xl border border-emerald-500/50 bg-gradient-to-b from-emerald-950/40 to-slate-900/90 shadow-lg shadow-emerald-950/20 flex flex-col justify-between transition-all hover:scale-[1.02] group">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="badge-pill badge-emerald text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+                                <i class="fas fa-check-circle text-emerald-300"></i> Verified
+                            </span>
+                            <span class="text-[10px] font-mono font-bold text-slate-400">Milestone ${msId}</span>
+                        </div>
+                        <div class="relative py-2 flex items-center justify-center">
+                            <img src="${badgeImg}" alt="${cleanName}" class="w-28 h-28 object-contain rounded-xl drop-shadow-[0_10px_15px_rgba(16,185,129,0.25)] transition-transform duration-300 group-hover:scale-105" onerror="this.src='assets/logo.png'">
+                        </div>
+                        <div class="text-center space-y-1">
+                            <h4 class="text-sm font-black text-white font-heading truncate">${cleanName}</h4>
+                            <p class="text-[10px] font-mono text-emerald-400 font-bold truncate">${credentialId}</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-800/80 mt-3 flex flex-col gap-1.5">
+                        <button onclick="openAwardedCredentialPreview(${msId})" class="btn-primary w-full py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md flex items-center justify-center gap-1.5">
+                            <i class="fas fa-award text-amber-300"></i> View Credential
+                        </button>
+                        <button onclick="downloadCredentialPDF(${msId}, '${credentialId}')" class="btn-secondary w-full py-1.5 text-[11px] font-bold text-slate-300 hover:text-white rounded-lg flex items-center justify-center gap-1">
+                            <i class="fas fa-download text-emerald-400"></i> PDF Certificate
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else if (isPending) {
+            return `
+                <div class="glass-card p-4 rounded-2xl border border-amber-500/50 bg-gradient-to-b from-amber-950/30 to-slate-900/90 shadow-lg shadow-amber-950/20 flex flex-col justify-between transition-all hover:scale-[1.01]">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="badge-pill badge-amber text-[9px] font-extrabold uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                                <i class="fas fa-hourglass-half"></i> Pending Review
+                            </span>
+                            <span class="text-[10px] font-mono font-bold text-slate-400">Milestone ${msId}</span>
+                        </div>
+                        <div class="relative py-2 flex items-center justify-center">
+                            <img src="${badgeImg}" alt="${cleanName}" class="w-28 h-28 object-contain rounded-xl drop-shadow-[0_10px_15px_rgba(245,158,11,0.25)] opacity-90" onerror="this.src='assets/logo.png'">
+                        </div>
+                        <div class="text-center space-y-1">
+                            <h4 class="text-sm font-black text-white font-heading truncate">${cleanName}</h4>
+                            <p class="text-[10px] text-amber-300/90 font-medium">Awaiting Creator approval</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-800/80 mt-3">
+                        <button onclick="openMilestone(${msId})" class="btn-secondary w-full py-2 text-xs font-bold text-amber-300 hover:text-white border border-amber-500/30 rounded-xl flex items-center justify-center gap-1.5">
+                            <i class="fas fa-clock"></i> Track Claim Status
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="glass-card p-4 rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow flex flex-col justify-between transition-all opacity-85 hover:opacity-100 hover:border-slate-700">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                In Progress
+                            </span>
+                            <span class="text-[10px] font-mono font-bold text-slate-500">Milestone ${msId}</span>
+                        </div>
+                        <div class="relative py-2 flex items-center justify-center">
+                            <img src="${badgeImg}" alt="${cleanName}" class="w-28 h-28 object-contain rounded-xl grayscale opacity-45 transition-all hover:grayscale-0 hover:opacity-80" onerror="this.src='assets/logo.png'">
+                        </div>
+                        <div class="text-center space-y-1">
+                            <h4 class="text-sm font-bold text-slate-300 font-heading truncate">${cleanName}</h4>
+                            <div class="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800/80 mt-1">
+                                <div class="bg-indigo-500 h-full rounded-full" style="width: ${prereqPct}%"></div>
+                            </div>
+                            <p class="text-[10px] text-slate-400 font-mono">${metCount} of ${totalPrereqs} Prerequisites (${prereqPct}%)</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 border-t border-slate-800/80 mt-3">
+                        <button onclick="openMilestone(${msId})" class="btn-secondary w-full py-2 text-xs font-bold text-slate-300 hover:text-white rounded-xl flex items-center justify-center gap-1.5">
+                            <i class="fas fa-compass"></i> View &amp; Fulfill
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    }).join('');
+
+    grid.innerHTML = cardsHtml;
+    if (badgeCount) {
+        badgeCount.innerText = `${earnedCount} of ${msList.length} Earned`;
+    }
+}
+window.renderCustomerDashboardCredentials = renderCustomerDashboardCredentials;
 
 async function unlockAndProceedToNextMilestone(msId) {
     if (!currentUser) return;
@@ -8273,15 +8681,19 @@ function renderAdminCohortSubmissions() {
         }
 
         let isApproved = isCertificateApproved(user._id, activeAdminMilestoneId || 1);
-        const isPending = completionPct >= 90 && !isApproved;
+        const certRec = (typeof mockApprovedCertificates !== 'undefined' && mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`]) || null;
+        const isClaimRequested = Boolean(certRec && certRec.status === 'pending_approval' && !isApproved);
+        const isPending = isClaimRequested || (completionPct >= 90 && !isApproved);
         
         if (isPending) totalPending++;
         if (filterStatus === 'pending' && !isPending) return;
         if (filterStatus === 'approved' && !isApproved) return;
-        validCohort.push({ ...user, completionPct, isPending, isApproved, earnedLcs });
+        validCohort.push({ ...user, completionPct, isPending, isClaimRequested, isApproved, earnedLcs, certRec });
     });
 
     validCohort.sort((a, b) => {
+        if (a.isClaimRequested && !b.isClaimRequested) return -1;
+        if (!a.isClaimRequested && b.isClaimRequested) return 1;
         const diffLcs = (b.earnedLcs || 0) - (a.earnedLcs || 0);
         if (diffLcs !== 0) return diffLcs;
         const diffPct = (b.completionPct || 0) - (a.completionPct || 0);
@@ -8359,8 +8771,13 @@ function renderAdminCohortSubmissions() {
     displayCohort.forEach((user, userIndex) => {
         const subs = getUserSubmissionsByUserId(user);
         
-        let statusBadge = user.isApproved ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded font-bold"><i class="fas fa-check"></i> Approved</span>`
-            : (user.isPending ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` : `<span class="text-[10px] text-slate-500">In Progress</span>`);
+        let statusBadge = user.isApproved 
+            ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/30 border border-emerald-700/50 px-2 py-1 rounded font-bold flex items-center justify-center gap-1"><i class="fas fa-check-circle"></i> Approved</span>`
+            : (user.isClaimRequested 
+                ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-400 hover:to-emerald-500 text-white px-2.5 py-1 rounded font-black transition-all shadow-md shadow-amber-950/40 animate-pulse flex items-center justify-center gap-1 mx-auto" title="Candidate claimed credential. Click to approve and issue badge."><i class="fas fa-award text-amber-200"></i> Approve Claim</button>`
+                : (user.isPending 
+                    ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` 
+                    : `<span class="text-[10px] text-slate-500">In Progress</span>`));
             
         const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null;
         let displayModDate = 'Set Day 1';
@@ -19927,6 +20344,7 @@ async function switchTab(tab) {
     // 5. Run Tab Specific Initializers
     if (tab === 'dashboardTab') {
         if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        if (typeof renderCustomerDashboardCredentials === 'function') renderCustomerDashboardCredentials();
         if (currentUser && typeof renderSubmissionsAndReflections === 'function') {
             renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');
         }
@@ -19948,6 +20366,9 @@ async function switchTab(tab) {
         if (typeof loadCampusPartnerNotifications === 'function') {
             loadCampusPartnerNotifications();
         }
+        if (typeof loadCreatorNotifications === 'function') {
+            loadCreatorNotifications();
+        }
     }
 
     // Guard: Management Tab is strictly Creator-only (hidden & blocked for campus partners & recruiters)
@@ -19968,6 +20389,9 @@ async function switchTab(tab) {
             console.warn("Unauthorized: Command Center is strictly restricted to Creators.");
             switchTab(isCampusPartner ? 'adminTab' : 'dashboardTab');
             return;
+        }
+        if (typeof loadCreatorNotifications === 'function') {
+            loadCreatorNotifications();
         }
     }
 
@@ -22418,6 +22842,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedUser = JSON.parse(localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser') || 'null');
         if (savedUser && (savedUser._id || savedUser.id) && typeof syncUserProjectLifecycleFromServer === 'function') {
             syncUserProjectLifecycleFromServer(savedUser._id || savedUser.id);
+        }
+        if (typeof loadCreatorNotifications === 'function') {
+            loadCreatorNotifications();
+            setInterval(() => {
+                if (typeof loadCreatorNotifications === 'function') {
+                    loadCreatorNotifications();
+                }
+            }, 25000);
+        }
+        if (savedUser && typeof renderCustomerDashboardCredentials === 'function') {
+            renderCustomerDashboardCredentials();
         }
     } catch(e) {}
 

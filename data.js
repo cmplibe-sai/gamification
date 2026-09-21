@@ -3525,6 +3525,7 @@ var milestoneConfig = [
         id: 1,
         name: 'cMPLi Challenge Embracer',
         desc: 'Build rock-solid daily discipline with 21 consecutive days of reflection and POD episodes.',
+        badgeImage: 'assets/credentials/milestone_1_credential.jpg',
         defaultModules: ['pod', 'dip', 'immerse'],
         modules: ['pod', 'dip', 'immerse']
     },
@@ -3532,6 +3533,7 @@ var milestoneConfig = [
         id: 2,
         name: 'cMPLi Curious',
         desc: 'Deep dive into immerse reflections and AI-driven real-world cMPLi-ai projects.',
+        badgeImage: 'assets/credentials/milestone_2_credential.jpg',
         defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai'],
         modules: ['pod', 'dip', 'immerse', 'cmpli_ai']
     },
@@ -3539,6 +3541,7 @@ var milestoneConfig = [
         id: 3,
         name: 'cMPLi Committed',
         desc: 'Strategic problem framing with cMPLi-ai projects and cMPLi Insight Engine analysis.',
+        badgeImage: 'assets/credentials/milestone_3_credential.jpg',
         defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine'],
         modules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine']
     },
@@ -3546,6 +3549,7 @@ var milestoneConfig = [
         id: 4,
         name: 'cMPLi futuREadi earliTalent',
         desc: 'Advanced industry readiness deployment with full cMPLi-ai and Insight Engine capstones.',
+        badgeImage: 'assets/credentials/milestone_4_credential.jpg',
         defaultModules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine'],
         modules: ['pod', 'dip', 'immerse', 'cmpli_ai', 'insight_engine']
     }
