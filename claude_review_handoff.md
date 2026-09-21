@@ -677,6 +677,10 @@ Following Claude's live browser testing and review, the following critical harde
 5. **Notification Timestamp Consistency**:
    - Server writes both `timestamp: Date.now()` and `createdAt: Date.now()`.
    - Client parses `notif.createdAt || notif.timestamp`, eliminating the generic fallback display.
+6. **Tightened Angle Bracket Stripping (Server-side)**:
+   - Server-side regex stripped all angle brackets (`/[<>'"]/g`) so even unclosed tags like `<svg/onload=alert(1)//` are stripped on the server, backing up client-side `escapeHtml()`.
+7. **Creator-Gated Synthetic Test Sessions**:
+   - In `POST /api/auth/session`, minting synthetic test accounts with `test_` or `@test.local` strictly requires Creator credentials (`checkCreatorAuth(req)`), preventing anonymous users from fabricating arbitrary accounts. Real registered users authenticate normally.
 
 
 
