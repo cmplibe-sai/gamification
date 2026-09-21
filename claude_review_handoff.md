@@ -666,11 +666,15 @@ Following Claude's live browser testing and review, the following critical harde
    - `POST /api/certificate-approvals`: Enforces `checkCreatorAuth(req)` &mdash; prevents unauthenticated clients from self-issuing credentials.
    - `GET /api/creator/notifications`: Enforces `checkCreatorAuth(req)` &mdash; blocks unauthorized access to candidate names/emails (PII protection).
    - `POST /api/creator/notifications/mark-read`: Enforces `checkCreatorAuth(req)`.
-2. **Candidate Session Integrity on Claims**:
-   - `POST /api/credential/claim-request`: Validates caller's session token to prevent candidate impersonation across accounts.
-3. **Restricted Polling in Frontend**:
+2. **Mandatory Candidate Authentication on Claim Submission**:
+   - `POST /api/credential/claim-request` now requires a valid candidate session token (or Creator authentication) &mdash; anonymous callers are rejected with `401 Unauthorized`.
+   - Rejects session mismatches (`403 Forbidden`) to prevent candidate spoofing.
+3. **Stored XSS Elimination (Dual Layer Defense)**:
+   - **Layer 1 (Server-side)**: Strips any HTML tags from `userName`, `userEmail`, and notification text before storing in runtime JSON.
+   - **Layer 2 (Client-side)**: All notification properties (`notif.title`, `notif.message`, `notif.userId`, `credentialId`) are escaped using `escapeHtml()` prior to interpolation into `container.innerHTML` in [app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js).
+4. **Restricted Polling in Frontend**:
    - In [app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js), `loadCreatorNotifications()` is only polled when logged in as an authenticated Creator (`isCreatorLoggedIn`), preventing unauthenticated visitors or learners from making background notification calls.
-4. **Notification Timestamp Consistency**:
+5. **Notification Timestamp Consistency**:
    - Server writes both `timestamp: Date.now()` and `createdAt: Date.now()`.
    - Client parses `notif.createdAt || notif.timestamp`, eliminating the generic fallback display.
 

@@ -6994,6 +6994,10 @@ function renderAdminNotificationsList() {
         const isApproved = isCertificateApproved(notif.userId, notif.milestoneId);
         const timeVal = notif.createdAt || notif.timestamp;
         const timeAgo = timeVal ? new Date(timeVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently';
+        const safeTitle = escapeHtml(notif.title || 'Credential Claim Alert');
+        const safeMessage = escapeHtml(notif.message || '');
+        const safeUserId = escapeHtml(String(notif.userId || '')).replace(/'/g, "\\'");
+        const safeMsId = Number(notif.milestoneId) || 1;
 
         return `
             <div class="p-3.5 rounded-xl border ${notif.read ? 'border-slate-800 bg-slate-900/60' : 'border-amber-500/40 bg-gradient-to-r from-amber-950/20 to-slate-900/80 shadow-md'} flex flex-col gap-2 transition-all">
@@ -7003,7 +7007,7 @@ function renderAdminNotificationsList() {
                             <i class="fas ${isApproved ? 'fa-check' : 'fa-award'}"></i>
                         </div>
                         <div>
-                            <h5 class="text-xs font-bold text-white leading-tight">${notif.title || 'Credential Claim Alert'}</h5>
+                            <h5 class="text-xs font-bold text-white leading-tight">${safeTitle}</h5>
                             <span class="text-[10px] text-slate-400 font-mono">${timeAgo}</span>
                         </div>
                     </div>
@@ -7012,15 +7016,15 @@ function renderAdminNotificationsList() {
                         : `<span class="badge-pill badge-amber text-[9px] font-extrabold animate-pulse"><i class="fas fa-clock mr-1"></i>Action Required</span>`
                     }
                 </div>
-                <p class="text-xs text-slate-300 pl-9">${notif.message}</p>
+                <p class="text-xs text-slate-300 pl-9">${safeMessage}</p>
                 <div class="pl-9 pt-1 flex items-center gap-2">
                     ${!isApproved ? `
-                        <button onclick="adminApproveCredential('${notif.userId}', ${notif.milestoneId}); renderAdminNotificationsList();" class="btn-primary py-1.5 px-3 text-[11px] bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-500 hover:to-emerald-500 text-white font-extrabold rounded-lg shadow flex items-center gap-1.5 transition-all">
+                        <button onclick="adminApproveCredential('${safeUserId}', ${safeMsId}); renderAdminNotificationsList();" class="btn-primary py-1.5 px-3 text-[11px] bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-500 hover:to-emerald-500 text-white font-extrabold rounded-lg shadow flex items-center gap-1.5 transition-all">
                             <i class="fas fa-certificate text-amber-300"></i> Approve &amp; Issue Credential
                         </button>
                     ` : `
                         <span class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-                            <i class="fas fa-id-badge"></i> Credential ${getCertificateId(notif.userId, notif.milestoneId)} active on candidate's dashboard
+                            <i class="fas fa-id-badge"></i> Credential ${escapeHtml(getCertificateId(notif.userId, notif.milestoneId))} active on candidate's dashboard
                         </span>
                     `}
                 </div>

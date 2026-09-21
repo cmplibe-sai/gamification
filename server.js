@@ -2921,11 +2921,19 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
             return res.status(400).json({ success: false, error: 'userId and milestoneId required' });
         }
 
-        // Prevent candidate session spoofing if session token is provided
+        // Require valid learner session (matching userId) or Creator auth
         const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
-        if (sess && sess.userId && String(sess.userId) !== String(userId) && !checkCreatorAuth(req)) {
+        const isCreator = typeof checkCreatorAuth === 'function' && checkCreatorAuth(req);
+
+        if (!sess && !isCreator) {
+            return res.status(401).json({ success: false, error: 'Unauthorized: Valid learner or creator session required to submit credential claims' });
+        }
+        if (sess && sess.userId && String(sess.userId) !== String(userId) && !isCreator) {
             return res.status(403).json({ success: false, error: 'Unauthorized: Session does not match claiming user' });
         }
+
+        const safeUserName = String(userName || (sess ? (sess.email || 'Learner') : 'Learner')).replace(/<[^>]*>/g, '').trim().slice(0, 100) || 'Learner';
+        const safeEmail = String(userEmail || (sess ? (sess.email || '') : '')).replace(/<[^>]*>/g, '').trim().toLowerCase().slice(0, 150);
 
         const current = getCertificateApprovalsFromDb();
         const key = `${userId}_MS${milestoneId}`;
@@ -2949,8 +2957,8 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
             approved: false,
             requestedAt: Date.now(),
             userId: String(userId),
-            userName: userName || 'Learner',
-            userEmail: (userEmail || '').toLowerCase(),
+            userName: safeUserName,
+            userEmail: safeEmail,
             milestoneId: msNum,
             milestoneTitle: msTitle,
             prereqSummary: prereqSummary || null
@@ -2971,10 +2979,10 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
             id: 'notif_cred_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             type: 'credential_claim',
             title: `Credential Request: Milestone ${msNum} (${msTitle})`,
-            message: `${userName || 'Learner'} has completed all prerequisites and requested official credential approval for Milestone ${msNum}.`,
+            message: `${safeUserName} has completed all prerequisites and requested official credential approval for Milestone ${msNum}.`,
             userId: String(userId),
-            userName: userName || 'Learner',
-            userEmail: userEmail || '',
+            userName: safeUserName,
+            userEmail: safeEmail,
             milestoneId: msNum,
             milestoneTitle: msTitle,
             timestamp: Date.now(),
