@@ -2844,6 +2844,9 @@ app.get(['/api/certificate-approvals', '/gamification/api/certificate-approvals'
 // POST — { key, approved, credentialId, issuedAt } for one user+milestone, or { allApprovals } for bulk merge
 app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals'], (req, res) => {
     try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to approve or issue credentials' });
+        }
         const { key, approved, credentialId, issuedAt, allApprovals, milestoneId, userId } = req.body;
         const current = getCertificateApprovalsFromDb();
 
@@ -2898,8 +2901,14 @@ app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals
         }
 
         const saved = saveCertificateApprovalsToDb(current);
-        res.json({ success: true, data: saved });
+        if (!saved) {
+            return res.status(500).json({ success: false, error: 'Failed to write certificate approvals to database' });
+        }
+
+        console.log(`[Certificate Approvals] Updated key: ${key || 'bulk'}`);
+        res.json({ success: true, message: 'Certificate approvals updated successfully', data: current });
     } catch (err) {
+        console.error('[Certificate Approvals Error]:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -2910,6 +2919,12 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
         const { userId, userName, userEmail, milestoneId, prereqSummary } = req.body;
         if (!userId || !milestoneId) {
             return res.status(400).json({ success: false, error: 'userId and milestoneId required' });
+        }
+
+        // Prevent candidate session spoofing if session token is provided
+        const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
+        if (sess && sess.userId && String(sess.userId) !== String(userId) && !checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Session does not match claiming user' });
         }
 
         const current = getCertificateApprovalsFromDb();
@@ -2963,8 +2978,10 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
             milestoneId: msNum,
             milestoneTitle: msTitle,
             timestamp: Date.now(),
+            createdAt: Date.now(),
             read: false,
-            resolved: false
+            resolved: false,
+            approved: false
         };
 
         store.creatorNotifications.unshift(notif);
@@ -2979,9 +2996,12 @@ app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-r
     }
 });
 
-// GET /api/creator/notifications — List creator notifications
+// GET /api/creator/notifications — List creator notifications (Strictly Creator Gated)
 app.get(['/api/creator/notifications', '/gamification/api/creator/notifications'], (req, res) => {
     try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view notifications' });
+        }
         if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
         const unreadCount = store.creatorNotifications.filter(n => !n.read && !n.resolved).length;
         res.json({ success: true, notifications: store.creatorNotifications, data: store.creatorNotifications, unreadCount });
@@ -2990,9 +3010,12 @@ app.get(['/api/creator/notifications', '/gamification/api/creator/notifications'
     }
 });
 
-// POST /api/creator/notifications/mark-read — Mark creator notifications as read
+// POST /api/creator/notifications/mark-read — Mark creator notifications as read (Strictly Creator Gated)
 app.post(['/api/creator/notifications/mark-read', '/gamification/api/creator/notifications/mark-read'], (req, res) => {
     try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required' });
+        }
         const { notifId, markAll } = req.body || {};
         if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
         if (notifId) {

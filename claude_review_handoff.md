@@ -649,7 +649,7 @@ Following user requirements, the **cMPLi-ai** (`cmpli_ai`) and **cMPLi Insight E
 ## 3. Automated Test Verification
 Run the verification suites in terminal:
 ```bash
-# 1. Milestone Credential Automation (6/6 tests)
+# 1. Milestone Credential Automation & Security Suite (7/7 tests including 403 checks)
 node scratch/test_credential_automation.js
 
 # 2. Module & Project Structure Suite (8/8 tests)
@@ -659,6 +659,20 @@ node scratch/test_new_modules_structure.js
 node test_security_audit_hardening.js
 ```
 All tests pass with 0 errors.
+
+## 4. Security Hardening & Review Resolution (Post-Claude Review)
+Following Claude's live browser testing and review, the following critical hardening fixes were implemented:
+1. **Creator Authorization Enforcement (No Self-Approval Bypass)**:
+   - `POST /api/certificate-approvals`: Enforces `checkCreatorAuth(req)` &mdash; prevents unauthenticated clients from self-issuing credentials.
+   - `GET /api/creator/notifications`: Enforces `checkCreatorAuth(req)` &mdash; blocks unauthorized access to candidate names/emails (PII protection).
+   - `POST /api/creator/notifications/mark-read`: Enforces `checkCreatorAuth(req)`.
+2. **Candidate Session Integrity on Claims**:
+   - `POST /api/credential/claim-request`: Validates caller's session token to prevent candidate impersonation across accounts.
+3. **Restricted Polling in Frontend**:
+   - In [app.js](file:///d:/Projects_Files/python_projects/cMPLiBe/Real-World%20Application/app.js), `loadCreatorNotifications()` is only polled when logged in as an authenticated Creator (`isCreatorLoggedIn`), preventing unauthenticated visitors or learners from making background notification calls.
+4. **Notification Timestamp Consistency**:
+   - Server writes both `timestamp: Date.now()` and `createdAt: Date.now()`.
+   - Client parses `notif.createdAt || notif.timestamp`, eliminating the generic fallback display.
 
 
 

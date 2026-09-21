@@ -6913,11 +6913,15 @@ window.getCertificateId = getCertificateId;
 var creatorNotificationsList = [];
 
 async function loadCreatorNotifications() {
+    const isCreator = (typeof isAdminLogin !== 'undefined' && isAdminLogin && !isCampusPartner) ||
+                      (localStorage.getItem('isAdminLogin') === 'true' && localStorage.getItem('isCampusPartner') !== 'true');
+    if (!isCreator) return;
     try {
         const res = await apiFetch('/api/creator/notifications');
+        if (!res.ok) return;
         const data = await res.json();
         if (data && data.success) {
-            creatorNotificationsList = data.notifications || [];
+            creatorNotificationsList = data.notifications || data.data || [];
             updateCreatorNotificationBadge();
             const modal = document.getElementById('adminNotificationsModal');
             if (modal && !modal.classList.contains('hidden')) {
@@ -6988,7 +6992,8 @@ function renderAdminNotificationsList() {
 
     container.innerHTML = creatorNotificationsList.map(notif => {
         const isApproved = isCertificateApproved(notif.userId, notif.milestoneId);
-        const timeAgo = notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently';
+        const timeVal = notif.createdAt || notif.timestamp;
+        const timeAgo = timeVal ? new Date(timeVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently';
 
         return `
             <div class="p-3.5 rounded-xl border ${notif.read ? 'border-slate-800 bg-slate-900/60' : 'border-amber-500/40 bg-gradient-to-r from-amber-950/20 to-slate-900/80 shadow-md'} flex flex-col gap-2 transition-all">
@@ -22843,10 +22848,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedUser && (savedUser._id || savedUser.id) && typeof syncUserProjectLifecycleFromServer === 'function') {
             syncUserProjectLifecycleFromServer(savedUser._id || savedUser.id);
         }
-        if (typeof loadCreatorNotifications === 'function') {
+        const isCreatorLoggedIn = (localStorage.getItem('isAdminLogin') === 'true' || sessionStorage.getItem('isAdminLogin') === 'true') && 
+                                  (localStorage.getItem('isCampusPartner') !== 'true');
+        if (isCreatorLoggedIn && typeof loadCreatorNotifications === 'function') {
             loadCreatorNotifications();
             setInterval(() => {
-                if (typeof loadCreatorNotifications === 'function') {
+                const stillCreator = (localStorage.getItem('isAdminLogin') === 'true' || sessionStorage.getItem('isAdminLogin') === 'true') && 
+                                     (localStorage.getItem('isCampusPartner') !== 'true');
+                if (stillCreator && typeof loadCreatorNotifications === 'function') {
                     loadCreatorNotifications();
                 }
             }, 25000);
