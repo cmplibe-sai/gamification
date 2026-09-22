@@ -16,7 +16,7 @@ function apiFetch(endpoint, options = {}) {
     if (crtToken && !opt.headers['x-creator-token'] && !opt.headers['authorization']) {
         opt.headers['x-creator-token'] = crtToken;
     }
-    const crtSecret = window._creatorAdminSecret || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
+    const crtSecret = window._creatorAdminSecret || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmpli_admin_secret') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
     if (crtSecret && !opt.headers['x-admin-secret']) {
         opt.headers['x-admin-secret'] = crtSecret;
     }
@@ -2589,7 +2589,29 @@ async function syncGlobalServerData() {
     try {
         let localData = getAllUserSubmissions();
 
-        const response = await apiFetch('/api/sync').then(r => r.json()).catch(() => null);
+        const rawRes = await apiFetch('/api/sync').catch(() => null);
+        if (rawRes && rawRes.status === 401) {
+            console.warn('[Sync Auth] Server returned 401 Unauthorized. Session token has expired or is invalid.');
+            if (typeof localStorage !== 'undefined') localStorage.removeItem('cmpli_session_token');
+            if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('cmpli_session_token');
+            isSyncInProgress = false;
+            if (typeof currentUser !== 'undefined' && currentUser && !window._sessionExpiryNotified && typeof document !== 'undefined') {
+                window._sessionExpiryNotified = true;
+                const toast = document.createElement('div');
+                toast.id = 'sessionExpiryToast';
+                toast.className = 'fixed bottom-4 right-4 z-50 bg-rose-900/90 border border-rose-500 text-rose-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-semibold backdrop-blur-md transition-all duration-300';
+                toast.innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-amber-400 text-base"></i>
+                    <span>Your session has expired. Please sign in again to sync your latest submissions and progress.</span>
+                    <button onclick="this.parentElement.remove()" class="ml-2 text-rose-300 hover:text-white"><i class="fas fa-times"></i></button>
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => { if (toast.parentElement) toast.remove(); }, 10000);
+            }
+            return;
+        }
+
+        const response = rawRes ? await rawRes.json().catch(() => null) : null;
         if (!response || !response.success || !response.data) {
             isSyncInProgress = false;
             return;
@@ -7870,10 +7892,10 @@ function switchAdminMilestoneTab(tabName) {
     const btns = {
         checkins: document.getElementById('btnTabCheckins'),
         completion: document.getElementById('btnTabCompletion'),
-        needApproval: document.getElementById('btnTabNeedApproval'),
         modulePrereqs: document.getElementById('btnTabModulePrereqs')
     };
-    const headerBtn = document.getElementById('btnHeaderMilestonePrereqs');
+    const headerPrereqsBtn = document.getElementById('btnHeaderMilestonePrereqs');
+    const headerNeedApprovalBtn = document.getElementById('btnHeaderNeedApproval');
     const views = {
         checkins: document.getElementById('adminCheckinsConfigView'),
         completion: document.getElementById('adminCompletionView'),
@@ -7888,11 +7910,19 @@ function switchAdminMilestoneTab(tabName) {
         if (btns[key]) btns[key].className = (key === tabName) ? activeTabClass : inactiveTabClass;
     });
 
-    if (headerBtn) {
+    if (headerPrereqsBtn) {
         if (tabName === 'prereqs') {
-            headerBtn.className = 'py-2 px-3 text-xs font-bold text-white bg-indigo-600 border border-indigo-500 shadow-md flex items-center gap-1.5 rounded-lg';
+            headerPrereqsBtn.className = 'py-2 px-3 text-xs font-bold text-white bg-indigo-600 border border-indigo-500 shadow-md flex items-center gap-1.5 rounded-lg';
         } else {
-            headerBtn.className = 'btn-secondary py-2 px-3 text-xs font-bold text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/20 shadow-sm flex items-center gap-1.5 rounded-lg';
+            headerPrereqsBtn.className = 'btn-secondary py-2 px-3 text-xs font-bold text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/20 shadow-sm flex items-center gap-1.5 rounded-lg';
+        }
+    }
+
+    if (headerNeedApprovalBtn) {
+        if (tabName === 'needApproval') {
+            headerNeedApprovalBtn.className = 'py-2 px-3 text-xs font-bold text-white bg-amber-600 border border-amber-500 shadow-md flex items-center gap-1.5 rounded-lg';
+        } else {
+            headerNeedApprovalBtn.className = 'btn-secondary py-2 px-3 text-xs font-bold text-amber-300 border border-amber-500/40 hover:bg-amber-600/20 shadow-sm flex items-center gap-1.5 rounded-lg';
         }
     }
 
@@ -8842,6 +8872,15 @@ function renderAdminCohortSubmissions() {
             <span class="text-xs font-bold bg-indigo-900/40 text-indigo-300 px-3 py-1 rounded-full border border-indigo-700/50">Active Customers: ${validCohort.length}</span>
             <span class="text-xs font-bold bg-amber-900/40 text-amber-300 px-3 py-1 rounded-full border border-amber-700/50">Pending Approvals: ${totalPending}</span>
         `;
+    }
+    const needApprovalBadge = document.getElementById('needApprovalCountBadge');
+    if (needApprovalBadge) {
+        if (totalPending > 0) {
+            needApprovalBadge.innerText = totalPending;
+            needApprovalBadge.classList.remove('hidden');
+        } else {
+            needApprovalBadge.classList.add('hidden');
+        }
     }
 
     // Calculate max display days based on Milestone AND active module
@@ -19706,6 +19745,7 @@ async function verifyOTP() {
                 }
                 if (role === 'creator' && creatorSecretInput) {
                     sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
+                    if (typeof localStorage !== 'undefined') localStorage.setItem('cmpli_admin_secret', creatorSecretInput);
                     window._creatorAdminSecret = creatorSecretInput;
                 }
                 sessionTokenAcquired = true;

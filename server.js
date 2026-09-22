@@ -5,6 +5,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch(e) {}
 const dns = require('dns');
 
 // Configure reliable DNS servers for MongoDB Atlas SRV resolution
@@ -548,6 +550,9 @@ function saveStore() {
     try {
         store.lastUpdated = Date.now();
         fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
+        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
+            syncStoreToMongo().catch(err => console.warn('[Background Mongo Sync]:', err.message));
+        }
     } catch (e) {
         console.error('Error saving storage file:', e);
     }
@@ -579,9 +584,71 @@ process.on('exit', () => { flushStoreSync(); });
 let isDbConnected = false;
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// Dedicated Mongoose Schema for Users (role: customer, creator, recruiter, partner)
+let User = null;
+// Dedicated Mongoose Schema for Submissions
+let Submission = null;
 // Dedicated Mongoose Schema for High-Frequency Profile Views & Search Appearances
 let ProfileView = null;
 try {
+    const userSchema = new mongoose.Schema({
+        role: { type: String, required: true, enum: ['customer', 'creator', 'recruiter', 'partner'], index: true },
+        externalId: { type: String, index: true }, // TagMango learner _id for customer; null for locally owned roles
+        email: { type: String, required: true, lowercase: true, trim: true, index: true },
+        phone: String,
+        name: String,
+        recruiter: {
+            employerId: String,
+            companyName: String,
+            permittedMangoes: [String]
+        },
+        partner: {
+            campusId: String
+        },
+        creator: {
+            title: String
+        },
+        firstLoginAt: { type: Date, default: null },
+        welcomeEmailSent: { type: Boolean, default: false },
+        welcomeEmailSentAt: { type: Date, default: null },
+        lastLoginAt: Date
+    }, { timestamps: true });
+
+    userSchema.index({ role: 1, email: 1 }, { unique: true });
+    userSchema.index({ role: 1, externalId: 1 }, { sparse: true });
+
+    User = mongoose.models.User || mongoose.model('User', userSchema);
+
+    const submissionSchema = new mongoose.Schema({
+        id: { type: String, index: true },
+        userId: { type: String, required: true, index: true },
+        userEmail: { type: String, index: true },
+        userName: String,
+        userPhone: String,
+        milestoneId: { type: Number, required: true, index: true },
+        type: { type: String, required: true }, // dip / pod / immerse / quiz / ...
+        day: Number,
+        dateKey: String,
+        date: String,
+        status: String, // completed / evaluating / rejected_mismatch / ...
+        lcReward: Number,
+        originalLcReward: Number,
+        matchPercentage: Number,
+        title: String,
+        videoUrl: String,
+        audioUrl: String,
+        remarks: String,
+        aiRemarks: String,
+        answers: mongoose.Schema.Types.Mixed,
+        metadata: mongoose.Schema.Types.Mixed,
+        submittedAt: Date
+    }, { timestamps: true });
+
+    submissionSchema.index({ userId: 1, milestoneId: 1, type: 1, day: 1 });
+    submissionSchema.index({ id: 1 }, { unique: true, sparse: true });
+
+    Submission = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);
+
     const profileViewSchema = new mongoose.Schema({
         studentId: { type: String, required: true, index: true },
         campusId: { type: String, index: true },
@@ -766,11 +833,365 @@ async function getTelemetryForCampus(campusId) {
     };
 }
 
+function escapeHtmlServer(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+let _isMongoSyncRunning = false;
+async function syncStoreToMongo() {
+    if (!isDbConnected || !Submission || !User || _isMongoSyncRunning) return;
+    _isMongoSyncRunning = true;
+    try {
+        // 1. Dual-directional Submissions Mirror & Backup
+        const mongoSubCount = await Submission.countDocuments();
+        if (mongoSubCount === 0 && Array.isArray(store.submissions) && store.submissions.length > 0) {
+            console.log(`[Mongo Init] Migrating ${store.submissions.length} submissions from JSON store to MongoDB...`);
+            const bulkOps = store.submissions.map(sub => {
+                const query = sub.id ? { id: sub.id } : {
+                    userId: String(sub.userId || ''),
+                    milestoneId: Number(sub.milestoneId || 1),
+                    type: String(sub.type || sub.moduleType || 'dip'),
+                    day: sub.day !== undefined ? Number(sub.day) : null
+                };
+                return {
+                    updateOne: {
+                        filter: query,
+                        update: { $set: sub },
+                        upsert: true
+                    }
+                };
+            });
+            if (bulkOps.length > 0) {
+                await Submission.bulkWrite(bulkOps);
+                console.log(`✅ Migrated ${bulkOps.length} submissions to MongoDB.`);
+            }
+        } else if (mongoSubCount > 0 && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
+            // Disaster Recovery / Cloud Backup Restore: Load from Mongo into local store
+            console.log(`[Mongo Backup Restore] Local JSON store has 0 submissions; restoring ${mongoSubCount} submissions from MongoDB...`);
+            const mongoSubs = await Submission.find({}).lean();
+            store.submissions = mongoSubs.map(s => {
+                const copy = { ...s };
+                delete copy._id;
+                delete copy.__v;
+                return copy;
+            });
+            store.submissionsRevision = Date.now();
+            saveStore();
+            console.log(`✅ Restored ${store.submissions.length} submissions from MongoDB backup.`);
+        }
+
+        // 2. Mirror Owned Collections to User (creator, recruiter, partner)
+        if (Array.isArray(store.teamMembers)) {
+            for (const tm of store.teamMembers) {
+                if (tm.email) {
+                    await User.updateOne(
+                        { role: 'creator', email: tm.email.toLowerCase().trim() },
+                        {
+                            $setOnInsert: {
+                                role: 'creator',
+                                email: tm.email.toLowerCase().trim(),
+                                name: tm.name || 'Team Member',
+                                welcomeEmailSent: false,
+                                createdAt: new Date()
+                            },
+                            $set: { updatedAt: new Date() }
+                        },
+                        { upsert: true }
+                    );
+                }
+            }
+        }
+
+        if (Array.isArray(store.employers)) {
+            for (const emp of store.employers) {
+                if (emp.email) {
+                    await User.updateOne(
+                        { role: 'recruiter', email: emp.email.toLowerCase().trim() },
+                        {
+                            $setOnInsert: {
+                                role: 'recruiter',
+                                email: emp.email.toLowerCase().trim(),
+                                name: emp.companyName || 'Corporate Recruiter',
+                                recruiter: {
+                                    employerId: emp.id,
+                                    companyName: emp.companyName,
+                                    permittedMangoes: emp.permittedMangoes || []
+                                },
+                                welcomeEmailSent: false,
+                                createdAt: new Date()
+                            },
+                            $set: { updatedAt: new Date() }
+                        },
+                        { upsert: true }
+                    );
+                }
+            }
+        }
+
+        if (Array.isArray(store.campuses)) {
+            for (const campus of store.campuses) {
+                if (Array.isArray(campus.coordinators)) {
+                    for (const coord of campus.coordinators) {
+                        if (coord.email) {
+                            await User.updateOne(
+                                { role: 'partner', email: coord.email.toLowerCase().trim() },
+                                {
+                                    $setOnInsert: {
+                                        role: 'partner',
+                                        email: coord.email.toLowerCase().trim(),
+                                        name: coord.name || campus.name || 'Campus Partner',
+                                        partner: { campusId: campus.id },
+                                        welcomeEmailSent: false,
+                                        createdAt: new Date()
+                                    },
+                                    $set: { updatedAt: new Date() }
+                                },
+                                { upsert: true }
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[Mongo Sync Error]:', e.message);
+    } finally {
+        _isMongoSyncRunning = false;
+    }
+}
+
+async function saveSubmissionToMongo(sub) {
+    if (!isDbConnected || !Submission || !sub) return;
+    try {
+        const query = sub.id ? { id: sub.id } : {
+            userId: String(sub.userId || ''),
+            milestoneId: Number(sub.milestoneId || 1),
+            type: String(sub.type || sub.moduleType || 'dip'),
+            day: sub.day !== undefined ? Number(sub.day) : null
+        };
+        await Submission.updateOne(query, { $set: sub }, { upsert: true });
+    } catch (e) {
+        console.warn('[Mongo Submission Write Warning]:', e.message);
+    }
+}
+
+async function removeSubmissionsFromMongo(userId, milestoneId) {
+    if (!isDbConnected || !Submission) return;
+    try {
+        const filter = { userId: String(userId) };
+        if (milestoneId !== null && milestoneId !== undefined) {
+            filter.milestoneId = Number(milestoneId);
+        }
+        await Submission.deleteMany(filter);
+    } catch (e) {
+        console.warn('[Mongo Submission Delete Warning]:', e.message);
+    }
+}
+
+// -------------------------------------------------------------
+// Dedicated First-Login Mailer & Notification Engine
+// -------------------------------------------------------------
+let mailTransporter = null;
+if (nodemailer && process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+        mailTransporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: parseInt(process.env.SMTP_PORT || '587', 10),
+            secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
+        });
+        console.log(`📧 Mailer initialized for SMTP host: ${process.env.SMTP_HOST}`);
+    } catch (e) {
+        console.warn('⚠️ Mailer initialization error:', e.message);
+    }
+} else {
+    console.log('ℹ️ SMTP credentials not fully configured in .env (SMTP_HOST, SMTP_USER, SMTP_PASS). First-login notifications will safely log to console.');
+}
+
+async function sendWelcomeEmail(user, role) {
+    const toEmail = (user.email || '').toLowerCase().trim();
+    if (!toEmail) return false;
+
+    const fromAddress = process.env.SMTP_FROM || '"cMPLiBe Platform" <noreply@cmplibe.com>';
+    const portalUrl = 'https://learn.cmplibe.com';
+
+    let subject = 'Welcome to cMPLiBe Gamification Journey! 🚀';
+    let roleGreeting = user.name || 'Learner';
+    let roleIntro = 'Welcome to your personalized gamification journey! Complete daily challenges, solve immersive missions, and unlock career-defining micro-credentials.';
+
+    if (role === 'creator') {
+        subject = 'Creator Portal Access Initialized — cMPLiBe 👑';
+        roleGreeting = user.name || 'Creator / Team Member';
+        roleIntro = 'Welcome to the cMPLiBe administrative control panel. You now have full executive management across learner cohorts, live modules, and corporate integrations.';
+    } else if (role === 'recruiter') {
+        subject = 'Welcome to cMPLiBe Talent Arena & Recruiter Portal 💼';
+        roleGreeting = user.companyName || user.name || 'Corporate Hiring Partner';
+        roleIntro = 'Welcome to the cMPLiBe Talent Arena! You can now explore high-caliber candidates, review verified skills, and connect with top learners.';
+    } else if (role === 'partner') {
+        subject = 'Welcome to cMPLiBe Campus Partner Dashboard 🎓';
+        roleGreeting = user.name || 'Campus Partner Coordinator';
+        roleIntro = 'Welcome to the cMPLiBe Institutional Dashboard. Track student participation, check-in momentum, and corporate engagement in real time.';
+    }
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f1f5f9; margin: 0; padding: 20px; }
+        .card { max-width: 580px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 32px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px; }
+        .content { padding: 32px 24px; }
+        .greeting { font-size: 18px; font-weight: 700; color: #e2e8f0; margin-bottom: 12px; }
+        .body-text { font-size: 14px; line-height: 1.6; color: #94a3b8; margin-bottom: 24px; }
+        .cta-btn { display: inline-block; background: #6366f1; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
+        .footer { padding: 20px 24px; border-top: 1px solid #1f2937; text-align: center; font-size: 12px; color: #64748b; }
+    </style></head>
+    <body>
+        <div class="card">
+            <div class="header">
+                <h1>cMPLiBe Platform</h1>
+            </div>
+            <div class="content">
+                <div class="greeting">Hello, ${escapeHtmlServer(roleGreeting)}!</div>
+                <div class="body-text">${escapeHtmlServer(roleIntro)}</div>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${portalUrl}" class="cta-btn" target="_blank">Access Your Dashboard</a>
+                </div>
+                <div class="body-text" style="font-size: 12px; color: #64748b;">
+                    Account: <strong>${escapeHtmlServer(toEmail)}</strong><br>
+                    Role: <strong>${escapeHtmlServer(role.toUpperCase())}</strong>
+                </div>
+            </div>
+            <div class="footer">
+                &copy; ${new Date().getFullYear()} cMPLiBe Gamification Platform. All rights reserved.
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    console.log(`[Welcome Email Dispatch] Preparing welcome email for ${role} (${toEmail})`);
+
+    if (!mailTransporter) {
+        console.log(`ℹ️ [Email Simulation] Transporter not connected. Email to ${toEmail} would be: "${subject}"`);
+        return true;
+    }
+
+    const mailOptions = {
+        from: fromAddress,
+        to: toEmail,
+        subject: subject,
+        html: htmlContent
+    };
+
+    return new Promise((resolve, reject) => {
+        mailTransporter.sendMail(mailOptions, (err, info) => {
+            if (err) {
+                console.warn(`⚠️ [Welcome Email Failed] To: ${toEmail} - Error: ${err.message}`);
+                return reject(err);
+            }
+            console.log(`✅ [Welcome Email Sent] MessageId: ${info.messageId} to ${toEmail}`);
+            return resolve(true);
+        });
+    });
+}
+
+function claimFirstLoginLocal(role, email) {
+    store.userLoginProfiles = store.userLoginProfiles || {};
+    const key = `${role}:${(email || '').toLowerCase().trim()}`;
+    const profile = store.userLoginProfiles[key] || { welcomeEmailSent: false, firstLoginAt: null };
+    if (!profile.welcomeEmailSent) {
+        profile.welcomeEmailSent = true;
+        profile.welcomeEmailSentAt = new Date().toISOString();
+        profile.firstLoginAt = profile.firstLoginAt || new Date().toISOString();
+        store.userLoginProfiles[key] = profile;
+        saveStoreDebounced(1000);
+        return true;
+    }
+    return false;
+}
+
+async function handleFirstLoginWelcome(userObj, role) {
+    try {
+        const cleanEmail = (userObj.email || '').toLowerCase().trim();
+        if (!cleanEmail) return;
+
+        let shouldSend = false;
+        const now = new Date();
+
+        if (isDbConnected && User) {
+            const updateDoc = {
+                $setOnInsert: {
+                    role,
+                    email: cleanEmail,
+                    externalId: userObj.externalId || userObj._id || userObj.id || null,
+                    name: userObj.name || '',
+                    phone: userObj.phone || '',
+                    welcomeEmailSent: false,
+                    firstLoginAt: now,
+                    createdAt: now
+                },
+                $set: {
+                    lastLoginAt: now,
+                    updatedAt: now
+                }
+            };
+            if (role === 'recruiter' && userObj.recruiter) {
+                updateDoc.$set.recruiter = userObj.recruiter;
+            } else if (role === 'partner' && userObj.partner) {
+                updateDoc.$set.partner = userObj.partner;
+            }
+
+            await User.updateOne({ role, email: cleanEmail }, updateDoc, { upsert: true });
+
+            // Atomic claim: only one concurrent caller succeeds in updating welcomeEmailSent from false to true
+            const claimed = await User.findOneAndUpdate(
+                { role, email: cleanEmail, welcomeEmailSent: false },
+                { $set: { welcomeEmailSent: true, welcomeEmailSentAt: now, firstLoginAt: now } },
+                { new: false }
+            );
+
+            if (claimed) {
+                shouldSend = true;
+                claimFirstLoginLocal(role, cleanEmail); // keep JSON in sync
+            }
+        } else {
+            shouldSend = claimFirstLoginLocal(role, cleanEmail);
+        }
+
+        if (shouldSend) {
+            console.log(`[First Login] Claimed first login for ${role} (${cleanEmail}). Dispatching welcome email...`);
+            sendWelcomeEmail(userObj, role).catch(err => {
+                console.warn(`[Welcome Email Error] Could not deliver to ${cleanEmail}:`, err.message);
+            });
+        }
+    } catch (err) {
+        console.warn(`[First Login Handler Warning]:`, err.message);
+    }
+}
+
 if (MONGODB_URI) {
-    mongoose.connect(MONGODB_URI)
+    const dbOptions = {
+        dbName: process.env.MONGODB_DB_NAME || 'cmplibe_gamification'
+    };
+    mongoose.connect(MONGODB_URI, dbOptions)
         .then(() => {
             isDbConnected = true;
-            console.log('✅ Connected to MongoDB Database successfully.');
+            console.log(`✅ Connected to MongoDB Database (${dbOptions.dbName}) successfully.`);
+            syncStoreToMongo().catch(err => console.warn('[Mongo Sync Warning]:', err.message));
         })
         .catch(err => {
             console.error('⚠️ Database connection warning:', err.message);
@@ -2521,6 +2942,15 @@ function getAuthenticatedSession(req) {
         removeUserSession(cleanToken);
         return null;
     }
+    // Sliding session window: extend expiresAt by another 24h on active use
+    const slidingExpiry = Date.now() + 86400000;
+    if (slidingExpiry - sess.expiresAt > 3600000) {
+        sess.expiresAt = slidingExpiry;
+        if (store.userSessions && store.userSessions[cleanToken]) {
+            store.userSessions[cleanToken].expiresAt = slidingExpiry;
+            saveStoreDebounced(2000);
+        }
+    }
     return sess;
 }
 
@@ -3465,6 +3895,11 @@ app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/cus
         appendReset(emailStr);
     }
 
+    removeSubmissionsFromMongo(uidStr, msId);
+    if (emailStr) {
+        removeSubmissionsFromMongo(emailStr, msId);
+    }
+
     store.submissionsRevision = resetTimestamp;
     saveStore();
 
@@ -3577,9 +4012,11 @@ app.post(['/api/submissions/bulk-sync', '/gamification/api/submissions/bulk-sync
 
                 store.submissions[existingIdx] = merged;
                 addedCount++;
+                saveSubmissionToMongo(merged);
             } else {
                 store.submissions.push(completeSub);
                 addedCount++;
+                saveSubmissionToMongo(completeSub);
             }
         });
 
@@ -3609,6 +4046,7 @@ app.post(['/api/submissions/update-status', '/gamification/api/submissions/updat
             store.submissions[idx].status = status || 'completed';
             store.submissionsRevision = Date.now();
             saveStore();
+            saveSubmissionToMongo(store.submissions[idx]);
             return res.json({ success: true, data: store.submissions[idx], submissionsRevision: store.submissionsRevision });
         }
         res.json({ success: false, message: 'Submission not found' });
@@ -4228,6 +4666,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             const isTeamMember = (store.teamMembers || []).some(m => m.email && m.email.toLowerCase() === cleanLogin);
             const token = `cmpli_sess_crt_${crypto.randomBytes(24).toString('hex')}`;
             recordUserSession(token, { role: 'creator', userId: cleanLogin, email: cleanLogin, expiresAt: Date.now() + 86400000 });
+            handleFirstLoginWelcome({ email: cleanLogin, name: 'Creator / Team Member' }, 'creator');
             return res.json({ success: true, token, role: 'creator' });
         }
 
@@ -4256,6 +4695,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             }
             const token = `cmpli_sess_rec_${crypto.randomBytes(24).toString('hex')}`;
             recordUserSession(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
+            handleFirstLoginWelcome({ email: emp.email, name: emp.companyName || 'Corporate Partner', companyName: emp.companyName, recruiter: { employerId: emp.id, companyName: emp.companyName, permittedMangoes: emp.permittedMangoes || [] } }, 'recruiter');
             return res.json({ success: true, token, role: 'recruiter', employer: { id: emp.id, companyName: emp.companyName, email: emp.email, permittedMangoes: emp.permittedMangoes || [] } });
         }
 
@@ -4281,6 +4721,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             }
             const token = `cmpli_sess_ptn_${crypto.randomBytes(24).toString('hex')}`;
             recordUserSession(token, { role: 'partner', userId: matchedCoord.email, campusId: matchedCampus.id, email: matchedCoord.email, expiresAt: Date.now() + 86400000 });
+            handleFirstLoginWelcome({ email: matchedCoord.email, name: matchedCoord.name || matchedCampus.name || 'Campus Partner', partner: { campusId: matchedCampus.id } }, 'partner');
             return res.json({ success: true, token, role: 'partner', campusId: matchedCampus.id });
         }
 
@@ -4304,6 +4745,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             const learnerId = String(learner._id || learner.id);
             const token = `cmpli_sess_lrn_${crypto.randomBytes(24).toString('hex')}`;
             recordUserSession(token, { role: 'customer', userId: learnerId, email: learner.email, expiresAt: Date.now() + 86400000 });
+            handleFirstLoginWelcome({ email: learner.email, name: learner.name || 'Learner', externalId: learnerId, phone: learner.phone || '' }, 'customer');
             return res.json({ success: true, token, role: 'customer', studentId: learnerId });
         }
 
