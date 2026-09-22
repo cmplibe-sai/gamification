@@ -2595,11 +2595,92 @@ async function syncGlobalServerData() {
             return;
         }
 
-        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, moduleActivationDates: serverModuleActivationDates, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, modulePrereqs: serverModulePrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates } = response.data;
+        const { submissions: serverData, milestoneConfigs: serverConfigs, moduleAccess: serverModuleAccess, moduleActivationDates: serverModuleActivationDates, joinDates: serverJoinDates, userModuleStartDates: serverModuleStartDates, levelUpAccess: serverLevelUpAccess, milestonePrereqs: serverPrereqs, modulePrereqs: serverModulePrereqs, certificateApprovals: serverCertApprovals, userMilestoneStates: serverUserMilestoneStates, userResets: serverUserResets } = response.data;
         const serverRevision = (response.data && (response.data.submissionsRevision || response.data.lastUpdated)) || '';
         const configsRevision = (response.data && response.data.configsRevision) || '';
 
         let hasLocalSubmissionsChanged = false;
+
+        // 0. RESET PROGRESS RECONCILIATION (Purges local cache on learner device if creator reset progress)
+        if (serverUserResets && typeof serverUserResets === 'object' && currentUser) {
+            const myUid = String(currentUser._id || currentUser.id || '');
+            const myEmail = (currentUser.email || '').toLowerCase().trim();
+            const rawResets = (myUid && serverUserResets[myUid]) || (myEmail && serverUserResets[myEmail]) || null;
+            const userResetList = Array.isArray(rawResets)
+                ? rawResets
+                : (rawResets && rawResets.timestamp ? [rawResets] : []);
+
+            if (userResetList.length > 0) {
+                let processedResets = {};
+                try { processedResets = JSON.parse(localStorage.getItem('processedUserResets') || '{}'); } catch(e) {}
+                let lastProcessed = Math.max(processedResets[myUid] || 0, (myEmail ? processedResets[myEmail] || 0 : 0));
+                const pendingResets = userResetList
+                    .filter(r => r && r.timestamp && r.timestamp > lastProcessed)
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                if (pendingResets.length > 0) {
+                    pendingResets.forEach(myReset => {
+                        console.log(`[Reset Enforced by Creator] Clearing local state for learner ${myUid} (Milestone: ${myReset.milestoneId || 'All'}).`);
+                        const resetMs = myReset.milestoneId;
+
+                        // A. Purge local submissions
+                        localData = (Array.isArray(localData) ? localData : []).filter(loc => {
+                            const matchesUser = (myUid && String(loc.userId) === myUid) || (myEmail && loc.userEmail && loc.userEmail.toLowerCase().trim() === myEmail);
+                            if (!matchesUser) return true;
+                            if (resetMs !== null && resetMs !== undefined) {
+                                return Number(loc.milestoneId || 1) !== Number(resetMs);
+                            }
+                            return false;
+                        });
+                        setAllUserSubmissions(localData);
+
+                        // B. Purge local certificate approvals
+                        if (typeof mockApprovedCertificates !== 'undefined') {
+                            if (resetMs !== null && resetMs !== undefined) {
+                                delete mockApprovedCertificates[`${myUid}_${resetMs}`];
+                                delete mockApprovedCertificates[`${myUid}_MS${resetMs}`];
+                                if (myEmail) {
+                                    delete mockApprovedCertificates[`${myEmail}_${resetMs}`];
+                                    delete mockApprovedCertificates[`${myEmail}_MS${resetMs}`];
+                                }
+                            } else {
+                                Object.keys(mockApprovedCertificates).forEach(k => {
+                                    if (k.startsWith(`${myUid}_`) || (myEmail && k.startsWith(`${myEmail}_`))) {
+                                        delete mockApprovedCertificates[k];
+                                    }
+                                });
+                            }
+                            try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
+                        }
+
+                        // C. Purge local userMilestoneState
+                        if (typeof userMilestoneState !== 'undefined' && (userMilestoneState[myUid] || (myEmail && userMilestoneState[myEmail]))) {
+                            const key = userMilestoneState[myUid] ? myUid : myEmail;
+                            if (resetMs !== null && resetMs !== undefined) {
+                                if (userMilestoneState[key].started && userMilestoneState[key].started[resetMs]) {
+                                    delete userMilestoneState[key].started[resetMs];
+                                }
+                                if (Number(resetMs) === 1) {
+                                    userMilestoneState[key].highestUnlocked = 1;
+                                }
+                            } else {
+                                userMilestoneState[key] = { highestUnlocked: 1, viewedTerms: [], started: {} };
+                            }
+                            try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+                        }
+
+                        if (myReset.timestamp > lastProcessed) {
+                            lastProcessed = myReset.timestamp;
+                        }
+                    });
+
+                    processedResets[myUid] = lastProcessed;
+                    if (myEmail) processedResets[myEmail] = lastProcessed;
+                    try { localStorage.setItem('processedUserResets', JSON.stringify(processedResets)); } catch(e) {}
+                    hasLocalSubmissionsChanged = true;
+                }
+            }
+        }
 
         // 1. TWO-WAY SUBMISSIONS SYNC (ALWAYS RUNS BEFORE SIGNATURE GATE!)
         if (Array.isArray(serverData)) {
@@ -2795,10 +2876,23 @@ async function syncGlobalServerData() {
         // conflicts so an optimistic "Start Now" click isn't clobbered before it round-trips.
         if (serverUserMilestoneStates && typeof serverUserMilestoneStates === 'object') {
             Object.keys(serverUserMilestoneStates).forEach(uid => {
-                const isSelf = currentUser && String(uid) === String(currentUser._id);
-                userMilestoneState[uid] = isSelf
-                    ? { ...serverUserMilestoneStates[uid], ...(userMilestoneState[uid] || {}) }
-                    : { ...(userMilestoneState[uid] || {}), ...serverUserMilestoneStates[uid] };
+                const isSelf = currentUser && (
+                    String(uid) === String(currentUser._id || currentUser.id || '') ||
+                    (currentUser.email && String(uid).toLowerCase().trim() === currentUser.email.toLowerCase().trim())
+                );
+                if (isSelf) {
+                    const srv = serverUserMilestoneStates[uid] || {};
+                    const loc = userMilestoneState[uid] || {};
+                    userMilestoneState[uid] = {
+                        ...srv,
+                        ...loc,
+                        highestUnlocked: Math.max(Number(srv.highestUnlocked) || 1, Number(loc.highestUnlocked) || 1),
+                        started: { ...(srv.started || {}), ...(loc.started || {}) },
+                        viewedTerms: Array.from(new Set([...(Array.isArray(srv.viewedTerms) ? srv.viewedTerms : []), ...(Array.isArray(loc.viewedTerms) ? loc.viewedTerms : [])]))
+                    };
+                } else {
+                    userMilestoneState[uid] = { ...(userMilestoneState[uid] || {}), ...serverUserMilestoneStates[uid] };
+                }
             });
             try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
         }
@@ -7776,12 +7870,14 @@ function switchAdminMilestoneTab(tabName) {
     const btns = {
         checkins: document.getElementById('btnTabCheckins'),
         completion: document.getElementById('btnTabCompletion'),
+        needApproval: document.getElementById('btnTabNeedApproval'),
         modulePrereqs: document.getElementById('btnTabModulePrereqs')
     };
     const headerBtn = document.getElementById('btnHeaderMilestonePrereqs');
     const views = {
         checkins: document.getElementById('adminCheckinsConfigView'),
         completion: document.getElementById('adminCompletionView'),
+        needApproval: document.getElementById('adminNeedApprovalView'),
         prereqs: document.getElementById('adminPrereqsView'),
         modulePrereqs: document.getElementById('adminModulePrereqsView')
     };
@@ -7813,6 +7909,8 @@ function switchAdminMilestoneTab(tabName) {
         activeAdminDateKey = todayKey;
         renderAdminCheckinsList();
         loadAdminCheckinEditor(todayKey);
+    } else if (tabName === 'needApproval') {
+        if (typeof renderAdminNeedApprovalView === 'function') renderAdminNeedApprovalView();
     } else if (tabName === 'prereqs') {
         renderAdminPrereqsView();
     } else if (tabName === 'modulePrereqs') {
@@ -8603,7 +8701,7 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
         }
         if (!mappedDay && s.day !== undefined && s.day !== null) {
             const rawDay = Number(s.day);
-            if (!isNaN(rawDay) && rawDay >= 1 && rawDay <= totalSessions) {
+            if (!isNaN(rawDay)) {
                 mappedDay = rawDay;
             }
         }
@@ -8615,45 +8713,63 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
         }
     });
 
+    daySubMap._dayDateKeys = dayDateKeys;
     return daySubMap;
 }
 if (typeof window !== 'undefined') window.buildDaySubMap = buildDaySubMap;
 
-// Update the Cohort Renderer to respect the active module
-function renderAdminCohortSubmissions() {
-    const table = document.getElementById('adminCompletionTable');
-    if (!table) return;
-
+// Global helper to get cohort learners scoped to current campus partner, enrolled solutions, and search filters
+function getFilteredCohortLearners(applySearch = true) {
     const filterMango = (document.getElementById('adminCohortFilter')?.value || 'all').trim();
-    const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
     const searchText = (document.getElementById('adminSearchUser')?.value || '').toLowerCase().trim();
 
     const pool = (Array.isArray(adminRealtimeUsers) && adminRealtimeUsers.length > 0) 
         ? adminRealtimeUsers 
         : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
 
-    // 1. FILTER LOGIC: ONLY USERS WITH ENROLLED SOLUTIONS IN LEVEL-UP ACCESS
     let cohort = pool.filter(u => {
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
-        const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
+        const isTestUserEmail = (typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && (TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone)));
         
-        if (isCampusPartner) {
-            return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
+        if (typeof isCampusPartner !== 'undefined' && isCampusPartner) {
+            return u.subscribedMangoes && u.subscribedMangoes.some(mId => (typeof partnerAllowedMangoes !== 'undefined' ? partnerAllowedMangoes : []).includes(mId));
         }
         
         return hasAccess || isTestUserEmail; 
     });
 
     if (filterMango && filterMango !== 'all') {
-        cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
+        cohort = cohort.filter(u => ((typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && TEST_EMAILS.includes(u.email)) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
     }
 
-    if (searchText) {
+    if (applySearch && searchText) {
         cohort = cohort.filter(u => (u.name && u.name.toLowerCase().includes(searchText)) || (u.email && u.email.toLowerCase().includes(searchText)) || (u.phone && String(u.phone).includes(searchText)));
     }
 
+    let removedChallengeUsers = [];
+    try {
+        removedChallengeUsers = JSON.parse(localStorage.getItem('removedChallengeUsers') || '[]');
+    } catch(e) {}
+    if (Array.isArray(window._removedChallengeUsers)) {
+        removedChallengeUsers = [...new Set([...removedChallengeUsers, ...window._removedChallengeUsers])];
+    }
+    cohort = cohort.filter(u => !removedChallengeUsers.includes(String(u._id || u.id)));
+
+    return cohort;
+}
+window.getFilteredCohortLearners = getFilteredCohortLearners;
+
+// Update the Cohort Renderer to respect the active module
+function renderAdminCohortSubmissions() {
+    const table = document.getElementById('adminCompletionTable');
+    if (!table) return;
+
+    const filterStatus = (document.getElementById('adminStatusFilter')?.value || 'all').trim();
+    let cohort = getFilteredCohortLearners(true);
+
     let totalPending = 0;
     let validCohort = [];
+    let maxSubDayInCohort = 0;
 
     // Filter by Status & prepare math
     cohort.forEach(user => {
@@ -8669,6 +8785,14 @@ function renderAdminCohortSubmissions() {
 
         const cleanMod = normalizeLevelUpType(activeAdminModule);
         const targetModuleSubs = subs.filter(s => normalizeLevelUpType(s.type) === cleanMod && String(s.milestoneId || 1) === String(activeAdminMilestoneId || 1));
+        
+        targetModuleSubs.forEach(s => {
+            if (s.day) {
+                const sd = Number(s.day);
+                if (!isNaN(sd) && sd > maxSubDayInCohort && sd < 100) maxSubDayInCohort = sd;
+            }
+        });
+
         const prereqCfg = getMilestonePrereqConfig(activeAdminMilestoneId || 1);
 
         const modDaysRule = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === cleanMod && p.type === 'days');
@@ -8693,7 +8817,7 @@ function renderAdminCohortSubmissions() {
         const certRec = (typeof mockApprovedCertificates !== 'undefined' && mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`]) || null;
         const isClaimRequested = Boolean(certRec && certRec.status === 'pending_approval' && !isApproved);
         const isPending = isClaimRequested || (completionPct >= 90 && !isApproved);
-        
+
         if (isPending) totalPending++;
         if (filterStatus === 'pending' && !isPending) return;
         if (filterStatus === 'approved' && !isApproved) return;
@@ -8744,13 +8868,18 @@ function renderAdminCohortSubmissions() {
     } else if (activeAdminModule === 'immerse') {
         maxDays = 9;
     }
+
+    // Dynamic horizon expansion: ensure maxDays accounts for submissions beyond standard days
+    if (!isProjectGrid && maxSubDayInCohort > 0) {
+        maxDays = Math.max(maxDays, maxSubDayInCohort);
+    }
     
     let theadHtml = `
         <thead class="bg-slate-900/80 text-xs uppercase text-slate-400 font-black border-b border-slate-700 sticky top-0 z-10">
             <tr>
                 <th class="px-3 py-4 text-center w-14 sticky left-0 bg-slate-900 z-30 border-r border-slate-700">Rank</th>
-                <th class="px-4 py-4 sticky left-14 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[220px]">Customer Name</th>
-                <th class="px-4 py-4 text-center min-w-[100px]">Status</th>
+                <th class="px-4 py-4 sticky left-14 bg-slate-900 z-20 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)] min-w-[240px]">Customer &amp; Controls</th>
+                <th class="px-4 py-4 text-center min-w-[110px]">Status</th>
                 <th class="px-4 py-4 text-center min-w-[100px]">LCs</th>`;
     
     if (isProjectGrid) {
@@ -8781,11 +8910,11 @@ function renderAdminCohortSubmissions() {
         const subs = getUserSubmissionsByUserId(user);
         
         let statusBadge = user.isApproved 
-            ? `<span class="text-[10px] text-emerald-400 bg-emerald-900/30 border border-emerald-700/50 px-2 py-1 rounded font-bold flex items-center justify-center gap-1"><i class="fas fa-check-circle"></i> Approved</span>`
+            ? `<span class="text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-700/60 px-2.5 py-1 rounded font-bold flex items-center justify-center gap-1"><i class="fas fa-check-circle"></i> Approved</span>`
             : (user.isClaimRequested 
-                ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-400 hover:to-emerald-500 text-white px-2.5 py-1 rounded font-black transition-all shadow-md shadow-amber-950/40 animate-pulse flex items-center justify-center gap-1 mx-auto" title="Candidate claimed credential. Click to approve and issue badge."><i class="fas fa-award text-amber-200"></i> Approve Claim</button>`
+                ? `<span class="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-600/60 px-2.5 py-1 rounded font-bold flex items-center justify-center gap-1" title="Claim pending in Need Approval queue"><i class="fas fa-clock text-amber-400"></i> Claim Pending</span>`
                 : (user.isPending 
-                    ? `<button onclick="adminApproveCredential('${user._id}', ${activeAdminMilestoneId || 1})" class="text-[10px] bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded font-bold transition-all shadow-md">Approve</button>` 
+                    ? `<span class="text-[10px] text-indigo-300 bg-indigo-950/60 border border-indigo-700/60 px-2.5 py-1 rounded font-bold flex items-center justify-center gap-1"><i class="fas fa-hourglass-half"></i> In Review</span>` 
                     : `<span class="text-[10px] text-slate-500">In Progress</span>`));
             
         const modStart = (typeof getUserModuleStartDate === 'function') ? getUserModuleStartDate(user._id, activeAdminMilestoneId || 1, activeAdminModule) : null;
@@ -8803,12 +8932,20 @@ function renderAdminCohortSubmissions() {
                 <td class="px-4 py-3 sticky left-14 bg-slate-900/90 group-hover:bg-slate-800/90 z-10 border-r border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.3)]">
                     <div class="flex items-center gap-3">
                         <img src="${user.profilePicUrl || 'https://via.placeholder.com/30'}" class="w-8 h-8 rounded-full border border-slate-600 object-cover" onerror="this.src='https://via.placeholder.com/30'">
-                        <div>
-                            <p class="text-sm font-bold text-white truncate w-40">${user.name || 'Customer'}</p>
-                            <p class="text-[10px] text-slate-400 truncate w-40">${user.email || user.phone}</p>
-                            <div class="flex items-center gap-1.5 mt-0.5">
-                                <button type="button" onclick="promptSetCustomerModuleStartDate('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', '${activeAdminModule}')" class="text-slate-500 hover:text-indigo-400 p-0.5 rounded transition-all inline-flex items-center gap-1 text-[10px]" title="Edit Day 1 Start Date for ${activeAdminModule.toUpperCase()}">
-                                    <i class="fas fa-pen-to-square"></i>
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-white truncate w-44">${user.name || 'Customer'}</p>
+                            <p class="text-[10px] text-slate-400 truncate w-44">${user.email || user.phone}</p>
+                            <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                <button type="button" onclick="promptSetCustomerModuleStartDate('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', '${activeAdminModule}')" class="text-slate-400 hover:text-indigo-400 text-[10px] inline-flex items-center gap-1" title="Edit Day 1 Start Date for ${activeAdminModule.toUpperCase()}">
+                                    <i class="fas fa-calendar-day"></i> <span>Day 1</span>
+                                </button>
+                                <span class="text-slate-700">•</span>
+                                <button type="button" onclick="confirmResetCustomerProgress('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}', ${activeAdminMilestoneId || 1})" class="text-amber-400/90 hover:text-amber-300 text-[10px] inline-flex items-center gap-1 font-bold" title="Reset all check-in progress for this milestone">
+                                    <i class="fas fa-rotate-left"></i> <span>Reset</span>
+                                </button>
+                                <span class="text-slate-700">•</span>
+                                <button type="button" onclick="confirmRemoveCustomerFromChallenge('${user._id}', '${(user.name || 'Customer').replace(/'/g, "\\'")}')" class="text-rose-400/90 hover:text-rose-300 text-[10px] inline-flex items-center gap-1 font-bold" title="Remove customer from Level-Up Challenge cohort">
+                                    <i class="fas fa-user-slash"></i> <span>Remove</span>
                                 </button>
                             </div>
                         </div>
@@ -8863,7 +9000,7 @@ function renderAdminCohortSubmissions() {
                 let actualDay = d;
                 if (activeAdminModule === 'ios') actualDay = d + 30; 
                 
-                const matchingSub = daySubMap[d] || null;
+                const matchingSub = daySubMap[d] || (daySubMap._dayDateKeys && daySubMap._dayDateKeys[d] && daySubMap[daySubMap._dayDateKeys[d]]) || null;
                 
                 if (matchingSub) {
                     const isEval = matchingSub.status === 'evaluating';
@@ -8900,6 +9037,225 @@ function renderAdminCohortSubmissions() {
     table.innerHTML = theadHtml + tbodyHtml;
 }
 window.renderAdminCohortSubmissions = renderAdminCohortSubmissions;   
+
+// ==============================================================
+// CREATOR CUSTOMER MANAGEMENT: RESET PROGRESS & REMOVE
+// ==============================================================
+async function confirmResetCustomerProgress(userId, userName, milestoneId) {
+    const msId = milestoneId || activeAdminMilestoneId || 1;
+    const cleanName = userName || 'Customer';
+    const confirmed = confirm(`⚠️ RESET PROGRESS CONFIRMATION\n\nAre you sure you want to completely reset check-in progress for ${cleanName} in Milestone ${msId}?\n\n• All check-in submissions for Milestone ${msId} will be permanently cleared from the database.\n• Their module start dates will be reset to Day 1.\n• Any claimed credentials for Milestone ${msId} will be removed.\n• The learner will start from scratch Day 1.\n\nClick OK to confirm.`);
+    if (!confirmed) return;
+
+    try {
+        const res = await apiFetch('/api/creator/customer/reset-progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, milestoneId: msId })
+        }).then(r => r.json());
+
+        if (res && res.success) {
+            // Clear local cached submissions for this user & milestone
+            try {
+                let localDB = getAllUserSubmissions();
+                localDB = localDB.filter(s => !(
+                    (String(s.userId) === String(userId) || (s.userEmail && res.data?.userEmail && s.userEmail.toLowerCase() === res.data.userEmail.toLowerCase())) &&
+                    Number(s.milestoneId || 1) === Number(msId)
+                ));
+                setAllUserSubmissions(localDB);
+            } catch(e) {}
+
+            // Clear certificate approvals locally
+            if (typeof mockApprovedCertificates !== 'undefined') {
+                delete mockApprovedCertificates[`${userId}_${msId}`];
+                delete mockApprovedCertificates[`${userId}_MS${msId}`];
+                try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch(e) {}
+            }
+
+            // Clear progression flags locally so customer restarts at Day 1
+            if (typeof userMilestoneState !== 'undefined' && userMilestoneState[userId]) {
+                if (userMilestoneState[userId].started && userMilestoneState[userId].started[msId]) {
+                    delete userMilestoneState[userId].started[msId];
+                }
+                if (Number(msId) === 1) {
+                    userMilestoneState[userId].highestUnlocked = 1;
+                }
+                try { localStorage.setItem('mockUserMilestoneState', JSON.stringify(userMilestoneState)); } catch(e) {}
+            }
+
+            alert(`✅ Progress for ${cleanName} has been reset. They can now start Milestone ${msId} from Day 1.`);
+            if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+            if (typeof updateDashboardUI === 'function') updateDashboardUI();
+            if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
+        } else {
+            alert('Failed to reset progress: ' + (res?.error || 'Unknown error'));
+        }
+    } catch(err) {
+        alert('Error resetting customer progress: ' + (err.message || err));
+    }
+}
+window.confirmResetCustomerProgress = confirmResetCustomerProgress;
+
+async function confirmRemoveCustomerFromChallenge(userId, userName) {
+    const cleanName = userName || 'Customer';
+    const confirmed = confirm(`⚠️ REMOVE CUSTOMER CONFIRMATION\n\nAre you sure you want to remove ${cleanName} from the Level-Up Challenge cohort?\n\n• They will no longer appear in the Level-Up Completion Grid.\n• Their user account remains preserved.\n\nClick OK to confirm.`);
+    if (!confirmed) return;
+
+    try {
+        const res = await apiFetch('/api/creator/customer/remove-challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, action: 'remove' })
+        }).then(r => r.json());
+
+        if (res && res.success) {
+            const removedList = res.data?.removedChallengeUsers || [];
+            window._removedChallengeUsers = removedList;
+            try { localStorage.setItem('removedChallengeUsers', JSON.stringify(removedList)); } catch(e) {}
+
+            alert(`✅ ${cleanName} has been removed from the Level-Up Challenge cohort.`);
+            if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+            if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
+        } else {
+            alert('Failed to remove customer: ' + (res?.error || 'Unknown error'));
+        }
+    } catch(err) {
+        alert('Error removing customer: ' + (err.message || err));
+    }
+}
+window.confirmRemoveCustomerFromChallenge = confirmRemoveCustomerFromChallenge;
+
+// ==============================================================
+// CREATOR DASHBOARD: DEDICATED NEED APPROVAL QUEUE
+// ==============================================================
+function renderAdminNeedApprovalView() {
+    const listContainer = document.getElementById('adminNeedApprovalList');
+    const headerCount = document.getElementById('approvalQueueCountHeader');
+    const badge = document.getElementById('needApprovalCountBadge');
+    if (!listContainer) return;
+
+    const msId = activeAdminMilestoneId || 1;
+    const users = (typeof getFilteredCohortLearners === 'function') ? getFilteredCohortLearners(false) : (adminRealtimeUsers || []);
+    const allSubs = getAllUserSubmissions();
+
+    const pendingCandidates = [];
+
+    users.forEach(u => {
+        const uid = String(u._id || u.id);
+        const isAppr = typeof isCertificateApproved === 'function' ? isCertificateApproved(uid, msId) : false;
+        if (isAppr) return; // already approved
+
+        let claimReq = false;
+        try {
+            const claims = JSON.parse(localStorage.getItem('userCredentialClaims') || '{}');
+            if (claims[`${uid}_${msId}`] || claims[`${uid}_MS${msId}`]) claimReq = true;
+        } catch(e) {}
+
+        const certRec = (typeof mockApprovedCertificates !== 'undefined' && (mockApprovedCertificates[`${uid}_MS${msId}`] || mockApprovedCertificates[`${uid}_${msId}`])) || null;
+        if (certRec && certRec.status === 'pending_approval') claimReq = true;
+
+        const userSubs = allSubs.filter(s => (String(s.userId) === uid || (s.userEmail && u.email && s.userEmail.toLowerCase().trim() === u.email.toLowerCase().trim())) && Number(s.milestoneId || 1) === msId);
+        const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+        const completedCount = userSubs.filter(s => s.status === 'completed' || Number(s.lcReward) > 0).length;
+
+        if (claimReq || completedCount >= 1) {
+            pendingCandidates.push({
+                ...u,
+                claimReq,
+                earnedLcs,
+                completedCount,
+                userSubs
+            });
+        }
+    });
+
+    const pendingCount = pendingCandidates.length;
+    if (headerCount) headerCount.innerText = `${pendingCount} Pending`;
+    if (badge) {
+        badge.innerText = pendingCount;
+        badge.classList.toggle('hidden', pendingCount === 0);
+    }
+
+    if (pendingCandidates.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center py-12 px-4 rounded-2xl bg-slate-900/50 border border-slate-800 space-y-3">
+                <div class="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xl">
+                    <i class="fas fa-check-double"></i>
+                </div>
+                <h5 class="text-sm font-bold text-white">All Caught Up!</h5>
+                <p class="text-xs text-slate-400 max-w-sm mx-auto">No pending credential claims or approvals required for Milestone ${msId}. Candidates who apply for certification will appear here.</p>
+            </div>
+        `;
+        return;
+    }
+
+    listContainer.innerHTML = pendingCandidates.map(cand => {
+        const uid = cand._id || cand.id;
+        const name = cand.name || 'Candidate';
+        const email = cand.email || cand.phone || 'No contact info';
+        const statusLabel = cand.claimReq 
+            ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse flex items-center gap-1"><i class="fas fa-clock"></i> Credential Claim Requested</span>'
+            : '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 flex items-center gap-1"><i class="fas fa-hourglass-half"></i> Ready for Review</span>';
+
+        return `
+            <div class="glass-card p-4 sm:p-5 rounded-2xl border border-slate-800 bg-slate-900/70 hover:border-indigo-500/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3.5 min-w-0">
+                    <img src="${cand.profilePicUrl || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full border border-slate-700 object-cover shrink-0" onerror="this.src='https://via.placeholder.com/40'">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h5 class="text-sm font-bold text-white truncate">${name}</h5>
+                            ${statusLabel}
+                        </div>
+                        <p class="text-xs text-slate-400 truncate mt-0.5">${email}</p>
+                        <div class="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400 font-mono flex-wrap">
+                            <span><strong class="text-indigo-400 font-bold">${cand.earnedLcs}</strong> LCs Earned</span>
+                            <span>•</span>
+                            <span><strong class="text-emerald-400 font-bold">${cand.completedCount}</strong> Check-ins Completed</span>
+                            <span>•</span>
+                            <span>Milestone ${msId}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <button type="button" onclick="displayAdminLearnerDataById('${uid}')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm">
+                        <i class="fas fa-eye text-indigo-400"></i> Review Submissions
+                    </button>
+                    <button type="button" onclick="adminApproveAndRefresh('${uid}', ${msId})" class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-950/40 cursor-pointer">
+                        <i class="fas fa-check"></i> Approve Claim
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+window.renderAdminNeedApprovalView = renderAdminNeedApprovalView;
+
+async function adminApproveAndRefresh(userId, msId) {
+    if (typeof adminApproveCredential === 'function') {
+        await adminApproveCredential(userId, msId);
+    }
+    renderAdminNeedApprovalView();
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.adminApproveAndRefresh = adminApproveAndRefresh;
+
+async function batchApproveAllPendingClaims() {
+    const msId = activeAdminMilestoneId || 1;
+    const users = (typeof getFilteredCohortLearners === 'function') ? getFilteredCohortLearners(false) : (adminRealtimeUsers || []);
+    let count = 0;
+    for (const u of users) {
+        const uid = String(u._id || u.id);
+        const isAppr = typeof isCertificateApproved === 'function' ? isCertificateApproved(uid, msId) : false;
+        if (!isAppr && typeof adminApproveCredential === 'function') {
+            await adminApproveCredential(uid, msId);
+            count++;
+        }
+    }
+    alert(`✅ Successfully approved ${count} pending credential claims for Milestone ${msId}!`);
+    renderAdminNeedApprovalView();
+    if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+}
+window.batchApproveAllPendingClaims = batchApproveAllPendingClaims;
 
 // ==============================================================
 // COMPLETION GRID DATA EXTRACTION & TELEMETRY EXPORT ENGINE
@@ -12811,6 +13167,11 @@ async function submitPodSessionQuiz() {
         showPodSuccessPopup(awardedPoints, answers.length);
 
         if (typeof switchMilestoneTab === 'function') switchMilestoneTab('pod');
+        if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        if (typeof renderAdminCohortSubmissions === 'function' && document.getElementById('adminCompletionTable')) {
+            renderAdminCohortSubmissions();
+        }
+        if (typeof syncGlobalServerData === 'function') syncGlobalServerData().catch(() => {});
     } catch (err) {
         console.error('Server sync error for POD quiz:', err);
         alert(`Network error submitting POD check-in: ${err.message || 'Please check your connection and retry.'}`);
@@ -15642,7 +16003,8 @@ function showAiEvaluatingLagtime(evalPromise, onDoneCallback) {
         .then(data => {
             console.log('✅ Server evaluation result arrived in modal:', data);
             serverResult = data;
-            if (!document.getElementById('evaluatingCheckinModal') && !lateResultApplied) {
+            // IMMEDIATELY invoke onDoneCallback to ensure check-in is persisted to localDB & in-memory caches
+            if (!lateResultApplied && data) {
                 lateResultApplied = true;
                 if (typeof onDoneCallback === 'function') onDoneCallback(data);
             }
@@ -15926,7 +16288,9 @@ function closeAiEvaluatingModal(forceDismiss = false) {
     }
     const cb = window._evalCallback;
     window._evalCallback = null;
-    if (typeof cb === 'function') cb();
+    if (typeof cb === 'function') {
+        try { cb(); } catch(e) {}
+    }
 }
 window.closeAiEvaluatingModal = closeAiEvaluatingModal;
 
@@ -16154,7 +16518,10 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             }
         } catch(e) {}
 
+        let doneHandlerExecuted = false;
         const doneHandler = (finalData) => {
+            if (doneHandlerExecuted) return;
+            doneHandlerExecuted = true;
             const pts = Number(finalData?.lcReward) || 0;
             const matchScore = Number(finalData?.matchPercentage) || 0;
             const isMismatch = (pts === 0 || finalData?.status === 'rejected_mismatch' || matchScore < 50);
@@ -17967,6 +18334,9 @@ function switchMilestoneTab(moduleName, btnElement) {
     `;
 
     container.innerHTML = streakBannerHtml + cardsHtml;
+    if (typeof renderMilestonePeerProgress === 'function') {
+        renderMilestonePeerProgress(activeMilestoneId);
+    }
 }
 window.switchMilestoneTab = switchMilestoneTab;
 
@@ -20653,8 +21023,96 @@ function renderMilestoneModulesUI(msId) {
     if (typeof switchMilestoneTab === 'function') {
         switchMilestoneTab(firstMod);
     }
+
+    // Render Cohort Peer Standings (Currently in this Milestone vs Reached Next Milestone)
+    renderMilestonePeerProgress(msId);
 }
 window.renderMilestoneModulesUI = renderMilestoneModulesUI;
+
+// ==============================================================
+// CUSTOMER MILESTONE VIEW: PEER COHORT STANDINGS
+// ==============================================================
+function renderMilestonePeerProgress(msId) {
+    const currentListEl = document.getElementById('cohortCurrentPeersList');
+    const advancedListEl = document.getElementById('cohortAdvancedPeersList');
+    const curBadge = document.getElementById('cohortCurrentCountBadge');
+    const advBadge = document.getElementById('cohortAdvancedCountBadge');
+    const summaryEl = document.getElementById('milestoneCohortPeerSummary');
+    if (!currentListEl || !advancedListEl) return;
+
+    const effectiveMsId = Number(msId || activeMilestoneId || 1);
+    const users = (typeof adminRealtimeUsers !== 'undefined' && adminRealtimeUsers.length > 0) ? adminRealtimeUsers : (typeof actualUsers !== 'undefined' ? actualUsers : []);
+    const allSubs = getAllUserSubmissions();
+
+    let removedChallengeUsers = [];
+    try {
+        removedChallengeUsers = JSON.parse(localStorage.getItem('removedChallengeUsers') || '[]');
+    } catch(e) {}
+    if (Array.isArray(window._removedChallengeUsers)) {
+        removedChallengeUsers = [...new Set([...removedChallengeUsers, ...window._removedChallengeUsers])];
+    }
+
+    const currentPeers = [];
+    const advancedPeers = [];
+
+    users.forEach(u => {
+        const uid = String(u._id || u.id);
+        if (removedChallengeUsers.includes(uid)) return;
+
+        const highestMs = (typeof getActualLearnerHighestMilestone === 'function') ? getActualLearnerHighestMilestone(uid) : 1;
+        const isApprovedForMs = typeof isCertificateApproved === 'function' ? isCertificateApproved(uid, effectiveMsId) : false;
+
+        const userSubs = allSubs.filter(s => (String(s.userId) === uid || (s.userEmail && u.email && s.userEmail.toLowerCase().trim() === u.email.toLowerCase().trim())));
+        const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+
+        const peerObj = {
+            ...u,
+            highestMs,
+            earnedLcs,
+            isCurrentLearner: currentUser && String(currentUser._id) === uid
+        };
+
+        if (highestMs > effectiveMsId || isApprovedForMs) {
+            advancedPeers.push(peerObj);
+        } else {
+            currentPeers.push(peerObj);
+        }
+    });
+
+    if (curBadge) curBadge.innerText = currentPeers.length;
+    if (advBadge) advBadge.innerText = advancedPeers.length;
+    if (summaryEl) summaryEl.innerText = `• ${currentPeers.length} active in Milestone ${effectiveMsId} • ${advancedPeers.length} reached Milestone ${effectiveMsId + 1}`;
+
+    const renderPeerCard = (p, isAdv) => `
+        <div class="flex items-center justify-between gap-2.5 p-2 rounded-xl bg-slate-900/60 border border-slate-800/80 ${p.isCurrentLearner ? 'border-indigo-500/50 bg-indigo-950/20' : ''}">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <img src="${p.profilePicUrl || 'https://via.placeholder.com/28'}" class="w-7 h-7 rounded-full border border-slate-700 object-cover shrink-0" onerror="this.src='https://via.placeholder.com/28'">
+                <div class="min-w-0">
+                    <p class="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                        <span>${p.name || 'Learner'}</span>
+                        ${p.isCurrentLearner ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-indigo-600 text-white font-mono font-bold">You</span>' : ''}
+                    </p>
+                    <p class="text-[10px] text-slate-400 font-mono">${p.earnedLcs} LCs Earned</p>
+                </div>
+            </div>
+            <div class="shrink-0">
+                ${isAdv 
+                    ? `<span class="text-[9px] px-2 py-0.5 rounded-full font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60"><i class="fas fa-check mr-0.5"></i> Reached M${effectiveMsId + 1}</span>`
+                    : `<span class="text-[9px] px-2 py-0.5 rounded-full font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">Milestone ${effectiveMsId}</span>`
+                }
+            </div>
+        </div>
+    `;
+
+    currentListEl.innerHTML = currentPeers.length > 0 
+        ? currentPeers.map(p => renderPeerCard(p, false)).join('')
+        : `<div class="text-center py-4 text-xs text-slate-500">No peers currently in Milestone ${effectiveMsId}.</div>`;
+
+    advancedListEl.innerHTML = advancedPeers.length > 0
+        ? advancedPeers.map(p => renderPeerCard(p, true)).join('')
+        : `<div class="text-center py-4 text-xs text-slate-500">Be the first to reach Milestone ${effectiveMsId + 1}!</div>`;
+}
+window.renderMilestonePeerProgress = renderMilestonePeerProgress;
 
 // ==============================================================
 // MILESTONE ENTRY WARNING MODAL — rules, reset policy, and the

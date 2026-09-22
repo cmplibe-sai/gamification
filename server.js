@@ -553,6 +553,26 @@ function saveStore() {
     }
 }
 
+let _saveStoreTimer = null;
+function saveStoreDebounced(delayMs = 800) {
+    if (_saveStoreTimer) return;
+    _saveStoreTimer = setTimeout(() => {
+        _saveStoreTimer = null;
+        saveStore();
+    }, delayMs);
+}
+
+function flushStoreSync() {
+    if (_saveStoreTimer) {
+        clearTimeout(_saveStoreTimer);
+        _saveStoreTimer = null;
+        saveStore();
+    }
+}
+process.on('SIGINT', () => { flushStoreSync(); process.exit(0); });
+process.on('SIGTERM', () => { flushStoreSync(); process.exit(0); });
+process.on('exit', () => { flushStoreSync(); });
+
 // -------------------------------------------------------------
 // Database Connection (Optional / Graceful MongoDB)
 // -------------------------------------------------------------
@@ -2466,8 +2486,30 @@ function verifyCreatorToken(req) {
     return true;
 }
 
-// In-memory store for authenticated user sessions (Learners, Recruiters, Campus Coordinators, Creators)
+// Persistent store for authenticated user sessions (Learners, Recruiters, Campus Coordinators, Creators)
 const validUserSessions = new Map(); // sessionToken -> { role, userId, email, employerId, campusId, expiresAt }
+if (store.userSessions && typeof store.userSessions === 'object') {
+    Object.entries(store.userSessions).forEach(([tok, sess]) => {
+        if (sess && sess.expiresAt && sess.expiresAt > Date.now()) {
+            validUserSessions.set(tok, sess);
+        }
+    });
+}
+
+function recordUserSession(token, sessionData) {
+    validUserSessions.set(token, sessionData);
+    if (!store.userSessions || typeof store.userSessions !== 'object') store.userSessions = {};
+    store.userSessions[token] = sessionData;
+    saveStoreDebounced(500);
+}
+
+function removeUserSession(token) {
+    validUserSessions.delete(token);
+    if (store.userSessions && store.userSessions[token]) {
+        delete store.userSessions[token];
+        saveStoreDebounced(500);
+    }
+}
 
 function getAuthenticatedSession(req) {
     const authHeader = req.headers['authorization'] || req.headers['x-session-token'];
@@ -2476,7 +2518,7 @@ function getAuthenticatedSession(req) {
     if (!validUserSessions.has(cleanToken)) return null;
     const sess = validUserSessions.get(cleanToken);
     if (Date.now() > sess.expiresAt) {
-        validUserSessions.delete(cleanToken);
+        removeUserSession(cleanToken);
         return null;
     }
     return sess;
@@ -3302,8 +3344,165 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             milestonePrereqs: getMilestonePrereqsFromDb(),
             modulePrereqs: getModulePrereqsFromDb(),
             certificateApprovals: getCertificateApprovalsFromDb(),
-            userMilestoneStates: getUserMilestoneStateFromDb()
+            userMilestoneStates: getUserMilestoneStateFromDb(),
+            removedChallengeUsers: store.removedChallengeUsers || [],
+            userResets: store.userResets || {}
         }
+    });
+});
+
+// CREATOR ACTION: Reset customer milestone progress so they start from scratch Day 1
+app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/customer/reset-progress'], (req, res) => {
+    if (!checkCreatorAuth(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+    }
+    const { userId, milestoneId, userEmail } = req.body || {};
+    if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
+    }
+    let msId = null;
+    if (milestoneId !== undefined && milestoneId !== null && String(milestoneId).trim() !== '') {
+        const cleanMsStr = String(milestoneId).toLowerCase().trim();
+        if (cleanMsStr === 'all') {
+            msId = null;
+        } else {
+            const parsed = parseInt(cleanMsStr.replace(/\D/g, ''), 10);
+            if (!isNaN(parsed) && parsed > 0) {
+                msId = parsed;
+            } else {
+                return res.status(400).json({ success: false, error: 'Invalid milestoneId. Must be a positive integer (e.g. 1) or "all".' });
+            }
+        }
+    }
+    const uidStr = String(userId);
+    const emailStr = (userEmail || '').toLowerCase().trim();
+
+    // 1. Remove submissions for this user (for specific milestone or all)
+    const initialCount = (store.submissions || []).length;
+    store.submissions = (store.submissions || []).filter(s => {
+        const matchesUser = String(s.userId) === uidStr || (emailStr && s.userEmail && s.userEmail.toLowerCase().trim() === emailStr);
+        if (!matchesUser) return true;
+        if (msId !== null) {
+            return Number(s.milestoneId || 1) !== msId;
+        }
+        return false;
+    });
+    const removedSubs = initialCount - store.submissions.length;
+
+    // 2. Remove certificate approvals
+    if (store.certificateApprovals) {
+        if (msId !== null) {
+            delete store.certificateApprovals[`${uidStr}_${msId}`];
+            delete store.certificateApprovals[`${uidStr}_MS${msId}`];
+            if (emailStr) {
+                delete store.certificateApprovals[`${emailStr}_${msId}`];
+                delete store.certificateApprovals[`${emailStr}_MS${msId}`];
+            }
+        } else {
+            Object.keys(store.certificateApprovals).forEach(k => {
+                if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
+                    delete store.certificateApprovals[k];
+                }
+            });
+        }
+    }
+
+    // 3. Clear customer module start dates for this milestone
+    if (store.userModuleStartDates) {
+        if (msId !== null) {
+            Object.keys(store.userModuleStartDates).forEach(k => {
+                if (k.startsWith(`${uidStr}_ms${msId}_`) || (emailStr && k.startsWith(`${emailStr}_ms${msId}_`))) {
+                    delete store.userModuleStartDates[k];
+                }
+            });
+        } else {
+            Object.keys(store.userModuleStartDates).forEach(k => {
+                if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
+                    delete store.userModuleStartDates[k];
+                }
+            });
+        }
+    }
+
+    // 4. Reset user milestone progression state (highestUnlocked, started)
+    if (store.userMilestoneState) {
+        const stateKey = store.userMilestoneState[uidStr] ? uidStr : (emailStr && store.userMilestoneState[emailStr] ? emailStr : null);
+        if (stateKey && store.userMilestoneState[stateKey]) {
+            if (msId !== null) {
+                if (store.userMilestoneState[stateKey].started && store.userMilestoneState[stateKey].started[msId]) {
+                    delete store.userMilestoneState[stateKey].started[msId];
+                }
+                if (msId === 1) {
+                    store.userMilestoneState[stateKey].highestUnlocked = 1;
+                }
+            } else {
+                store.userMilestoneState[stateKey] = { highestUnlocked: 1, viewedTerms: [], started: {} };
+            }
+        }
+    }
+
+    // 5. Record reset event so that client-side sync purges local cache on learner device
+    if (!store.userResets || typeof store.userResets !== 'object') store.userResets = {};
+    const resetTimestamp = Date.now();
+    const resetRecord = { milestoneId: msId, timestamp: resetTimestamp };
+
+    const appendReset = (key) => {
+        if (!store.userResets[key]) {
+            store.userResets[key] = [resetRecord];
+        } else if (Array.isArray(store.userResets[key])) {
+            store.userResets[key].push(resetRecord);
+            if (store.userResets[key].length > 20) {
+                store.userResets[key] = store.userResets[key].slice(-20);
+            }
+        } else {
+            // Upgrade legacy single object to array
+            store.userResets[key] = [store.userResets[key], resetRecord];
+        }
+    };
+
+    appendReset(uidStr);
+    if (emailStr) {
+        appendReset(emailStr);
+    }
+
+    store.submissionsRevision = resetTimestamp;
+    saveStore();
+
+    console.log(`[Creator Action] Reset progress for user ${uidStr} (Milestone: ${msId || 'All'}). Cleared ${removedSubs} submissions.`);
+    res.json({
+        success: true,
+        message: `Successfully reset progress for learner. Removed ${removedSubs} submissions.`,
+        data: { userId: uidStr, milestoneId: msId, removedSubmissions: removedSubs, resetTimestamp }
+    });
+});
+
+// CREATOR ACTION: Remove or restore customer in Level-Up Challenge cohort
+app.post(['/api/creator/customer/remove-challenge', '/gamification/api/creator/customer/remove-challenge'], (req, res) => {
+    if (!checkCreatorAuth(req)) {
+        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+    }
+    const { userId, action } = req.body || {};
+    if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId is required' });
+    }
+
+    if (!store.removedChallengeUsers) store.removedChallengeUsers = [];
+    const uidStr = String(userId);
+
+    if (action === 'restore') {
+        store.removedChallengeUsers = store.removedChallengeUsers.filter(id => String(id) !== uidStr);
+    } else {
+        if (!store.removedChallengeUsers.some(id => String(id) === uidStr)) {
+            store.removedChallengeUsers.push(uidStr);
+        }
+    }
+    saveStore();
+
+    console.log(`[Creator Action] ${action === 'restore' ? 'Restored' : 'Removed'} user ${uidStr} ${action === 'restore' ? 'to' : 'from'} challenge.`);
+    res.json({
+        success: true,
+        message: action === 'restore' ? 'Customer restored to challenge.' : 'Customer removed from Level-Up Challenge.',
+        data: { removedChallengeUsers: store.removedChallengeUsers }
     });
 });
 
@@ -4028,7 +4227,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             }
             const isTeamMember = (store.teamMembers || []).some(m => m.email && m.email.toLowerCase() === cleanLogin);
             const token = `cmpli_sess_crt_${crypto.randomBytes(24).toString('hex')}`;
-            validUserSessions.set(token, { role: 'creator', userId: cleanLogin, email: cleanLogin, expiresAt: Date.now() + 86400000 });
+            recordUserSession(token, { role: 'creator', userId: cleanLogin, email: cleanLogin, expiresAt: Date.now() + 86400000 });
             return res.json({ success: true, token, role: 'creator' });
         }
 
@@ -4056,7 +4255,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
                 });
             }
             const token = `cmpli_sess_rec_${crypto.randomBytes(24).toString('hex')}`;
-            validUserSessions.set(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
+            recordUserSession(token, { role: 'recruiter', userId: emp.id, employerId: emp.id, email: emp.email, companyName: emp.companyName, expiresAt: Date.now() + 86400000 });
             return res.json({ success: true, token, role: 'recruiter', employer: { id: emp.id, companyName: emp.companyName, email: emp.email, permittedMangoes: emp.permittedMangoes || [] } });
         }
 
@@ -4081,7 +4280,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
                 return res.status(403).json({ success: false, error: 'Unauthorized: Campus coordinator credentials invalid' });
             }
             const token = `cmpli_sess_ptn_${crypto.randomBytes(24).toString('hex')}`;
-            validUserSessions.set(token, { role: 'partner', userId: matchedCoord.email, campusId: matchedCampus.id, email: matchedCoord.email, expiresAt: Date.now() + 86400000 });
+            recordUserSession(token, { role: 'partner', userId: matchedCoord.email, campusId: matchedCampus.id, email: matchedCoord.email, expiresAt: Date.now() + 86400000 });
             return res.json({ success: true, token, role: 'partner', campusId: matchedCampus.id });
         }
 
@@ -4104,7 +4303,7 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
             }
             const learnerId = String(learner._id || learner.id);
             const token = `cmpli_sess_lrn_${crypto.randomBytes(24).toString('hex')}`;
-            validUserSessions.set(token, { role: 'customer', userId: learnerId, email: learner.email, expiresAt: Date.now() + 86400000 });
+            recordUserSession(token, { role: 'customer', userId: learnerId, email: learner.email, expiresAt: Date.now() + 86400000 });
             return res.json({ success: true, token, role: 'customer', studentId: learnerId });
         }
 
@@ -4189,6 +4388,27 @@ function cleanScriptForSpeech(text) {
     // "BLive" / "blive" -> "B-Live" (forces ElevenLabs British voice to say "B-Live", never "blive")
     cleaned = cleaned.replace(/\bBLive\b/gi, 'B-Live');
 
+    // Consistent vocabulary pronunciation (avoids ElevenLabs acoustic drift):
+    // "dynasties" -> "din-uh-stees" (standard British dictionary pronunciation /ˈdɪnəstiz/, never "dinasities")
+    cleaned = cleaned.replace(/\bdynasties\b/gi, 'din-uh-stees');
+    cleaned = cleaned.replace(/\bdynasty\b/gi, 'din-uh-stee');
+
+    // "multi-brand" / "multibrand" -> consistent hyphenated "multi-brand"
+    cleaned = cleaned.replace(/\bmulti[- ]?brand\b/gi, 'multi-brand');
+    cleaned = cleaned.replace(/\bmulti[- ]?product\b/gi, 'multi-product');
+    cleaned = cleaned.replace(/\bmulti[- ]?market\b/gi, 'multi-market');
+    cleaned = cleaned.replace(/\bmulti[- ]?channel\b/gi, 'multi-channel');
+
+    // Number ranges (e.g. "10-15" -> "10 to 15")
+    cleaned = cleaned.replace(/(\d+)\s*[-–—]\s*(\d+)/g, '$1 to $2');
+
+    // Ordinal numbers (1st, 2nd, 3rd, etc.)
+    cleaned = cleaned.replace(/\b1st\b/gi, 'first');
+    cleaned = cleaned.replace(/\b2nd\b/gi, 'second');
+    cleaned = cleaned.replace(/\b3rd\b/gi, 'third');
+    cleaned = cleaned.replace(/\b4th\b/gi, 'fourth');
+    cleaned = cleaned.replace(/\b5th\b/gi, 'fifth');
+
     // Episode & Edition Numbers:
     // "#cD549" or "#cD 549" or "cD549" -> "Simply Dip story number 549"
     cleaned = cleaned.replace(/#?cD\s*(\d+)/gi, 'Simply Dip story number $1');
@@ -4238,9 +4458,22 @@ function cleanScriptForSpeech(text) {
         line = line.replace(/AU\$\s*([\d,]+(?:\.\d+)?)/gi, '$1 Australian dollars');
         line = line.replace(/US\$\s*([\d,]+(?:\.\d+)?)/gi, '$1 US dollars');
         line = line.replace(/\$\s*([\d,]+(?:\.\d+)?)/g, '$1 dollars');
+        line = line.replace(/₹\s*([\d,]+(?:\.\d+)?)/g, '$1 rupees');
+        line = line.replace(/€\s*([\d,]+(?:\.\d+)?)/g, '$1 euros');
+        line = line.replace(/£\s*([\d,]+(?:\.\d+)?)/g, '$1 pounds');
         line = line.replace(/&/g, ' and ');
         line = line.replace(/%/g, ' percent');
         line = line.replace(/\+/g, ' plus ');
+        // Contextual slash pronunciations: preserve and/or, units, dates, without
+        line = line.replace(/\band\/or\b/gi, 'and or');
+        line = line.replace(/\bkm\s*\/\s*h(?:r)?\b/gi, 'kilometers per hour');
+        line = line.replace(/\bmph\b/gi, 'miles per hour');
+        line = line.replace(/\bw\/o\b/gi, 'without');
+        line = line.replace(/\bw\/(?=[ \t\r\n.,;!?]|$)/gi, 'with');
+        // Single letter options e.g. "A/B testing" -> "A or B testing"
+        line = line.replace(/\b([A-Za-z])\s*\/\s*([A-Za-z])\b/g, '$1 or $2');
+        // Word pairs e.g. "hybrid/electric" -> "hybrid or electric"
+        line = line.replace(/([a-zA-Z]{2,})\s*\/\s*([a-zA-Z]{2,})/g, '$1 or $2');
 
         // Trailing cadence punctuation: ensure natural vocal pause without doubling punctuation
         if (!/[.!?:;,—–]$/.test(line)) {
@@ -4298,9 +4531,9 @@ async function synthesizeBritishVoiceNarration(text, milestoneId = 1, dateKey = 
             text: cleanedSpeechText,
             model_id: 'eleven_multilingual_v2',
             voice_settings: {
-                stability: typeof options.stability === 'number' ? Math.max(0.1, Math.min(1.0, options.stability)) : 0.38,
-                similarity_boost: typeof options.similarityBoost === 'number' ? Math.max(0.1, Math.min(1.0, options.similarityBoost)) : 0.80,
-                style: typeof options.style === 'number' ? Math.max(0.0, Math.min(1.0, options.style)) : 0.20,
+                stability: typeof options.stability === 'number' ? Math.max(0.1, Math.min(1.0, options.stability)) : 0.68,
+                similarity_boost: typeof options.similarityBoost === 'number' ? Math.max(0.1, Math.min(1.0, options.similarityBoost)) : 0.82,
+                style: typeof options.style === 'number' ? Math.max(0.0, Math.min(1.0, options.style)) : 0.05,
                 use_speaker_boost: true
             }
         })
