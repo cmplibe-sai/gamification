@@ -16,7 +16,7 @@ function apiFetch(endpoint, options = {}) {
     if (crtToken && !opt.headers['x-creator-token'] && !opt.headers['authorization']) {
         opt.headers['x-creator-token'] = crtToken;
     }
-    const crtSecret = window._creatorAdminSecret || (typeof localStorage !== 'undefined' ? localStorage.getItem('cmpli_admin_secret') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
+    const crtSecret = window._creatorAdminSecret || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
     if (crtSecret && !opt.headers['x-admin-secret']) {
         opt.headers['x-admin-secret'] = crtSecret;
     }
@@ -19745,7 +19745,7 @@ async function verifyOTP() {
                 }
                 if (role === 'creator' && creatorSecretInput) {
                     sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
-                    if (typeof localStorage !== 'undefined') localStorage.setItem('cmpli_admin_secret', creatorSecretInput);
+                    if (typeof localStorage !== 'undefined') localStorage.removeItem('cmpli_admin_secret');
                     window._creatorAdminSecret = creatorSecretInput;
                 }
                 sessionTokenAcquired = true;

@@ -57,6 +57,7 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const DB_FILE = path.join(DATA_DIR, 'gamification_store.json');
+const isStoreNewlyCreated = !fs.existsSync(DB_FILE);
 
 // -------------------------------------------------------------
 // UPLOADS STORAGE & STATIC STREAMING ENGINE
@@ -550,9 +551,6 @@ function saveStore() {
     try {
         store.lastUpdated = Date.now();
         fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
-            syncStoreToMongo().catch(err => console.warn('[Background Mongo Sync]:', err.message));
-        }
     } catch (e) {
         console.error('Error saving storage file:', e);
     }
@@ -620,7 +618,7 @@ try {
     User = mongoose.models.User || mongoose.model('User', userSchema);
 
     const submissionSchema = new mongoose.Schema({
-        id: { type: String, index: true },
+        id: { type: String },
         userId: { type: String, required: true, index: true },
         userEmail: { type: String, index: true },
         userName: String,
@@ -843,94 +841,145 @@ function escapeHtmlServer(str) {
         .replace(/'/g, '&#039;');
 }
 
+async function restoreSubmissionsFromMongoBackup() {
+    if (!isDbConnected || !Submission) return false;
+    try {
+        const mongoSubCount = await Submission.countDocuments();
+        if (mongoSubCount === 0) return false;
+        console.log(`[Mongo Disaster Recovery] Restoring ${mongoSubCount} submissions from MongoDB cloud backup into local store...`);
+        const mongoSubs = await Submission.find({}).lean();
+        store.submissions = mongoSubs.map(s => {
+            const copy = { ...s };
+            delete copy._id;
+            delete copy.__v;
+            return copy;
+        });
+        store.submissionsRevision = Date.now();
+        saveStore();
+        console.log(`✅ Successfully restored ${store.submissions.length} submissions from MongoDB backup.`);
+        return true;
+    } catch (err) {
+        console.warn('[Mongo Recovery Warning]:', err.message);
+        return false;
+    }
+}
+
 let _isMongoSyncRunning = false;
 async function syncStoreToMongo() {
     if (!isDbConnected || !Submission || !User || _isMongoSyncRunning) return;
     _isMongoSyncRunning = true;
     try {
-        // 1. Dual-directional Submissions Mirror & Backup
+        // 1. Initial Submissions Migration from store to Mongo (only if Mongo has 0 records)
         const mongoSubCount = await Submission.countDocuments();
         if (mongoSubCount === 0 && Array.isArray(store.submissions) && store.submissions.length > 0) {
             console.log(`[Mongo Init] Migrating ${store.submissions.length} submissions from JSON store to MongoDB...`);
-            const bulkOps = store.submissions.map(sub => {
-                const query = sub.id ? { id: sub.id } : {
-                    userId: String(sub.userId || ''),
-                    milestoneId: Number(sub.milestoneId || 1),
-                    type: String(sub.type || sub.moduleType || 'dip'),
-                    day: sub.day !== undefined ? Number(sub.day) : null
-                };
-                return {
-                    updateOne: {
-                        filter: query,
-                        update: { $set: sub },
-                        upsert: true
-                    }
-                };
-            });
+            const bulkOps = store.submissions
+                .filter(sub => sub && sub.userId && sub.milestoneId && (sub.type || sub.moduleType))
+                .map(sub => {
+                    const query = sub.id ? { id: sub.id } : {
+                        userId: String(sub.userId),
+                        milestoneId: Number(sub.milestoneId || 1),
+                        type: String(sub.type || sub.moduleType || 'dip'),
+                        day: sub.day !== undefined ? Number(sub.day) : null
+                    };
+                    return {
+                        updateOne: {
+                            filter: query,
+                            update: { $set: sub },
+                            upsert: true
+                        }
+                    };
+                });
             if (bulkOps.length > 0) {
-                await Submission.bulkWrite(bulkOps);
+                await Submission.bulkWrite(bulkOps, { ordered: false });
                 console.log(`✅ Migrated ${bulkOps.length} submissions to MongoDB.`);
             }
-        } else if (mongoSubCount > 0 && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
-            // Disaster Recovery / Cloud Backup Restore: Load from Mongo into local store
-            console.log(`[Mongo Backup Restore] Local JSON store has 0 submissions; restoring ${mongoSubCount} submissions from MongoDB...`);
-            const mongoSubs = await Submission.find({}).lean();
-            store.submissions = mongoSubs.map(s => {
-                const copy = { ...s };
-                delete copy._id;
-                delete copy.__v;
-                return copy;
-            });
-            store.submissionsRevision = Date.now();
-            saveStore();
-            console.log(`✅ Restored ${store.submissions.length} submissions from MongoDB backup.`);
+        } else if (mongoSubCount > 0 && (process.env.RESTORE_FROM_MONGO === 'true' || (isStoreNewlyCreated && (!Array.isArray(store.submissions) || store.submissions.length === 0)))) {
+            // Disaster recovery strictly on startup when explicitly instructed or if store was brand new and empty
+            await restoreSubmissionsFromMongoBackup();
         }
 
-        // 2. Mirror Owned Collections to User (creator, recruiter, partner)
+        // 2. Mirror Owned Collections to User using bulkWrite with ordered: false (non-blocking per-record isolation)
+        const userBulkOps = [];
+        const localProfiles = store.userLoginProfiles || {};
+
+        const getWelcomeState = (role, email) => {
+            const key = `${role}:${email}`;
+            const prof = localProfiles[key];
+            if (prof && prof.welcomeEmailSent) {
+                return { welcomeEmailSent: true, welcomeEmailSentAt: prof.welcomeEmailSentAt || new Date(), firstLoginAt: prof.firstLoginAt || new Date() };
+            }
+            return null;
+        };
+
         if (Array.isArray(store.teamMembers)) {
             for (const tm of store.teamMembers) {
-                if (tm.email) {
-                    await User.updateOne(
-                        { role: 'creator', email: tm.email.toLowerCase().trim() },
-                        {
-                            $setOnInsert: {
-                                role: 'creator',
-                                email: tm.email.toLowerCase().trim(),
-                                name: tm.name || 'Team Member',
-                                welcomeEmailSent: false,
-                                createdAt: new Date()
-                            },
-                            $set: { updatedAt: new Date() }
-                        },
-                        { upsert: true }
-                    );
+                const cleanEmail = (tm.email || '').toLowerCase().trim();
+                if (!cleanEmail) continue;
+                const welcomeState = getWelcomeState('creator', cleanEmail);
+                const updateDoc = {
+                    $setOnInsert: {
+                        role: 'creator',
+                        email: cleanEmail,
+                        welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
+                        welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
+                        firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                        createdAt: new Date()
+                    },
+                    $set: {
+                        updatedAt: new Date(),
+                        name: tm.name || 'Team Member'
+                    }
+                };
+                if (welcomeState) {
+                    updateDoc.$set.welcomeEmailSent = true;
+                    updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
                 }
+                userBulkOps.push({
+                    updateOne: {
+                        filter: { role: 'creator', email: cleanEmail },
+                        update: updateDoc,
+                        upsert: true
+                    }
+                });
             }
         }
 
         if (Array.isArray(store.employers)) {
             for (const emp of store.employers) {
-                if (emp.email) {
-                    await User.updateOne(
-                        { role: 'recruiter', email: emp.email.toLowerCase().trim() },
-                        {
-                            $setOnInsert: {
-                                role: 'recruiter',
-                                email: emp.email.toLowerCase().trim(),
-                                name: emp.companyName || 'Corporate Recruiter',
-                                recruiter: {
-                                    employerId: emp.id,
-                                    companyName: emp.companyName,
-                                    permittedMangoes: emp.permittedMangoes || []
-                                },
-                                welcomeEmailSent: false,
-                                createdAt: new Date()
-                            },
-                            $set: { updatedAt: new Date() }
-                        },
-                        { upsert: true }
-                    );
+                const cleanEmail = (emp.email || '').toLowerCase().trim();
+                if (!cleanEmail) continue;
+                const welcomeState = getWelcomeState('recruiter', cleanEmail);
+                const updateDoc = {
+                    $setOnInsert: {
+                        role: 'recruiter',
+                        email: cleanEmail,
+                        welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
+                        welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
+                        firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                        createdAt: new Date()
+                    },
+                    $set: {
+                        updatedAt: new Date(),
+                        name: emp.companyName || 'Corporate Recruiter',
+                        recruiter: {
+                            employerId: emp.id,
+                            companyName: emp.companyName,
+                            permittedMangoes: emp.permittedMangoes || []
+                        }
+                    }
+                };
+                if (welcomeState) {
+                    updateDoc.$set.welcomeEmailSent = true;
+                    updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
                 }
+                userBulkOps.push({
+                    updateOne: {
+                        filter: { role: 'recruiter', email: cleanEmail },
+                        update: updateDoc,
+                        upsert: true
+                    }
+                });
             }
         }
 
@@ -938,26 +987,43 @@ async function syncStoreToMongo() {
             for (const campus of store.campuses) {
                 if (Array.isArray(campus.coordinators)) {
                     for (const coord of campus.coordinators) {
-                        if (coord.email) {
-                            await User.updateOne(
-                                { role: 'partner', email: coord.email.toLowerCase().trim() },
-                                {
-                                    $setOnInsert: {
-                                        role: 'partner',
-                                        email: coord.email.toLowerCase().trim(),
-                                        name: coord.name || campus.name || 'Campus Partner',
-                                        partner: { campusId: campus.id },
-                                        welcomeEmailSent: false,
-                                        createdAt: new Date()
-                                    },
-                                    $set: { updatedAt: new Date() }
-                                },
-                                { upsert: true }
-                            );
+                        const cleanEmail = (coord.email || '').toLowerCase().trim();
+                        if (!cleanEmail) continue;
+                        const welcomeState = getWelcomeState('partner', cleanEmail);
+                        const updateDoc = {
+                            $setOnInsert: {
+                                role: 'partner',
+                                email: cleanEmail,
+                                welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
+                                welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
+                                firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                                createdAt: new Date()
+                            },
+                            $set: {
+                                updatedAt: new Date(),
+                                name: coord.name || campus.name || 'Campus Partner',
+                                partner: { campusId: campus.id }
+                            }
+                        };
+                        if (welcomeState) {
+                            updateDoc.$set.welcomeEmailSent = true;
+                            updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
                         }
+                        userBulkOps.push({
+                            updateOne: {
+                                filter: { role: 'partner', email: cleanEmail },
+                                update: updateDoc,
+                                upsert: true
+                            }
+                        });
                     }
                 }
             }
+        }
+
+        if (userBulkOps.length > 0) {
+            await User.bulkWrite(userBulkOps, { ordered: false });
+            console.log(`✅ Synced ${userBulkOps.length} user directory records to MongoDB (bulk, non-blocking).`);
         }
     } catch (e) {
         console.warn('[Mongo Sync Error]:', e.message);
@@ -969,13 +1035,21 @@ async function syncStoreToMongo() {
 async function saveSubmissionToMongo(sub) {
     if (!isDbConnected || !Submission || !sub) return;
     try {
+        const userId = String(sub.userId || '').trim();
+        const msId = Number(sub.milestoneId);
+        const subType = String(sub.type || sub.moduleType || '').trim();
+        if (!userId || isNaN(msId) || !subType) {
+            console.warn('[Mongo Submission Skipped] Missing required fields:', { userId, milestoneId: sub.milestoneId, type: sub.type });
+            return;
+        }
+
         const query = sub.id ? { id: sub.id } : {
-            userId: String(sub.userId || ''),
-            milestoneId: Number(sub.milestoneId || 1),
-            type: String(sub.type || sub.moduleType || 'dip'),
+            userId: userId,
+            milestoneId: msId,
+            type: subType,
             day: sub.day !== undefined ? Number(sub.day) : null
         };
-        await Submission.updateOne(query, { $set: sub }, { upsert: true });
+        await Submission.updateOne(query, { $set: sub }, { upsert: true, runValidators: true });
     } catch (e) {
         console.warn('[Mongo Submission Write Warning]:', e.message);
     }
@@ -1155,7 +1229,7 @@ async function handleFirstLoginWelcome(userObj, role) {
                 updateDoc.$set.partner = userObj.partner;
             }
 
-            await User.updateOne({ role, email: cleanEmail }, updateDoc, { upsert: true });
+            await User.updateOne({ role, email: cleanEmail }, updateDoc, { upsert: true, runValidators: true });
 
             // Atomic claim: only one concurrent caller succeeds in updating welcomeEmailSent from false to true
             const claimed = await User.findOneAndUpdate(
@@ -2918,6 +2992,7 @@ if (store.userSessions && typeof store.userSessions === 'object') {
 }
 
 function recordUserSession(token, sessionData) {
+    sessionData.createdAt = sessionData.createdAt || Date.now();
     validUserSessions.set(token, sessionData);
     if (!store.userSessions || typeof store.userSessions !== 'object') store.userSessions = {};
     store.userSessions[token] = sessionData;
@@ -2938,12 +3013,20 @@ function getAuthenticatedSession(req) {
     const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (!validUserSessions.has(cleanToken)) return null;
     const sess = validUserSessions.get(cleanToken);
-    if (Date.now() > sess.expiresAt) {
+    const now = Date.now();
+    if (now > sess.expiresAt) {
         removeUserSession(cleanToken);
         return null;
     }
-    // Sliding session window: extend expiresAt by another 24h on active use
-    const slidingExpiry = Date.now() + 86400000;
+    // Absolute session ceiling: 14 days maximum from issuance
+    const maxAbsoluteLifetime = 14 * 86400000;
+    const sessionCreated = sess.createdAt || (sess.expiresAt - 86400000);
+    if (now - sessionCreated > maxAbsoluteLifetime) {
+        removeUserSession(cleanToken);
+        return null;
+    }
+    // Sliding session window: extend expiresAt by another 24h on active use, capped by maxAbsoluteLifetime
+    const slidingExpiry = Math.min(now + 86400000, sessionCreated + maxAbsoluteLifetime);
     if (slidingExpiry - sess.expiresAt > 3600000) {
         sess.expiresAt = slidingExpiry;
         if (store.userSessions && store.userSessions[cleanToken]) {
@@ -3782,7 +3865,7 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
 });
 
 // CREATOR ACTION: Reset customer milestone progress so they start from scratch Day 1
-app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/customer/reset-progress'], (req, res) => {
+app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/customer/reset-progress'], async (req, res) => {
     if (!checkCreatorAuth(req)) {
         return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
     }
@@ -3895,9 +3978,9 @@ app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/cus
         appendReset(emailStr);
     }
 
-    removeSubmissionsFromMongo(uidStr, msId);
+    await removeSubmissionsFromMongo(uidStr, msId);
     if (emailStr) {
-        removeSubmissionsFromMongo(emailStr, msId);
+        await removeSubmissionsFromMongo(emailStr, msId);
     }
 
     store.submissionsRevision = resetTimestamp;
@@ -7013,9 +7096,26 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start listening
-app.listen(PORT, () => {
-    console.log(`🚀 cMPLiBe Gamification Web Service running on port ${PORT}`);
-    console.log(`📡 Local preview: http://localhost:${PORT}`);
-    console.log(`🩺 Health check: http://localhost:${PORT}/health`);
-});
+// Start listening (only when run directly)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 cMPLiBe Gamification Web Service running on port ${PORT}`);
+        console.log(`📡 Local preview: http://localhost:${PORT}`);
+        console.log(`🩺 Health check: http://localhost:${PORT}/health`);
+    });
+}
+
+module.exports = {
+    app,
+    store,
+    saveSubmissionToMongo,
+    removeSubmissionsFromMongo,
+    syncStoreToMongo,
+    restoreSubmissionsFromMongoBackup,
+    handleFirstLoginWelcome,
+    getAuthenticatedSession,
+    recordUserSession,
+    removeUserSession,
+    User,
+    Submission
+};
