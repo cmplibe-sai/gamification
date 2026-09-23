@@ -12931,20 +12931,42 @@ async function openPodSessionModal(dayNum, dateKey) {
         indianDate = `${d}-${m}-${y}`;
     }
 
+    // Check if learner already completed this pod session
+    const uId = (currentUser && (currentUser._id || currentUser.id)) || 'anon';
+    const msId = activeMilestoneId || '1';
+    const allSubs = (typeof getUserSubmissionsByUserId === 'function') ? getUserSubmissionsByUserId(uId) : [];
+    const existingSub = allSubs.find(s => 
+        String(s.milestoneId || 1) === String(safeMs) && 
+        normalizeLevelUpType(s.type || s.moduleType) === 'pod' && 
+        (s.dateKey === activePodSessionDateKey || s.date === activePodSessionDateKey || Number(s.day) === Number(dayNum)) &&
+        (s.status === 'completed' || Number(s.lcReward) > 0)
+    );
+    const isAlreadyCompleted = Boolean(existingSub);
+
     // Secure server-side question session: answers and explanations are NEVER sent to the learner
     window._activePodSessionId = null;
     let learnerQuestions = [];
 
-    try {
-        const uId = (currentUser && (currentUser._id || currentUser.id)) || 'anon';
-        const msId = activeMilestoneId || '1';
-        const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}&dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(msId)}`).then(r => r.json());
-        if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
-            window._activePodSessionId = sessRes.sessionId;
-            learnerQuestions = sessRes.questions;
+    if (!isAlreadyCompleted) {
+        try {
+            const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}&dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(msId)}`).then(r => r.json());
+            if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
+                window._activePodSessionId = sessRes.sessionId;
+                learnerQuestions = sessRes.questions;
+            }
+        } catch(err) {
+            console.warn('Could not fetch server-side pod session questions, using local pool:', err);
         }
-    } catch(err) {
-        console.warn('Could not fetch server-side pod session questions, using local pool:', err);
+    } else if (existingSub && Array.isArray(existingSub.answers || existingSub.responses) && (existingSub.answers || existingSub.responses).length > 0) {
+        learnerQuestions = (existingSub.answers || existingSub.responses).map(a => ({
+            id: a.id,
+            title: a.question || a.title,
+            options: a.options || [],
+            selectedOption: a.selectedOption,
+            correctOption: a.correctOption,
+            isCorrect: a.isCorrect,
+            pts: a.pts || 11
+        }));
     }
 
     if (learnerQuestions.length === 0) {
@@ -12999,7 +13021,10 @@ async function openPodSessionModal(dayNum, dateKey) {
                 
                 <div class="flex justify-between items-start border-b border-slate-700 pb-4 mb-6">
                     <div>
-                        <span class="badge-pill badge-indigo mb-1.5"><i class="fas fa-podcast mr-1"></i> cMPLi POD</span>
+                        <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span class="badge-pill badge-indigo"><i class="fas fa-podcast mr-1"></i> cMPLi POD</span>
+                            ${isAlreadyCompleted ? `<span class="badge-pill badge-emerald text-[9px] font-bold"><i class="fas fa-check-circle mr-1"></i> Completed (+${existingSub.lcReward || 33} LCs)</span>` : ''}
+                        </div>
                         <h3 class="text-xl sm:text-2xl font-extrabold text-white font-heading">Day ${dayNum}: ${cleanStoryTitle}</h3>
                         <p class="text-xs text-slate-400 mt-1">Date: <strong class="text-slate-200 font-mono">${indianDate}</strong></p>
                     </div>
@@ -13008,7 +13033,7 @@ async function openPodSessionModal(dayNum, dateKey) {
                     </button>
                 </div>
 
-                <!-- Secure In-Browser Podcast Audio Player (No seekbar, forward/backward disabled, speed selector) -->
+                <!-- Secure In-Browser Podcast Audio Player with Drag Seek & 5s Controls -->
                 <div class="glass-card p-4 sm:p-6 border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900/80 to-slate-900/80 rounded-2xl mb-6 space-y-4 shadow-lg">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-xl sm:text-2xl shrink-0 shadow-inner">
@@ -13017,10 +13042,16 @@ async function openPodSessionModal(dayNum, dateKey) {
                         <div class="overflow-hidden flex-1">
                             <div class="flex items-center gap-2">
                                 <span class="badge-pill badge-indigo text-[9px] uppercase tracking-widest">Active Listening Stream</span>
-                                <span id="podListeningBadge" class="badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">85% Required</span>
+                                <span id="podListeningBadge" class="badge-pill ${isAlreadyCompleted ? 'badge-emerald' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'} text-[9px] font-bold">
+                                    ${isAlreadyCompleted ? '<i class="fas fa-check-circle mr-1"></i> Completed &amp; Replayable' : '85% Required'}
+                                </span>
                             </div>
                             <h4 class="text-xs sm:text-sm font-bold text-white truncate mt-1">Audio Narration • ${cleanStoryTitle}</h4>
-                            <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Listen to at least 85% of this episode to unlock the 3 comprehension questions.</p>
+                            <p class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
+                                ${isAlreadyCompleted 
+                                    ? 'Re-listen to this episode anytime. Drag slider anywhere or use ±5s.' 
+                                    : 'Listen to at least 85% of this episode to unlock dragging, ±5s seeking, and the 3 comprehension questions.'}
+                            </p>
                         </div>
                     </div>
 
@@ -13029,13 +13060,27 @@ async function openPodSessionModal(dayNum, dateKey) {
                             <audio id="podAudioPlayerElement" preload="metadata" class="hidden" src="${audioUrl}"></audio>
                             
                             <div class="p-3 sm:p-4 bg-slate-950/90 rounded-2xl border border-indigo-500/30 space-y-3">
-                                <!-- Top controls: Play/Pause Button + Time + Speed selector (Mobile-Optimized) -->
+                                <!-- Top controls: Rewind 5s + Play/Pause Button + Forward 5s + Time + Speed selector (Mobile-Optimized) -->
                                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div class="flex items-center gap-3">
-                                        <button id="podPlayToggleBtn" type="button" class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 transition-transform active:scale-95 shrink-0">
+                                    <div class="flex items-center gap-2 sm:gap-2.5">
+                                        <!-- Rewind 5s Button -->
+                                        <button id="podRewind5Btn" type="button" ${isAlreadyCompleted ? '' : 'disabled'} class="w-9 h-9 rounded-full bg-slate-900 border border-slate-700/80 hover:border-indigo-500/50 hover:bg-slate-800 text-indigo-300 hover:text-white flex flex-col items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 cursor-pointer" title="Rewind 5 Seconds">
+                                            <i class="fas fa-undo-alt text-[10px]"></i>
+                                            <span class="text-[8px] font-bold font-mono leading-none mt-0.5">-5s</span>
+                                        </button>
+
+                                        <!-- Play/Pause Button -->
+                                        <button id="podPlayToggleBtn" type="button" class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 transition-transform active:scale-95 shrink-0 cursor-pointer">
                                             <i id="podPlayIcon" class="fas fa-play ml-0.5"></i>
                                         </button>
-                                        <div>
+
+                                        <!-- Forward 5s Button -->
+                                        <button id="podForward5Btn" type="button" ${isAlreadyCompleted ? '' : 'disabled'} class="w-9 h-9 rounded-full bg-slate-900 border border-slate-700/80 hover:border-indigo-500/50 hover:bg-slate-800 text-indigo-300 hover:text-white flex flex-col items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shrink-0 cursor-pointer" title="Forward 5 Seconds">
+                                            <i class="fas fa-redo-alt text-[10px]"></i>
+                                            <span class="text-[8px] font-bold font-mono leading-none mt-0.5">+5s</span>
+                                        </button>
+
+                                        <div class="ml-1 sm:ml-2">
                                             <div class="flex items-center gap-2">
                                                 <span id="podCurrentTimeDisplay" class="font-mono text-xs text-white font-bold">00:00</span>
                                                 <span class="text-slate-500 text-xs">/</span>
@@ -13058,17 +13103,30 @@ async function openPodSessionModal(dayNum, dateKey) {
                                     </div>
                                 </div>
 
-                                <!-- Non-interactive Listen Progress Bar (Forward/Backward scrubbing disabled) -->
-                                <div class="space-y-1 pt-1">
-                                    <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden relative cursor-not-allowed" title="Seeking disabled: Active listening required">
+                                <!-- Listen Progress Bar with Draggable Scrub Slider -->
+                                <div class="space-y-1.5 pt-1">
+                                    <div class="relative w-full flex items-center h-4">
                                         <!-- 85% Target Indicator -->
-                                        <div class="absolute top-0 bottom-0 left-[85%] w-0.5 bg-amber-400 z-10 opacity-70" title="85% unlock threshold"></div>
-                                        <!-- Progress Fill -->
-                                        <div id="podAudioProgressBar" class="bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 h-full w-0 transition-all duration-150"></div>
+                                        <div id="podThresholdLine" class="absolute top-0 bottom-0 left-[85%] w-0.5 bg-amber-400 z-10 pointer-events-none ${isAlreadyCompleted ? 'opacity-30' : 'opacity-80'}" title="85% unlock threshold"></div>
+                                        
+                                        <!-- Visual Track & Fill -->
+                                        <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden relative pointer-events-none">
+                                            <div id="podAudioProgressBar" class="bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 h-full w-0 transition-all duration-75"></div>
+                                        </div>
+
+                                        <!-- Interactive Scrub Range Slider -->
+                                        <input type="range" id="podAudioSeekSlider" min="0" max="100" value="0" step="0.1" 
+                                            class="absolute inset-0 w-full h-full opacity-0 z-20 ${isAlreadyCompleted ? 'cursor-pointer' : 'cursor-not-allowed'}" 
+                                            ${isAlreadyCompleted ? '' : 'disabled'}
+                                            title="${isAlreadyCompleted ? 'Drag anywhere to seek or replay from start' : 'Seeking locked: Active listening to 85% required'}" />
                                     </div>
                                     <div class="flex justify-between items-center text-[10px] text-slate-400 px-0.5">
                                         <span id="podAudioProgressPercent" class="font-bold text-indigo-300">0% Listened</span>
-                                        <span class="text-amber-400/80 font-semibold"><i class="fas fa-lock text-[9px] mr-1"></i> 85% required to unlock quiz</span>
+                                        <span id="podScrubbingHint" class="${isAlreadyCompleted ? 'text-emerald-400 font-semibold' : 'text-amber-400/80 font-semibold'}">
+                                            ${isAlreadyCompleted 
+                                                ? '<i class="fas fa-unlock text-[10px] mr-1"></i> Seeking Unlocked • Drag anywhere or use ±5s' 
+                                                : '<i class="fas fa-lock text-[9px] mr-1"></i> 85% required to unlock seeking &amp; quiz'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -13086,7 +13144,7 @@ async function openPodSessionModal(dayNum, dateKey) {
 
                 <!-- Quiz Gated Container -->
                 <div id="podQuizContainer" class="space-y-6">
-                    <div id="podQuizLockedNotice" class="p-6 bg-slate-900/90 rounded-2xl border border-amber-500/40 text-center space-y-2">
+                    <div id="podQuizLockedNotice" class="${isAlreadyCompleted ? 'hidden' : ''} p-6 bg-slate-900/90 rounded-2xl border border-amber-500/40 text-center space-y-2">
                         <div class="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl border border-amber-500/40">
                             <i class="fas fa-lock"></i>
                         </div>
@@ -13098,7 +13156,7 @@ async function openPodSessionModal(dayNum, dateKey) {
                         </p>
                     </div>
 
-                    <div id="podQuizQuestionsArea" class="hidden space-y-5">
+                    <div id="podQuizQuestionsArea" class="${isAlreadyCompleted ? '' : 'hidden'} space-y-5">
                         <div class="flex items-center justify-between pb-2 border-b border-slate-700">
                             <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                                 <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
@@ -13114,12 +13172,19 @@ async function openPodSessionModal(dayNum, dateKey) {
                                 </div>
                                 <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
                                 <div class="space-y-2 pt-1">
-                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => `
-                                        <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all">
-                                            <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" class="text-indigo-600 focus:ring-0">
-                                            <span class="text-xs text-slate-200 font-medium">${opt}</span>
-                                        </label>
-                                    `).join('')}
+                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => {
+                                        const isChecked = isAlreadyCompleted && (q.selectedOption === optIdx || (q.selectedOption === undefined && q.correctOption === optIdx));
+                                        const isCorrectOpt = isAlreadyCompleted && (q.correctOption === optIdx);
+                                        return `
+                                            <label class="flex items-center justify-between p-3 rounded-xl bg-slate-950 border ${isChecked ? (isCorrectOpt ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-indigo-500/60') : 'border-slate-800'} ${isAlreadyCompleted ? 'cursor-default' : 'hover:border-indigo-500/50 cursor-pointer'} transition-all">
+                                                <div class="flex items-center gap-3">
+                                                    <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" ${isChecked ? 'checked' : ''} ${isAlreadyCompleted ? 'disabled' : ''} class="text-indigo-600 focus:ring-0">
+                                                    <span class="text-xs ${isChecked ? 'text-white font-semibold' : 'text-slate-300'} font-medium">${opt}</span>
+                                                </div>
+                                                ${isAlreadyCompleted && isCorrectOpt ? `<span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40"><i class="fas fa-check mr-1"></i> Correct</span>` : ''}
+                                            </label>
+                                        `;
+                                    }).join('')}
                                 </div>
                             </div>
                         `).join('')}
@@ -13128,11 +13193,17 @@ async function openPodSessionModal(dayNum, dateKey) {
 
                 <div class="mt-8 pt-4 border-t border-slate-700 flex justify-between items-center">
                     <button onclick="document.getElementById('podSessionModal').remove()" class="btn-secondary py-2.5 px-4 text-xs">
-                        Cancel
+                        Close
                     </button>
-                    <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs opacity-50 cursor-not-allowed" disabled>
-                        <i class="fas fa-paper-plane mr-2"></i> Submit & Claim LCs
-                    </button>
+                    ${isAlreadyCompleted ? `
+                        <button disabled class="btn-secondary py-2.5 px-6 text-xs bg-emerald-950/60 border-emerald-500/40 text-emerald-300 font-bold cursor-default">
+                            <i class="fas fa-check-circle mr-2 text-emerald-400"></i> Check-in Completed (+${existingSub.lcReward || 33} LCs)
+                        </button>
+                    ` : `
+                        <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs opacity-50 cursor-not-allowed" disabled>
+                            <i class="fas fa-paper-plane mr-2"></i> Submit &amp; Claim LCs
+                        </button>
+                    `}
                 </div>
             </div>
         </div>
@@ -13140,7 +13211,7 @@ async function openPodSessionModal(dayNum, dateKey) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-    // Attach Audio Gating & Anti-Scrubbing Listener
+    // Attach Audio Gating, Anti-Scrubbing & 5-Second Seeking Listener
     if (hasAudio) {
         setTimeout(() => {
             const player = document.getElementById('podAudioPlayerElement');
@@ -13149,14 +13220,54 @@ async function openPodSessionModal(dayNum, dateKey) {
             const submitBtn = document.getElementById('btnSubmitPodSession');
             const playBtn = document.getElementById('podPlayToggleBtn');
             const playIcon = document.getElementById('podPlayIcon');
+            const rewind5Btn = document.getElementById('podRewind5Btn');
+            const forward5Btn = document.getElementById('podForward5Btn');
             const curDisplay = document.getElementById('podCurrentTimeDisplay');
             const totalDisplay = document.getElementById('podTotalTimeDisplay');
             const bar = document.getElementById('podAudioProgressBar');
             const pctText = document.getElementById('podAudioProgressPercent');
             const statusText = document.getElementById('podAudioStatusText');
             const badge = document.getElementById('podListeningBadge');
+            const seekSlider = document.getElementById('podAudioSeekSlider');
+            const thresholdLine = document.getElementById('podThresholdLine');
+            const scrubbingHint = document.getElementById('podScrubbingHint');
 
             if (!player) return;
+
+            let maxAudibleTime = 0;
+            let isSeekUnlocked = Boolean(isAlreadyCompleted);
+            let isUserDraggingSlider = false;
+
+            const fmtTime = (secs) => {
+                if (isNaN(secs) || secs < 0) return '00:00';
+                const m = Math.floor(secs / 60);
+                const s = Math.floor(secs % 60);
+                return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+            };
+
+            function enableSeekingUI() {
+                if (isSeekUnlocked) return;
+                isSeekUnlocked = true;
+                if (seekSlider) {
+                    seekSlider.disabled = false;
+                    seekSlider.classList.remove('cursor-not-allowed');
+                    seekSlider.classList.add('cursor-pointer');
+                    seekSlider.title = "Drag anywhere to listen or replay from the beginning";
+                }
+                if (rewind5Btn) rewind5Btn.disabled = false;
+                if (forward5Btn) forward5Btn.disabled = false;
+                if (thresholdLine) thresholdLine.classList.add('opacity-30');
+                if (scrubbingHint) {
+                    scrubbingHint.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Seeking Unlocked • Drag anywhere or use ±5s</span>';
+                }
+            }
+
+            if (isAlreadyCompleted) {
+                enableSeekingUI();
+                if (statusText) {
+                    statusText.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fas fa-headphones mr-1"></i> Re-listen Mode: Drag slider to scrub or replay from start</span>';
+                }
+            }
 
             // Auto-heal / Ensure British voice audio if missing or network error
             player.addEventListener('error', () => {
@@ -13170,15 +13281,6 @@ async function openPodSessionModal(dayNum, dateKey) {
                         }
                     }).catch(() => {});
             });
-
-            let maxAudibleTime = 0;
-
-            const fmtTime = (secs) => {
-                if (isNaN(secs) || secs < 0) return '00:00';
-                const m = Math.floor(secs / 60);
-                const s = Math.floor(secs % 60);
-                return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-            };
 
             if (playBtn) {
                 playBtn.onclick = function() {
@@ -13198,6 +13300,62 @@ async function openPodSessionModal(dayNum, dateKey) {
                 };
             }
 
+            // Rewind 5 seconds
+            if (rewind5Btn) {
+                rewind5Btn.onclick = function() {
+                    if (!isSeekUnlocked) return;
+                    player.currentTime = Math.max(0, player.currentTime - 5);
+                    if (curDisplay) curDisplay.innerText = fmtTime(player.currentTime);
+                    if (Number.isFinite(player.duration) && player.duration > 0) {
+                        const pct = Math.min(100, Math.round((player.currentTime / player.duration) * 100));
+                        if (bar) bar.style.width = `${pct}%`;
+                        if (seekSlider) seekSlider.value = pct;
+                    }
+                };
+            }
+
+            // Forward 5 seconds
+            if (forward5Btn) {
+                forward5Btn.onclick = function() {
+                    if (!isSeekUnlocked || !Number.isFinite(player.duration) || player.duration <= 0) return;
+                    player.currentTime = Math.min(player.duration, player.currentTime + 5);
+                    if (curDisplay) curDisplay.innerText = fmtTime(player.currentTime);
+                    const pct = Math.min(100, Math.round((player.currentTime / player.duration) * 100));
+                    if (bar) bar.style.width = `${pct}%`;
+                    if (seekSlider) seekSlider.value = pct;
+                };
+            }
+
+            // Interactive Drag Scrub Slider
+            if (seekSlider) {
+                seekSlider.addEventListener('mousedown', () => { isUserDraggingSlider = true; });
+                seekSlider.addEventListener('touchstart', () => { isUserDraggingSlider = true; }, { passive: true });
+                seekSlider.addEventListener('pointerdown', () => { isUserDraggingSlider = true; });
+                seekSlider.addEventListener('input', () => {
+                    if (!isSeekUnlocked || !Number.isFinite(player.duration) || player.duration <= 0) return;
+                    const targetPct = parseFloat(seekSlider.value);
+                    const targetSec = (targetPct / 100) * player.duration;
+                    player.currentTime = targetSec;
+                    if (bar) bar.style.width = `${targetPct}%`;
+                    if (curDisplay) curDisplay.innerText = fmtTime(targetSec);
+                });
+                const onSeekEnd = () => { isUserDraggingSlider = false; };
+                seekSlider.addEventListener('mouseup', onSeekEnd);
+                seekSlider.addEventListener('touchend', onSeekEnd);
+                seekSlider.addEventListener('touchcancel', onSeekEnd);
+                seekSlider.addEventListener('pointercancel', onSeekEnd);
+                seekSlider.addEventListener('pointerup', onSeekEnd);
+                seekSlider.addEventListener('change', () => {
+                    isUserDraggingSlider = false;
+                    if (!isSeekUnlocked || !Number.isFinite(player.duration) || player.duration <= 0) return;
+                    const targetPct = parseFloat(seekSlider.value);
+                    const targetSec = (targetPct / 100) * player.duration;
+                    player.currentTime = targetSec;
+                    if (bar) bar.style.width = `${targetPct}%`;
+                    if (curDisplay) curDisplay.innerText = fmtTime(targetSec);
+                });
+            }
+
             player.addEventListener('loadedmetadata', () => {
                 if (totalDisplay && player.duration && !isNaN(player.duration)) {
                     totalDisplay.innerText = fmtTime(player.duration);
@@ -13209,30 +13367,35 @@ async function openPodSessionModal(dayNum, dateKey) {
                 if (statusText) {
                     statusText.innerHTML = `<span class="text-amber-400 font-semibold"><i class="fas fa-info-circle mr-1"></i> Audio stream unavailable. Comprehension quiz unlocked.</span>`;
                 }
+                enableSeekingUI();
                 if (lockedNotice) lockedNotice.classList.add('hidden');
                 if (questionsArea) questionsArea.classList.remove('hidden');
-                if (submitBtn) {
+                if (submitBtn && !isAlreadyCompleted) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
-                if (badge) {
+                if (badge && !isAlreadyCompleted) {
                     badge.className = 'badge-pill bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold';
                     badge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Audio Bypassed';
                 }
             });
 
-            // Anti-Scrubbing & Seeking Prevention: Forward AND Backward seeking disabled!
+            // Anti-Scrubbing & Seeking Prevention: Enforced only before 85% is reached
             player.addEventListener('seeking', () => {
-                if (Math.abs(player.currentTime - maxAudibleTime) > 1.2) {
-                    player.currentTime = maxAudibleTime; // Snap back strictly!
+                if (!isSeekUnlocked) {
+                    if (Math.abs(player.currentTime - maxAudibleTime) > 1.2) {
+                        player.currentTime = maxAudibleTime; // Snap back strictly!
+                    }
                 }
             });
 
             player.addEventListener('timeupdate', () => {
-                if (player.currentTime > maxAudibleTime + 1.2) {
-                    player.currentTime = maxAudibleTime; // Snap back!
-                } else {
-                    maxAudibleTime = Math.max(maxAudibleTime, player.currentTime);
+                if (!isSeekUnlocked) {
+                    if (player.currentTime > maxAudibleTime + 1.2) {
+                        player.currentTime = maxAudibleTime; // Snap back!
+                    } else {
+                        maxAudibleTime = Math.max(maxAudibleTime, player.currentTime);
+                    }
                 }
 
                 if (curDisplay) curDisplay.innerText = fmtTime(player.currentTime);
@@ -13241,25 +13404,37 @@ async function openPodSessionModal(dayNum, dateKey) {
                 }
 
                 if (player.duration) {
-                    const pct = Math.min(100, Math.round((maxAudibleTime / player.duration) * 100));
-                    if (bar) bar.style.width = `${pct}%`;
-                    if (pctText) pctText.innerText = `${pct}% Listened`;
-                    if (statusText && !player.paused) {
-                        statusText.innerHTML = `<i class="fas fa-volume-up text-indigo-400 mr-1"></i> Active Listening In Progress...`;
+                    const currentPct = Math.min(100, Math.round((player.currentTime / player.duration) * 100));
+                    const maxPct = Math.min(100, Math.round((maxAudibleTime / player.duration) * 100));
+
+                    if (bar && !isUserDraggingSlider) bar.style.width = `${currentPct}%`;
+                    if (seekSlider && !isUserDraggingSlider) seekSlider.value = currentPct;
+
+                    if (!isSeekUnlocked) {
+                        if (pctText) pctText.innerText = `${maxPct}% Listened`;
+                    } else {
+                        if (pctText) pctText.innerText = `${currentPct}% Progress`;
                     }
 
-                    // 85% THRESHOLD UNLOCKS QUIZ
-                    if (pct >= 85 || player.ended) {
+                    if (statusText && !player.paused) {
+                        statusText.innerHTML = isSeekUnlocked 
+                            ? `<i class="fas fa-volume-up text-cyan-400 mr-1"></i> Playing Audio Narration...` 
+                            : `<i class="fas fa-volume-up text-indigo-400 mr-1"></i> Active Listening In Progress...`;
+                    }
+
+                    // 85% THRESHOLD UNLOCKS QUIZ & SEEKING
+                    if (maxPct >= 85 || player.currentTime >= player.duration * 0.85 || player.ended) {
+                        enableSeekingUI();
                         if (lockedNotice) lockedNotice.classList.add('hidden');
                         if (questionsArea) questionsArea.classList.remove('hidden');
-                        if (submitBtn) {
+                        if (submitBtn && !isAlreadyCompleted) {
                             submitBtn.disabled = false;
                             submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                         }
-                        if (statusText) {
-                            statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Active Listening Complete (≥85%). Quiz Unlocked!`;
+                        if (statusText && !isAlreadyCompleted) {
+                            statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Active Listening Complete (≥85%). Seeking &amp; Quiz Unlocked!`;
                         }
-                        if (badge) {
+                        if (badge && !isAlreadyCompleted) {
                             badge.className = 'badge-pill badge-emerald text-[9px] font-bold';
                             badge.innerHTML = '<i class="fas fa-check-circle mr-1"></i> 85% Verified';
                         }
@@ -13279,14 +13454,15 @@ async function openPodSessionModal(dayNum, dateKey) {
                     playIcon.classList.remove('fa-pause');
                     playIcon.classList.add('fa-play', 'ml-0.5');
                 }
+                enableSeekingUI();
                 if (lockedNotice) lockedNotice.classList.add('hidden');
                 if (questionsArea) questionsArea.classList.remove('hidden');
-                if (submitBtn) {
+                if (submitBtn && !isAlreadyCompleted) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
                 if (statusText) {
-                    statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Quiz Unlocked`;
+                    statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Drag slider to 0% to re-listen anytime.`;
                 }
             });
         }, 100);
@@ -13306,6 +13482,14 @@ async function submitPodSessionQuiz() {
         if (!selected) {
             return alert("Please answer all 3 comprehension questions before submitting.");
         }
+    }
+
+    const submitBtn = document.getElementById('btnSubmitPodSession');
+    if (submitBtn && submitBtn.dataset.submitting === 'true') return;
+    if (submitBtn) {
+        submitBtn.dataset.submitting = 'true';
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting & Verifying...';
     }
 
     let calculatedPoints = 0;
@@ -13390,14 +13574,6 @@ async function submitPodSessionQuiz() {
         responses: answers,
         aiRemarks: `✅ [cMPLi POD Quiz Graded & Recorded]\nScore: ${calculatedPoints} / 33 LCs | Status: Graded & Recorded\nActive listening requirement verified (≥85%). Points synced to TagMango wallet.`
     };
-
-    const submitBtn = document.getElementById('btnSubmitPodSession');
-    if (submitBtn && submitBtn.dataset.submitting === 'true') return;
-    if (submitBtn) {
-        submitBtn.dataset.submitting = 'true';
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Submitting & Verifying...';
-    }
 
     try {
         // 1. Send to Server Backend for Evaluation & Direct TagMango Wallet Sync
@@ -14151,10 +14327,6 @@ window.restoreAudioDraft = async function(idx, draftKey) {
         if (stopBtn) stopBtn.classList.add('hidden');
         if (resumeBtn) {
             resumeBtn.classList.remove('hidden');
-            const totalW = window._totalTeleprompterWords || 0;
-            const nextWord = Math.min((window._currentReadWordIndex || 0) + 1, totalW);
-            const resumeLabel = document.getElementById('resume_word_num');
-            if (resumeLabel) resumeLabel.innerText = nextWord;
         }
         if (resetBtn) resetBtn.classList.remove('hidden');
 
@@ -14339,163 +14511,32 @@ function renderMarkdownText(text) {
 window.renderMarkdownText = renderMarkdownText;
 
 // ==============================================================
-// INTERACTIVE WORD TOKENIZER & READING TRACKER
-// Wraps each word so words turn RED as they are spoken / read
+// STORY READING SCRIPT RENDERER
+// Clean markdown rendering for student manual pace reading
 // ==============================================================
-window._teleprompterWords = [];
-window._totalTeleprompterWords = 0;
-window._currentReadWordIndex = 0;
-
 function renderInteractiveReadingScript(text) {
-    const rawHtml = renderMarkdownText(text);
-    if (!rawHtml) return '';
-
-    window._teleprompterWords = [];
-    let wordIdx = 0;
-
-    // Tokenize text words outside HTML tags
-    const processed = rawHtml.replace(/(<[^>]+>)|([^<>\s]+)/g, (match, isTag, isWord) => {
-        if (isTag) return isTag;
-        if (isWord) {
-            const currentIdx = wordIdx++;
-            const cleanWord = isWord.replace(/^[^\w]+|[^\w]+$/g, '').toLowerCase();
-            window._teleprompterWords.push({ idx: currentIdx, raw: isWord, clean: cleanWord });
-            return `<span id="tele_w_${currentIdx}" class="tele-word text-slate-200 transition-colors duration-150 cursor-pointer hover:underline" data-idx="${currentIdx}" onclick="jumpTeleprompterToWord(${currentIdx})">${isWord}</span>`;
-        }
-        return match;
-    });
-
-    window._totalTeleprompterWords = wordIdx;
-    window._currentReadWordIndex = 0;
-    return processed;
+    return renderMarkdownText(text);
 }
 window.renderInteractiveReadingScript = renderInteractiveReadingScript;
 
-function updateTeleprompterWordHighlight(targetIndex, spokenIndices) {
-    if (typeof targetIndex !== 'number' || isNaN(targetIndex)) return;
-    const total = window._totalTeleprompterWords || (window._teleprompterWords ? window._teleprompterWords.length : 0);
-    if (total === 0) return;
-
-    window._currentReadWordIndex = Math.max(0, Math.min(targetIndex, total - 1));
-    window._teleprompterWordStatus = window._teleprompterWordStatus || {};
-
-    if (Array.isArray(spokenIndices)) {
-        for (const idx of spokenIndices) {
-            window._teleprompterWordStatus[idx] = true;
-        }
-    } else if (typeof targetIndex === 'number') {
-        window._teleprompterWordStatus[targetIndex] = true;
-    }
-
-    // ZERO-LAYOUT-SHIFT RENDERING:
-    // Strictly ZERO horizontal padding (px-0), ZERO margin, and ZERO dynamic font-weight alteration.
-    // The exact letter spacing, word width, and line geometry remain 100% constant whether highlighted or not!
-    // Spoken words: text-rose-400 (or emerald) with subtle background tint.
-    // Current focus word: text-amber-300 with underline decoration.
-    // Skipped / Unread words: clean white/slate text-slate-200.
-    for (let i = 0; i < total; i++) {
-        const el = document.getElementById(`tele_w_${i}`);
-        if (!el) continue;
-        if (i === window._currentReadWordIndex) {
-            el.className = 'tele-word text-amber-300 bg-amber-400/20 underline decoration-amber-400 decoration-2 underline-offset-2 transition-colors duration-100 cursor-pointer';
-        } else if (window._teleprompterWordStatus[i]) {
-            el.className = 'tele-word text-rose-400 bg-rose-500/15 rounded-sm transition-colors duration-100 cursor-pointer';
-        } else {
-            el.className = 'tele-word text-slate-200 hover:text-white transition-colors duration-100 cursor-pointer';
-        }
-    }
-
-    // Centering the active word in the viewport
-    const activeEl = document.getElementById(`tele_w_${window._currentReadWordIndex}`);
-    const vp = document.getElementById('teleprompter_viewport');
-    if (activeEl && vp) {
-        const vpRect = vp.getBoundingClientRect();
-        const activeRect = activeEl.getBoundingClientRect();
-        const relativeTop = activeRect.top - vpRect.top;
-        const targetScrollTop = vp.scrollTop + (relativeTop - (vp.clientHeight / 2));
-        vp.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
-    }
-
-    // Update progress text
-    const progEl = document.getElementById('teleprompter_words_progress');
-    if (progEl) {
-        progEl.innerText = `${Math.min(window._currentReadWordIndex + 1, total)} / ${total} Words Read`;
-    }
-
-    // Update resume button label if visible
-    const resumeWordSpan = document.getElementById('resume_word_num');
-    if (resumeWordSpan) {
-        resumeWordSpan.innerText = Math.min(window._currentReadWordIndex + 1, total);
-    }
-}
+function updateTeleprompterWordHighlight() {}
 window.updateTeleprompterWordHighlight = updateTeleprompterWordHighlight;
 
-function jumpTeleprompterToWord(idx) {
-    updateTeleprompterWordHighlight(idx);
-}
+function jumpTeleprompterToWord() {}
 window.jumpTeleprompterToWord = jumpTeleprompterToWord;
 
 // ==============================================================
-// TELEPROMPTER AUTO-SCROLL & READING CADENCE ENGINE
-// Calibrated for natural 2.5 to 3.5 minutes master reading speed
+// STORY READING CADENCE ENGINE (MANUAL SCROLLING WORKFLOW)
 // ==============================================================
 window._teleprompterInterval = null;
 window._teleprompterCadenceInterval = null;
-window._teleprompterSpeed = 1; // 0.75x, 1x, 1.25x, 1.5x
+window._teleprompterSpeed = 1;
 window._teleprompterIsPlaying = false;
 window._hasSpeechRecActive = false;
 
 function startTeleprompterScroll() {
-    const vp = document.getElementById('teleprompter_viewport');
-    if (!vp) return;
-    if (window._teleprompterInterval) {
-        clearInterval(window._teleprompterInterval);
-        window._teleprompterInterval = null;
-    }
-    if (window._teleprompterCadenceInterval) {
-        clearInterval(window._teleprompterCadenceInterval);
-        window._teleprompterCadenceInterval = null;
-    }
-    window._teleprompterIsPlaying = true;
-    updateTeleprompterControlsUI(true);
-
-    // 1. Ultra-slow viewport smooth crawl (0.25px per 30ms step ≈ 8px/s -> ~3 minutes for full story)
-    const stepMs = 30;
-    window._teleprompterInterval = setInterval(() => {
-        const vpEl = document.getElementById('teleprompter_viewport');
-        if (!vpEl) {
-            stopTeleprompterScroll();
-            return;
-        }
-        const maxScroll = vpEl.scrollHeight - vpEl.clientHeight;
-        if (vpEl.scrollTop >= maxScroll - 2) {
-            stopTeleprompterScroll();
-            return;
-        }
-        const scrollDelta = 0.25 * (window._teleprompterSpeed || 1);
-        vpEl.scrollTop += scrollDelta;
-    }, stepMs);
-
-    // 2. Word-by-word reading progression timer (~450ms per word ≈ 130 WPM -> ~2.7 mins for 360 words)
-    // When live Speech Recognition is active, the speaker's voice directly drives highlighting!
-    // The timer does NOT race ahead blindly if the speaker pauses or steps away.
-    const totalWords = window._totalTeleprompterWords || (window._teleprompterWords ? window._teleprompterWords.length : 0);
-    const msPerWord = Math.round(450 / (window._teleprompterSpeed || 1));
-    window._teleprompterCadenceInterval = setInterval(() => {
-        if (!window._teleprompterIsPlaying) return;
-
-        // If Speech Recognition is active and tracking the user's voice, do not auto-advance!
-        if (window._hasSpeechRecActive) {
-            return;
-        }
-
-        const cur = window._currentReadWordIndex || 0;
-        if (cur < totalWords - 1) {
-            updateTeleprompterWordHighlight(cur + 1);
-        } else {
-            stopTeleprompterScroll();
-        }
-    }, msPerWord);
+    // Deactivated: student scrolls story manually at their own pace
+    return;
 }
 window.startTeleprompterScroll = startTeleprompterScroll;
 
@@ -14525,53 +14566,16 @@ window.toggleTeleprompterScroll = toggleTeleprompterScroll;
 function resetTeleprompterScroll() {
     const vp = document.getElementById('teleprompter_viewport');
     if (vp) vp.scrollTop = 0;
-    updateTeleprompterWordHighlight(0);
 }
 window.resetTeleprompterScroll = resetTeleprompterScroll;
 
 function setTeleprompterSpeed(spd) {
     window._teleprompterSpeed = spd;
-    ['075x', '1x', '125x', '15x'].forEach(k => {
-        const b = document.getElementById(`btn_tpromp_${k}`);
-        if (b) {
-            b.classList.remove('bg-indigo-600', 'text-white');
-            b.classList.add('bg-slate-800', 'text-slate-400');
-        }
-    });
-    const key = spd === 0.75 ? '075x' : (spd === 1.25 ? '125x' : (spd === 1.5 ? '15x' : '1x'));
-    const activeBtn = document.getElementById(`btn_tpromp_${key}`);
-    if (activeBtn) {
-        activeBtn.classList.remove('bg-slate-800', 'text-slate-400');
-        activeBtn.classList.add('bg-indigo-600', 'text-white');
-    }
-    // If running, restart cadence interval with new speed
-    if (window._teleprompterIsPlaying) {
-        startTeleprompterScroll();
-    }
 }
 window.setTeleprompterSpeed = setTeleprompterSpeed;
 
 function updateTeleprompterControlsUI(isPlaying) {
-    const btnToggle = document.getElementById('btn_teleprompter_toggle');
-    const icon = document.getElementById('icon_teleprompter_toggle');
-    const txt = document.getElementById('text_teleprompter_toggle');
-    if (icon && txt) {
-        if (isPlaying) {
-            icon.className = 'fas fa-pause text-[10px]';
-            txt.textContent = 'Pause';
-            if (btnToggle) {
-                btnToggle.classList.remove('bg-indigo-600/30', 'text-indigo-300');
-                btnToggle.classList.add('bg-amber-600/40', 'text-amber-300', 'border-amber-500/50');
-            }
-        } else {
-            icon.className = 'fas fa-play text-[10px]';
-            txt.textContent = 'Play';
-            if (btnToggle) {
-                btnToggle.classList.remove('bg-amber-600/40', 'text-amber-300', 'border-amber-500/50');
-                btnToggle.classList.add('bg-indigo-600/30', 'text-indigo-300');
-            }
-        }
-    }
+    // Legacy no-op kept for backward compatibility
 }
 window.updateTeleprompterControlsUI = updateTeleprompterControlsUI;
 
@@ -14650,7 +14654,6 @@ function saveCheckinFormDraft() {
             textInputs: {},
             checkboxes: {},
             mcqChoices: {},
-            readWordIndex: window._currentReadWordIndex || 0,
             savedAt: Date.now()
         };
 
@@ -14695,15 +14698,6 @@ function restoreCheckinFormDraft() {
                 const r = document.querySelector(`input[name="${name}"][value="${val}"]`);
                 if (r) r.checked = true;
             });
-        }
-        if (typeof draft.readWordIndex === 'number' && draft.readWordIndex > 0) {
-            setTimeout(() => {
-                updateTeleprompterWordHighlight(draft.readWordIndex);
-                const resumeBtns = document.querySelectorAll('[id^="btn_resume_audio_"]');
-                const resetBtns = document.querySelectorAll('[id^="btn_reset_audio_"]');
-                resumeBtns.forEach(b => b.classList.remove('hidden'));
-                resetBtns.forEach(b => b.classList.remove('hidden'));
-            }, 300);
         }
     } catch(e) {}
 }
@@ -14821,8 +14815,8 @@ async function concatAudioBlobs(blobList) {
 }
 
 // ==============================================================
-// VOICE RECORDING ENGINE WITH RESUME & SPEECH SYNCHRONIZATION
-// Appends subsequent recording segments and turns read words RED live
+// VOICE RECORDING ENGINE WITH RESUME
+// Appends subsequent recording segments for voice reflection
 // ==============================================================
 window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
 window._recordingAutosaveTimer = null;
@@ -14842,9 +14836,6 @@ async function startAudioRecording(idx, isResume = false) {
         _audioChunks = [];
         if (!isResume) {
             window._accumulatedAudioBlobs[idx] = [];
-            window._currentReadWordIndex = 0;
-            window._teleprompterWordStatus = {};
-            updateTeleprompterWordHighlight(0);
         }
 
         const audioConstraints = {
@@ -14925,55 +14916,6 @@ async function startAudioRecording(idx, isResume = false) {
                     window._liveTranscripts[idx] = (window._liveTranscripts[idx] ? window._liveTranscripts[idx] + ' ' : '') + cleanSpeech;
                     const hiddenTrans = document.getElementById(`checkin_transcript_${idx}`);
                     if (hiddenTrans) hiddenTrans.value = window._liveTranscripts[idx];
-
-                    // Multi-token matching: Compares what the customer spoken against teleprompter words
-                    if (window._teleprompterWords && window._teleprompterWords.length > 0) {
-                        const wordsSpoken = cleanSpeech.toLowerCase().split(/\s+/).map(w => w.replace(/[^\w]/g, '')).filter(Boolean);
-                        let searchCursor = Math.max(window._currentReadWordIndex || 0, 0);
-                        let maxMatchedIndex = searchCursor;
-                        const matchedThisBatch = [];
-                        const stopWords = new Set(['the', 'to', 'in', 'on', 'at', 'by', 'for', 'of', 'and', 'or', 'a', 'an', 'is', 'it', 'as', 'be', 'we', 'he', 'so']);
-
-                        for (const spoken of wordsSpoken) {
-                            if (spoken.length < 2) continue;
-                            const isStopWord = stopWords.has(spoken);
-                            // Stop words (the/to/for/etc.) can only look ahead up to 2 words from current position.
-                            // Distinct content words can look ahead up to 25 words.
-                            const maxLookaheadDist = isStopWord ? 2 : 25;
-                            const lookahead = Math.min(searchCursor + maxLookaheadDist + 1, window._teleprompterWords.length);
-
-                            for (let w = searchCursor; w < lookahead; w++) {
-                                const target = window._teleprompterWords[w]?.clean || '';
-                                if (!target) continue;
-
-                                const isMatch = (target === spoken) ||
-                                    (!isStopWord && target.length >= 4 && (target.startsWith(spoken) || spoken.startsWith(target))) ||
-                                    (!isStopWord && target.length >= 5 && spoken.length >= 5 && (target.slice(0, 4) === spoken.slice(0, 4)));
-
-                                if (isMatch) {
-                                    matchedThisBatch.push(w);
-                                    if (w > maxMatchedIndex) {
-                                        maxMatchedIndex = w;
-                                    }
-                                    // Advance searchCursor monotonically so subsequent words in this utterance match strictly AFTER this word!
-                                    searchCursor = w + 1;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (matchedThisBatch.length > 0) {
-                            window._lastSpeechMatchTime = Date.now();
-                            window._teleprompterWordStatus = window._teleprompterWordStatus || {};
-                            for (const mIdx of matchedThisBatch) {
-                                window._teleprompterWordStatus[mIdx] = true;
-                            }
-                            // Strictly monotonic forward progress — never snap backward mid-sentence!
-                            if (maxMatchedIndex >= (window._currentReadWordIndex || 0)) {
-                                updateTeleprompterWordHighlight(maxMatchedIndex, matchedThisBatch);
-                            }
-                        }
-                    }
                 };
 
                 rec.onerror = (e) => {
@@ -15075,18 +15017,12 @@ async function startAudioRecording(idx, isResume = false) {
             if (stopBtn) stopBtn.classList.add('hidden');
             if (resumeBtn) {
                 resumeBtn.classList.remove('hidden');
-                const totalW = window._totalTeleprompterWords || 0;
-                const nextWord = Math.min((window._currentReadWordIndex || 0) + 1, totalW);
-                const resumeLabel = document.getElementById('resume_word_num');
-                if (resumeLabel) resumeLabel.innerText = nextWord;
             }
             if (resetBtn) resetBtn.classList.remove('hidden');
 
             const recStatus = document.getElementById(`audio_rec_status_${idx}`);
             if (recStatus) {
-                const totalW = window._totalTeleprompterWords || 0;
-                const readW = Math.min((window._currentReadWordIndex || 0) + 1, totalW);
-                recStatus.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Recorded up to word ${readW} of ${totalW}. Listen above or click &quot;Resume Reading &amp; Recording&quot; to continue.</span>`;
+                recStatus.innerHTML = `<span class="text-emerald-400 font-semibold"><i class="fas fa-check-circle mr-1"></i> Audio recorded. Listen above or click &quot;Resume Recording&quot; to continue.</span>`;
             }
 
             // Background upload of full combined audio
@@ -15133,7 +15069,6 @@ async function startAudioRecording(idx, isResume = false) {
 
         // Start recording with 1-second timeslices
         _audioRecorder.start(1000);
-        startTeleprompterScroll();
 
         // 10-second periodic draft autosave during active recording
         if (window._recordingAutosaveTimer) clearInterval(window._recordingAutosaveTimer);
@@ -15153,7 +15088,7 @@ async function startAudioRecording(idx, isResume = false) {
 
         const recStatus = document.getElementById(`audio_rec_status_${idx}`);
         if (recStatus) {
-            recStatus.innerHTML = '<span class="text-rose-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note (Target 2.5-3.5 mins)... Read story above. Words turn RED as read.</span>';
+            recStatus.innerHTML = '<span class="text-rose-400 font-bold animate-pulse"><i class="fas fa-circle mr-1"></i> Recording Voice Note... Read and scroll the story above at your own pace.</span>';
         }
     } catch(err) {
         console.error('Microphone error:', err);
@@ -15174,13 +15109,9 @@ function resetAudioRecording(idx) {
     }
     window._isAudioRecording = false;
     window._hasSpeechRecActive = false;
-    window._teleprompterWordStatus = {};
     window._accumulatedAudioBlobs = window._accumulatedAudioBlobs || {};
     window._accumulatedAudioBlobs[idx] = [];
     _audioChunks = [];
-    window._currentReadWordIndex = 0;
-    updateTeleprompterWordHighlight(0);
-    resetTeleprompterScroll();
 
     const previewEl = document.getElementById(`audio_preview_${idx}`);
     if (previewEl) {
@@ -15220,7 +15151,6 @@ function stopAudioRecording(idx) {
     if (_audioRecorder && _audioRecorder.state !== 'inactive') {
         _audioRecorder.stop();
     }
-    stopTeleprompterScroll();
 }
 window.stopAudioRecording = stopAudioRecording;
 
@@ -15361,7 +15291,6 @@ async function startVideoRecording(idx) {
         };
 
         _videoRecorder.start();
-        startTeleprompterScroll();
         const startBtn = document.getElementById(`btn_start_video_${idx}`);
         const stopBtn = document.getElementById(`btn_stop_video_${idx}`);
         const rerecordBtn = document.getElementById(`btn_rerecord_video_${idx}`);
@@ -15963,48 +15892,27 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                 </div>
                 ` : ''}
 
-                <!-- MASTER REFERENCE ARTICLE & READING TELEPROMPTER + AUDIO RECORDER (DIP ONLY) -->
+                <!-- MASTER REFERENCE ARTICLE & AUDIO RECORDER (DIP ONLY) -->
                 ${(!isImmerse) ? `
                 <div class="glass-card p-4 sm:p-5 rounded-2xl border border-indigo-500/40 bg-slate-950/90 shadow-xl space-y-3.5">
                     <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/30">
-                                <i class="fas fa-file-alt"></i>
+                                <i class="fas fa-book-open"></i>
                             </span>
                             <div>
-                                <h5 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                                    Reference Script &amp; Teleprompter
-                                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Auto-Flow</span>
+                                <h5 class="text-xs font-bold text-white uppercase tracking-wider">
+                                    Today's Story &amp; Reference Script
                                 </h5>
-                                <p class="text-[10px] text-slate-400">Flows slowly down when recording. Read words turn <strong class="text-rose-400">RED</strong> live.</p>
-                            </div>
-                        </div>
-
-                        <!-- Teleprompter Flow Controls & Speed Selector -->
-                        <div class="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
-                            <span id="teleprompter_words_progress" class="text-[10px] text-indigo-300 font-mono font-bold px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/40">
-                                0 / 0 Words Read
-                            </span>
-                            <button type="button" onclick="toggleTeleprompterScroll()" id="btn_teleprompter_toggle" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 border border-indigo-500/40 transition-all flex items-center gap-1">
-                                <i class="fas fa-play text-[10px]" id="icon_teleprompter_toggle"></i> <span id="text_teleprompter_toggle">Play</span>
-                            </button>
-                            <button type="button" onclick="resetTeleprompterScroll()" class="px-2 py-1 text-[11px] font-bold rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all" title="Reset to top">
-                                <i class="fas fa-undo text-[10px]"></i>
-                            </button>
-                            <div class="flex items-center gap-1 pl-1 border-l border-slate-800">
-                                <span class="text-[10px] text-slate-400 px-0.5">Speed:</span>
-                                <button type="button" onclick="setTeleprompterSpeed(0.75)" id="btn_tpromp_075x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400 hover:text-white" title="Very Slow (~3.5 mins)">0.75x</button>
-                                <button type="button" onclick="setTeleprompterSpeed(1)" id="btn_tpromp_1x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-600 text-white" title="Recommended Slow Reading (~2.8 mins)">1x</button>
-                                <button type="button" onclick="setTeleprompterSpeed(1.25)" id="btn_tpromp_125x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400 hover:text-white" title="Moderate (~2.2 mins)">1.25x</button>
-                                <button type="button" onclick="setTeleprompterSpeed(1.5)" id="btn_tpromp_15x" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-slate-800 text-slate-400 hover:text-white" title="Brisk (~1.8 mins)">1.5x</button>
+                                <p class="text-[10px] text-slate-400">Read today's story and scroll at your own pace while recording your reflection below.</p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Teleprompter Scrollable Viewport (Situated directly above record button) -->
+                    <!-- Scrollable Story Viewport (Situated directly above record button) -->
                     <div id="teleprompter_viewport" class="relative max-h-60 sm:max-h-72 overflow-y-auto custom-scrollbar p-4 bg-slate-900/80 rounded-xl border border-slate-800/90 leading-relaxed text-xs sm:text-sm shadow-inner">
-                        <div id="teleprompter_content" class="text-slate-200 select-text leading-relaxed">
-                            ${renderInteractiveReadingScript(dayConfig.articleText || dayConfig.description || dayConfig.mainQuestion || 'Please record your reflection answering today\'s focus prompt.')}
+                        <div id="teleprompter_content" class="text-slate-200 select-text leading-relaxed space-y-2">
+                            ${renderMarkdownText(dayConfig.articleText || dayConfig.description || dayConfig.mainQuestion || 'Please record your reflection answering today\'s focus prompt.')}
                         </div>
                     </div>
 
@@ -16044,8 +15952,8 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                                     <button type="button" id="btn_stop_audio_${audioIdx}" onclick="stopAudioRecording(${audioIdx})" class="hidden btn-secondary py-2 px-4 text-xs font-bold text-red-400 border-red-500/40 bg-red-950/30 flex items-center gap-2">
                                         <i class="fas fa-pause"></i> Stop / Pause
                                     </button>
-                                    <button type="button" id="btn_resume_audio_${audioIdx}" onclick="resumeAudioRecording(${audioIdx})" class="hidden btn-primary py-2 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 flex items-center gap-2 shadow-lg animate-pulse">
-                                        <i class="fas fa-play"></i> Resume from Word <span id="resume_word_num">1</span>
+                                    <button type="button" id="btn_resume_audio_${audioIdx}" onclick="resumeAudioRecording(${audioIdx})" class="hidden btn-primary py-2 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 flex items-center gap-2 shadow-lg">
+                                        <i class="fas fa-play"></i> Resume Recording
                                     </button>
                                     <button type="button" id="btn_reset_audio_${audioIdx}" onclick="resetAudioRecording(${audioIdx})" class="hidden btn-secondary py-2 px-3 text-xs font-bold text-slate-400 hover:text-white border-slate-700 bg-slate-800 flex items-center gap-1.5" title="Clear recording & start over">
                                         <i class="fas fa-redo"></i> Start Fresh
@@ -16059,7 +15967,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
 
                                 <div class="flex flex-wrap items-center justify-between gap-2">
                                     <div id="audio_rec_status_${audioIdx}" class="text-xs text-slate-400">
-                                        Click &quot;Record with Mic&quot; to begin. The script will flow slowly and words will turn red as you read.
+                                        Click &quot;Record with Mic&quot; to begin. Read and scroll the story above at your own pace.
                                     </div>
                                     <a id="audio_download_${audioIdx}" href="#" download="my_reflection_audio.webm" class="hidden text-xs text-indigo-400 hover:text-indigo-300 font-semibold items-center gap-1 transition-colors">
                                         <i class="fas fa-download"></i> Download Audio
@@ -18496,7 +18404,16 @@ function switchMilestoneTab(moduleName, btnElement) {
             `;
         } else if (isCompleted) {
             statusBadge = '<span class="badge-pill badge-emerald text-[10px] font-bold whitespace-nowrap"><i class="fas fa-check-circle mr-1"></i> Completed</span>';
-            actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
+            if (moduleName === 'pod') {
+                actionBtn = `
+                    <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                        <button onclick="openPodSessionModal(${dayNum}, '${cardDateKey}')" class="btn-primary py-1 px-2.5 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 whitespace-nowrap shadow-sm"><i class="fas fa-headphones mr-1"></i> Listen</button>
+                        <button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2 text-[11px] font-bold text-slate-300 hover:text-white shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>
+                    </div>
+                `;
+            } else {
+                actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
+            }
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -18609,7 +18526,14 @@ function switchMilestoneTab(moduleName, btnElement) {
         const isTodayCompleted = todaySub && (isPod || (!isEvaluating && !isMismatch && (todaySub.status === 'completed' || Number(todaySub.matchPercentage) >= 50 || Number(todaySub.lcReward) > 0)));
 
         if (isTodayCompleted) {
-            todayActionHtml = `<div class="mt-2.5 text-center text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5"><i class="fas fa-check-circle"></i> Today's Check-in Completed</div>`;
+            if (isPod) {
+                todayActionHtml = `<div class="mt-2.5 flex items-center justify-center gap-2">
+                    <button onclick="openPodSessionModal(${todayDayNum}, '${todayKey}')" class="flex-1 py-1.5 px-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"><i class="fas fa-headphones text-indigo-400"></i> Replay Podcast</button>
+                    <button onclick="viewMySubmission(${todayDayNum}, 'pod', '${todayKey}')" class="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-all flex items-center justify-center gap-1 cursor-pointer"><i class="fas fa-eye"></i> View</button>
+                </div>`;
+            } else {
+                todayActionHtml = `<div class="mt-2.5 text-center text-[10px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5"><i class="fas fa-check-circle"></i> Today's Check-in Completed</div>`;
+            }
         } else if (isEvaluating) {
             todayActionHtml = `<button onclick="viewMySubmission(${todayDayNum}, '${moduleName}', '${todayKey}')" class="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 border border-indigo-500/40 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer animate-pulse"><i class="fas fa-spinner fa-spin"></i> Checking Evaluation...</button>`;
         } else if (isMismatch) {
@@ -19117,7 +19041,36 @@ function renderSubmissionDetailModal(sub, userId, dayLabel, type) {
         }
     }
 
+    let podAudioSectionHtml = '';
+    if (isPod) {
+        const podAudioUrl = (typeof resolvePodAudioUrl === 'function') ? resolvePodAudioUrl(dayCfg, cleanDateKey, msId) : (sub.audioUrl || '');
+        if (podAudioUrl) {
+            podAudioSectionHtml = `
+                <div class="p-4 sm:p-5 rounded-2xl bg-indigo-950/30 border border-indigo-500/40 space-y-3 shadow-md mb-4">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-sm">
+                                <i class="fas fa-headphones"></i>
+                            </span>
+                            <div>
+                                <h5 class="text-xs font-bold text-white uppercase tracking-wider">Episode Audio Narration</h5>
+                                <p class="text-[10px] text-slate-400">Re-listen to this episode anytime with seek controls.</p>
+                            </div>
+                        </div>
+                        ${!isCreatorView ? `
+                        <button type="button" onclick="openPodSessionModal(${actualDay}, '${cleanDateKey}')" class="text-[11px] font-bold text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <i class="fas fa-podcast text-xs text-indigo-400"></i> Open Dedicated Player
+                        </button>
+                        ` : ''}
+                    </div>
+                    <audio controls class="w-full h-10 rounded-lg custom-audio-player" src="${podAudioUrl}" preload="metadata"></audio>
+                </div>
+            `;
+        }
+    }
+
     let bodyHtml = `
+        ${podAudioSectionHtml}
         <div class="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl">
             <div class="flex items-center justify-between pb-3 border-b border-slate-800">
                 <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
