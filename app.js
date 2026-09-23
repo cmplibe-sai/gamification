@@ -6,19 +6,37 @@ function apiFetch(endpoint, options = {}) {
     const opt = { ...options };
     opt.headers = { ...(options.headers || {}) };
 
+    const getHeader = (name) => {
+        const target = name.toLowerCase();
+        for (const k of Object.keys(opt.headers)) {
+            if (k.toLowerCase() === target) return opt.headers[k];
+        }
+        return undefined;
+    };
+    const setHeader = (name, val) => {
+        const target = name.toLowerCase();
+        for (const k of Object.keys(opt.headers)) {
+            if (k.toLowerCase() === target) {
+                opt.headers[k] = val;
+                return;
+            }
+        }
+        opt.headers[name] = val;
+    };
+
     const sessToken = (typeof localStorage !== 'undefined' ? localStorage.getItem('cmpli_session_token') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_session_token') : null);
-    if (sessToken && !opt.headers['x-session-token'] && !opt.headers['authorization']) {
-        opt.headers['authorization'] = `Bearer ${sessToken}`;
-        opt.headers['x-session-token'] = sessToken;
+    if (sessToken && !getHeader('x-session-token') && !getHeader('authorization')) {
+        setHeader('authorization', `Bearer ${sessToken}`);
+        setHeader('x-session-token', sessToken);
     }
 
     const crtToken = window._creatorAuthToken || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_creator_token') : null);
-    if (crtToken && !opt.headers['x-creator-token'] && !opt.headers['authorization']) {
-        opt.headers['x-creator-token'] = crtToken;
+    if (crtToken && !getHeader('x-creator-token') && !getHeader('authorization')) {
+        setHeader('x-creator-token', crtToken);
     }
     const crtSecret = window._creatorAdminSecret || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
-    if (crtSecret && !opt.headers['x-admin-secret']) {
-        opt.headers['x-admin-secret'] = crtSecret;
+    if (crtSecret && !getHeader('x-admin-secret')) {
+        setHeader('x-admin-secret', crtSecret);
     }
 
     return fetch(url, opt);
@@ -10769,39 +10787,43 @@ async function synthesizePodElevenLabsAudio(dateKey) {
         return;
     }
 
-    // 1. Ensure creator token is present
+    // 1. Ensure creator token, session, or admin secret is present
     let token = window._creatorAuthToken;
     if (!token) {
         try { token = sessionStorage.getItem('cmpli_creator_token'); } catch(e) {}
     }
+    let sessToken = null;
+    try { sessToken = localStorage.getItem('cmpli_session_token') || sessionStorage.getItem('cmpli_session_token'); } catch(e) {}
+    let secret = window._creatorAdminSecret;
+    if (!secret) {
+        try { secret = sessionStorage.getItem('cmpli_admin_secret'); } catch(e) {}
+    }
 
-    if (!token) {
+    if (!token && !secret && (!sessToken || (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'creator'))) {
         const enteredSecret = prompt('🔐 cMPLi POD Creator Authentication:\n\nEnter Creator Security Key to synthesize ElevenLabs podcast audio:');
         if (!enteredSecret || !enteredSecret.trim()) {
             if (typeof showToast === 'function') showToast('Creator Security Key required.', 'warning');
             return;
         }
 
+        secret = enteredSecret.trim();
+        window._creatorAdminSecret = secret;
+        try { sessionStorage.setItem('cmpli_admin_secret', secret); } catch(e) {}
+
         try {
             const tokenRes = await apiFetch('/api/auth/creator-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ adminSecret: enteredSecret.trim() })
+                body: JSON.stringify({ adminSecret: secret })
             }).then(r => r.json());
 
-            if (!tokenRes || !tokenRes.success || !tokenRes.token) {
-                const errMsg = tokenRes?.error || 'Authentication failed: Invalid Creator Security Key.';
-                if (typeof showToast === 'function') showToast(errMsg, 'error');
-                alert(errMsg);
-                return;
+            if (tokenRes && tokenRes.success && tokenRes.token) {
+                token = tokenRes.token;
+                window._creatorAuthToken = token;
+                try { sessionStorage.setItem('cmpli_creator_token', token); } catch(e) {}
             }
-
-            token = tokenRes.token;
-            window._creatorAuthToken = token;
-            try { sessionStorage.setItem('cmpli_creator_token', token); } catch(e) {}
         } catch(authErr) {
-            alert('Authentication network error.');
-            return;
+            console.warn('Could not exchange secret for creator token, using direct secret header:', authErr);
         }
     }
 
@@ -10821,17 +10843,20 @@ async function synthesizePodElevenLabsAudio(dateKey) {
         const titleEl = document.getElementById('podAudioTitle');
         const episodeTitle = titleEl ? titleEl.value : '';
 
+        const reqHeaders = { 'Content-Type': 'application/json' };
+        if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+        if (secret) reqHeaders['x-admin-secret'] = secret;
+        if (sessToken) reqHeaders['x-session-token'] = sessToken;
+
         const res = await apiFetch('/api/pod/generate-voice', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: reqHeaders,
             body: JSON.stringify({
                 text: scriptText,
                 milestoneId: activeAdminMilestoneId || 1,
                 dateKey: dateKey || activeAdminDateKey,
-                title: episodeTitle
+                title: episodeTitle,
+                adminSecret: secret || undefined
             })
         }).then(r => r.json());
 
@@ -12881,7 +12906,7 @@ async function openPodSessionModal(dayNum, dateKey) {
             // Auto-heal / Ensure British voice audio if missing or network error
             player.addEventListener('error', () => {
                 console.warn('[Pod Audio Player] Audio stream error, requesting ensure-audio from server...');
-                fetch(`/api/pod/ensure-audio?dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(safeMs)}`)
+                apiFetch(`/api/pod/ensure-audio?dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(safeMs)}`)
                     .then(r => r.json())
                     .then(res => {
                         if (res && res.success && res.audioUrl && player.src !== res.audioUrl) {
@@ -16689,7 +16714,12 @@ async function submitPayloadToServer(payload) {
 
     if (res.pending) {
         // Submission is already safely saved server-side — poll for the real result.
-        return await pollSubmissionStatus(res.data.id);
+        try {
+            return await pollSubmissionStatus(res.data.id);
+        } catch (pollErr) {
+            console.warn('[Poll Warning] Background evaluation polling timed out, using safely saved submission ack:', pollErr);
+            return res.data;
+        }
     }
     return res.data;
 }

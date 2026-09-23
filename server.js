@@ -66,6 +66,42 @@ const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
+// Dedicated static media resolver that normalizes dashes/underscores and NEVER falls through to index.html
+function serveUploadFile(req, res, next) {
+    const rawName = path.basename(req.params.filename || '');
+    if (!rawName) return res.status(404).send('Not found');
+
+    const exactPath = path.join(UPLOADS_DIR, rawName);
+    if (fs.existsSync(exactPath)) {
+        return res.sendFile(exactPath);
+    }
+
+    // Try hyphen/underscore permutations
+    const altUnderscore = rawName.replace(/-/g, '_');
+    const altHyphen = rawName.replace(/_/g, '-');
+    const pathUnderscore = path.join(UPLOADS_DIR, altUnderscore);
+    const pathHyphen = path.join(UPLOADS_DIR, altHyphen);
+
+    if (fs.existsSync(pathUnderscore)) {
+        return res.sendFile(pathUnderscore);
+    }
+    if (fs.existsSync(pathHyphen)) {
+        return res.sendFile(pathHyphen);
+    }
+
+    // Fallback: check tracked data/uploads directory
+    const trackedPath = path.join(__dirname, 'data', 'uploads', rawName);
+    const trackedUnderscore = path.join(__dirname, 'data', 'uploads', altUnderscore);
+    const trackedHyphen = path.join(__dirname, 'data', 'uploads', altHyphen);
+    if (fs.existsSync(trackedPath)) return res.sendFile(trackedPath);
+    if (fs.existsSync(trackedUnderscore)) return res.sendFile(trackedUnderscore);
+    if (fs.existsSync(trackedHyphen)) return res.sendFile(trackedHyphen);
+
+    // Explicit 404: Never let media asset requests fall through to index.html!
+    return res.status(404).type('text/plain').send('Audio/media file not found');
+}
+
+app.get(['/uploads/:filename', '/gamification/uploads/:filename'], serveUploadFile);
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/gamification/uploads', express.static(UPLOADS_DIR));
 
@@ -85,6 +121,12 @@ try {
         if (fs.existsSync(trk) && !fs.existsSync(tgt)) {
             fs.copyFileSync(trk, tgt);
             console.log(`[Seed Asset] Copied ${f} to uploads directory`);
+        }
+        const hyphenName = f.replace(/_/g, '-');
+        const tgtHyphen = path.join(UPLOADS_DIR, hyphenName);
+        if (fs.existsSync(trk) && !fs.existsSync(tgtHyphen)) {
+            fs.copyFileSync(trk, tgtHyphen);
+            console.log(`[Seed Asset] Copied ${hyphenName} to uploads directory`);
         }
     });
 
@@ -2966,16 +3008,39 @@ const validCreatorTokens = new Map();
 const failedCreatorAuthAttempts = new Map(); // ip -> { count, lockedUntil }
 
 function verifyCreatorToken(req) {
-    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.query.token;
+    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.headers['x-session-token'] || req.query.token;
     if (!authHeader || typeof authHeader !== 'string') return false;
-    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!validCreatorTokens.has(cleanToken)) return false;
-    const expiry = validCreatorTokens.get(cleanToken);
-    if (Date.now() > expiry) {
-        validCreatorTokens.delete(cleanToken);
-        return false;
+    
+    // Parse comma-separated or Bearer tokens
+    const rawTokens = authHeader.split(',').map(t => t.replace(/^Bearer\s+/i, '').trim()).filter(Boolean);
+    for (const cleanToken of rawTokens) {
+        if (validCreatorTokens.has(cleanToken)) {
+            const expiry = validCreatorTokens.get(cleanToken);
+            if (Date.now() > expiry) {
+                validCreatorTokens.delete(cleanToken);
+            } else {
+                return true;
+            }
+        }
+        if (typeof validUserSessions !== 'undefined' && validUserSessions.has(cleanToken)) {
+            const sess = validUserSessions.get(cleanToken);
+            if (sess && sess.role === 'creator') {
+                if (sess.expiresAt && Date.now() > sess.expiresAt) {
+                    validUserSessions.delete(cleanToken);
+                } else {
+                    return true;
+                }
+            }
+        }
+        if (store && store.userSessions && store.userSessions[cleanToken]) {
+            const sess = store.userSessions[cleanToken];
+            if (sess && sess.role === 'creator' && (!sess.expiresAt || sess.expiresAt > Date.now())) {
+                if (typeof validUserSessions !== 'undefined') validUserSessions.set(cleanToken, sess);
+                return true;
+            }
+        }
     }
-    return true;
+    return false;
 }
 
 // Persistent store for authenticated user sessions (Learners, Recruiters, Campus Coordinators, Creators)
@@ -3059,7 +3124,7 @@ function checkCreatorAuth(req) {
     if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
     const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
     if (sess && sess.role === 'creator') return true;
-    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret;
+    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret || (req.body && req.body.adminSecret);
     const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
     if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;
     return false;
@@ -4141,7 +4206,7 @@ app.post(['/api/submissions/update-status', '/gamification/api/submissions/updat
     }
 });
 
-app.get('/api/submissions', (req, res) => {
+app.get(['/api/submissions', '/gamification/api/submissions'], (req, res) => {
     const { userId, milestoneId, type } = req.query;
     let list = store.submissions || [];
     if (userId) list = list.filter(s => String(s.userId) === String(userId));
@@ -4286,14 +4351,21 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
         if (refWordSet.has(w) && !matchedSet.has(w)) { matchedCount++; matchedSet.add(w); }
     });
 
-    let coverage = Math.round((matchedCount / refWordSet.size) * 100);
-    // Very sparse transcript (< 4 meaningful words) — cap to near zero
-    if (studentWords.length < 4) coverage = Math.min(coverage, 4);
+    // Score against a realistic core concept target (up to 8 key concepts) rather than demanding 50% of a 300-word article
+    const targetConcepts = Math.max(1, Math.min(refWordSet.size, 8));
+    let coverage = Math.min(100, Math.round((matchedCount / targetConcepts) * 100));
+
+    // If an authentic audio voice note was recorded, ensure attempt is credited even if speech transcription is pending/partial
+    if (hasAudio) {
+        coverage = Math.max(coverage, 65); // Guarantees successful completion & LC award
+    } else if (studentWords.length < 4) {
+        coverage = Math.min(coverage, 4);
+    }
 
     // ── 5-TIER LC GRADING (Warm, Personalized & Constructive Feedback) ────────
 
-    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
-    if (coverage < 50) {
+    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit (only when no audio and no text)
+    if (coverage < 50 && !hasAudio) {
         const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
             pastCheckinsCount, studentText, userName, pts: 0, fullExpected: Number(basePoints) || 33, isLate
         });
@@ -4303,7 +4375,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             status: 'rejected_mismatch',
             remarks: `❌ [Match Percentage Below 50% — 0 LCs Awarded]\n` +
                 `Match Percentage: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
-                `Why 0 LCs were awarded: The audio voice reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short/faint to verify.\n` +
+                `Why 0 LCs were awarded: Neither audio nor adequate text reflection content was detected to verify against today's concepts.\n` +
                 `${progressNote}\n` +
                 `${vocalFeedback}\n` +
                 `${improvementTip}`
@@ -4846,10 +4918,10 @@ app.post(['/api/auth/session', '/gamification/api/auth/session'], (req, res) => 
 // Creator / Admin endpoint: strictly protected by signed creator session token
 app.get(['/api/pod/quiz-pool', '/gamification/api/pod/quiz-pool'], (req, res) => {
     try {
-        if (!verifyCreatorToken(req)) {
+        if (!checkCreatorAuth(req)) {
             return res.status(403).json({ 
                 success: false, 
-                error: 'Access denied: Valid authenticated creator bearer token required to inspect full answer keys.' 
+                error: 'Access denied: Valid authenticated creator credentials required to inspect full answer keys.' 
             });
         }
 
@@ -5120,11 +5192,11 @@ async function synthesizeBritishVoiceNarration(text, milestoneId = 1, dateKey = 
 // Strictly protected by Creator Bearer token and rate-limited
 app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], async (req, res) => {
     try {
-        // 1. Auth Gate: Require valid creator Bearer token
-        if (!verifyCreatorToken(req)) {
+        // 1. Auth Gate: Require valid creator authorization (Session token, Creator token, or Creator Secret)
+        if (!checkCreatorAuth(req)) {
             return res.status(403).json({
                 success: false,
-                error: 'Unauthorized: Valid creator session token required to generate voice audio.'
+                error: 'Unauthorized: Valid creator session token or Creator Security Key required to generate voice audio.'
             });
         }
 
@@ -5163,12 +5235,33 @@ app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (
         const safeMsId = parseInt(msId, 10) || 1;
         const safeDateKey = dateKey.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const fileName = `pod_m${safeMsId}_${safeDateKey}.mp3`;
-        const filePath = path.join(UPLOADS_DIR, fileName);
+        const fileNameUnderscore = `pod_m${safeMsId}_${safeDateKey.replace(/-/g, '_')}.mp3`;
+        const fileNameHyphen = `pod_m${safeMsId}_${safeDateKey.replace(/_/g, '-')}.mp3`;
 
-        // 1. If audio file already exists on disk, return it immediately
+        const filePath = path.join(UPLOADS_DIR, fileName);
+        const filePathUnderscore = path.join(UPLOADS_DIR, fileNameUnderscore);
+        const filePathHyphen = path.join(UPLOADS_DIR, fileNameHyphen);
+
+        // 1. If audio file already exists on disk (exact, underscore, or hyphen), return it immediately
         if (fs.existsSync(filePath)) {
-            const publicUrl = `/gamification/uploads/${fileName}`;
-            return res.json({ success: true, audioUrl: publicUrl, cached: true });
+            return res.json({ success: true, audioUrl: `/gamification/uploads/${fileName}`, cached: true });
+        }
+        if (fs.existsSync(filePathUnderscore)) {
+            return res.json({ success: true, audioUrl: `/gamification/uploads/${fileNameUnderscore}`, cached: true });
+        }
+        if (fs.existsSync(filePathHyphen)) {
+            return res.json({ success: true, audioUrl: `/gamification/uploads/${fileNameHyphen}`, cached: true });
+        }
+
+        // Check tracked data directory fallback
+        const trackedDataDir = path.join(__dirname, 'data', 'uploads');
+        if (fs.existsSync(path.join(trackedDataDir, fileNameUnderscore))) {
+            fs.copyFileSync(path.join(trackedDataDir, fileNameUnderscore), filePathUnderscore);
+            return res.json({ success: true, audioUrl: `/gamification/uploads/${fileNameUnderscore}`, cached: true });
+        }
+        if (fs.existsSync(path.join(trackedDataDir, fileNameHyphen))) {
+            fs.copyFileSync(path.join(trackedDataDir, fileNameHyphen), filePathHyphen);
+            return res.json({ success: true, audioUrl: `/gamification/uploads/${fileNameHyphen}`, cached: true });
         }
 
         // 2. Special case for Snabbit legacy audio
@@ -5539,6 +5632,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             store.submissions.push(completedSub);
             store.submissionsRevision = Date.now();
             saveStore();
+            saveSubmissionToMongo(completedSub);
 
             // Direct TagMango Credit
             let targetFanId = completedSub.fanId || completedSub.userId;
@@ -5655,6 +5749,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         store.submissions.push(placeholderSub);
         store.submissionsRevision = Date.now();
         saveStore();
+        saveSubmissionToMongo(placeholderSub);
 
         res.json({
             success: true,
@@ -5908,6 +6003,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             };
             store.submissionsRevision = Date.now();
             saveStore();
+            saveSubmissionToMongo(store.submissions[idx]);
         }
 
         // Direct TagMango Wallet Sync
@@ -6026,6 +6122,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     };
     store.submissionsRevision = Date.now();
     saveStore();
+    saveSubmissionToMongo(store.submissions[idx]);
 
     // -------------------------------------------------------------
     // DIRECT REAL-TIME TAGMANGO WALLET REWARD ASSIGNMENT
