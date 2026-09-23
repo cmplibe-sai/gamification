@@ -10817,13 +10817,20 @@ async function synthesizePodElevenLabsAudio(dateKey) {
                 body: JSON.stringify({ adminSecret: secret })
             }).then(r => r.json());
 
-            if (tokenRes && tokenRes.success && tokenRes.token) {
-                token = tokenRes.token;
-                window._creatorAuthToken = token;
-                try { sessionStorage.setItem('cmpli_creator_token', token); } catch(e) {}
+            if (!tokenRes || !tokenRes.success || !tokenRes.token) {
+                const errMsg = tokenRes?.error || 'Authentication failed: Invalid Creator Security Key.';
+                if (typeof showToast === 'function') showToast(errMsg, 'error');
+                alert(errMsg);
+                return;
             }
+
+            token = tokenRes.token;
+            window._creatorAuthToken = token;
+            try { sessionStorage.setItem('cmpli_creator_token', token); } catch(e) {}
         } catch(authErr) {
-            console.warn('Could not exchange secret for creator token, using direct secret header:', authErr);
+            console.error('Authentication network error:', authErr);
+            alert('Authentication network error. Please try again.');
+            return;
         }
     }
 
@@ -16714,12 +16721,7 @@ async function submitPayloadToServer(payload) {
 
     if (res.pending) {
         // Submission is already safely saved server-side — poll for the real result.
-        try {
-            return await pollSubmissionStatus(res.data.id);
-        } catch (pollErr) {
-            console.warn('[Poll Warning] Background evaluation polling timed out, using safely saved submission ack:', pollErr);
-            return res.data;
-        }
+        return await pollSubmissionStatus(res.data.id);
     }
     return res.data;
 }

@@ -122,12 +122,6 @@ try {
             fs.copyFileSync(trk, tgt);
             console.log(`[Seed Asset] Copied ${f} to uploads directory`);
         }
-        const hyphenName = f.replace(/_/g, '-');
-        const tgtHyphen = path.join(UPLOADS_DIR, hyphenName);
-        if (fs.existsSync(trk) && !fs.existsSync(tgtHyphen)) {
-            fs.copyFileSync(trk, tgtHyphen);
-            console.log(`[Seed Asset] Copied ${hyphenName} to uploads directory`);
-        }
     });
 
     const trackedQuiz = path.join(trackedDataDir, 'pod_quiz_pool_snabbit.json');
@@ -1955,6 +1949,7 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
 
         store.submissionsRevision = Date.now();
         saveStore();
+        saveSubmissionToMongo(subRecord);
 
         res.json({
             success: true,
@@ -3008,39 +3003,16 @@ const validCreatorTokens = new Map();
 const failedCreatorAuthAttempts = new Map(); // ip -> { count, lockedUntil }
 
 function verifyCreatorToken(req) {
-    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.headers['x-session-token'] || req.query.token;
+    const authHeader = req.headers['authorization'] || req.headers['x-creator-token'] || req.query.token;
     if (!authHeader || typeof authHeader !== 'string') return false;
-    
-    // Parse comma-separated or Bearer tokens
-    const rawTokens = authHeader.split(',').map(t => t.replace(/^Bearer\s+/i, '').trim()).filter(Boolean);
-    for (const cleanToken of rawTokens) {
-        if (validCreatorTokens.has(cleanToken)) {
-            const expiry = validCreatorTokens.get(cleanToken);
-            if (Date.now() > expiry) {
-                validCreatorTokens.delete(cleanToken);
-            } else {
-                return true;
-            }
-        }
-        if (typeof validUserSessions !== 'undefined' && validUserSessions.has(cleanToken)) {
-            const sess = validUserSessions.get(cleanToken);
-            if (sess && sess.role === 'creator') {
-                if (sess.expiresAt && Date.now() > sess.expiresAt) {
-                    validUserSessions.delete(cleanToken);
-                } else {
-                    return true;
-                }
-            }
-        }
-        if (store && store.userSessions && store.userSessions[cleanToken]) {
-            const sess = store.userSessions[cleanToken];
-            if (sess && sess.role === 'creator' && (!sess.expiresAt || sess.expiresAt > Date.now())) {
-                if (typeof validUserSessions !== 'undefined') validUserSessions.set(cleanToken, sess);
-                return true;
-            }
-        }
+    const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!validCreatorTokens.has(cleanToken)) return false;
+    const expiry = validCreatorTokens.get(cleanToken);
+    if (Date.now() > expiry) {
+        validCreatorTokens.delete(cleanToken);
+        return false;
     }
-    return false;
+    return true;
 }
 
 // Persistent store for authenticated user sessions (Learners, Recruiters, Campus Coordinators, Creators)
@@ -3124,7 +3096,7 @@ function checkCreatorAuth(req) {
     if (typeof verifyCreatorToken === 'function' && verifyCreatorToken(req)) return true;
     const sess = typeof getAuthenticatedSession === 'function' ? getAuthenticatedSession(req) : null;
     if (sess && sess.role === 'creator') return true;
-    const directSecret = req.headers['x-admin-secret'] || req.query.adminSecret || (req.body && req.body.adminSecret);
+    const directSecret = (req.headers && req.headers['x-admin-secret']) || (req.query && req.query.adminSecret) || (req.body && req.body.adminSecret);
     const configuredSecret = (process.env.CREATOR_ADMIN_SECRET || '').trim();
     if (directSecret && configuredSecret && String(directSecret).trim() === configuredSecret) return true;
     return false;
@@ -4355,17 +4327,15 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     const targetConcepts = Math.max(1, Math.min(refWordSet.size, 8));
     let coverage = Math.min(100, Math.round((matchedCount / targetConcepts) * 100));
 
-    // If an authentic audio voice note was recorded, ensure attempt is credited even if speech transcription is pending/partial
-    if (hasAudio) {
-        coverage = Math.max(coverage, 65); // Guarantees successful completion & LC award
-    } else if (studentWords.length < 4) {
+    // Very sparse transcript (< 4 meaningful words) — cap to near zero
+    if (studentWords.length < 4) {
         coverage = Math.min(coverage, 4);
     }
 
     // ── 5-TIER LC GRADING (Warm, Personalized & Constructive Feedback) ────────
 
-    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit (only when no audio and no text)
-    if (coverage < 50 && !hasAudio) {
+    // REJECTED — Below Minimum Threshold (< 50% match) → 0 LCs, Must Re-submit
+    if (coverage < 50) {
         const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
             pastCheckinsCount, studentText, userName, pts: 0, fullExpected: Number(basePoints) || 33, isLate
         });
@@ -4375,7 +4345,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
             status: 'rejected_mismatch',
             remarks: `❌ [Match Percentage Below 50% — 0 LCs Awarded]\n` +
                 `Match Percentage: ${coverage}% | Credited: +0 LCs | Status: Re-submission Required (Min. 50% Required)\n` +
-                `Why 0 LCs were awarded: Neither audio nor adequate text reflection content was detected to verify against today's concepts.\n` +
+                `Why 0 LCs were awarded: The reflection scored ${coverage}%, which did not capture enough of today's key ideas or was too short to verify.\n` +
                 `${progressNote}\n` +
                 `${vocalFeedback}\n` +
                 `${improvementTip}`
@@ -5850,6 +5820,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             };
             store.submissionsRevision = Date.now();
             saveStore();
+            saveSubmissionToMongo(store.submissions[idx]);
         }
 
         const targetFanId = resolveTargetFanId(sub);
@@ -7230,5 +7201,9 @@ module.exports = {
     recordUserSession,
     removeUserSession,
     User,
-    Submission
+    Submission,
+    evaluateReflectionAgainstRubric,
+    verifyCreatorToken,
+    checkCreatorAuth,
+    validCreatorTokens
 };
