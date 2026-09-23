@@ -887,17 +887,34 @@ async function restoreSubmissionsFromMongoBackup() {
     try {
         const mongoSubCount = await Submission.countDocuments();
         if (mongoSubCount === 0) return false;
-        console.log(`[Mongo Disaster Recovery] Restoring ${mongoSubCount} submissions from MongoDB cloud backup into local store...`);
+        console.log(`[Mongo Sync] Merging/restoring ${mongoSubCount} submissions from MongoDB cloud into local store...`);
         const mongoSubs = await Submission.find({}).lean();
-        store.submissions = mongoSubs.map(s => {
+        
+        // Use a composite key map so existing local submissions and mongo submissions are merged cleanly
+        const subMap = new Map();
+        
+        // 1. Seed with local store submissions
+        if (Array.isArray(store.submissions)) {
+            store.submissions.forEach(s => {
+                if (!s) return;
+                const key = s.id || `${s.userId}_${s.milestoneId}_${s.type || s.moduleType}_${s.day || s.date || s.dateKey}`;
+                subMap.set(key, s);
+            });
+        }
+
+        // 2. Overlay / insert MongoDB authoritative submissions
+        mongoSubs.forEach(s => {
             const copy = { ...s };
             delete copy._id;
             delete copy.__v;
-            return copy;
+            const key = copy.id || `${copy.userId}_${copy.milestoneId}_${copy.type || copy.moduleType}_${copy.day || copy.date || copy.dateKey}`;
+            subMap.set(key, copy);
         });
+
+        store.submissions = Array.from(subMap.values());
         store.submissionsRevision = Date.now();
         saveStore();
-        console.log(`✅ Successfully restored ${store.submissions.length} submissions from MongoDB backup.`);
+        console.log(`✅ Successfully synced ${store.submissions.length} submissions with MongoDB.`);
         return true;
     } catch (err) {
         console.warn('[Mongo Recovery Warning]:', err.message);
@@ -921,7 +938,7 @@ async function syncStoreToMongo() {
                         userId: String(sub.userId),
                         milestoneId: Number(sub.milestoneId || 1),
                         type: String(sub.type || sub.moduleType || 'dip'),
-                        day: sub.day !== undefined ? Number(sub.day) : null
+                        day: sub.day !== undefined ? (isNaN(Number(sub.day)) ? String(sub.day) : Number(sub.day)) : null
                     };
                     return {
                         updateOne: {
@@ -935,8 +952,8 @@ async function syncStoreToMongo() {
                 await Submission.bulkWrite(bulkOps, { ordered: false });
                 console.log(`✅ Migrated ${bulkOps.length} submissions to MongoDB.`);
             }
-        } else if (mongoSubCount > 0 && (process.env.RESTORE_FROM_MONGO === 'true' || (isStoreNewlyCreated && (!Array.isArray(store.submissions) || store.submissions.length === 0)))) {
-            // Disaster recovery strictly on startup when explicitly instructed or if store was brand new and empty
+        } else if (mongoSubCount > 0) {
+            // Restore / merge submissions from MongoDB so store.submissions is always up to date across restarts
             await restoreSubmissionsFromMongoBackup();
         }
 
@@ -1673,12 +1690,24 @@ function getLevelUpAccessFromDb() {
         if (fs.existsSync(LEVELUP_ACCESS_FILE)) {
             const raw = fs.readFileSync(LEVELUP_ACCESS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
     } catch(e) {
         console.warn('Error reading levelup_access.json:', e);
     }
-    return store.levelUpAccessConfig || ["6714e7d8eb97f72e99e3316c"];
+    const defaultMangos = [
+        "6714e7d8eb97f72e99e3316c", // cMPLi Be Webinar
+        "66ac8a14cb4763138b556947", 
+        "67e517096a70bf196ed9b521", // cMPLi Dip
+        "68d38f6b46e0a315816fca79", // cMPLiBe Testing Service-2 (Chandra)
+        "68be879e8ce56ad627efcc7c", // cMPLiBe Community (Cynthiya)
+        "698c0af094f2b79d63427fca", // Team cMPLiBe (Cynthiya)
+        "672110ca6e4ab068827288bf", // cMPLiBe 33 Days Challenge
+        "67656afa87ad140605306541", // cMPLiBe 21Days Challenge
+        "67b712ae5b71fea527d8ba71", // cMPLi POD
+        "6a168e4213e4e9a10984b164"  // cMPLiBe - MSNIM Collaboration
+    ];
+    return (store.levelUpAccessConfig && store.levelUpAccessConfig.length > 0) ? store.levelUpAccessConfig : defaultMangos;
 }
 
 function saveLevelUpAccessToDb(accessArray) {
@@ -3824,7 +3853,7 @@ app.post(['/api/user-module-start-date', '/gamification/api/user-module-start-da
 
 
 // UNIFIED HIGH-SPEED SYNC ENDPOINT (Single ultra-fast request, strictly authenticated & PII-masked)
-app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
+app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
     const isCreator = checkCreatorAuth(req);
     const session = getAuthenticatedSession(req);
     const employer = verifyEmployerAuth(req);
@@ -3834,6 +3863,13 @@ app.get(['/api/sync', '/gamification/api/sync'], (req, res) => {
             success: false,
             error: 'Authentication required: Please provide a valid session token, creator secret, or employer credentials.'
         });
+    }
+
+    // Safety check: if MongoDB is connected and store.submissions is empty, sync from Mongo
+    if (isDbConnected && Submission && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
+        try {
+            await restoreSubmissionsFromMongoBackup();
+        } catch(e) {}
     }
 
     const liveLevelUpAccess = getLevelUpAccessFromDb();
@@ -4184,10 +4220,18 @@ app.post(['/api/submissions/update-status', '/gamification/api/submissions/updat
     }
 });
 
-app.get(['/api/submissions', '/gamification/api/submissions'], (req, res) => {
+app.get(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
     const { userId, milestoneId, type } = req.query;
+    if (isDbConnected && Submission && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
+        try {
+            await restoreSubmissionsFromMongoBackup();
+        } catch(e) {}
+    }
     let list = store.submissions || [];
-    if (userId) list = list.filter(s => String(s.userId) === String(userId));
+    if (userId) {
+        const uStr = String(userId).toLowerCase().trim();
+        list = list.filter(s => String(s.userId).toLowerCase() === uStr || (s.userEmail && s.userEmail.toLowerCase().trim() === uStr));
+    }
     if (milestoneId) list = list.filter(s => String(s.milestoneId) === String(milestoneId));
     if (type) list = list.filter(s => String(s.type).toLowerCase() === String(type).toLowerCase());
     res.json({ success: true, count: list.length, data: list });
@@ -6123,8 +6167,21 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
 }
 
 // Lightweight poll target for the client: current status of one submission by id.
-app.get(['/api/submissions/status/:id', '/gamification/api/submissions/status/:id'], (req, res) => {
-    const sub = (store.submissions || []).find(s => s.id === req.params.id);
+app.get(['/api/submissions/status/:id', '/gamification/api/submissions/status/:id'], async (req, res) => {
+    let sub = (store.submissions || []).find(s => s.id === req.params.id);
+    if (!sub && isDbConnected && Submission) {
+        try {
+            const dbSub = await Submission.findOne({ id: req.params.id }).lean();
+            if (dbSub) {
+                const copy = { ...dbSub };
+                delete copy._id;
+                delete copy.__v;
+                if (!Array.isArray(store.submissions)) store.submissions = [];
+                store.submissions.push(copy);
+                sub = copy;
+            }
+        } catch(e) {}
+    }
     if (!sub) return res.status(404).json({ success: false, error: 'Submission not found' });
     res.json({ success: true, data: sub });
 });

@@ -8775,7 +8775,32 @@ function getFilteredCohortLearners(applySearch = true) {
         ? adminRealtimeUsers 
         : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
 
-    let cohort = pool.filter(u => {
+    // Merge any learners present in allUserSubmissionsDB who might not be in pool
+    const allSubs = (typeof getAllUserSubmissions === 'function') ? getAllUserSubmissions() : [];
+    const submissionUsers = [];
+    const seenUids = new Set(pool.map(u => String(u._id || u.id)));
+    const seenEmails = new Set(pool.map(u => (u.email || '').toLowerCase().trim()).filter(Boolean));
+
+    allSubs.forEach(s => {
+        if (!s) return;
+        const sUid = s.userId ? String(s.userId) : '';
+        const sEmail = s.userEmail ? s.userEmail.toLowerCase().trim() : '';
+        if ((sUid && seenUids.has(sUid)) || (sEmail && seenEmails.has(sEmail))) return;
+        if (sUid) seenUids.add(sUid);
+        if (sEmail) seenEmails.add(sEmail);
+        submissionUsers.push({
+            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}`),
+            id: sUid,
+            name: s.userName || (sEmail ? sEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
+            email: sEmail,
+            phone: s.userPhone || '',
+            subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : []
+        });
+    });
+    const fullPool = submissionUsers.length > 0 ? [...pool, ...submissionUsers] : pool;
+
+    let cohort = fullPool.filter(u => {
+        const hasSubmissions = (typeof getUserSubmissionsByUserId === 'function') && getUserSubmissionsByUserId(u).length > 0;
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
         const isTestUserEmail = (typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && (TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone)));
         
@@ -8783,11 +8808,11 @@ function getFilteredCohortLearners(applySearch = true) {
             return u.subscribedMangoes && u.subscribedMangoes.some(mId => (typeof partnerAllowedMangoes !== 'undefined' ? partnerAllowedMangoes : []).includes(mId));
         }
         
-        return hasAccess || isTestUserEmail; 
+        return hasAccess || isTestUserEmail || hasSubmissions; 
     });
 
     if (filterMango && filterMango !== 'all') {
-        cohort = cohort.filter(u => ((typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && TEST_EMAILS.includes(u.email)) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
+        cohort = cohort.filter(u => ((typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && TEST_EMAILS.includes(u.email)) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)) || ((typeof getUserSubmissionsByUserId === 'function') && getUserSubmissionsByUserId(u).length > 0));
     }
 
     if (applySearch && searchText) {
@@ -9427,7 +9452,32 @@ function getAdminCompletionGridData() {
         ? adminRealtimeUsers 
         : ((typeof actualUsers !== 'undefined' && Array.isArray(actualUsers)) ? actualUsers : []);
 
-    let cohort = pool.filter(u => {
+    // Merge any learners present in allUserSubmissionsDB who might not be in pool
+    const allSubs = (typeof getAllUserSubmissions === 'function') ? getAllUserSubmissions() : [];
+    const submissionUsers = [];
+    const seenUids = new Set(pool.map(u => String(u._id || u.id)));
+    const seenEmails = new Set(pool.map(u => (u.email || '').toLowerCase().trim()).filter(Boolean));
+
+    allSubs.forEach(s => {
+        if (!s) return;
+        const sUid = s.userId ? String(s.userId) : '';
+        const sEmail = s.userEmail ? s.userEmail.toLowerCase().trim() : '';
+        if ((sUid && seenUids.has(sUid)) || (sEmail && seenEmails.has(sEmail))) return;
+        if (sUid) seenUids.add(sUid);
+        if (sEmail) seenEmails.add(sEmail);
+        submissionUsers.push({
+            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}`),
+            id: sUid,
+            name: s.userName || (sEmail ? sEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
+            email: sEmail,
+            phone: s.userPhone || '',
+            subscribedMangoes: (levelUpAccessConfig && levelUpAccessConfig.length > 0) ? [...levelUpAccessConfig] : []
+        });
+    });
+    const fullPool = submissionUsers.length > 0 ? [...pool, ...submissionUsers] : pool;
+
+    let cohort = fullPool.filter(u => {
+        const hasSubmissions = (typeof getUserSubmissionsByUserId === 'function') && getUserSubmissionsByUserId(u).length > 0;
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
         const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
         
@@ -9435,11 +9485,11 @@ function getAdminCompletionGridData() {
             return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
         }
         
-        return hasAccess || isTestUserEmail; 
+        return hasAccess || isTestUserEmail || hasSubmissions; 
     });
 
     if (filterMango && filterMango !== 'all') {
-        cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)));
+        cohort = cohort.filter(u => TEST_EMAILS.includes(u.email) || (u.subscribedMangoes && u.subscribedMangoes.includes(filterMango)) || ((typeof getUserSubmissionsByUserId === 'function') && getUserSubmissionsByUserId(u).length > 0));
     }
 
     if (searchText) {
@@ -18202,8 +18252,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         cardDate.setHours(0,0,0,0);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        // EXCLUSIVE RESOLUTION: matching submission strictly by card date (never match across different calendar dates)
-        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey))) || daySubMap[cardDateKey] || null;
+        // EXCLUSIVE RESOLUTION: matching submission strictly by card date or day number
+        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey || (s.day !== undefined && s.day !== null && Number(s.day) === Number(dayNum))))) || daySubMap[cardDateKey] || daySubMap[dayNum] || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
@@ -20905,7 +20955,8 @@ async function switchTab(tab) {
             (typeof TEST_EMAILS !== 'undefined' && (TEST_EMAILS.includes(currentUser.email) || (currentUser.phone && TEST_EMAILS.includes(currentUser.phone)))) ||
             (currentUser.email && (currentUser.email.includes('test') || currentUser.email.includes('sai') || currentUser.email.includes('vip')))
         );
-        const hasAccess = isAdminLogin || isGodMode || isTestUserEmail || hasSubscribedMango;
+        const hasSubmissions = currentUser && (typeof getUserSubmissionsByUserId === 'function') && getUserSubmissionsByUserId(currentUser).length > 0;
+        const hasAccess = isAdminLogin || isGodMode || isTestUserEmail || hasSubscribedMango || hasSubmissions;
 
         if (!hasAccess) {
             document.getElementById('levelUpNoAccess')?.classList.remove('hidden');
