@@ -3935,7 +3935,8 @@ app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
             userEmail: maskEmail(rawEmail),
             userName: maskName(rawName),
             userPhone: maskPhone(rawPhone),
-            answers: []
+            answers: [],
+            isMasked: true
         };
     });
 

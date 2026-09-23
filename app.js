@@ -2841,17 +2841,18 @@ async function syncGlobalServerData() {
                             ? localItem.answers
                             : (serverHasSubstantiveAnswers ? cleanS.answers : (localItem.answers || cleanS.answers || []));
 
-                        const isMaskedVal = (val) => Boolean(val && typeof val === 'string' && val.includes('*'));
+                        const isServerMasked = Boolean(cleanS.isMasked || isServerAnswersDowngrade);
+                        const isMaskedVal = (val) => Boolean(val && typeof val === 'string' && (val.includes('*') || /\s[A-Z]\.$/.test(val) || val === 'Learner'));
 
-                        const mergedUserEmail = (isServerAnswersDowngrade || isMaskedVal(cleanS.userEmail))
+                        const mergedUserEmail = (isServerMasked || isMaskedVal(cleanS.userEmail))
                             ? (!isMaskedVal(localItem.userEmail) ? localItem.userEmail : (cleanS.userEmail || localItem.userEmail || ''))
                             : (cleanS.userEmail || localItem.userEmail || '');
 
-                        const mergedUserName = (isServerAnswersDowngrade || isMaskedVal(cleanS.userName))
+                        const mergedUserName = (isServerMasked || isMaskedVal(cleanS.userName))
                             ? (!isMaskedVal(localItem.userName) ? localItem.userName : (cleanS.userName || localItem.userName || ''))
                             : (cleanS.userName || localItem.userName || '');
 
-                        const mergedUserPhone = (isServerAnswersDowngrade || isMaskedVal(cleanS.userPhone))
+                        const mergedUserPhone = (isServerMasked || isMaskedVal(cleanS.userPhone))
                             ? (!isMaskedVal(localItem.userPhone) ? localItem.userPhone : (cleanS.userPhone || localItem.userPhone || ''))
                             : (cleanS.userPhone || localItem.userPhone || '');
 
