@@ -1,3 +1,14 @@
+const APP_CLIENT_VERSION = '2.9.25';
+if (typeof localStorage !== 'undefined') {
+    try {
+        const storedVer = localStorage.getItem('cmpli_client_version');
+        if (storedVer !== APP_CLIENT_VERSION) {
+            localStorage.setItem('cmpli_client_version', APP_CLIENT_VERSION);
+            if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('lastSyncSignature');
+        }
+    } catch(e) {}
+}
+
 var APP_PATH_PREFIX = window.APP_PATH_PREFIX || ((typeof window !== 'undefined' && window.location && (window.location.pathname.startsWith('/gamification') || window.location.pathname.includes('/gamification/'))) ? '/gamification' : '');
 
 function apiFetch(endpoint, options = {}) {
@@ -2781,16 +2792,47 @@ async function syncGlobalServerData() {
                         return copyA;
                     });
                 }
-                const idx = localData.findIndex(l => (
-                    (String(l.userId) === String(cleanS.userId) || (l.userEmail && cleanS.userEmail && l.userEmail.toLowerCase().trim() === cleanS.userEmail.toLowerCase().trim())) &&
-                    String(l.milestoneId || 1) === String(cleanS.milestoneId || 1) &&
-                    normalizeLevelUpType(l.type) === normalizeLevelUpType(cleanS.type) &&
-                    String(l.day !== undefined && l.day !== null ? l.day : (l.date || l.dateKey)) === String(cleanS.day !== undefined && cleanS.day !== null ? cleanS.day : (cleanS.date || cleanS.dateKey))
-                ));
+                // Match by submission ID first, or by compound identity (user, milestone, module, day/date)
+                const srvDay = cleanS.day !== undefined && cleanS.day !== null ? String(cleanS.day) : '';
+                const srvDate = String(cleanS.dateKey || cleanS.date || '');
+                const idx = localData.findIndex(l => {
+                    if (cleanS.id && (String(l.id) === String(cleanS.id) || String(l._id) === String(cleanS.id))) {
+                        return true;
+                    }
+                    const userMatch = (String(l.userId) === String(cleanS.userId) || (l.userEmail && cleanS.userEmail && l.userEmail.toLowerCase().trim() === cleanS.userEmail.toLowerCase().trim()));
+                    if (!userMatch) return false;
+                    if (String(l.milestoneId || 1) !== String(cleanS.milestoneId || 1)) return false;
+                    if (normalizeLevelUpType(l.type) !== normalizeLevelUpType(cleanS.type)) return false;
+
+                    const locDay = l.day !== undefined && l.day !== null ? String(l.day) : '';
+                    const locDate = String(l.dateKey || l.date || '');
+                    if (srvDay && locDay && srvDay === locDay) return true;
+                    if (srvDate && locDate && srvDate === locDate) return true;
+                    return (locDay || locDate) === (srvDay || srvDate);
+                });
 
                 if (idx > -1) {
-                    if (localData[idx].status !== cleanS.status || localData[idx].lcReward !== cleanS.lcReward || String(localData[idx].id) !== String(cleanS.id)) {
-                        localData[idx] = { ...localData[idx], ...cleanS };
+                    const localItem = localData[idx];
+                    const localAnswersCount = Array.isArray(localItem.answers) ? localItem.answers.length : 0;
+                    const serverAnswersCount = Array.isArray(cleanS.answers) ? cleanS.answers.length : 0;
+                    const localHasSubstantiveAnswers = localAnswersCount > 0 && localItem.answers.some(a => a && (a.value || a.transcription || a.audioUrl || a.videoUrl || a.answer));
+                    const serverHasSubstantiveAnswers = serverAnswersCount > 0 && cleanS.answers.some(a => a && (a.value || a.transcription || a.audioUrl || a.videoUrl || a.answer));
+
+                    const shouldUpdate =
+                        localItem.status !== cleanS.status ||
+                        localItem.lcReward !== cleanS.lcReward ||
+                        String(localItem.id) !== String(cleanS.id) ||
+                        (!localHasSubstantiveAnswers && serverHasSubstantiveAnswers) ||
+                        (serverAnswersCount > 0 && localAnswersCount === 0) ||
+                        (cleanS.transcription && !localItem.transcription) ||
+                        (cleanS.audioUrl && !localItem.audioUrl) ||
+                        (cleanS.videoUrl && !localItem.videoUrl) ||
+                        (cleanS.updatedAt && cleanS.updatedAt !== localItem.updatedAt) ||
+                        (cleanS.submittedAt && cleanS.submittedAt !== localItem.submittedAt) ||
+                        JSON.stringify(localItem.answers || []) !== JSON.stringify(cleanS.answers || []);
+
+                    if (shouldUpdate) {
+                        localData[idx] = { ...localItem, ...cleanS };
                         hasLocalSubmissionsChanged = true;
                     }
                 } else {
@@ -2976,7 +3018,7 @@ async function syncGlobalServerData() {
         }
 
         // 6. SIGNATURE & SELECTIVE FAST RE-RENDER
-        const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '')).join('|') : '';
+        const subsSummary = Array.isArray(serverData) ? serverData.map(s => (s.id || s._id || '') + ':' + (s.status || '') + ':' + (s.day || '') + ':' + (s.submittedAt || '') + ':' + (s.answers ? s.answers.length : 0) + ':' + (s.transcription ? 1 : 0)).join('|') : '';
         const cfgSig = JSON.stringify(serverConfigs || {});
         const currentSignature = serverRevision + '_' + configsRevision + '_' + (serverData ? serverData.length : 0) + '_' + (localData ? localData.length : 0) + '_' + subsSummary + '_' +
             cfgSig + '_' +

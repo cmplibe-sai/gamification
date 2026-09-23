@@ -7297,10 +7297,17 @@ app.get(['/api/campus/placement-activity/:campusId', '/gamification/api/campus/p
 // -------------------------------------------------------------
 // Serve Static Frontend Assets
 // -------------------------------------------------------------
-app.use(express.static(path.join(__dirname, '.')));
+app.use(express.static(path.join(__dirname, '.'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        }
+    }
+}));
 
 // Catch-all: Route all frontend navigation back to index.html
 app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
