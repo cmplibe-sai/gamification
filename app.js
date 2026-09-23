@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.27';
+const APP_CLIENT_VERSION = '2.9.28';
 if (typeof localStorage !== 'undefined') {
     try {
         const storedVer = localStorage.getItem('cmpli_client_version');
@@ -8760,16 +8760,91 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
     if (isNaN(startDateObj.getTime())) startDateObj = new Date();
     startDateObj.setHours(0, 0, 0, 0);
 
-    // Precompute dateKeys for all days 1..totalSessions based on the learner's module start date
+    // Precompute dateKeys for all days 1..totalSessions taking creator scheduling and cancellations into account
+    const effectiveMsId = msId || (typeof activeAdminMilestoneId !== 'undefined' ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1));
+    const normMod = (typeof normalizeLevelUpType === 'function') ? normalizeLevelUpType(moduleName || 'dip') : (moduleName || 'dip').toLowerCase().trim();
+    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[effectiveMsId] && (customMilestoneConfigs[effectiveMsId][normMod] || customMilestoneConfigs[effectiveMsId][moduleName])) || {};
+    const learnerStartKey = (typeof getLocalDateKey === 'function') ? getLocalDateKey(startDateObj) : startDateObj.toISOString().split('T')[0];
+
+    // 1. Collect creator explicit day mappings (dayNumber / sessionDay / title Day N)
+    const explicitDayMap = {};
+    Object.keys(msConfigs || {}).forEach(dk => {
+        const cfg = msConfigs[dk];
+        if (!cfg || cfg.cancelled) return;
+
+        let dayNum = Number(cfg.dayNumber || cfg.sessionDay || cfg.day);
+        if (!dayNum && cfg.title) {
+            const m = String(cfg.title).match(/(?:Session|Day)\s*(\d+)/i);
+            if (m) dayNum = Number(m[1]);
+        }
+        if (!dayNum || dayNum <= 0 || dayNum > totalSessions || explicitDayMap[dayNum]) return;
+
+        // Earliest possible calendar date for dayNum given the learner's enrollment date
+        const minDateForD = new Date(startDateObj);
+        minDateForD.setDate(minDateForD.getDate() + (dayNum - 1));
+        const minDateKey = (typeof getLocalDateKey === 'function') ? getLocalDateKey(minDateForD) : minDateForD.toISOString().split('T')[0];
+
+        const hasSubForDay = Array.isArray(subs) && subs.some(s => Number(s.day) === dayNum);
+        // A creator-configured date can only be assigned to dayNum if it's on/after minDateKey OR learner submitted on it
+        if (dk < minDateKey && !hasSubForDay) return;
+
+        explicitDayMap[dayNum] = dk;
+    });
+
+    // Also check getResolvedMilestoneDateKey for any creator-scheduled slots
+    if (typeof getResolvedMilestoneDateKey === 'function') {
+        for (let d = 1; d <= totalSessions; d++) {
+            if (explicitDayMap[d]) continue;
+            const res = getResolvedMilestoneDateKey(effectiveMsId, moduleName, startDateObj, d);
+            if (res && res.isCreatorScheduled && !res.isCancelled && res.cardDateKey) {
+                const minDateForD = new Date(startDateObj);
+                minDateForD.setDate(minDateForD.getDate() + (d - 1));
+                const minDateKey = (typeof getLocalDateKey === 'function') ? getLocalDateKey(minDateForD) : minDateForD.toISOString().split('T')[0];
+
+                const hasSubForDay = Array.isArray(subs) && subs.some(s => Number(s.day) === d);
+                if (res.cardDateKey >= minDateKey || hasSubForDay) {
+                    explicitDayMap[d] = res.cardDateKey;
+                }
+            }
+        }
+    }
+
+    // 2. Sequential calendar progression respecting creator cancellations
     const dayDateKeys = {};
+    const currDate = new Date(startDateObj);
+    currDate.setHours(0, 0, 0, 0);
+
     for (let d = 1; d <= totalSessions; d++) {
-        const dt = new Date(startDateObj);
-        dt.setDate(dt.getDate() + (d - 1));
-        dayDateKeys[d] = getLocalDateKey(dt);
+        if (explicitDayMap[d]) {
+            dayDateKeys[d] = explicitDayMap[d];
+            const expDate = new Date(explicitDayMap[d] + 'T00:00:00');
+            if (expDate >= currDate) {
+                currDate.setTime(expDate.getTime());
+                currDate.setDate(currDate.getDate() + 1);
+            }
+        } else {
+            // Advance over any cancelled dates configured by the creator
+            while (msConfigs && msConfigs[(typeof getLocalDateKey === 'function') ? getLocalDateKey(currDate) : currDate.toISOString().split('T')[0]]?.cancelled) {
+                currDate.setDate(currDate.getDate() + 1);
+            }
+            dayDateKeys[d] = (typeof getLocalDateKey === 'function') ? getLocalDateKey(currDate) : currDate.toISOString().split('T')[0];
+            currDate.setDate(currDate.getDate() + 1);
+        }
     }
     daySubMap._dayDateKeys = dayDateKeys;
 
     if (!Array.isArray(subs) || subs.length === 0) return daySubMap;
+
+    // Helper to safely get unique submission ID preventing collision on "undefined"
+    const getSubUid = (s, idx) => {
+        if (s.id) return String(s.id);
+        if (s._id) return String(s._id);
+        if (s.clientSubmissionId) return String(s.clientSubmissionId);
+        if (!s._tempSubId) {
+            s._tempSubId = `sub_anon_${idx}_${s.day || ''}_${s.dateKey || ''}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+        return s._tempSubId;
+    };
 
     // Sort submissions to break ties on collision:
     // 1. Status 'completed' or having LC reward takes precedence over failed/evaluating
@@ -8794,13 +8869,14 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
 
     // Pass 1: Strict explicit day number match
     for (let d = 1; d <= totalSessions; d++) {
-        const subForDay = sortedSubs.find(s => {
-            const id = String(s.id || s._id);
-            return !usedSubIds.has(id) && s.day !== undefined && s.day !== null && Number(s.day) === d;
+        const subForDay = sortedSubs.find((s, idx) => {
+            const uid = getSubUid(s, idx);
+            return !usedSubIds.has(uid) && s.day !== undefined && s.day !== null && Number(s.day) === d;
         });
         if (subForDay) {
             daySubMap[d] = subForDay;
-            usedSubIds.add(String(subForDay.id || subForDay._id));
+            const uid = getSubUid(subForDay, 0);
+            usedSubIds.add(uid);
             const subDk = subForDay.dateKey || (subForDay.date ? String(subForDay.date).split('T')[0] : null);
             if (subDk && !daySubMap[subDk]) daySubMap[subDk] = subForDay;
         }
@@ -8811,15 +8887,20 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
         if (daySubMap[d]) continue;
         const slotDk = dayDateKeys[d];
         if (!slotDk) continue;
-        const subForDate = sortedSubs.find(s => {
-            const id = String(s.id || s._id);
-            if (usedSubIds.has(id)) return false;
-            const subDk = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
-            return (!s.day || Number(s.day) === d) && (subDk === slotDk);
+        const subForDate = sortedSubs.find((s, idx) => {
+            const uid = getSubUid(s, idx);
+            if (usedSubIds.has(uid)) return false;
+            // Guard against shadowing: if this submission has an explicit valid day > 0,
+            // do not allow it to be claimed by a different day's date column!
+            if (s.day !== undefined && s.day !== null && !isNaN(Number(s.day)) && Number(s.day) > 0) {
+                return false;
+            }
+            return (s.dateKey === slotDk || s.date === slotDk);
         });
         if (subForDate) {
             daySubMap[d] = subForDate;
-            usedSubIds.add(String(subForDate.id || subForDate._id));
+            const uid = getSubUid(subForDate, 0);
+            usedSubIds.add(uid);
             if (!daySubMap[slotDk]) daySubMap[slotDk] = subForDate;
         }
     }
