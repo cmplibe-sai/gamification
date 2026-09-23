@@ -3965,132 +3965,149 @@ app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
 
 // CREATOR ACTION: Reset customer milestone progress so they start from scratch Day 1
 app.post(['/api/creator/customer/reset-progress', '/gamification/api/creator/customer/reset-progress'], async (req, res) => {
-    if (!checkCreatorAuth(req)) {
-        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
-    }
-    const { userId, milestoneId, userEmail } = req.body || {};
-    if (!userId) {
-        return res.status(400).json({ success: false, error: 'userId is required' });
-    }
-    let msId = null;
-    if (milestoneId !== undefined && milestoneId !== null && String(milestoneId).trim() !== '') {
-        const cleanMsStr = String(milestoneId).toLowerCase().trim();
-        if (cleanMsStr === 'all') {
-            msId = null;
-        } else {
-            const parsed = parseInt(cleanMsStr.replace(/\D/g, ''), 10);
-            if (!isNaN(parsed) && parsed > 0) {
-                msId = parsed;
+    try {
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+        }
+        const { userId, milestoneId, userEmail } = req.body || {};
+        if (!userId) {
+            return res.status(400).json({ success: false, error: 'userId is required' });
+        }
+        let msId = null;
+        if (milestoneId !== undefined && milestoneId !== null && String(milestoneId).trim() !== '') {
+            const cleanMsStr = String(milestoneId).toLowerCase().trim();
+            if (cleanMsStr === 'all') {
+                msId = null;
             } else {
-                return res.status(400).json({ success: false, error: 'Invalid milestoneId. Must be a positive integer (e.g. 1) or "all".' });
+                const parsed = parseInt(cleanMsStr.replace(/\D/g, ''), 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    msId = parsed;
+                } else {
+                    return res.status(400).json({ success: false, error: 'Invalid milestoneId. Must be a positive integer (e.g. 1) or "all".' });
+                }
             }
         }
-    }
-    const uidStr = String(userId);
-    const emailStr = (userEmail || '').toLowerCase().trim();
+        const uidStr = String(userId);
+        const emailStr = (userEmail || '').toLowerCase().trim();
 
-    // 1. Remove submissions for this user (for specific milestone or all)
-    const initialCount = (store.submissions || []).length;
-    store.submissions = (store.submissions || []).filter(s => {
-        const matchesUser = String(s.userId) === uidStr || (emailStr && s.userEmail && s.userEmail.toLowerCase().trim() === emailStr);
-        if (!matchesUser) return true;
-        if (msId !== null) {
-            return Number(s.milestoneId || 1) !== msId;
-        }
-        return false;
-    });
-    const removedSubs = initialCount - store.submissions.length;
-
-    // 2. Remove certificate approvals
-    if (store.certificateApprovals) {
-        if (msId !== null) {
-            delete store.certificateApprovals[`${uidStr}_${msId}`];
-            delete store.certificateApprovals[`${uidStr}_MS${msId}`];
-            if (emailStr) {
-                delete store.certificateApprovals[`${emailStr}_${msId}`];
-                delete store.certificateApprovals[`${emailStr}_MS${msId}`];
-            }
-        } else {
-            Object.keys(store.certificateApprovals).forEach(k => {
-                if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
-                    delete store.certificateApprovals[k];
-                }
-            });
-        }
-    }
-
-    // 3. Clear customer module start dates for this milestone
-    if (store.userModuleStartDates) {
-        if (msId !== null) {
-            Object.keys(store.userModuleStartDates).forEach(k => {
-                if (k.startsWith(`${uidStr}_ms${msId}_`) || (emailStr && k.startsWith(`${emailStr}_ms${msId}_`))) {
-                    delete store.userModuleStartDates[k];
-                }
-            });
-        } else {
-            Object.keys(store.userModuleStartDates).forEach(k => {
-                if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
-                    delete store.userModuleStartDates[k];
-                }
-            });
-        }
-    }
-
-    // 4. Reset user milestone progression state (highestUnlocked, started)
-    if (store.userMilestoneState) {
-        const stateKey = store.userMilestoneState[uidStr] ? uidStr : (emailStr && store.userMilestoneState[emailStr] ? emailStr : null);
-        if (stateKey && store.userMilestoneState[stateKey]) {
+        // 1. Remove submissions for this user (for specific milestone or all)
+        const initialCount = (store.submissions || []).length;
+        store.submissions = (store.submissions || []).filter(s => {
+            const matchesUser = String(s.userId) === uidStr || (emailStr && s.userEmail && s.userEmail.toLowerCase().trim() === emailStr);
+            if (!matchesUser) return true;
             if (msId !== null) {
-                if (store.userMilestoneState[stateKey].started && store.userMilestoneState[stateKey].started[msId]) {
-                    delete store.userMilestoneState[stateKey].started[msId];
-                }
-                if (msId === 1) {
-                    store.userMilestoneState[stateKey].highestUnlocked = 1;
+                return Number(s.milestoneId || 1) !== msId;
+            }
+            return false;
+        });
+        const removedSubs = initialCount - store.submissions.length;
+
+        // 2. Remove certificate approvals
+        if (store.certificateApprovals) {
+            if (msId !== null) {
+                delete store.certificateApprovals[`${uidStr}_${msId}`];
+                delete store.certificateApprovals[`${uidStr}_MS${msId}`];
+                if (emailStr) {
+                    delete store.certificateApprovals[`${emailStr}_${msId}`];
+                    delete store.certificateApprovals[`${emailStr}_MS${msId}`];
                 }
             } else {
-                store.userMilestoneState[stateKey] = { highestUnlocked: 1, viewedTerms: [], started: {} };
+                Object.keys(store.certificateApprovals).forEach(k => {
+                    if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
+                        delete store.certificateApprovals[k];
+                    }
+                });
             }
         }
-    }
 
-    // 5. Record reset event so that client-side sync purges local cache on learner device
-    if (!store.userResets || typeof store.userResets !== 'object') store.userResets = {};
-    const resetTimestamp = Date.now();
-    const resetRecord = { milestoneId: msId, timestamp: resetTimestamp };
-
-    const appendReset = (key) => {
-        if (!store.userResets[key]) {
-            store.userResets[key] = [resetRecord];
-        } else if (Array.isArray(store.userResets[key])) {
-            store.userResets[key].push(resetRecord);
-            if (store.userResets[key].length > 20) {
-                store.userResets[key] = store.userResets[key].slice(-20);
+        // 3. Clear customer module start dates for this milestone
+        if (store.userModuleStartDates) {
+            if (msId !== null) {
+                Object.keys(store.userModuleStartDates).forEach(k => {
+                    if (k.startsWith(`${uidStr}_ms${msId}_`) || (emailStr && k.startsWith(`${emailStr}_ms${msId}_`))) {
+                        delete store.userModuleStartDates[k];
+                    }
+                });
+            } else {
+                Object.keys(store.userModuleStartDates).forEach(k => {
+                    if (k.startsWith(`${uidStr}_`) || (emailStr && k.startsWith(`${emailStr}_`))) {
+                        delete store.userModuleStartDates[k];
+                    }
+                });
             }
-        } else {
-            // Upgrade legacy single object to array
-            store.userResets[key] = [store.userResets[key], resetRecord];
         }
-    };
 
-    appendReset(uidStr);
-    if (emailStr) {
-        appendReset(emailStr);
+        // 4. Reset user milestone progression state (highestUnlocked, started)
+        if (store.userMilestoneState) {
+            const stateKey = store.userMilestoneState[uidStr] ? uidStr : (emailStr && store.userMilestoneState[emailStr] ? emailStr : null);
+            if (stateKey && store.userMilestoneState[stateKey]) {
+                if (msId !== null) {
+                    if (store.userMilestoneState[stateKey].started && store.userMilestoneState[stateKey].started[msId]) {
+                        delete store.userMilestoneState[stateKey].started[msId];
+                    }
+                    if (msId === 1) {
+                        store.userMilestoneState[stateKey].highestUnlocked = 1;
+                    }
+                } else {
+                    store.userMilestoneState[stateKey] = { highestUnlocked: 1, viewedTerms: [], started: {} };
+                }
+            }
+        }
+
+        // 5. Record reset event so that client-side sync purges local cache on learner device
+        if (!store.userResets || typeof store.userResets !== 'object') store.userResets = {};
+        const resetTimestamp = Date.now();
+        const resetRecord = { milestoneId: msId, timestamp: resetTimestamp };
+
+        const appendReset = (key) => {
+            if (!store.userResets[key]) {
+                store.userResets[key] = [resetRecord];
+            } else if (Array.isArray(store.userResets[key])) {
+                store.userResets[key].push(resetRecord);
+                if (store.userResets[key].length > 20) {
+                    store.userResets[key] = store.userResets[key].slice(-20);
+                }
+            } else {
+                // Upgrade legacy single object to array
+                store.userResets[key] = [store.userResets[key], resetRecord];
+            }
+        };
+
+        appendReset(uidStr);
+        if (emailStr) {
+            appendReset(emailStr);
+        }
+
+        // 6. Delete remote submissions in MongoDB (protected by try/catch so transient network blips do not abort reset)
+        let mongoWarning = null;
+        try {
+            await removeSubmissionsFromMongo(uidStr, msId);
+            if (emailStr && emailStr !== uidStr) {
+                await removeSubmissionsFromMongo(emailStr, msId);
+            }
+        } catch (mErr) {
+            mongoWarning = mErr.message;
+            console.warn(`[Reset Progress Mongo Warning] Failed to delete MongoDB copies for ${uidStr}:`, mErr.message);
+        }
+
+        // 7. Persist local store guaranteed
+        store.submissionsRevision = resetTimestamp;
+        saveStore();
+
+        console.log(`[Creator Action] Reset progress for user ${uidStr} (Milestone: ${msId || 'All'}). Cleared ${removedSubs} submissions.`);
+        const responsePayload = {
+            success: true,
+            message: `Successfully reset progress for learner. Removed ${removedSubs} submissions.`,
+            data: { userId: uidStr, milestoneId: msId, removedSubmissions: removedSubs, resetTimestamp }
+        };
+        if (mongoWarning) {
+            responsePayload.warning = `Local progress reset, but cloud database sync encountered: ${mongoWarning}`;
+        }
+        res.json(responsePayload);
+    } catch(err) {
+        console.error('[Reset Progress Error]', err);
+        res.status(500).json({ success: false, error: err.message });
     }
-
-    await removeSubmissionsFromMongo(uidStr, msId);
-    if (emailStr) {
-        await removeSubmissionsFromMongo(emailStr, msId);
-    }
-
-    store.submissionsRevision = resetTimestamp;
-    saveStore();
-
-    console.log(`[Creator Action] Reset progress for user ${uidStr} (Milestone: ${msId || 'All'}). Cleared ${removedSubs} submissions.`);
-    res.json({
-        success: true,
-        message: `Successfully reset progress for learner. Removed ${removedSubs} submissions.`,
-        data: { userId: uidStr, milestoneId: msId, removedSubmissions: removedSubs, resetTimestamp }
-    });
 });
 
 // CREATOR ACTION: Remove or restore customer in Level-Up Challenge cohort

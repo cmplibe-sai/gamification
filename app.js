@@ -8804,8 +8804,11 @@ function getFilteredCohortLearners(applySearch = true) {
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
         const isTestUserEmail = (typeof TEST_EMAILS !== 'undefined' && Array.isArray(TEST_EMAILS)) && (TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone)));
         
+        // Strict tenant isolation: campus partners can ONLY view learners enrolled in their partner-allowed mangoes.
+        // Arbitrary submission existence across other mangoes must NOT leak cross-institutional student records.
         if (typeof isCampusPartner !== 'undefined' && isCampusPartner) {
-            return u.subscribedMangoes && u.subscribedMangoes.some(mId => (typeof partnerAllowedMangoes !== 'undefined' ? partnerAllowedMangoes : []).includes(mId));
+            const allowed = typeof partnerAllowedMangoes !== 'undefined' && Array.isArray(partnerAllowedMangoes) ? partnerAllowedMangoes : [];
+            return Boolean(u.subscribedMangoes && u.subscribedMangoes.some(mId => allowed.includes(mId)));
         }
         
         return hasAccess || isTestUserEmail || hasSubmissions; 
@@ -9481,8 +9484,11 @@ function getAdminCompletionGridData() {
         const hasAccess = u.subscribedMangoes && u.subscribedMangoes.some(mId => (levelUpAccessConfig || []).includes(mId));
         const isTestUserEmail = TEST_EMAILS.includes(u.email) || (u.phone && TEST_EMAILS.includes(u.phone));
         
-        if (isCampusPartner) {
-            return u.subscribedMangoes && u.subscribedMangoes.some(mId => partnerAllowedMangoes.includes(mId));
+        // Strict tenant isolation: campus partners can ONLY view learners enrolled in their partner-allowed mangoes.
+        // Arbitrary submission existence across other mangoes must NOT leak cross-institutional student records.
+        if (typeof isCampusPartner !== 'undefined' && isCampusPartner) {
+            const allowed = typeof partnerAllowedMangoes !== 'undefined' && Array.isArray(partnerAllowedMangoes) ? partnerAllowedMangoes : [];
+            return Boolean(u.subscribedMangoes && u.subscribedMangoes.some(mId => allowed.includes(mId)));
         }
         
         return hasAccess || isTestUserEmail || hasSubmissions; 
