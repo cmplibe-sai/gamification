@@ -917,28 +917,27 @@ async function syncStoreToMongo() {
                 const cleanEmail = (tm.email || '').toLowerCase().trim();
                 if (!cleanEmail) continue;
                 const welcomeState = getWelcomeState('creator', cleanEmail);
-                const updateDoc = {
-                    $setOnInsert: {
-                        role: 'creator',
-                        email: cleanEmail,
-                        welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
-                        welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
-                        firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
-                        createdAt: new Date()
-                    },
-                    $set: {
-                        updatedAt: new Date(),
-                        name: tm.name || 'Team Member'
-                    }
+                const setOnInsert = {
+                    role: 'creator',
+                    email: cleanEmail,
+                    firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                    createdAt: new Date()
+                };
+                const setFields = {
+                    updatedAt: new Date(),
+                    name: tm.name || 'Team Member'
                 };
                 if (welcomeState) {
-                    updateDoc.$set.welcomeEmailSent = true;
-                    updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                    setFields.welcomeEmailSent = true;
+                    setFields.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                } else {
+                    setOnInsert.welcomeEmailSent = false;
+                    setOnInsert.welcomeEmailSentAt = null;
                 }
                 userBulkOps.push({
                     updateOne: {
                         filter: { role: 'creator', email: cleanEmail },
-                        update: updateDoc,
+                        update: { $setOnInsert: setOnInsert, $set: setFields },
                         upsert: true
                     }
                 });
@@ -950,33 +949,32 @@ async function syncStoreToMongo() {
                 const cleanEmail = (emp.email || '').toLowerCase().trim();
                 if (!cleanEmail) continue;
                 const welcomeState = getWelcomeState('recruiter', cleanEmail);
-                const updateDoc = {
-                    $setOnInsert: {
-                        role: 'recruiter',
-                        email: cleanEmail,
-                        welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
-                        welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
-                        firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
-                        createdAt: new Date()
-                    },
-                    $set: {
-                        updatedAt: new Date(),
-                        name: emp.companyName || 'Corporate Recruiter',
-                        recruiter: {
-                            employerId: emp.id,
-                            companyName: emp.companyName,
-                            permittedMangoes: emp.permittedMangoes || []
-                        }
+                const setOnInsert = {
+                    role: 'recruiter',
+                    email: cleanEmail,
+                    firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                    createdAt: new Date()
+                };
+                const setFields = {
+                    updatedAt: new Date(),
+                    name: emp.companyName || 'Corporate Recruiter',
+                    recruiter: {
+                        employerId: emp.id,
+                        companyName: emp.companyName,
+                        permittedMangoes: emp.permittedMangoes || []
                     }
                 };
                 if (welcomeState) {
-                    updateDoc.$set.welcomeEmailSent = true;
-                    updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                    setFields.welcomeEmailSent = true;
+                    setFields.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                } else {
+                    setOnInsert.welcomeEmailSent = false;
+                    setOnInsert.welcomeEmailSentAt = null;
                 }
                 userBulkOps.push({
                     updateOne: {
                         filter: { role: 'recruiter', email: cleanEmail },
-                        update: updateDoc,
+                        update: { $setOnInsert: setOnInsert, $set: setFields },
                         upsert: true
                     }
                 });
@@ -990,29 +988,28 @@ async function syncStoreToMongo() {
                         const cleanEmail = (coord.email || '').toLowerCase().trim();
                         if (!cleanEmail) continue;
                         const welcomeState = getWelcomeState('partner', cleanEmail);
-                        const updateDoc = {
-                            $setOnInsert: {
-                                role: 'partner',
-                                email: cleanEmail,
-                                welcomeEmailSent: welcomeState ? welcomeState.welcomeEmailSent : false,
-                                welcomeEmailSentAt: welcomeState ? welcomeState.welcomeEmailSentAt : null,
-                                firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
-                                createdAt: new Date()
-                            },
-                            $set: {
-                                updatedAt: new Date(),
-                                name: coord.name || campus.name || 'Campus Partner',
-                                partner: { campusId: campus.id }
-                            }
+                        const setOnInsert = {
+                            role: 'partner',
+                            email: cleanEmail,
+                            firstLoginAt: welcomeState ? welcomeState.firstLoginAt : null,
+                            createdAt: new Date()
+                        };
+                        const setFields = {
+                            updatedAt: new Date(),
+                            name: coord.name || campus.name || 'Campus Partner',
+                            partner: { campusId: campus.id }
                         };
                         if (welcomeState) {
-                            updateDoc.$set.welcomeEmailSent = true;
-                            updateDoc.$set.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                            setFields.welcomeEmailSent = true;
+                            setFields.welcomeEmailSentAt = welcomeState.welcomeEmailSentAt;
+                        } else {
+                            setOnInsert.welcomeEmailSent = false;
+                            setOnInsert.welcomeEmailSentAt = null;
                         }
                         userBulkOps.push({
                             updateOne: {
                                 filter: { role: 'partner', email: cleanEmail },
-                                update: updateDoc,
+                                update: { $setOnInsert: setOnInsert, $set: setFields },
                                 upsert: true
                             }
                         });
@@ -3167,15 +3164,21 @@ app.post(['/api/sync-google-sheet', '/gamification/api/sync-google-sheet'], asyn
 });
 
 // Periodic automatic background sync (every 10 minutes) & initial sync at server start
-const GOOGLE_SHEET_SYNC_INTERVAL_MS = Math.max(60000, parseInt(process.env.GOOGLE_SHEET_SYNC_INTERVAL_MS, 10) || (10 * 60 * 1000));
-setTimeout(() => {
-    syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Initial GoogleSheetSync Notice]:', err.message));
-}, 3000);
-setInterval(() => {
-    console.log(`[Automated Sync Scheduler] Running scheduled Google Sheet sync (${new Date().toLocaleTimeString('en-GB')})...`);
-    syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Periodic GoogleSheetSync Notice]:', err.message));
-}, GOOGLE_SHEET_SYNC_INTERVAL_MS);
-console.log(`[GoogleSheetSync] Automated background sync scheduler active (Interval: ${GOOGLE_SHEET_SYNC_INTERVAL_MS / 60000} mins)`);
+if (require.main === module && process.env.NODE_ENV !== 'test') {
+    const GOOGLE_SHEET_SYNC_INTERVAL_MS = Math.max(60000, parseInt(process.env.GOOGLE_SHEET_SYNC_INTERVAL_MS, 10) || (10 * 60 * 1000));
+    const initTimer = setTimeout(() => {
+        syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Initial GoogleSheetSync Notice]:', err.message));
+    }, 3000);
+    if (initTimer.unref) initTimer.unref();
+
+    const syncInterval = setInterval(() => {
+        console.log(`[Automated Sync Scheduler] Running scheduled Google Sheet sync (${new Date().toLocaleTimeString('en-GB')})...`);
+        syncGoogleSheetData(DEFAULT_GOOGLE_SHEET_ID).catch(err => console.warn('[Periodic GoogleSheetSync Notice]:', err.message));
+    }, GOOGLE_SHEET_SYNC_INTERVAL_MS);
+    if (syncInterval.unref) syncInterval.unref();
+
+    console.log(`[GoogleSheetSync] Automated background sync scheduler active (Interval: ${GOOGLE_SHEET_SYNC_INTERVAL_MS / 60000} mins)`);
+}
 
 
 // ==============================================================
@@ -4603,7 +4606,7 @@ app.post(['/api/upload-media', '/gamification/api/upload-media'], (req, res) => 
 const podQuizSessions = new Map();
 const userSessionRates = new Map();
 
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [sId, sData] of podQuizSessions.entries()) {
         if (sData.expiresAt < now) podQuizSessions.delete(sId);
@@ -4620,6 +4623,7 @@ setInterval(() => {
         if (rec.lockedUntil && rec.lockedUntil < now) failedCreatorAuthAttempts.delete(ip);
     }
 }, 300000);
+if (cleanupInterval.unref) cleanupInterval.unref();
 
 // Issues a cryptographic creator session token to requesters providing the valid shared secret (CREATOR_ADMIN_SECRET)
 app.post(['/api/auth/creator-token', '/gamification/api/auth/creator-token'], (req, res) => {
@@ -6362,6 +6366,9 @@ app.post(['/api/management/team', '/gamification/api/management/team'], (req, re
         }
 
         saveStore();
+        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
+            syncStoreToMongo().catch(err => console.warn('[Mongo Sync Warning]:', err.message));
+        }
         res.json({ success: true, message: 'Team member saved successfully', member: memberData });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6445,6 +6452,9 @@ app.post(['/api/management/campuses', '/gamification/api/management/campuses'], 
 
         syncCampusPartnersDB();
         saveStore();
+        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
+            syncStoreToMongo().catch(err => console.warn('[Mongo Sync Warning]:', err.message));
+        }
         res.json({ success: true, message: 'Campus partner saved successfully', campus: campusData });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6524,6 +6534,9 @@ app.post(['/api/management/employers', '/gamification/api/management/employers']
         }
 
         saveStore();
+        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
+            syncStoreToMongo().catch(err => console.warn('[Mongo Sync Warning]:', err.message));
+        }
         res.json({ success: true, message: 'Corporate partner saved successfully', employer: empData });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -6574,6 +6587,9 @@ app.post(['/api/employers/register', '/gamification/api/employers/register'], (r
 
         store.employers.push(newEmp);
         saveStore();
+        if (typeof isDbConnected !== 'undefined' && isDbConnected && typeof syncStoreToMongo === 'function') {
+            syncStoreToMongo().catch(err => console.warn('[Mongo Sync Warning]:', err.message));
+        }
         res.json({
             success: true,
             message: 'Corporate empanelment application submitted successfully. Your account is pending creator review before talent arena access is activated.',

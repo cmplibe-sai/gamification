@@ -138,6 +138,7 @@ async function runTests() {
     server.removeUserSession(testToken);
 
     console.log('\n=== ALL AUDIT ASSERTIONS (7/7) PASSED AGAINST PRODUCTION CODE! ===');
+    process.exit(0);
 }
 
 runTests().catch(err => {
