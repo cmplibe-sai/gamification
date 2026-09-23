@@ -2841,9 +2841,26 @@ async function syncGlobalServerData() {
                             ? localItem.answers
                             : (serverHasSubstantiveAnswers ? cleanS.answers : (localItem.answers || cleanS.answers || []));
 
+                        const isMaskedVal = (val) => Boolean(val && typeof val === 'string' && val.includes('*'));
+
+                        const mergedUserEmail = (isServerAnswersDowngrade || isMaskedVal(cleanS.userEmail))
+                            ? (!isMaskedVal(localItem.userEmail) ? localItem.userEmail : (cleanS.userEmail || localItem.userEmail || ''))
+                            : (cleanS.userEmail || localItem.userEmail || '');
+
+                        const mergedUserName = (isServerAnswersDowngrade || isMaskedVal(cleanS.userName))
+                            ? (!isMaskedVal(localItem.userName) ? localItem.userName : (cleanS.userName || localItem.userName || ''))
+                            : (cleanS.userName || localItem.userName || '');
+
+                        const mergedUserPhone = (isServerAnswersDowngrade || isMaskedVal(cleanS.userPhone))
+                            ? (!isMaskedVal(localItem.userPhone) ? localItem.userPhone : (cleanS.userPhone || localItem.userPhone || ''))
+                            : (cleanS.userPhone || localItem.userPhone || '');
+
                         localData[idx] = {
                             ...localItem,
                             ...cleanS,
+                            userEmail: mergedUserEmail,
+                            userName: mergedUserName,
+                            userPhone: mergedUserPhone,
                             answers: mergedAnswers,
                             transcription: cleanS.transcription || localItem.transcription || '',
                             audioUrl: cleanS.audioUrl || localItem.audioUrl || '',
