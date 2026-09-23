@@ -4,7 +4,6 @@ if (typeof localStorage !== 'undefined') {
         const storedVer = localStorage.getItem('cmpli_client_version');
         if (storedVer !== APP_CLIENT_VERSION) {
             localStorage.setItem('cmpli_client_version', APP_CLIENT_VERSION);
-            if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('lastSyncSignature');
         }
     } catch(e) {}
 }
@@ -2808,7 +2807,9 @@ async function syncGlobalServerData() {
                     const locDate = String(l.dateKey || l.date || '');
                     if (srvDay && locDay && srvDay === locDay) return true;
                     if (srvDate && locDate && srvDate === locDate) return true;
-                    return (locDay || locDate) === (srvDay || srvDate);
+                    const locKey = locDay || locDate;
+                    const srvKey = srvDay || srvDate;
+                    return Boolean(locKey && srvKey && locKey === srvKey);
                 });
 
                 if (idx > -1) {
@@ -2817,6 +2818,10 @@ async function syncGlobalServerData() {
                     const serverAnswersCount = Array.isArray(cleanS.answers) ? cleanS.answers.length : 0;
                     const localHasSubstantiveAnswers = localAnswersCount > 0 && localItem.answers.some(a => a && (a.value || a.transcription || a.audioUrl || a.videoUrl || a.answer));
                     const serverHasSubstantiveAnswers = serverAnswersCount > 0 && cleanS.answers.some(a => a && (a.value || a.transcription || a.audioUrl || a.videoUrl || a.answer));
+
+                    // SYMMETRIC PROTECTION: If server sent empty/masked answers, but client already has real substantive answers locally,
+                    // DO NOT downgrade/clobber local answers!
+                    const isServerAnswersDowngrade = (serverAnswersCount === 0 && localHasSubstantiveAnswers);
 
                     const shouldUpdate =
                         localItem.status !== cleanS.status ||
@@ -2829,10 +2834,21 @@ async function syncGlobalServerData() {
                         (cleanS.videoUrl && !localItem.videoUrl) ||
                         (cleanS.updatedAt && cleanS.updatedAt !== localItem.updatedAt) ||
                         (cleanS.submittedAt && cleanS.submittedAt !== localItem.submittedAt) ||
-                        JSON.stringify(localItem.answers || []) !== JSON.stringify(cleanS.answers || []);
+                        (!isServerAnswersDowngrade && JSON.stringify(localItem.answers || []) !== JSON.stringify(cleanS.answers || []));
 
                     if (shouldUpdate) {
-                        localData[idx] = { ...localItem, ...cleanS };
+                        const mergedAnswers = isServerAnswersDowngrade
+                            ? localItem.answers
+                            : (serverHasSubstantiveAnswers ? cleanS.answers : (localItem.answers || cleanS.answers || []));
+
+                        localData[idx] = {
+                            ...localItem,
+                            ...cleanS,
+                            answers: mergedAnswers,
+                            transcription: cleanS.transcription || localItem.transcription || '',
+                            audioUrl: cleanS.audioUrl || localItem.audioUrl || '',
+                            videoUrl: cleanS.videoUrl || localItem.videoUrl || ''
+                        };
                         hasLocalSubmissionsChanged = true;
                     }
                 } else {
