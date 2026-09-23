@@ -8789,7 +8789,7 @@ function getFilteredCohortLearners(applySearch = true) {
         if (sUid) seenUids.add(sUid);
         if (sEmail) seenEmails.add(sEmail);
         submissionUsers.push({
-            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}`),
+            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
             id: sUid,
             name: s.userName || (sEmail ? sEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
             email: sEmail,
@@ -9466,7 +9466,7 @@ function getAdminCompletionGridData() {
         if (sUid) seenUids.add(sUid);
         if (sEmail) seenEmails.add(sEmail);
         submissionUsers.push({
-            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}`),
+            _id: sUid || (sEmail ? sEmail : `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
             id: sUid,
             name: s.userName || (sEmail ? sEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Learner'),
             email: sEmail,
@@ -18180,6 +18180,21 @@ function switchMilestoneTab(moduleName, btnElement) {
     // EXCLUSIVE DAY RESOLUTION: map each submission to at most ONE session card taking creator rescheduling into account
     const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, moduleName, totalSessions, activeMilestoneId);
 
+    // Sort typeSubs with same priority as buildDaySubMap to resolve fallbacks (completed > higher reward > newer)
+    const sortedTypeSubs = [...typeSubs].sort((a, b) => {
+        const aCompleted = (a.status === 'completed' || Number(a.lcReward) > 0) ? 1 : 0;
+        const bCompleted = (b.status === 'completed' || Number(b.lcReward) > 0) ? 1 : 0;
+        if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+
+        const aReward = Number(a.lcReward) || 0;
+        const bReward = Number(b.lcReward) || 0;
+        if (aReward !== bReward) return bReward - aReward;
+
+        const timeA = new Date(a.submittedAt || a.timestamp || a.date || 0).getTime();
+        const timeB = new Date(b.submittedAt || b.timestamp || b.date || 0).getTime();
+        return timeB - timeA;
+    });
+
     // Collect all configured session dateKeys for this module (respecting cancelled flag)
     const msConfigsForModule = (customMilestoneConfigs && customMilestoneConfigs[activeMilestoneId] && customMilestoneConfigs[activeMilestoneId][normalizedMod]) || {};
     
@@ -18252,8 +18267,8 @@ function switchMilestoneTab(moduleName, btnElement) {
         cardDate.setHours(0,0,0,0);
         const displayDate = cardDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
-        // EXCLUSIVE RESOLUTION: matching submission strictly by card date or day number
-        const sub = (typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey || (s.day !== undefined && s.day !== null && Number(s.day) === Number(dayNum))))) || daySubMap[cardDateKey] || daySubMap[dayNum] || null;
+        // EXCLUSIVE RESOLUTION: matching submission strictly by resolved daySubMap first, then fallback to sortedTypeSubs
+        const sub = daySubMap[cardDateKey] || daySubMap[dayNum] || (sortedTypeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey || (s.day !== undefined && s.day !== null && Number(s.day) === Number(dayNum))))) || null;
         const isPod = (normalizeLevelUpType(moduleName) === 'pod');
         const isEvaluating = !isPod && sub && sub.status === 'evaluating';
         const isMismatch = !isPod && sub && !isEvaluating && (sub.status === 'rejected_mismatch' || (sub.status !== 'completed' && (Number(sub.lcReward) === 0 || (sub.matchPercentage !== undefined && Number(sub.matchPercentage) < 50))));
@@ -18586,10 +18601,25 @@ function viewMySubmission(dayNumberOrUserId, moduleNameOrDay, maybeModuleNameOrD
 
     const daySubMap = buildDaySubMap(typeSubs, milestoneStartDate, normalizedMod, totalSessions, msId);
 
-    // Prioritize exact dateKey match, then daySubMap dateKey, then daySubMap dayNumber
-    let sub = (cardDateKey && typeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey)))
-        || (cardDateKey && daySubMap[cardDateKey])
+    // Prioritize resolved daySubMap (dateKey or dayNumber), then sorted fallbacks
+    const sortedTypeSubs = [...typeSubs].sort((a, b) => {
+        const aCompleted = (a.status === 'completed' || Number(a.lcReward) > 0) ? 1 : 0;
+        const bCompleted = (b.status === 'completed' || Number(b.lcReward) > 0) ? 1 : 0;
+        if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+
+        const aReward = Number(a.lcReward) || 0;
+        const bReward = Number(b.lcReward) || 0;
+        if (aReward !== bReward) return bReward - aReward;
+
+        const timeA = new Date(a.submittedAt || a.timestamp || a.date || 0).getTime();
+        const timeB = new Date(b.submittedAt || b.timestamp || b.date || 0).getTime();
+        return timeB - timeA;
+    });
+
+    let sub = (cardDateKey && daySubMap[cardDateKey])
         || daySubMap[Number(dayNumber)]
+        || (cardDateKey && sortedTypeSubs.find(s => (s.dateKey === cardDateKey || s.date === cardDateKey)))
+        || (sortedTypeSubs.find(s => s.day !== undefined && s.day !== null && Number(s.day) === Number(dayNumber)))
         || null;
 
     if (!sub) {

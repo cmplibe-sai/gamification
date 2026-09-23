@@ -882,8 +882,10 @@ function escapeHtmlServer(str) {
         .replace(/'/g, '&#039;');
 }
 
+let _isMongoRestoreRunning = false;
 async function restoreSubmissionsFromMongoBackup() {
-    if (!isDbConnected || !Submission) return false;
+    if (!isDbConnected || !Submission || _isMongoRestoreRunning) return false;
+    _isMongoRestoreRunning = true;
     try {
         const mongoSubCount = await Submission.countDocuments();
         if (mongoSubCount === 0) return false;
@@ -902,12 +904,19 @@ async function restoreSubmissionsFromMongoBackup() {
             });
         }
 
-        // 2. Overlay / insert MongoDB authoritative submissions
+        // 2. Overlay / insert MongoDB authoritative submissions, respecting local timestamps
         mongoSubs.forEach(s => {
             const copy = { ...s };
             delete copy._id;
             delete copy.__v;
             const key = copy.id || `${copy.userId}_${copy.milestoneId}_${copy.type || copy.moduleType}_${copy.day || copy.date || copy.dateKey}`;
+            const existing = subMap.get(key);
+            if (existing) {
+                const existingTime = new Date(existing.updatedAt || existing.submittedAt || existing.evaluatedAt || 0).getTime();
+                const remoteTime = new Date(copy.updatedAt || copy.submittedAt || copy.evaluatedAt || 0).getTime();
+                // If local copy is newer than remote, preserve local copy
+                if (existingTime > remoteTime) return;
+            }
             subMap.set(key, copy);
         });
 
@@ -919,6 +928,8 @@ async function restoreSubmissionsFromMongoBackup() {
     } catch (err) {
         console.warn('[Mongo Recovery Warning]:', err.message);
         return false;
+    } finally {
+        _isMongoRestoreRunning = false;
     }
 }
 
@@ -952,8 +963,8 @@ async function syncStoreToMongo() {
                 await Submission.bulkWrite(bulkOps, { ordered: false });
                 console.log(`✅ Migrated ${bulkOps.length} submissions to MongoDB.`);
             }
-        } else if (mongoSubCount > 0) {
-            // Restore / merge submissions from MongoDB so store.submissions is always up to date across restarts
+        } else if (mongoSubCount > 0 && (process.env.RESTORE_FROM_MONGO === 'true' || (isStoreNewlyCreated && (!Array.isArray(store.submissions) || store.submissions.length === 0)))) {
+            // Disaster recovery strictly on startup when explicitly instructed or if store was brand new and empty
             await restoreSubmissionsFromMongoBackup();
         }
 
@@ -1114,13 +1125,23 @@ async function saveSubmissionToMongo(sub) {
 async function removeSubmissionsFromMongo(userId, milestoneId) {
     if (!isDbConnected || !Submission) return;
     try {
-        const filter = { userId: String(userId) };
+        const uStr = String(userId || '').trim();
+        if (!uStr) return;
+        const filter = {
+            $or: [
+                { userId: uStr },
+                { userEmail: uStr.toLowerCase() }
+            ]
+        };
         if (milestoneId !== null && milestoneId !== undefined) {
             filter.milestoneId = Number(milestoneId);
         }
-        await Submission.deleteMany(filter);
+        const result = await Submission.deleteMany(filter);
+        console.log(`[Mongo Submissions Deleted] Removed ${result.deletedCount || 0} submissions for user ${uStr}`);
+        return result;
     } catch (e) {
-        console.warn('[Mongo Submission Delete Warning]:', e.message);
+        console.error('[Mongo Submission Delete Error]:', e.message);
+        throw e;
     }
 }
 
@@ -1690,10 +1711,13 @@ function getLevelUpAccessFromDb() {
         if (fs.existsSync(LEVELUP_ACCESS_FILE)) {
             const raw = fs.readFileSync(LEVELUP_ACCESS_FILE, 'utf8');
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (Array.isArray(parsed)) return parsed;
         }
     } catch(e) {
         console.warn('Error reading levelup_access.json:', e);
+    }
+    if (Array.isArray(store.levelUpAccessConfig)) {
+        return store.levelUpAccessConfig;
     }
     const defaultMangos = [
         "6714e7d8eb97f72e99e3316c", // cMPLi Be Webinar
@@ -1707,7 +1731,7 @@ function getLevelUpAccessFromDb() {
         "67b712ae5b71fea527d8ba71", // cMPLi POD
         "6a168e4213e4e9a10984b164"  // cMPLiBe - MSNIM Collaboration
     ];
-    return (store.levelUpAccessConfig && store.levelUpAccessConfig.length > 0) ? store.levelUpAccessConfig : defaultMangos;
+    return defaultMangos;
 }
 
 function saveLevelUpAccessToDb(accessArray) {
@@ -3865,13 +3889,6 @@ app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
         });
     }
 
-    // Safety check: if MongoDB is connected and store.submissions is empty, sync from Mongo
-    if (isDbConnected && Submission && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
-        try {
-            await restoreSubmissionsFromMongoBackup();
-        } catch(e) {}
-    }
-
     const liveLevelUpAccess = getLevelUpAccessFromDb();
     
     // Submissions enrichment with privacy & PII masking for non-creators
@@ -4221,20 +4238,47 @@ app.post(['/api/submissions/update-status', '/gamification/api/submissions/updat
 });
 
 app.get(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
-    const { userId, milestoneId, type } = req.query;
-    if (isDbConnected && Submission && (!Array.isArray(store.submissions) || store.submissions.length === 0)) {
-        try {
-            await restoreSubmissionsFromMongoBackup();
-        } catch(e) {}
+    try {
+        const isCreator = checkCreatorAuth(req);
+        const session = getAuthenticatedSession(req);
+        const employer = verifyEmployerAuth(req);
+
+        // Require authentication
+        if (!isCreator && !session && !employer) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+
+        const { userId, milestoneId, type } = req.query;
+        let list = store.submissions || [];
+
+        // If not creator/admin, scope strictly to the authenticated user's own submissions
+        if (!isCreator) {
+            if (employer) {
+                return res.status(403).json({ success: false, error: 'Submissions endpoint not accessible to employer' });
+            }
+            if (session) {
+                const myUserId = session.userId ? String(session.userId).toLowerCase().trim() : null;
+                const myEmail = session.email ? String(session.email).toLowerCase().trim() : null;
+                list = list.filter(s => {
+                    const matchesId = myUserId && s.userId && String(s.userId).toLowerCase().trim() === myUserId;
+                    const matchesEmail = myEmail && s.userEmail && String(s.userEmail).toLowerCase().trim() === myEmail;
+                    return matchesId || matchesEmail;
+                });
+            }
+        } else {
+            // Creator / Admin can filter by userId or userEmail if requested
+            if (userId) {
+                const uStr = String(userId).toLowerCase().trim();
+                list = list.filter(s => String(s.userId).toLowerCase().trim() === uStr || (s.userEmail && s.userEmail.toLowerCase().trim() === uStr));
+            }
+        }
+
+        if (milestoneId) list = list.filter(s => String(s.milestoneId) === String(milestoneId));
+        if (type) list = list.filter(s => String(s.type || s.moduleType || '').toLowerCase() === String(type).toLowerCase());
+        res.json({ success: true, count: list.length, data: list });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
     }
-    let list = store.submissions || [];
-    if (userId) {
-        const uStr = String(userId).toLowerCase().trim();
-        list = list.filter(s => String(s.userId).toLowerCase() === uStr || (s.userEmail && s.userEmail.toLowerCase().trim() === uStr));
-    }
-    if (milestoneId) list = list.filter(s => String(s.milestoneId) === String(milestoneId));
-    if (type) list = list.filter(s => String(s.type).toLowerCase() === String(type).toLowerCase());
-    res.json({ success: true, count: list.length, data: list });
 });
 
 
