@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.26';
+const APP_CLIENT_VERSION = '2.9.27';
 if (typeof localStorage !== 'undefined') {
     try {
         const storedVer = localStorage.getItem('cmpli_client_version');
@@ -8753,46 +8753,23 @@ mockApprovedCertificates = JSON.parse(localStorage.getItem('mockApprovedCertific
 // --- Shared Exclusive Day Resolution Helper ---
 function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msId) {
     const daySubMap = {};
-    if (!Array.isArray(subs) || subs.length === 0) return daySubMap;
 
-    let startDateObj = milestoneStartDate;
-    if (!(startDateObj instanceof Date) || isNaN(startDateObj.getTime())) {
-        startDateObj = new Date(String(startDateObj || '') + 'T00:00:00');
-        if (isNaN(startDateObj.getTime())) startDateObj = new Date();
-    }
+    let startDateObj = (milestoneStartDate && typeof milestoneStartDate.getTime === 'function' && !isNaN(milestoneStartDate.getTime()))
+        ? new Date(milestoneStartDate.getTime())
+        : new Date(String(milestoneStartDate || '').split('T')[0] + 'T00:00:00');
+    if (isNaN(startDateObj.getTime())) startDateObj = new Date();
     startDateObj.setHours(0, 0, 0, 0);
 
-    // Precompute dateKeys for all days 1..totalSessions taking creator scheduling into account
+    // Precompute dateKeys for all days 1..totalSessions based on the learner's module start date
     const dayDateKeys = {};
-    const effectiveMsId = msId || (typeof activeAdminMilestoneId !== 'undefined' ? activeAdminMilestoneId : (typeof activeMilestoneId !== 'undefined' ? activeMilestoneId : 1));
-    const normMod = normalizeLevelUpType(moduleName || 'dip');
-    const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[effectiveMsId] && (customMilestoneConfigs[effectiveMsId][normMod] || customMilestoneConfigs[effectiveMsId][moduleName])) || {};
-    const learnerStartKey = getLocalDateKey(startDateObj);
-
-    let orderedDateKeys = [];
     for (let d = 1; d <= totalSessions; d++) {
-        const resolved = (typeof getResolvedMilestoneDateKey === 'function')
-            ? getResolvedMilestoneDateKey(effectiveMsId, moduleName, startDateObj, d)
-            : { cardDateKey: getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName)) };
-        const slotDk = resolved.cardDateKey;
-        const cfg = msConfigs[slotDk];
-        if (cfg && cfg.cancelled) continue; // skip cancelled slots
-        if (!orderedDateKeys.includes(slotDk)) orderedDateKeys.push(slotDk);
+        const dt = new Date(startDateObj);
+        dt.setDate(dt.getDate() + (d - 1));
+        dayDateKeys[d] = getLocalDateKey(dt);
     }
-    // Include any creator configured dates on or after learnerStartKey (or with user submission)
-    Object.keys(msConfigs).forEach(dk => {
-        const cfg = msConfigs[dk];
-        if (!cfg || cfg.cancelled || orderedDateKeys.includes(dk)) return;
-        const hasSubOnDate = subs.some(s => (s.dateKey === dk || s.date === dk));
-        if (dk < learnerStartKey && !hasSubOnDate) return;
-        orderedDateKeys.push(dk);
-    });
-    // Sort chronologically so session 1 is always the earliest date
-    orderedDateKeys.sort();
+    daySubMap._dayDateKeys = dayDateKeys;
 
-    for (let d = 1; d <= totalSessions; d++) {
-        dayDateKeys[d] = orderedDateKeys[d - 1] || getLocalDateKey(getMilestoneSessionDate(startDateObj, d, moduleName));
-    }
+    if (!Array.isArray(subs) || subs.length === 0) return daySubMap;
 
     // Sort submissions to break ties on collision:
     // 1. Status 'completed' or having LC reward takes precedence over failed/evaluating
@@ -8812,28 +8789,40 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
         return timeB - timeA;
     });
 
-    sortedSubs.forEach(s => {
-        const rawDay = (s.day !== undefined && s.day !== null) ? Number(s.day) : null;
-        let mappedDay = (rawDay !== null && !isNaN(rawDay) && rawDay > 0) ? rawDay : null;
-        const rawDate = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
-        if (!mappedDay && rawDate) {
-            for (let d = 1; d <= totalSessions; d++) {
-                if (dayDateKeys[d] === rawDate) {
-                    mappedDay = d;
-                    break;
-                }
-            }
+    // EXCLUSIVE 1:1 RESOLUTION: Each submission can only match ONE day column (prevents duplicate appearances)
+    const usedSubIds = new Set();
+
+    // Pass 1: Strict explicit day number match
+    for (let d = 1; d <= totalSessions; d++) {
+        const subForDay = sortedSubs.find(s => {
+            const id = String(s.id || s._id);
+            return !usedSubIds.has(id) && s.day !== undefined && s.day !== null && Number(s.day) === d;
+        });
+        if (subForDay) {
+            daySubMap[d] = subForDay;
+            usedSubIds.add(String(subForDay.id || subForDay._id));
+            const subDk = subForDay.dateKey || (subForDay.date ? String(subForDay.date).split('T')[0] : null);
+            if (subDk && !daySubMap[subDk]) daySubMap[subDk] = subForDay;
         }
-        if (rawDate && !daySubMap[rawDate]) {
-            daySubMap[rawDate] = s;
+    }
+
+    // Pass 2: Fallback date match for any submissions where s.day was missing or not yet claimed
+    for (let d = 1; d <= totalSessions; d++) {
+        if (daySubMap[d]) continue;
+        const slotDk = dayDateKeys[d];
+        if (!slotDk) continue;
+        const subForDate = sortedSubs.find(s => {
+            const id = String(s.id || s._id);
+            if (usedSubIds.has(id)) return false;
+            const subDk = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
+            return (!s.day || Number(s.day) === d) && (subDk === slotDk);
+        });
+        if (subForDate) {
+            daySubMap[d] = subForDate;
+            usedSubIds.add(String(subForDate.id || subForDate._id));
+            if (!daySubMap[slotDk]) daySubMap[slotDk] = subForDate;
         }
-        if (mappedDay && !daySubMap[mappedDay]) {
-            daySubMap[mappedDay] = s;
-        }
-        if (rawDay !== null && !isNaN(rawDay) && rawDay > 0 && !daySubMap[rawDay]) {
-            daySubMap[rawDay] = s;
-        }
-    });
+    }
 
     daySubMap._dayDateKeys = dayDateKeys;
     return daySubMap;
@@ -9175,10 +9164,7 @@ function renderAdminCohortSubmissions() {
                 if (activeAdminModule === 'ios') actualDay = d + 30; 
                 
                 const slotDk = dayDateKeys[d];
-                const matchingSub = daySubMap[d] 
-                    || (slotDk && daySubMap[slotDk]) 
-                    || (sortedUserModSubs.find(s => (s.day !== undefined && s.day !== null && Number(s.day) === d) || (slotDk && (s.dateKey === slotDk || s.date === slotDk)))) 
-                    || null;
+                const matchingSub = daySubMap[d] || null;
                 
                 if (matchingSub) {
                     const isEval = matchingSub.status === 'evaluating';
@@ -9190,19 +9176,32 @@ function renderAdminCohortSubmissions() {
                         const tooltip = `Evaluating... • Attempt #${attemptNum}`;
                         rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-indigo-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-spinner fa-spin text-indigo-400 text-base"></i><span class="text-[9px] text-indigo-300 font-mono">Evaluating</span></div></td>`;
                     } else if (isSubFailed) {
-                        const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • Rejected (<50% match) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''} • 0 LCs`;
+                        const tooltip = `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : (slotDk || '')} • Rejected (<50% match) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''} • 0 LCs`;
                         rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-rose-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-400 text-base"></i><span class="text-[9px] px-1 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono font-bold" title="Failed: Match Percentage < 50%">Att #${attemptNum}</span></div></td>`;
                     } else {
                         const isPodMod = activeAdminModule === 'pod';
                         const tooltip = isPodMod
-                            ? `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Completed (Quiz Graded)`
-                            : `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : ''} • ${matchingSub.lcReward || 0} LCs • Passed (≥50%) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''}`;
+                            ? `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : (slotDk || '')} • ${matchingSub.lcReward || 0} LCs • Completed (Quiz Graded)`
+                            : `${matchingSub.date ? new Date(matchingSub.date).toLocaleDateString('en-GB') : (slotDk || '')} • ${matchingSub.lcReward || 0} LCs • Passed (≥50%) • Attempt #${attemptNum}${matchPct ? ` (${matchPct})` : ''}`;
                         const statusLabel = matchingSub.lcReward ? `${matchingSub.lcReward} LCs` : 'Completed';
                         const attBadge = isPodMod ? '' : `<span class="text-[8px] px-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono font-bold" title="Passed on Attempt #${attemptNum}">Att #${attemptNum}</span>`;
                         rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50 cursor-pointer hover:bg-emerald-900/30 transition-colors" title="${tooltip}" onclick="viewSubmissionById('${matchingSub.id || matchingSub._id || ''}', '${user._id}', '${actualDay}', '${activeAdminModule}')"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-check-circle text-emerald-400 text-base shadow-emerald"></i><div class="flex items-center gap-1"><span class="text-[10px] text-slate-300">${statusLabel}</span>${attBadge}</div></div></td>`;
                     }
                 } else {
-                    rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50"><i class="fas fa-times text-slate-600/50 text-sm"></i></td>`;
+                    const todayKey = (typeof getLocalDateKey === 'function') ? getLocalDateKey(new Date()) : new Date().toISOString().split('T')[0];
+                    const isToday = Boolean(slotDk && slotDk === todayKey);
+                    const isPast = Boolean(slotDk && slotDk < todayKey);
+
+                    if (isToday) {
+                        const tooltip = `${slotDk || `Day ${d}`} • Open Today (In Progress)`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50" title="${tooltip}"><div class="flex flex-col items-center gap-0.5"><div class="w-5 h-5 rounded-full border-2 border-amber-400/80 bg-amber-500/10 flex items-center justify-center animate-pulse shadow-sm shadow-amber-500/30"><div class="w-1.5 h-1.5 rounded-full bg-amber-400"></div></div><span class="text-[8px] font-mono font-bold text-amber-300">Today</span></div></td>`;
+                    } else if (isPast) {
+                        const tooltip = `${slotDk || `Day ${d}`} • Missed (No check-in)`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50" title="${tooltip}"><div class="flex flex-col items-center gap-0.5"><i class="fas fa-times-circle text-rose-500/80 text-sm"></i><span class="text-[8px] font-mono text-rose-400/70">Missed</span></div></td>`;
+                    } else {
+                        const tooltip = `${slotDk || `Day ${d}`} • Upcoming (Not yet started)`;
+                        rowHtml += `<td class="px-2 py-3 text-center border-l border-slate-700/50" title="${tooltip}"><span class="text-slate-700/50 text-xs font-mono select-none">—</span></td>`;
+                    }
                 }
             }
         }
@@ -9760,10 +9759,7 @@ function getAdminCompletionGridData() {
 
             for (let d = 1; d <= maxDays; d++) {
                 const slotDk = dayDateKeys[d];
-                const matchingSub = daySubMap[d] 
-                    || (slotDk && daySubMap[slotDk]) 
-                    || (sortedUserModSubs.find(s => (s.day !== undefined && s.day !== null && Number(s.day) === d) || (slotDk && (s.dateKey === slotDk || s.date === slotDk)))) 
-                    || null;
+                const matchingSub = daySubMap[d] || null;
                 if (matchingSub) {
                     sessions.push({
                         dayOrIndex: d,
@@ -9780,11 +9776,14 @@ function getAdminCompletionGridData() {
                         videoUrl: matchingSub.videoUrl || ''
                     });
                 } else {
+                    const todayKey = (typeof getLocalDateKey === 'function') ? getLocalDateKey(new Date()) : new Date().toISOString().split('T')[0];
+                    const isToday = Boolean(slotDk && slotDk === todayKey);
+                    const isPast = Boolean(slotDk && slotDk < todayKey);
                     sessions.push({
                         dayOrIndex: d,
                         label: `D${d}`,
                         title: `Day ${d}`,
-                        status: 'not_submitted',
+                        status: isToday ? 'open_today' : (isPast ? 'missed' : 'upcoming'),
                         lcReward: 0,
                         matchPercentage: null,
                         attemptNumber: 0,
@@ -21595,9 +21594,8 @@ if (typeof window !== 'undefined') {
             try {
                 if (window._storageSubmissionsDebounce) clearTimeout(window._storageSubmissionsDebounce);
                 window._storageSubmissionsDebounce = setTimeout(() => {
-                    const compView = document.getElementById('adminCompletionView');
-                    const isCompVisible = compView && !compView.classList.contains('hidden') && compView.style.display !== 'none';
-                    if (isCompVisible && typeof renderAdminCohortSubmissions === 'function') {
+                    const compTable = document.getElementById('adminCompletionTable');
+                    if (compTable && typeof renderAdminCohortSubmissions === 'function') {
                         renderAdminCohortSubmissions();
                     }
                     const adminMainTab = document.getElementById('adminTab');
