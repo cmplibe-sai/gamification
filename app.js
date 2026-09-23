@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.25';
+const APP_CLIENT_VERSION = '2.9.26';
 if (typeof localStorage !== 'undefined') {
     try {
         const storedVer = localStorage.getItem('cmpli_client_version');
@@ -8813,9 +8813,10 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
     });
 
     sortedSubs.forEach(s => {
-        let mappedDay = null;
+        const rawDay = (s.day !== undefined && s.day !== null) ? Number(s.day) : null;
+        let mappedDay = (rawDay !== null && !isNaN(rawDay) && rawDay > 0) ? rawDay : null;
         const rawDate = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
-        if (rawDate) {
+        if (!mappedDay && rawDate) {
             for (let d = 1; d <= totalSessions; d++) {
                 if (dayDateKeys[d] === rawDate) {
                     mappedDay = d;
@@ -8823,17 +8824,14 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
                 }
             }
         }
-        if (!mappedDay && s.day !== undefined && s.day !== null) {
-            const rawDay = Number(s.day);
-            if (!isNaN(rawDay)) {
-                mappedDay = rawDay;
-            }
-        }
         if (rawDate && !daySubMap[rawDate]) {
             daySubMap[rawDate] = s;
         }
         if (mappedDay && !daySubMap[mappedDay]) {
             daySubMap[mappedDay] = s;
+        }
+        if (rawDay !== null && !isNaN(rawDay) && !daySubMap[rawDay]) {
+            daySubMap[rawDay] = s;
         }
     });
 
@@ -9725,9 +9723,28 @@ function getAdminCompletionGridData() {
             userMilestoneStartDate.setHours(0,0,0,0);
 
             const daySubMap = (typeof buildDaySubMap === 'function') ? buildDaySubMap(userModSubs, userMilestoneStartDate, cleanMod, maxDays, msId) : {};
+            const dayDateKeys = daySubMap._dayDateKeys || {};
+
+            const sortedUserModSubs = [...userModSubs].sort((a, b) => {
+                const aCompleted = (a.status === 'completed' || Number(a.lcReward) > 0) ? 1 : 0;
+                const bCompleted = (b.status === 'completed' || Number(b.lcReward) > 0) ? 1 : 0;
+                if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+
+                const aReward = Number(a.lcReward) || 0;
+                const bReward = Number(b.lcReward) || 0;
+                if (aReward !== bReward) return bReward - aReward;
+
+                const timeA = new Date(a.submittedAt || a.timestamp || a.date || 0).getTime();
+                const timeB = new Date(b.submittedAt || b.timestamp || b.date || 0).getTime();
+                return timeB - timeA;
+            });
 
             for (let d = 1; d <= maxDays; d++) {
-                const matchingSub = daySubMap[d] || null;
+                const slotDk = dayDateKeys[d];
+                const matchingSub = daySubMap[d] 
+                    || (slotDk && daySubMap[slotDk]) 
+                    || (sortedUserModSubs.find(s => (s.day !== undefined && s.day !== null && Number(s.day) === d) || (slotDk && (s.dateKey === slotDk || s.date === slotDk)))) 
+                    || null;
                 if (matchingSub) {
                     sessions.push({
                         dayOrIndex: d,
