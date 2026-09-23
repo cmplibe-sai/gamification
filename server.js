@@ -655,13 +655,16 @@ try {
 
     const submissionSchema = new mongoose.Schema({
         id: { type: String },
+        submissionId: String,
         userId: { type: String, required: true, index: true },
         userEmail: { type: String, index: true },
         userName: String,
         userPhone: String,
         milestoneId: { type: Number, required: true, index: true },
-        type: { type: String, required: true }, // dip / pod / immerse / quiz / ...
-        day: Number,
+        type: { type: String, required: true }, // dip / pod / immerse / quiz / project
+        day: mongoose.Schema.Types.Mixed, // Number for check-ins (1, 2, ...), String for project deliverables ("proj_...")
+        projectId: String,
+        projectTitle: String,
         dateKey: String,
         date: String,
         status: String, // completed / evaluating / rejected_mismatch / ...
@@ -674,8 +677,10 @@ try {
         remarks: String,
         aiRemarks: String,
         answers: mongoose.Schema.Types.Mixed,
+        responses: mongoose.Schema.Types.Mixed,
         metadata: mongoose.Schema.Types.Mixed,
-        submittedAt: Date
+        submittedAt: Date,
+        timestamp: Number
     }, { timestamps: true });
 
     submissionSchema.index({ userId: 1, milestoneId: 1, type: 1, day: 1 });
@@ -1076,11 +1081,12 @@ async function saveSubmissionToMongo(sub) {
             return;
         }
 
+        const dayVal = sub.day !== undefined ? (isNaN(Number(sub.day)) ? String(sub.day) : Number(sub.day)) : null;
         const query = sub.id ? { id: sub.id } : {
             userId: userId,
             milestoneId: msId,
             type: subType,
-            day: sub.day !== undefined ? Number(sub.day) : null
+            day: dayVal
         };
         await Submission.updateOne(query, { $set: sub }, { upsert: true, runValidators: true });
     } catch (e) {
