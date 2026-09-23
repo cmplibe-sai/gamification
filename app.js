@@ -8830,7 +8830,7 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
         if (mappedDay && !daySubMap[mappedDay]) {
             daySubMap[mappedDay] = s;
         }
-        if (rawDay !== null && !isNaN(rawDay) && !daySubMap[rawDay]) {
+        if (rawDay !== null && !isNaN(rawDay) && rawDay > 0 && !daySubMap[rawDay]) {
             daySubMap[rawDay] = s;
         }
     });
@@ -9154,12 +9154,31 @@ function renderAdminCohortSubmissions() {
             userMilestoneStartDate.setHours(0,0,0,0);
 
             const daySubMap = buildDaySubMap(userModSubs, userMilestoneStartDate, activeAdminModule, maxDays, activeAdminMilestoneId || 1);
+            const dayDateKeys = daySubMap._dayDateKeys || {};
+
+            const sortedUserModSubs = [...userModSubs].sort((a, b) => {
+                const aCompleted = (a.status === 'completed' || Number(a.lcReward) > 0) ? 1 : 0;
+                const bCompleted = (b.status === 'completed' || Number(b.lcReward) > 0) ? 1 : 0;
+                if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+
+                const aReward = Number(a.lcReward) || 0;
+                const bReward = Number(b.lcReward) || 0;
+                if (aReward !== bReward) return bReward - aReward;
+
+                const timeA = new Date(a.submittedAt || a.timestamp || a.date || 0).getTime();
+                const timeB = new Date(b.submittedAt || b.timestamp || b.date || 0).getTime();
+                return timeB - timeA;
+            });
 
             for (let d = 1; d <= maxDays; d++) {
                 let actualDay = d;
                 if (activeAdminModule === 'ios') actualDay = d + 30; 
                 
-                const matchingSub = daySubMap[d] || (daySubMap._dayDateKeys && daySubMap._dayDateKeys[d] && daySubMap[daySubMap._dayDateKeys[d]]) || null;
+                const slotDk = dayDateKeys[d];
+                const matchingSub = daySubMap[d] 
+                    || (slotDk && daySubMap[slotDk]) 
+                    || (sortedUserModSubs.find(s => (s.day !== undefined && s.day !== null && Number(s.day) === d) || (slotDk && (s.dateKey === slotDk || s.date === slotDk)))) 
+                    || null;
                 
                 if (matchingSub) {
                     const isEval = matchingSub.status === 'evaluating';
