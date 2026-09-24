@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.32';
+const APP_CLIENT_VERSION = '2.9.33';
 
 // Safe Storage Subsystem with Automatic Quota Recovery & Resilient Fallbacks
 const safeStorage = {
@@ -12994,6 +12994,283 @@ function resolvePodAudioUrl(dayConfig, dateKey, msId = '1') {
 }
 window.resolvePodAudioUrl = resolvePodAudioUrl;
 
+// ==============================================================
+// cMPLi POD - SYNCED LYRICS (Spotify-style)
+// Mini view under the player: previous line (dim) / current line (highlighted) / next line (dim),
+// plus an expand button that opens a full-screen "lyrics" window with the title, the highlighted script,
+// a play/pause button and a listening progress bar.
+// Tapping a line to jump is only allowed once the 85% listening requirement is met.
+// The lyrics text and timings come from the audio itself (/api/pod/lyrics), so they always match.
+// ==============================================================
+function initPodLyrics(ctx) {
+    const player = ctx.player;
+    if (!player) return;
+    const mini = document.getElementById('podLyricsMini');
+    if (!mini) return;
+
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const fmt = (secs) => {
+        if (!Number.isFinite(secs) || secs < 0) return '00:00';
+        const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+        return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    };
+
+    let lines = [];
+    let raf = 0;
+    let lastLine = -2, lastWord = -2;
+    let fullEl = null;
+    let followUntil = 0;   // auto-scroll is paused while the learner scrolls the full window by hand
+    let pollTimer = 0;
+    let pollCount = 0;
+
+    const miniStatus = document.getElementById('podLyricsStatus');
+    const miniLines = document.getElementById('podLyricsMiniLines');
+    const prevEl = miniLines.querySelector('[data-role="prev"]');
+    const curEl = miniLines.querySelector('[data-role="cur"]');
+    const nextEl = miniLines.querySelector('[data-role="next"]');
+
+    // ---- timing helpers -------------------------------------------------------------
+    function findLine(t) {
+        let lo = 0, hi = lines.length - 1, ans = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (lines[mid].s <= t + 0.05) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+        }
+        return ans;
+    }
+    function findWord(line, t) {
+        let ans = -1;
+        for (let i = 0; i < line.w.length; i++) { if (line.w[i][1] <= t + 0.03) ans = i; else break; }
+        return ans;
+    }
+    function lineHtml(line, wordIdx) {
+        return line.w.map((w, i) => `<span class="pod-w${i < wordIdx ? ' w-done' : ''}${i === wordIdx ? ' w-now' : ''}">${esc(w[0])}</span>`).join(' ');
+    }
+    const state = () => (ctx.getState ? ctx.getState() : { unlocked: false, pct: 0 });
+
+    // ---- rendering ------------------------------------------------------------------
+    function renderMini(li, wi) {
+        const plain = (l) => (l ? esc(l.w.map(x => x[0]).join(' ')) : '&nbsp;');
+        if (li !== lastLine) {
+            prevEl.innerHTML = plain(lines[li - 1]);
+            nextEl.innerHTML = plain(lines[li + 1] || (li === -1 ? lines[0] : null));
+            curEl.innerHTML = li >= 0 ? lineHtml(lines[li], wi) : '<span class="pod-w">&hellip;</span>';
+            if (li === -1) { prevEl.innerHTML = '&nbsp;'; nextEl.innerHTML = plain(lines[0]); }
+        } else if (li >= 0) {
+            const spans = curEl.querySelectorAll('.pod-w');
+            spans.forEach((sp, i) => { sp.classList.toggle('w-done', i < wi); sp.classList.toggle('w-now', i === wi); });
+        }
+    }
+
+    function renderFull(li, wi) {
+        if (!fullEl) return;
+        const ps = fullEl.querySelectorAll('.pod-lyric-line');
+        if (li !== lastLine) {
+            ps.forEach((p, i) => {
+                p.classList.toggle('is-past', i < li);
+                p.classList.toggle('is-current', i === li);
+            });
+            if (li >= 0 && ps[li] && Date.now() > followUntil) ps[li].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        if (li >= 0 && ps[li]) {
+            const spans = ps[li].querySelectorAll('.pod-w');
+            spans.forEach((sp, i) => { sp.classList.toggle('w-done', i < wi); sp.classList.toggle('w-now', i === wi); });
+        }
+        if (li !== lastLine && lastLine >= 0 && ps[lastLine]) {
+            ps[lastLine].querySelectorAll('.pod-w').forEach(sp => { sp.classList.add('w-done'); sp.classList.remove('w-now'); });
+        }
+    }
+
+    function renderFullControls() {
+        if (!fullEl) return;
+        const st = state();
+        const dur = player.duration;
+        const pos = Number.isFinite(dur) && dur > 0 ? Math.min(100, (player.currentTime / dur) * 100) : 0;
+        const bar = fullEl.querySelector('#podLyricsFullBar');
+        const range = fullEl.querySelector('#podLyricsFullSeek');
+        const cur = fullEl.querySelector('#podLyricsFullCur');
+        const tot = fullEl.querySelector('#podLyricsFullTot');
+        const note = fullEl.querySelector('#podLyricsFullNote');
+        const icon = fullEl.querySelector('#podLyricsFullPlayIcon');
+        if (bar) bar.style.width = pos + '%';
+        if (range) { range.disabled = !st.unlocked; if (document.activeElement !== range) range.value = pos; }
+        if (cur) cur.textContent = fmt(player.currentTime);
+        if (tot) tot.textContent = Number.isFinite(dur) ? fmt(dur) : '--:--';
+        if (icon) { icon.classList.toggle('fa-pause', !player.paused); icon.classList.toggle('fa-play', player.paused); }
+        if (note) {
+            note.innerHTML = st.unlocked
+                ? '<i class="fas fa-unlock mr-1"></i> Unlocked &bull; tap any line or drag the bar to replay'
+                : `<i class="fas fa-lock mr-1"></i> ${Math.min(100, Math.round(st.pct || 0))}% listened &bull; tap-to-jump unlocks at 85%`;
+            note.className = 'pod-lyrics-note ' + (st.unlocked ? 'is-unlocked' : 'is-locked');
+        }
+    }
+
+    function refresh(force) {
+        if (!lines.length) return;
+        const t = player.currentTime || 0;
+        const li = findLine(t);
+        const wi = li >= 0 ? findWord(lines[li], t) : -1;
+        if (!force && li === lastLine && wi === lastWord) { renderFullControls(); return; }
+        renderMini(li, wi);
+        renderFull(li, wi);
+        lastLine = li; lastWord = wi;
+        renderFullControls();
+    }
+
+    function loop() {
+        if (!player.isConnected) { cleanup(); return; }
+        refresh(false);
+        raf = player.paused ? 0 : requestAnimationFrame(loop);
+    }
+    function kick() { if (!raf && lines.length) raf = requestAnimationFrame(loop); }
+
+    function cleanup() {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        if (pollTimer) clearTimeout(pollTimer);
+        if (fullEl) { fullEl.remove(); fullEl = null; }
+        document.body.classList.remove('pod-lyrics-open');
+    }
+
+    // ---- seeking (only after the 85% requirement) -----------------------------------
+    function toast(msg) {
+        if (!fullEl) return;
+        const t = fullEl.querySelector('#podLyricsToast');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toast._t);
+        toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+    function seekToLine(i) {
+        if (!state().unlocked) { toast('Seeking unlocks after you listen to 85% of the episode'); return; }
+        const line = lines[i];
+        if (!line) return;
+        player.currentTime = Math.max(0, line.s - 0.05);
+        if (player.paused) player.play().catch(() => {});
+        lastLine = -2; refresh(true); kick();
+    }
+
+    // ---- full-screen window ---------------------------------------------------------
+    function openFull() {
+        if (fullEl || !lines.length) return;
+        const title = esc(ctx.title || 'cMPLi POD');
+        fullEl = document.createElement('div');
+        fullEl.id = 'podLyricsFull';
+        fullEl.className = 'pod-lyrics-full';
+        fullEl.setAttribute('role', 'dialog');
+        fullEl.setAttribute('aria-label', 'Synced lyrics');
+        fullEl.innerHTML = `
+            <div class="pod-lyrics-full-card">
+                <div class="pod-lyrics-head">
+                    <div class="min-w-0">
+                        <div class="pod-lyrics-kicker"><i class="fas fa-headphones-alt mr-1"></i> cMPLi POD &bull; Lyrics</div>
+                        <div class="pod-lyrics-title">${title}</div>
+                    </div>
+                    <button type="button" id="podLyricsCloseBtn" class="pod-lyrics-close" aria-label="Close lyrics"><i class="fas fa-compress-alt"></i></button>
+                </div>
+                <div class="pod-lyrics-scroll" id="podLyricsScroll">
+                    <div class="pod-lyrics-pad"></div>
+                    ${lines.map((l, i) => `<p class="pod-lyric-line" data-i="${i}">${lineHtml(l, -1)}</p>`).join('')}
+                    <div class="pod-lyrics-pad"></div>
+                </div>
+                <div id="podLyricsToast" class="pod-lyrics-toast"></div>
+                <div class="pod-lyrics-foot">
+                    <div class="pod-lyrics-progress">
+                        <div class="pod-lyrics-track"><div id="podLyricsFullBar" class="pod-lyrics-fill"></div><div class="pod-lyrics-mark" title="85%"></div></div>
+                        <input type="range" id="podLyricsFullSeek" min="0" max="100" step="0.1" value="0" class="pod-lyrics-range" aria-label="Seek" disabled>
+                    </div>
+                    <div class="pod-lyrics-times"><span id="podLyricsFullCur">00:00</span><span id="podLyricsFullTot">--:--</span></div>
+                    <div id="podLyricsFullNote" class="pod-lyrics-note is-locked"></div>
+                    <div class="pod-lyrics-controls">
+                        <button type="button" id="podLyricsFullPlay" class="pod-lyrics-play" aria-label="Play or pause"><i id="podLyricsFullPlayIcon" class="fas fa-play"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(fullEl);
+        document.body.classList.add('pod-lyrics-open');
+
+        fullEl.querySelector('#podLyricsCloseBtn').onclick = closeFull;
+        fullEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFull(); });
+        fullEl.querySelector('#podLyricsFullPlay').onclick = () => {
+            if (player.paused) player.play().catch(() => {}); else player.pause();
+        };
+        const range = fullEl.querySelector('#podLyricsFullSeek');
+        range.addEventListener('input', () => {
+            if (!state().unlocked || !Number.isFinite(player.duration)) return;
+            player.currentTime = (parseFloat(range.value) / 100) * player.duration;
+            lastLine = -2; refresh(true);
+        });
+        const scroller = fullEl.querySelector('#podLyricsScroll');
+        const pauseFollow = () => { followUntil = Date.now() + 3500; };
+        scroller.addEventListener('touchstart', pauseFollow, { passive: true });
+        scroller.addEventListener('wheel', pauseFollow, { passive: true });
+        scroller.addEventListener('click', (e) => {
+            const p = e.target.closest('.pod-lyric-line');
+            if (p) seekToLine(parseInt(p.dataset.i, 10));
+        });
+        lastLine = -2; followUntil = 0;
+        refresh(true);
+        fullEl.querySelector('#podLyricsCloseBtn').focus();
+    }
+    function closeFull() {
+        if (!fullEl) return;
+        fullEl.remove(); fullEl = null;
+        document.body.classList.remove('pod-lyrics-open');
+    }
+
+    // ---- wiring ---------------------------------------------------------------------
+    ['play', 'seeked', 'timeupdate', 'loadedmetadata', 'ratechange'].forEach(ev => player.addEventListener(ev, () => { if (lines.length) { refresh(false); kick(); } }));
+    ['pause', 'ended'].forEach(ev => player.addEventListener(ev, () => { if (lines.length) refresh(false); }));
+    // Keep the main play button in sync when playback is started from the full lyrics window
+    player.addEventListener('play', () => {
+        const ic = document.getElementById('podPlayIcon');
+        if (ic) { ic.classList.remove('fa-play', 'ml-0.5'); ic.classList.add('fa-pause'); }
+    });
+
+    const expandBtn = document.getElementById('podLyricsExpandBtn');
+    if (expandBtn) expandBtn.onclick = openFull;
+
+    function showReady() {
+        miniStatus.classList.add('hidden');
+        miniLines.classList.remove('hidden');
+        if (expandBtn) expandBtn.classList.remove('hidden');
+        mini.classList.remove('hidden');
+        lastLine = -2;
+        refresh(true);
+        if (!player.paused) kick();
+    }
+    function showProcessing() {
+        mini.classList.remove('hidden');
+        miniLines.classList.add('hidden');
+        if (expandBtn) expandBtn.classList.add('hidden');
+        miniStatus.classList.remove('hidden');
+        miniStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1.5"></i> Preparing synced lyrics for today&hellip; this takes a minute or two.';
+    }
+
+    async function load() {
+        if (!player.isConnected) { cleanup(); return; }
+        let res = null;
+        try {
+            res = await apiFetch(`/api/pod/lyrics?dateKey=${encodeURIComponent(ctx.dateKey)}&milestoneId=${encodeURIComponent(ctx.msId)}`).then(r => r.json());
+        } catch (e) { res = null; }
+        if (res && res.success && res.status === 'ready' && Array.isArray(res.lines) && res.lines.length) {
+            lines = res.lines;
+            showReady();
+            return;
+        }
+        if (res && res.success && res.status === 'processing' && pollCount < 90) {
+            showProcessing();
+            pollCount++;
+            pollTimer = setTimeout(load, 6000);
+            return;
+        }
+        mini.classList.add('hidden'); // not available for this episode: show nothing extra
+    }
+    load();
+}
+window.initPodLyrics = initPodLyrics;
+
 async function openPodSessionModal(dayNum, dateKey) {
     activePodSessionDay = dayNum;
     activePodSessionDateKey = dateKey || getLocalDateKey(new Date());
@@ -13233,6 +13510,19 @@ async function openPodSessionModal(dayNum, dateKey) {
                                                 : '<i class="fas fa-lock text-[9px] mr-1"></i> 85% required to unlock seeking &amp; quiz'}
                                         </span>
                                     </div>
+                                </div>
+
+                                <!-- Synced lyrics (Spotify-style): previous / current / next line + expand -->
+                                <div id="podLyricsMini" class="hidden pt-3 mt-1 border-t border-slate-800/80">
+                                    <div class="flex items-stretch gap-3">
+                                        <div id="podLyricsMiniLines" class="flex-1 min-w-0 space-y-1" aria-live="off">
+                                            <p data-role="prev" class="pod-lyric-prev">&nbsp;</p>
+                                            <p data-role="cur" class="pod-lyric-cur">&nbsp;</p>
+                                            <p data-role="next" class="pod-lyric-next">&nbsp;</p>
+                                        </div>
+                                        <button type="button" id="podLyricsExpandBtn" class="hidden" aria-label="Open full lyrics window" title="Open full lyrics"><i class="fas fa-expand-alt"></i></button>
+                                    </div>
+                                    <div id="podLyricsStatus" class="hidden"></div>
                                 </div>
                             </div>
                         ` : `
@@ -13585,6 +13875,22 @@ async function openPodSessionModal(dayNum, dateKey) {
                     statusText.innerHTML = `<i class="fas fa-check-circle text-emerald-400 mr-1"></i> Episode Completed! Drag slider to 0% to re-listen anytime.`;
                 }
             });
+
+            // Synced lyrics: seeking by tapping a line stays locked until the 85% requirement is met
+            try {
+                initPodLyrics({
+                    player,
+                    dateKey: activePodSessionDateKey,
+                    msId: safeMs,
+                    title: cleanStoryTitle,
+                    getState: () => ({
+                        unlocked: isSeekUnlocked,
+                        pct: player.duration ? Math.min(100, (maxAudibleTime / player.duration) * 100) : 0
+                    })
+                });
+            } catch (lyricsErr) {
+                console.warn('Synced lyrics unavailable:', lyricsErr);
+            }
         }, 100);
     }
 }

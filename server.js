@@ -323,6 +323,168 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
         return null;
     }
 }
+// ==============================================================
+// cMPLi POD - SYNCED LYRICS (word-level timings from the actual audio)
+// The lyrics text is the AssemblyAI transcript of the generated audio itself, so what is
+// highlighted always matches what is spoken. Only TODAY's episode is transcribed (cost control);
+// results are cached on disk per date and reused for everyone.
+// ==============================================================
+const POD_LYRICS_DIR = path.join(DATA_DIR, 'pod_lyrics');
+const podLyricsJobs = new Map();      // key -> startedAt (jobs currently running)
+const podLyricsFailures = new Map();  // key -> failedAt (cool-down before retrying)
+const POD_LYRICS_RETRY_AFTER_MS = 10 * 60 * 1000;
+
+function todayKeyIST() {
+    return new Date(Date.now() + 5.5 * 3600000).toISOString().split('T')[0];
+}
+
+function podLyricsPaths(msId, dateKey) {
+    const safeMs = String(parseInt(msId, 10) || 1);
+    const safeDate = String(dateKey).replace(/[^0-9\-]/g, '');
+    return { key: `${safeMs}_${safeDate}`, file: path.join(POD_LYRICS_DIR, `m${safeMs}_${safeDate}.json`) };
+}
+
+// Finds the audio for a POD date: a local file (preferred) or a public URL. `sig` changes when the audio changes.
+function resolvePodAudioSource(msId, dateKey) {
+    const safeMs = parseInt(msId, 10) || 1;
+    let configured = '';
+    try {
+        const cfgs = getMilestoneConfigsFromDb();
+        const day = cfgs && cfgs[String(safeMs)] && cfgs[String(safeMs)].pod && cfgs[String(safeMs)].pod[dateKey];
+        configured = (day && typeof day.audioUrl === 'string') ? day.audioUrl.trim() : '';
+    } catch (e) { /* fall through to conventional file names */ }
+
+    const candidates = [];
+    if (configured && !/^https?:\/\//i.test(configured)) candidates.push(path.basename(configured));
+    const safeDate = String(dateKey).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    candidates.push(`pod_m${safeMs}_${safeDate}.mp3`, `pod_m${safeMs}_${safeDate.replace(/-/g, '_')}.mp3`);
+    for (const name of candidates) {
+        const p = path.join(UPLOADS_DIR, name);
+        try {
+            if (fs.existsSync(p)) {
+                const st = fs.statSync(p);
+                return { ref: p, sig: `${name}:${st.size}:${Math.round(st.mtimeMs)}` };
+            }
+        } catch (e) { /* try next */ }
+    }
+    if (/^https?:\/\//i.test(configured)) return { ref: configured, sig: configured };
+    return null;
+}
+
+// Groups timed words into readable lyric lines (sentence ends, long pauses, or ~12 words).
+function buildLyricLines(words) {
+    const lines = [];
+    let cur = [];
+    const flush = () => {
+        if (cur.length) {
+            lines.push({ s: cur[0][1], e: cur[cur.length - 1][2], w: cur });
+            cur = [];
+        }
+    };
+    for (let i = 0; i < words.length; i++) {
+        const wd = words[i];
+        const text = String(wd.text || '').trim();
+        if (!text) continue;
+        const start = Math.round((Number(wd.start) || 0) / 10) / 100;
+        const end = Math.round((Number(wd.end) || 0) / 10) / 100;
+        cur.push([text, start, Math.max(end, start)]);
+        const next = words[i + 1];
+        const gap = next ? ((Number(next.start) || 0) - (Number(wd.end) || 0)) / 1000 : 0;
+        const endsSentence = /[.!?]["')\]]?$/.test(text);
+        const endsClause = /[,;:]["')\]]?$/.test(text);
+        let shouldBreak = (endsSentence && cur.length >= 3) || (endsClause && cur.length >= 9) || gap > 0.9;
+        if (!shouldBreak && cur.length >= 14) {
+            // Avoid leaving a 1-3 word tail on the next line: keep going if the sentence ends within 3 words
+            let sentenceEndsSoon = false;
+            for (let k = 1; k <= 3; k++) {
+                const nw = words[i + k];
+                if (!nw) break;
+                if (/[.!?]["')\]]?$/.test(String(nw.text || '').trim())) { sentenceEndsSoon = true; break; }
+            }
+            shouldBreak = !sentenceEndsSoon || cur.length >= 20;
+        }
+        if (shouldBreak) flush();
+    }
+    flush();
+    return lines;
+}
+
+async function transcribeWordsWithAssemblyAI(audioRef) {
+    if (!ASSEMBLYAI_API_KEY) return null;
+    const AAI_BASE = 'https://api.assemblyai.com';
+    const headers = { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/json' };
+    let audioUrl = audioRef;
+    if (!/^https?:\/\//i.test(audioRef)) {
+        const buffer = fs.readFileSync(audioRef);
+        const up = await fetch(`${AAI_BASE}/v2/upload`, {
+            method: 'POST',
+            headers: { authorization: ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' },
+            body: buffer
+        });
+        const upData = await up.json();
+        if (!upData || !upData.upload_url) throw new Error('AssemblyAI upload failed');
+        audioUrl = upData.upload_url;
+    }
+    const created = await fetch(`${AAI_BASE}/v2/transcript`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ audio_url: audioUrl, language_code: 'en', punctuate: true, format_text: true })
+    });
+    const job = await created.json();
+    if (!job || !job.id) throw new Error('AssemblyAI did not accept the transcription job');
+    const maxAttempts = 90; // up to ~7.5 minutes for long episodes
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(r => setTimeout(r, attempt === 0 ? 2000 : 5000));
+        const poll = await (await fetch(`${AAI_BASE}/v2/transcript/${job.id}`, { headers })).json();
+        if (poll.status === 'completed') return Array.isArray(poll.words) ? poll.words : [];
+        if (poll.status === 'error') throw new Error(poll.error || 'AssemblyAI transcription error');
+    }
+    throw new Error('AssemblyAI transcription timed out');
+}
+
+function readPodLyricsCache(msId, dateKey) {
+    try {
+        const { file } = podLyricsPaths(msId, dateKey);
+        if (!fs.existsSync(file)) return null;
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) { return null; }
+}
+
+// Starts (at most one) background transcription for a date. Never throws.
+async function ensurePodLyricsJob(msId, dateKey) {
+    try {
+        if (!ASSEMBLYAI_API_KEY) return;
+        const { key, file } = podLyricsPaths(msId, dateKey);
+        if (podLyricsJobs.has(key)) return;
+        const failedAt = podLyricsFailures.get(key);
+        if (failedAt && Date.now() - failedAt < POD_LYRICS_RETRY_AFTER_MS) return;
+        const src = resolvePodAudioSource(msId, dateKey);
+        if (!src) return;
+        const cached = readPodLyricsCache(msId, dateKey);
+        if (cached && cached.sig === src.sig && Array.isArray(cached.lines) && cached.lines.length) return;
+
+        podLyricsJobs.set(key, Date.now());
+        console.log(`[POD Lyrics] Transcribing ${dateKey} (MS ${msId}) for synced lyrics...`);
+        try {
+            const words = await transcribeWordsWithAssemblyAI(src.ref);
+            const lines = buildLyricLines(words || []);
+            const wordCount = lines.reduce((n, l) => n + l.w.length, 0);
+            if (wordCount < 10) throw new Error('Transcript contained too few words');
+            fs.mkdirSync(POD_LYRICS_DIR, { recursive: true });
+            fs.writeFileSync(file, JSON.stringify({ sig: src.sig, generatedAt: Date.now(), lines }), 'utf8');
+            podLyricsFailures.delete(key);
+            console.log(`[POD Lyrics] Ready for ${dateKey}: ${lines.length} lines, ${wordCount} words`);
+        } catch (err) {
+            podLyricsFailures.set(key, Date.now());
+            console.warn(`[POD Lyrics] Could not build lyrics for ${dateKey}:`, err.message);
+        } finally {
+            podLyricsJobs.delete(key);
+        }
+    } catch (outer) {
+        console.warn('[POD Lyrics] Unexpected error:', outer.message);
+    }
+}
+
 function loadStore() {
     try {
         if (fs.existsSync(DB_FILE)) {
@@ -6033,6 +6195,12 @@ async function synthesizeBritishVoiceNarration(text, milestoneId = 1, dateKey = 
     fs.writeFileSync(filePath, buffer);
     console.log(`[ElevenLabs Voice Generated] Saved ${buffer.length} bytes to ${fileName}`);
 
+    // Today's episode: start building synced lyrics in the background so they are ready when learners press play
+    try {
+        const genDateKey = String(dateKey || '').trim();
+        if (genDateKey === todayKeyIST()) ensurePodLyricsJob(safeMsId, genDateKey);
+    } catch (lyricErr) { /* lyrics are optional */ }
+
     const publicUrl = `/gamification/uploads/${fileName}`;
 
     // Auto-persist audioUrl to milestone configs immediately so it is never lost or reverted
@@ -6099,6 +6267,42 @@ app.post(['/api/pod/generate-voice', '/gamification/api/pod/generate-voice'], as
 });
 
 // Automated on-demand endpoint: ensures British podcast audio exists and returns audioUrl immediately
+// Synced lyrics for the POD player (word timings from the audio itself). Learners only ever get lyrics for
+// audio that exists; new transcriptions are started only for TODAY's episode.
+app.get(['/api/pod/lyrics', '/gamification/api/pod/lyrics'], (req, res) => {
+    try {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        const dateKey = String(req.query.dateKey || '').trim();
+        const msId = String(req.query.milestoneId || '1').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !/^\d{1,4}$/.test(msId)) {
+            return res.status(400).json({ success: false, error: 'Invalid dateKey or milestoneId' });
+        }
+
+        const src = resolvePodAudioSource(msId, dateKey);
+        if (!src) return res.json({ success: true, status: 'unavailable', reason: 'no_audio' });
+
+        const cached = readPodLyricsCache(msId, dateKey);
+        if (cached && cached.sig === src.sig && Array.isArray(cached.lines) && cached.lines.length) {
+            return res.json({ success: true, status: 'ready', lines: cached.lines });
+        }
+
+        if (dateKey !== todayKeyIST()) return res.json({ success: true, status: 'unavailable', reason: 'only_today' });
+        if (!ASSEMBLYAI_API_KEY) return res.json({ success: true, status: 'unavailable', reason: 'not_configured' });
+
+        const { key } = podLyricsPaths(msId, dateKey);
+        if (podLyricsJobs.has(key)) return res.json({ success: true, status: 'processing' });
+        const failedAt = podLyricsFailures.get(key);
+        if (failedAt && Date.now() - failedAt < POD_LYRICS_RETRY_AFTER_MS) {
+            return res.json({ success: true, status: 'unavailable', reason: 'failed' });
+        }
+
+        ensurePodLyricsJob(msId, dateKey); // runs in the background
+        return res.json({ success: true, status: 'processing' });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (req, res) => {
     try {
         const dateKey = String(req.query.dateKey || '').trim();
