@@ -2414,6 +2414,65 @@ function deriveDayNumber(module, dateKey, explicitDay) {
 }
 
 // -------------------------------------------------------------
+// Markdown Stripping & Question Well-Formedness Validators
+// -------------------------------------------------------------
+function stripMarkdown(text) {
+    return String(text || '')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/_([^_]+)_/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/^#+\s+/gm, '')
+        .replace(/^[•\-\*]\s+/gm, '')
+        .trim();
+}
+
+function isWellFormedQuestion(q) {
+    if (!q || typeof q !== 'object') return false;
+    if (!q.title || typeof q.title !== 'string' || q.title.trim().length === 0) return false;
+    if (!Array.isArray(q.options) || q.options.length !== 4) return false;
+    const distinct = new Set(q.options.map(opt => String(opt || '').trim().toLowerCase()));
+    if (distinct.size !== 4 || distinct.has('')) return false;
+    if (typeof q.correctOption !== 'number' || q.correctOption < 0 || q.correctOption > 3) return false;
+    return true;
+}
+
+function countWellFormedQuestions(pool) {
+    if (!Array.isArray(pool)) return 0;
+    return pool.filter(isWellFormedQuestion).length;
+}
+
+function escapeRegExp(string) {
+    return String(string || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function formatOptionSentence(text) {
+    let clean = String(text || '').replace(/\s+/g, ' ').replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, '').trim();
+    clean = stripMarkdown(clean);
+    if (clean.length > 0) {
+        clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
+    const stopwordRegex = /\b(and|or|but|the|a|an|in|on|at|to|with|for|of|from|that|which|who|whom|whose|as|by|more|very|then|so|is|are|was|were|be|been|being|has|have|had|do|does|did|its|their|his|her|my|our|your)\b$/i;
+    let prev;
+    do {
+        prev = clean;
+        clean = clean.replace(/[\.\,\;\:\-\s&]+$/, '').trim();
+        clean = clean.replace(stopwordRegex, '').trim();
+    } while (clean !== prev && clean.length > 0);
+    clean = clean.replace(/[\.\,\;\:\-\s&]+$/, '').trim();
+    return clean;
+}
+
+function replacePhraseWithArticleFix(sentence, srcPhrase, dstPhrase) {
+    let result = sentence.replace(new RegExp(`(?<![-–\\w])\\b${escapeRegExp(srcPhrase)}\\b(?![-–\\w])`, 'i'), dstPhrase);
+    result = result.replace(/\ba\s+([aeiou][a-z0-9_-]+)/gi, 'an $1');
+    result = result.replace(/\ban\s+([^aeiou\s][a-z0-9_-]+)/gi, 'a $1');
+    return result;
+}
+
+// -------------------------------------------------------------
 // SimpliPod Dynamic 50-Question Pool Generator
 // Synthesizes a structured 50-question bank from story article text
 // Categorized across 5 critical dimensions with varied distractors
@@ -2427,43 +2486,37 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
         .replace(/[:\)\(\]\[\}\{]+/g, '')
         .replace(/["']/g, '')
         .trim();
+    cleanTitle = stripMarkdown(cleanTitle);
     if (!cleanTitle) cleanTitle = 'Reflective Story';
 
-    const rawText = String(articleText || '').trim();
-    const metaFilter = /^(happy to do|all these about|tell us|have you ever wondered|don't miss|click here|listen to|today's dip|welcome to)/i;
+    const rawCleanText = stripMarkdown(String(articleText || '')).trim();
 
-    const rawSentences = rawText
+    // Strict meta & rhetorical filter: exclude questions and conversational leads
+    const metaFilter = /^(happy to do|all these about|tell us|have you ever|don't miss|click here|listen to|today's dip|welcome to|read on|in this edition|decoding digital|by the way|greetings|dear learners|photo credit|disclaimer|source:|to know more|stay tuned|what happens when|have you heard|well,?\s*until|did you know|let's dive|here is the story|imagine if|the underlying business logic|how long does it take)/i;
+
+    const rawSentences = rawCleanText
         .split(/(?:\r?\n|•|\. |\? |! |; )+/)
-        .map(s => s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, ''))
-        .filter(s => s.length > 25 && !metaFilter.test(s) && !/^(the|and|or|but|in|on|at|to)\b/i.test(s));
+        .map(s => {
+            let clean = s.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, '').trim();
+            clean = clean.replace(/^(and|or|but|so)\s+/i, '');
+            if (clean.length > 0) clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+            return clean;
+        })
+        .filter(s => {
+            if (s.includes('?')) return false;
+            if (s.length < 35 || s.length > 280) return false;
+            if (metaFilter.test(s)) return false;
+            const words = s.split(/\s+/);
+            if (words.length < 7 || words.length > 40) return false;
+            return true;
+        });
 
-    function formatOptionSentence(text) {
-        let clean = String(text || '').replace(/\s+/g, ' ').replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, '').trim();
-        if (clean.length > 0) {
-            clean = clean.charAt(0).toUpperCase() + clean.slice(1);
-        }
-        const words = clean.split(' ');
-        if (words.length > 16) {
-            clean = words.slice(0, 16).join(' ');
-        }
-        const stopwordRegex = /\b(and|or|but|the|a|an|in|on|at|to|with|for|of|from|that|which|who|whom|whose|as|by|more|very|then|so|is|are|was|were|be|been|being|has|have|had|do|does|did|its|their|his|her|my|our|your)\b$/i;
-        let prev;
-        do {
-            prev = clean;
-            clean = clean.replace(/[,;:\-\s&]+$/, '').trim();
-            clean = clean.replace(stopwordRegex, '').trim();
-        } while (clean !== prev && clean.length > 0);
-        return clean;
+    // REQUIRE MINIMUM 6 USABLE STORY SENTENCES: Never persist canned life-lessons padding!
+    if (rawSentences.length < 6) {
+        return [];
     }
 
-    const keyPoints = rawSentences.length >= 4 
-        ? rawSentences 
-        : [
-            `Consistent, small positive actions accumulate over time to create meaningful life transformation`,
-            `Inner contentment and peace often come from simple acts of kindness rather than material accumulation`,
-            `Mindful reflection and unburdening oneself allows greater clarity and purpose in daily work`,
-            `Genuine human connection and empathy can guide individuals through seasons of frustration or stress`
-        ];
+    const keyPoints = rawSentences;
 
     // Detect Saturday or Personal Growth / Life Story
     const isSaturday = (() => {
@@ -2475,97 +2528,681 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
     })();
 
     const isPersonalGrowth = isSaturday || 
-        /story|personal growth|reflection|mindset|habits|life lesson|soul|character|kindness|virtue|fulfil/i.test(String(title || '')) ||
-        /rushith|araliya|soul|compassion|gratitude|inner peace|happiness|teacher|contentment|unburden/i.test(rawText);
+        /personal growth|reflection|mindset|habits|life lesson|soul|character|kindness|virtue|fulfil/i.test(String(title || '')) ||
+        /rushith|araliya|soul|compassion|gratitude|inner peace|happiness|teacher|contentment|unburden/i.test(rawCleanText);
 
-    const reflectiveStems = [
-        `In this story, what core principle or life lesson is highlighted?`,
-        `What fundamental shift in mindset or perspective is illustrated?`,
-        `What key insight about small daily habits and actions is emphasized?`,
-        `According to the story, what truly fosters lasting contentment and peace of mind?`,
-        `What contrast is drawn between outward material success and inner fulfillment?`,
-        `What practical realization transformed the character's outlook?`,
-        `How does the narrative demonstrate the power of empathy, sharing, and listening?`,
-        `What meaningful takeaway can learners apply to their personal and professional growth?`,
-        `What pivotal moment in the story marks the beginning of positive change?`,
-        `According to the reflections in the story, what gives real depth to daily efforts?`,
-        `What role does self-awareness play in overcoming dissatisfaction and restlessness?`,
-        `What timeless truth about kindness, simplicity, and well-being is illustrated?`
+    // 1. Collect all words that appear at the start of any sentence or clause in the article
+    const sentenceStartWords = new Set();
+    const rawClauses = rawCleanText.split(/(?:\r?\n|•|\. |\? |! |; |:\s+)+/);
+    rawClauses.forEach(cl => {
+        const trimmed = cl.trim().replace(/^[-*•#\d\.\)]\s*/, '').replace(/["'“”]/g, '').trim();
+        if (trimmed.length > 0) {
+            const m = trimmed.match(/^[a-zA-Z]+/);
+            if (m) sentenceStartWords.add(m[0].toLowerCase());
+        }
+    });
+
+    // 2. Strict Named Entity Extraction: ONLY genuine mid-sentence proper nouns
+    const commonExcludedCaps = new Set([
+        'the', 'in', 'on', 'at', 'to', 'from', 'with', 'by', 'over', 'under', 'between', 
+        'through', 'across', 'behind', 'beyond', 'after', 'before', 'during', 'while', 'when', 
+        'where', 'what', 'which', 'who', 'why', 'how', 'if', 'because', 'since', 'although', 
+        'though', 'as', 'then', 'there', 'here', 'so', 'therefore', 'however', 'moreover', 
+        'furthermore', 'thus', 'hence', 'meanwhile', 'suddenly', 'today', 'tomorrow', 'yesterday', 
+        'this', 'that', 'these', 'those', 'it', 'its', 'he', 'his', 'him', 'she', 'her', 'they', 
+        'their', 'them', 'we', 'our', 'us', 'you', 'your', 'one', 'two', 'many', 'most', 'several',
+        'both', 'each', 'every', 'all', 'some', 'few', 'driven', 'underlying', 'imagine', 'according', 
+        'based', 'having', 'being', 'regulators', 'government', 'management', 'ministry', 'industry',
+        'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
+        'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+        'indian', 'american', 'global', 'local', 'regional', 'national', 'international',
+        'b2b', 'ai', 'hr', 'ev', 'it', 'esg', 'gis', 'bfsi', 'ipo', 'ebitda', 'us', 'rs', 'usd', 'inr', 'series', 'tier'
+    ]);
+
+    const storyCompanies = [];
+    const storyLocations = [];
+    const storyPersons = [];
+    const storyUniversities = [];
+
+    const midCapsRegex = /(?<=[a-z,]\s+)([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*)/g;
+    keyPoints.forEach(s => {
+        let m;
+        while ((m = midCapsRegex.exec(s)) !== null) {
+            const ent = m[1].trim();
+            const entLower = ent.toLowerCase();
+            if (ent.length > 2 && !sentenceStartWords.has(entLower) && !commonExcludedCaps.has(entLower)) {
+                if (/bengaluru|mumbai|pune|chennai|mangaluru|colaba|santacruz|delhi|ghats|rwanda|ghana|mauritius|sri lanka|dubai|japan|london|chicago/i.test(ent)) {
+                    if (!storyLocations.includes(ent)) storyLocations.push(ent);
+                } else if (/riya|rushith|araliya/i.test(ent)) {
+                    if (!storyPersons.includes(ent)) storyPersons.push(ent);
+                } else if (/mit|wharton|bristol|illinois tech|unsw/i.test(ent)) {
+                    if (!storyUniversities.includes(ent)) storyUniversities.push(ent);
+                } else if (/snabbit|blive|athulya|kirloskar|avante|godrej|mahindra|genius|ncdex|imd|iit|eruditus|tata|zipline|carrier/i.test(ent)) {
+                    if (!storyCompanies.includes(ent)) storyCompanies.push(ent);
+                }
+            }
+        }
+    });
+
+    // 3. Atomic Number Extraction with Units (Same-Kind)
+    const storyPercentages = [];
+    const storyCurrencies = [];
+    const storyDurations = [];
+    const storyMeasurements = [];
+    const storyYears = [];
+
+    const pctRegex = /\b(\d+(?:\.\d+)?)\s*%/g;
+    const currRegex = /(?:Rs\.?\s*|\$|US\$\s*|₹\s*)\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:\s*(?:crores?|billion|million))?\b/gi;
+    const durRegex = /\b\d+(?:-\w+|\s*(?:minutes?|hours?|days?|weeks?|months?|years?))\b/gi;
+    const measRegex = /\b\d+(?:\.\d+)?\s*(?:mm|cm|km|meters?|sq\s*ft|beds?)\b/gi;
+    const yearRegex = /\b(?:19\d{2}|20\d{2})\b/g;
+
+    keyPoints.forEach(s => {
+        let m;
+        while ((m = pctRegex.exec(s)) !== null) {
+            const str = m[0].trim();
+            if (!storyPercentages.includes(str)) storyPercentages.push(str);
+        }
+        while ((m = currRegex.exec(s)) !== null) {
+            const str = m[0].trim();
+            if (!storyCurrencies.includes(str)) storyCurrencies.push(str);
+        }
+        while ((m = durRegex.exec(s)) !== null) {
+            const str = m[0].trim();
+            if (!storyDurations.includes(str)) storyDurations.push(str);
+        }
+        while ((m = measRegex.exec(s)) !== null) {
+            const str = m[0].trim();
+            if (!storyMeasurements.includes(str)) storyMeasurements.push(str);
+        }
+        while ((m = yearRegex.exec(s)) !== null) {
+            const str = m[0].trim();
+            if (!storyYears.includes(str)) storyYears.push(str);
+        }
+    });
+
+    // 4. In-Story Thematic Noun Phrases (Singular vs Plural)
+    const singularPhrases = [];
+    const pluralPhrases = [];
+    const singularCandidates = [
+        'smart electric mobility platform', 'corporate asset class', 'architectural design',
+        'workforce integrity', 'online credential verification', 'rainfall futures contract',
+        'ownership framework', 'academic governance', 'silent reflection', 'steady discipline',
+        'inner patience', 'genuine empathy', 'personal character', 'cold-chain storage', 'bookkeeping',
+        'personal savings', 'supply-side innovation', 'unit-pricing revenue model', 'growth marketing',
+        'vendor acquisition', 'tactical partner management', 'field-level execution', 'balance sheet strength',
+        'sustainable corporate asset class', 'clinical palliative care', 'long-term care infrastructure',
+        'brand heritage', 'internal equity', 'consultative selling', 'strategic negotiation',
+        'key-account management', 'consumer psychology', 'site sourcing', 'background verification',
+        'credential fraud', 'hybrid work environments', 'customer trust', 'operational security',
+        'strategic risk assessment', 'process design', 'vendor governance', 'compliance management',
+        'payroll processing', 'flexi-staffing', 'curriculum design', 'faculty recruitment',
+        'physical infrastructure development', 'student housing', 'technology integration',
+        'corporate placement linkages', 'annual revenue', 'supply chain management', 'practical mentorship',
+        'omni-channel retail framework', 'asset-light business model', 'charging infrastructure',
+        'dedicated maintenance', 'commercial freight footprint', 'commercial fleet initiative',
+        'battery health', 'driver efficiency', 'total cost of ownership', 'operational reliability',
+        'senior care sector', 'total population', 'international expansion', 'business strategy',
+        'local real estate ecosystem', 'specialized workforce export', 'high-touch service delivery model',
+        'regulatory compliance', 'mental healthcare', 'selection process', 'high-growth sector',
+        'cash-settled financial product', 'specialized analytical capability', 'environmental strategy',
+        'parametric insurance', 'supply chain consulting',
+        'worker training', 'lowest possible price', 'rural district', 'decision-making process',
+        'expensive cold-chain storage', 'autonomous flight system', 'instant fulfillment',
+        'quick response', 'lasting fulfillment', 'external approval', 'true contentment'
+    ];
+    const pluralCandidates = [
+        'tourist rental hubs', 'governance standards', 'weather stations', 'climate exposures',
+        'executive online certificates', 'physical campuses', 'industrial sewing machines',
+        'intermediary distributors', 'monthly wages', 'autonomous electric drones',
+        'urgent medical supplies', 'specialized distribution hubs', 'rural health clinics',
+        'parachute drops', 'maternal mortality rates', 'small daily milestones', 'unexpected challenges',
+        'multi-skilled service providers', 'neighborhood micro-markets', 'historical benchmarks',
+        'automatic payouts', 'assisted living communities', 'culturally aligned services',
+        'mixed-use developments', 'corporate land banks', 'growth platforms', 'deal structures',
+        'direct acquisitions', 'early-stage career paths', 'entry-level opportunities',
+        'channel partner networks', 'deal closures', 'leasing portfolios', 'institutional accounts',
+        'metropolitan markets', 'corporate boardrooms', 'operational targets',
+        'background verification standards', 'aggressive hiring timelines', 'educational degrees',
+        'traditional verification systems', 'technology-led solutions', 'continuous monitoring tools',
+        'client acquisition roles', 'automated verification platforms', 'enterprise clients',
+        'elite universities', 'research standards', 'foreign universities', 'industry-aligned degrees',
+        'overseas costs', 'career entry points', 'enterprise talent acquisition teams',
+        'multi-brand electric two-wheeler experience stores', 'flexible long-term subscriptions',
+        'delivery networks', 'local merchants', 'electric mini trucks', 'enterprise logistics providers',
+        'client-facing roles', 'regional logistics partners', 'EV fleet packages', 'urban delivery corridors',
+        'assisted-living operators', 'overseas markets', 'demanding careers', 'specific demographics',
+        'high-net-worth Indian expatriates', 'asset-light operational tie-ups abroad', 'global talent shortages',
+        'higher margins', 'high-yield revenue streams', 'international jurisdictions',
+        'international healthcare partnerships', 'cross-cultural workforce deployment',
+        'claims adjusters', 'price movements', 'weather shifts', 'direct site labor losses',
+        'contract margins', 'default risks', 'seasonal runoff variances', 'rainfall derivatives',
+        'macro climate risks', 'trading instruments', 'quantitative skill sets', 'facility vulnerabilities',
+        'hedging tools', 'commodity exchanges',
+        'founding members', 'local schools', 'fulfillment orders', 'mobile portals',
+        'blood packs', 'remote clinics', 'vaccine shortages', 'daily responsibilities',
+        'tense team discussions', 'feelings of frustration'
+    ];
+    singularCandidates.forEach(p => {
+        if (rawCleanText.toLowerCase().includes(p)) singularPhrases.push(p);
+    });
+    pluralCandidates.forEach(p => {
+        if (rawCleanText.toLowerCase().includes(p)) pluralPhrases.push(p);
+    });
+
+    // 5. In-Story Antonym and Concept Pairs
+    const inStoryOpposites = [
+        [/\benterprise\b/gi, 'consumer'],
+        [/\bconsumer\b/gi, 'enterprise'],
+        [/\bplanned\b/gi, 'on-demand'],
+        [/\bon-demand\b/gi, 'scheduled advance'],
+        [/\bhigh-frequency\b/gi, 'low-frequency'],
+        [/\blow-frequency\b/gi, 'high-frequency'],
+        [/\bhigh-ticket\b/gi, 'low-ticket'],
+        [/\blow-ticket\b/gi, 'high-ticket'],
+        [/\bdaily\b/gi, 'occasional'],
+        [/\boccasional\b/gi, 'daily'],
+        [/\bshort positions\b/gi, 'long positions'],
+        [/\blong positions\b/gi, 'short positions'],
+        [/\brural\b/gi, 'urban'],
+        [/\burban\b/gi, 'rural']
     ];
 
-    const businessStems = [
-        `According to the case study on ${cleanTitle}, what core challenge or opportunity is addressed?`,
-        `What primary value proposition or unique offering distinguishes ${cleanTitle}?`,
-        `What operational approach or execution strategy is emphasized in this case study?`,
-        `What key customer need or market demand is addressed by ${cleanTitle}?`,
-        `What strategic milestone or operational objective is highlighted?`,
-        `Which capability or core competency is required to execute successfully?`,
-        `What key operational or managerial lesson emerges from this story?`,
-        `What career pathway or functional role is discussed in the context of ${cleanTitle}?`,
-        `How does ${cleanTitle} drive sustainable growth and execution in its market?`,
-        `What overarching strategic principle defines the journey of ${cleanTitle}?`
+    // 6. Positive Semantic Contrast Rules
+    const positiveSwapRules = [
+        // Directional verbs
+        [/\bupending\b/gi, ['conforming to', 'gradually adapting to']],
+        [/\baccelerated\b/gi, ['gradually transitioned toward', 'moderated the pace of']],
+        [/\baccelerates\b/gi, ['moderates the pace of', 'gradually stabilizes']],
+        [/\bexpanded\b/gi, ['consolidated operations across', 'narrowed the scope of']],
+        [/\bexpands\b/gi, ['consolidates operations within', 'limits regional activity in']],
+        [/\blaunched\b/gi, ['deferred the rollout of', 'evaluated third-party proposals for']],
+        [/\bpioneered\b/gi, ['followed established protocols for', 'replicated standard models for']],
+        [/\breduced\b/gi, ['extended', 'maintained previous levels of']],
+        [/\breduces\b/gi, ['extends', 'maintains previous benchmarks for']],
+        [/\bincreased\b/gi, ['moderated', 'stabilized']],
+        [/\bincreases\b/gi, ['moderates', 'stabilizes']],
+        [/\bimproved\b/gi, ['stabilized', 'moderated']],
+        [/\bpartnered with\b/gi, ['competed independently against', 'acquired regional assets from']],
+        [/\breinvested\b/gi, ['distributed commercial dividends from', 'reallocated capital away from']],
+        [/\bpooled\b/gi, ['borrowed commercial loans for', 'sought external funding for']],
+        [/\bdeepens\b/gi, ['moderates', 'weakens']],
+        [/\bmaximizing\b/gi, ['moderating', 'capping']],
+        [/\btargets\b/gi, ['bypasses', 'defers engagement with']],
+        [/\bhinges on\b/gi, ['operates independently of', 'departs from']],
+        [/\bformalising\b/gi, ['loosening oversight of', 'decentralizing']],
+        [/\baggregating\b/gi, ['segmenting', 'separating']],
+        [/\beliminating\b/gi, ['partnering with', 'relying heavily on']],
+        [/\bachieved\b/gi, ['struggled to maintain', 'delayed the realization of']],
+        [/\bdemands\b/gi, ['eliminates the requirement for', 'operates without']],
+
+        // Domain adjectives & modifiers
+        [/\bhyper-local\b/gi, ['cross-regional', 'state-wide']],
+        [/\bultra-dense\b/gi, ['broad geographic', 'low-density rural']],
+        [/\bsingle-use\b/gi, ['bulk reusable', 'multi-session']],
+        [/\bcross-trained\b/gi, ['single-task specialized', 'narrowly siloed']],
+        [/\basset-light\b/gi, ['capital-intensive', 'asset-heavy']],
+        [/\bomni-channel\b/gi, ['single-channel online', 'direct-to-consumer only']],
+        [/\bcash-settled\b/gi, ['physically delivered', 'collateral-backed']],
+        [/\bcommercial\b/gi, ['residential', 'industrial']],
+        [/\bresidential\b/gi, ['commercial', 'industrial']],
+        [/\bindustrial\b/gi, ['retail consumer', 'residential']],
+        [/\bdigital\b/gi, ['traditional manual', 'paper-based']],
+        [/\bautomated\b/gi, ['manual hands-on', 'labor-intensive']],
+        [/\bautonomous\b/gi, ['manually piloted', 'operator-dependent']],
+        [/\belectric\b/gi, ['diesel-powered', 'combustion-driven']],
+        [/\btransparent\b/gi, ['internally confidential', 'discretionary']],
+        [/\bflexible\b/gi, ['standardized', 'fixed-format']],
+        [/\breliability\b/gi, ['speed of fulfillment', 'volume turnover']],
+        [/\bmandatory\b/gi, ['voluntary optional', 'discretionary']],
+        [/\bfull-time\b/gi, ['part-time rotational', 'intermittent on-call']],
+        [/\bentry-level\b/gi, ['senior executive', 'management-tier']],
+
+        // Quantifiers & counts
+        [/\bevery member\b/gi, ['selected senior managers', 'designated committee members']],
+        [/\ball members\b/gi, ['outside advisors', 'regional coordinators']],
+        [/\bevery year\b/gi, ['in the second year', 'in the fifth year']],
+        [/\bevery month\b/gi, ['in the final quarter', 'on a periodic basis']],
+        [/\bhalf of its profits\b/gi, ['twenty percent of its profits', 'ten percent of its revenue']],
+        [/\bhalf\b/gi, ['twenty percent', 'one-fourth', 'ten percent']],
+        [/\bthree\b/gi, ['eight', 'twelve', 'six']],
+        [/\bfour\b/gi, ['ten', 'sixteen', 'seven']],
+        [/\btwo\b/gi, ['five', 'seven', 'six']],
+        [/\bwithin a year\b/gi, ['after several years', 'over an extended timeframe']],
+        [/\bseveral weeks\b/gi, ['eighteen months', 'two quarters', 'a few days']],
+        [/\btier 2 and tier 3\b/gi, ['tier 1 metropolitan', 'tier 1 capital']]
     ];
 
-    const simpleStems = isPersonalGrowth ? reflectiveStems : businessStems;
+    const normalizeWord = w => w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const storyWords = new Set(
+        rawCleanText.split(/\s+/)
+            .map(normalizeWord)
+            .filter(w => w.length > 2)
+    );
 
+    function getAllSentenceVariations(sentence) {
+        const s = formatOptionSentence(sentence);
+        const variations = [];
+        const seen = new Set([s.toLowerCase()]);
+
+        const addVar = (cand) => {
+            if (!cand) return;
+            const fmt = formatOptionSentence(cand);
+            const lower = fmt.toLowerCase();
+            if (!seen.has(lower) && fmt.length >= 25) {
+                seen.add(lower);
+                const words = fmt.split(/\s+/).map(normalizeWord).filter(w => w.length > 2);
+                const isStoryWordsOnly = !words.some(w => !storyWords.has(w));
+                variations.push({ text: fmt, isStoryWordsOnly });
+            }
+        };
+
+        // 1. In-Story Antonym Swaps (100% story words)
+        for (const [re, repl] of inStoryOpposites) {
+            if (re.test(s) && storyWords.has(normalizeWord(repl))) {
+                addVar(s.replace(re, repl));
+            }
+        }
+
+        // 2. In-Story Noun Phrase Swaps (Strictly Singular-for-Singular, Plural-for-Plural)
+        if (singularPhrases.length >= 2) {
+            for (let i = 0; i < singularPhrases.length; i++) {
+                const srcP = singularPhrases[i];
+                const pRegex = new RegExp(`(?<![-–\\w])\\b${escapeRegExp(srcP)}\\b(?![-–\\w])`, 'gi');
+                if (pRegex.test(s)) {
+                    for (let j = 0; j < singularPhrases.length; j++) {
+                        if (i !== j) addVar(replacePhraseWithArticleFix(s, srcP, singularPhrases[j]));
+                    }
+                }
+            }
+        }
+        if (pluralPhrases.length >= 2) {
+            for (let i = 0; i < pluralPhrases.length; i++) {
+                const srcP = pluralPhrases[i];
+                const pRegex = new RegExp(`(?<![-–\\w])\\b${escapeRegExp(srcP)}\\b(?![-–\\w])`, 'gi');
+                if (pRegex.test(s)) {
+                    for (let j = 0; j < pluralPhrases.length; j++) {
+                        if (i !== j) addVar(replacePhraseWithArticleFix(s, srcP, pluralPhrases[j]));
+                    }
+                }
+            }
+        }
+
+        // 3. Atomic Same-Type Number Swaps (In-Story numbers, 100% story words)
+        if (storyPercentages.length >= 2) {
+            for (let i = 0; i < storyPercentages.length; i++) {
+                const src = storyPercentages[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'gi');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyPercentages.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyPercentages[j]));
+                    }
+                }
+            }
+        }
+        if (storyCurrencies.length >= 2) {
+            for (let i = 0; i < storyCurrencies.length; i++) {
+                const src = storyCurrencies[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'gi');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyCurrencies.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyCurrencies[j]));
+                    }
+                }
+            }
+        }
+        if (storyDurations.length >= 2) {
+            for (let i = 0; i < storyDurations.length; i++) {
+                const src = storyDurations[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'gi');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyDurations.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyDurations[j]));
+                    }
+                }
+            }
+        }
+        if (storyMeasurements.length >= 2) {
+            for (let i = 0; i < storyMeasurements.length; i++) {
+                const src = storyMeasurements[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'gi');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyMeasurements.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyMeasurements[j]));
+                    }
+                }
+            }
+        }
+        if (storyYears.length >= 2) {
+            for (let i = 0; i < storyYears.length; i++) {
+                const src = storyYears[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'gi');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyYears.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyYears[j]));
+                    }
+                }
+            }
+        }
+
+        // 4. Strict Same-Kind Entity Swaps (Company-for-Company, Location-for-Location, Person-for-Person)
+        if (storyCompanies.length >= 2) {
+            for (let i = 0; i < storyCompanies.length; i++) {
+                const src = storyCompanies[i];
+                if (s.includes(`(${src}`) || s.includes(`${src} (`)) continue;
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'i');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyCompanies.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyCompanies[j]));
+                    }
+                }
+            }
+        }
+        if (storyLocations.length >= 2) {
+            for (let i = 0; i < storyLocations.length; i++) {
+                const src = storyLocations[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'i');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyLocations.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyLocations[j]));
+                    }
+                }
+            }
+        }
+        if (storyPersons.length >= 2) {
+            for (let i = 0; i < storyPersons.length; i++) {
+                const src = storyPersons[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'i');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyPersons.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyPersons[j]));
+                    }
+                }
+            }
+        }
+        if (storyUniversities.length >= 2) {
+            for (let i = 0; i < storyUniversities.length; i++) {
+                const src = storyUniversities[i];
+                const re = new RegExp(`(?<![-–\\w])${escapeRegExp(src)}(?![-–\\w])`, 'i');
+                if (re.test(s)) {
+                    for (let j = 0; j < storyUniversities.length; j++) {
+                        if (i !== j) addVar(s.replace(re, storyUniversities[j]));
+                    }
+                }
+            }
+        }
+
+        // 5. Positive Semantic Contrast Rules
+        for (let r = 0; r < positiveSwapRules.length; r++) {
+            const [re, repls] = positiveSwapRules[r];
+            if (re.test(s)) {
+                const list = Array.isArray(repls) ? repls : [repls];
+                for (const rep of list) {
+                    addVar(s.replace(re, rep));
+                }
+            }
+        }
+
+        // 6. Atomic Number Variations with Attached Units (Safe, in-domain arithmetic adjustments)
+        const pctMatches = s.match(/(?<![-–\w])(\d{1,2}(?:\.\d+)?)\s*%(?![-–\w])/g);
+        if (pctMatches) {
+            for (const m of pctMatches) {
+                const val = parseFloat(m);
+                const altVals = [Math.round(val * 0.5), Math.min(95, Math.round(val * 1.5))].filter(v => v !== val && v > 0);
+                for (const av of altVals) {
+                    addVar(s.replace(new RegExp(`(?<![-–\\w])${escapeRegExp(m)}(?![-–\\w])`), `${av}%`));
+                }
+            }
+        }
+        const durHyphenMatches = s.match(/(?<![-–\w])(\d+)-(minute|hour|year)(?![-–\w])/gi);
+        if (durHyphenMatches) {
+            for (const m of durHyphenMatches) {
+                const parts = m.split('-');
+                const v = parseInt(parts[0], 10);
+                const unit = parts[1];
+                const alts = [v * 2, Math.max(1, Math.round(v * 3))];
+                for (const altV of alts) {
+                    addVar(s.replace(new RegExp(`(?<![-–\\w])${escapeRegExp(m)}(?![-–\\w])`), `${altV}-${unit}`));
+                }
+            }
+        }
+        const measMatches = s.match(/(?<![-–\w])(\d+)\s*(mm|cm|km|meters?)(?![-–\w])/gi);
+        if (measMatches) {
+            for (const m of measMatches) {
+                const parts = m.trim().split(/\s+/);
+                const v = parseInt(parts[0], 10);
+                const unit = parts[1];
+                const alts = [Math.round(v * 2.5), Math.max(5, Math.round(v * 0.5))];
+                for (const altV of alts) {
+                    addVar(s.replace(new RegExp(`(?<![-–\\w])${escapeRegExp(m)}(?![-–\\w])`), `${altV} ${unit}`));
+                }
+            }
+        }
+        const currMatches = s.match(/(?<![-–\w])(Rs\.?\s*|₹\s*)(\d+)(?![-–\w])/gi);
+        if (currMatches) {
+            for (const m of currMatches) {
+                const numPart = m.replace(/^[^\d]+/, '');
+                const prefix = m.slice(0, m.indexOf(numPart));
+                const v = parseInt(numPart, 10);
+                if (v > 0 && v < 1000) {
+                    const alts = [v + 50, v * 2];
+                    for (const altV of alts) {
+                        addVar(s.replace(new RegExp(`(?<![-–\\w])${escapeRegExp(m)}(?![-–\\w])`), `${prefix}${altV}`));
+                    }
+                }
+            }
+        }
+
+        return variations;
+    }
+
+    // Precompute variation banks for each keyPoint sentence
+    const sentenceVariations = keyPoints.map(s => getAllSentenceVariations(s));
+
+    const businessStemTemplates = [
+        t => `According to today's reading about ${t}, which statement is factually accurate?`,
+        t => `Based on the case details of ${t}, which key development actually occurred?`,
+        t => `In the account of ${t}, which of the following operational milestones is documented?`,
+        t => `What significant breakthrough or result is confirmed in the analysis of ${t}?`,
+        t => `Which of the following statements represents an accurate fact reported in ${t}?`,
+        t => `According to the narrative of ${t}, what strategic action or outcome took place?`,
+        t => `In reviewing ${t}, which statement directly aligns with the facts presented in the article?`,
+        t => `Based on the text, which operational achievement is verified regarding ${t}?`,
+        t => `Which development is explicitly affirmed by the author in the discussion of ${t}?`,
+        t => `According to today's account, which of the following findings is confirmed in ${t}?`,
+        t => `What key operational progress is documented in today's reading concerning ${t}?`,
+        t => `Based on the narrative of ${t}, which statement correctly describes what transpired?`,
+        t => `In the breakdown of ${t}, which specific outcome was achieved?`,
+        t => `Which of the following points is explicitly confirmed by the case record in ${t}?`,
+        t => `According to the article, what notable event or initiative is recorded in ${t}?`,
+        t => `What real-world impact or progress is highlighted in the study of ${t}?`,
+        t => `Based on today's reading, which statement accurately reflects what ${t} established?`,
+        t => `Which factual detail is reported in the text regarding the execution of ${t}?`,
+        t => `According to the story, which outcome was directly realized as described in ${t}?`,
+        t => `In the analysis of ${t}, which of the following developments is verified as true?`,
+        t => `What specific strategic decision or milestone is highlighted in ${t}?`,
+        t => `Based on the text of ${t}, which of the following statements is supported by the facts?`,
+        t => `According to the author's report, what notable progress took place in ${t}?`,
+        t => `Which observation concerning ${t} is confirmed to be factually accurate?`,
+        t => `In today's case study of ${t}, which statement represents a verified reality?`,
+        t => `What primary development is detailed in the text regarding the growth of ${t}?`,
+        t => `According to the facts presented, which statement accurately characterizes ${t}?`,
+        t => `Based on the account of ${t}, which operational step was successfully carried out?`,
+        t => `Which of the following findings is directly supported by today's article on ${t}?`,
+        t => `In the operational review of ${t}, what specific achievement is reported?`,
+        t => `According to the reading, which statement accurately summarizes a verified fact about ${t}?`,
+        t => `What significant milestone was attained according to the narrative of ${t}?`,
+        t => `Based on the evidence shared in ${t}, which development is explicitly documented?`,
+        t => `In the account of ${t}, which statement reflects the genuine progress made?`,
+        t => `Which of the following details about ${t} is substantiated by the text?`,
+        t => `According to today's reading, which strategic result was achieved in ${t}?`,
+        t => `What core operational truth is established in the discussion of ${t}?`,
+        t => `Based on the author's analysis, which factual point is confirmed regarding ${t}?`,
+        t => `In examining ${t}, which of the following statements is proven by the narrative?`,
+        t => `According to the text, what concrete progress or accomplishment occurred in ${t}?`,
+        t => `Which statement accurately captures a key development reported in ${t}?`,
+        t => `Based on today's case review of ${t}, which observation is factually correct?`,
+        t => `What notable achievement is described in the article regarding ${t}?`,
+        t => `In the narrative of ${t}, which of the following outcomes was successfully reached?`,
+        t => `According to the documented facts, which statement regarding ${t} is true?`,
+        t => `What specific operational insight or milestone is verified in the study of ${t}?`,
+        t => `Based on the text, which development represents an authentic milestone in ${t}?`,
+        t => `In the account provided for ${t}, which factual occurrence is confirmed?`,
+        t => `Which of the following statements is directly confirmed by the reading on ${t}?`,
+        t => `According to the concluding analysis of ${t}, which statement is verified as accurate?`
+    ];
+
+    const reflectiveStemTemplates = [
+        t => `According to today's reflection on ${t}, which statement is factually accurate?`,
+        t => `Based on the narrative of ${t}, which key experience or event actually occurred?`,
+        t => `In the personal account of ${t}, which realization is explicitly shared?`,
+        t => `What meaningful transformation or milestone is documented in ${t}?`,
+        t => `Which of the following statements represents an authentic insight from ${t}?`,
+        t => `According to the story, what personal shift or understanding took place in ${t}?`,
+        t => `In reviewing ${t}, which statement directly aligns with the author's experience?`,
+        t => `Based on the reading, which mindful perspective or action is confirmed in ${t}?`,
+        t => `Which development or realization is explicitly affirmed in today's reflection on ${t}?`,
+        t => `According to the narrative, which of the following observations is verified in ${t}?`,
+        t => `What key lesson or breakthrough is highlighted in today's reading about ${t}?`,
+        t => `Based on the reflections in ${t}, which statement correctly captures what transpired?`,
+        t => `In the story of ${t}, which specific personal milestone was achieved?`,
+        t => `Which of the following points is explicitly confirmed by the narrative in ${t}?`,
+        t => `According to the text, what meaningful attitude or habit is demonstrated in ${t}?`,
+        t => `What real-world personal growth or progress is highlighted in ${t}?`,
+        t => `Based on today's reading, which statement accurately reflects the journey of ${t}?`,
+        t => `Which reflective detail is reported in the text regarding the experience of ${t}?`,
+        t => `According to the narrative, which outcome was directly realized in ${t}?`,
+        t => `In the reflection on ${t}, which of the following experiences is verified as true?`,
+        t => `What specific inner breakthrough or decision is highlighted in ${t}?`,
+        t => `Based on the text of ${t}, which of the following statements is supported by the narrative?`,
+        t => `According to the author's account, what notable progress took place in ${t}?`,
+        t => `Which observation concerning ${t} is confirmed to be factually accurate?`,
+        t => `In today's life reflection on ${t}, which statement represents a verified truth?`,
+        t => `What primary realization is detailed in the text regarding the journey of ${t}?`,
+        t => `According to the insights presented, which statement accurately reflects ${t}?`,
+        t => `Based on the account of ${t}, which constructive step was embraced?`,
+        t => `Which of the following insights is directly supported by today's reflection on ${t}?`,
+        t => `In the reflective review of ${t}, what specific milestone is reported?`,
+        t => `According to the reading, which statement accurately summarizes a core truth in ${t}?`,
+        t => `What significant personal turning point was attained in ${t}?`,
+        t => `Based on the wisdom shared in ${t}, which realization is explicitly documented?`,
+        t => `In the account of ${t}, which statement reflects the genuine growth achieved?`,
+        t => `Which of the following details about ${t} is substantiated by the narrative?`,
+        t => `According to today's reading, which positive outcome was reached in ${t}?`,
+        t => `What core personal truth is established in the discussion of ${t}?`,
+        t => `Based on the author's reflections, which factual point is confirmed regarding ${t}?`,
+        t => `In examining ${t}, which of the following statements is proven by the story?`,
+        t => `According to the text, what concrete progress or emotional shift occurred in ${t}?`,
+        t => `Which statement accurately captures a key realization reported in ${t}?`,
+        t => `Based on today's life lesson in ${t}, which observation is factually correct?`,
+        t => `What notable attitude or virtue is described in the article regarding ${t}?`,
+        t => `In the narrative of ${t}, which of the following realizations was embraced?`,
+        t => `According to the documented experience, which statement regarding ${t} is true?`,
+        t => `What specific insight or milestone is verified in the reflection on ${t}?`,
+        t => `Based on the text, which realization represents an authentic breakthrough in ${t}?`,
+        t => `In the account provided for ${t}, which personal change is confirmed?`,
+        t => `Which of the following statements is directly confirmed by the reading on ${t}?`,
+        t => `According to the closing reflections on ${t}, which statement is verified as accurate?`
+    ];
+
+    const stemTemplates = isPersonalGrowth ? reflectiveStemTemplates : businessStemTemplates;
     const categories = isPersonalGrowth 
         ? ['Personal Growth', 'Mindset & Habits', 'Empathy & Purpose', 'Life Wisdom', 'Reflective Action']
         : ['Business Strategy', 'Market & Customers', 'Operational Execution', 'Finance & Scale', 'Careers & Leadership'];
 
     const questions = [];
     const baseIdPrefix = `q_dyn_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}`;
+    const targetCount = 50;
 
-    // Target 32 random questions per story pool (user requested 30-40 random questions)
-    const targetCount = 32;
+    const globalDistractorCounts = {};
 
     for (let i = 0; i < targetCount; i++) {
         const cat = categories[i % categories.length];
-        const stem = simpleStems[i % simpleStems.length];
         const correctRaw = keyPoints[i % keyPoints.length];
         const correctText = formatOptionSentence(correctRaw);
 
+        const stemFn = stemTemplates[i % stemTemplates.length];
+        const stem = typeof stemFn === 'function' ? stemFn(cleanTitle) : String(stemFn);
+
         const distractors = [];
-        let offset = 1;
-        while (distractors.length < 3) {
-            const candidateIdx = (i + offset * 3) % keyPoints.length;
-            const distractorRaw = keyPoints[candidateIdx];
-            const distractorText = formatOptionSentence(distractorRaw);
-            if (distractorText !== correctText && !distractors.includes(distractorText) && distractorText.length > 10) {
-                distractors.push(distractorText);
-            }
-            offset++;
-            if (offset > keyPoints.length + 10) {
-                const defaults = isPersonalGrowth ? [
-                    `Focusing exclusively on short-term external validation without reflection`,
-                    `Dismissing small consistent improvements in pursuit of overnight success`,
-                    `Isolating oneself completely from the counsel and experiences of others`
-                ] : [
-                    `Standard regional expansion without technological differentiation`,
-                    `Short-term spot operations without sustainable customer retention`,
-                    `Generic market participation without clear unit economics`
-                ];
-                for (const d of defaults) {
-                    if (distractors.length < 3 && !distractors.includes(d) && d !== correctText) {
-                        distractors.push(d);
-                    }
+        const round = Math.floor(i / keyPoints.length);
+
+        // Track used distractor texts for this question
+        const questionDistractorSet = new Set([correctText.toLowerCase()]);
+
+        // Priority 1: Pick an in-story distractor (storyWordsOnly: true) to ensure 0 novelty tells
+        for (let sIdx = 1; sIdx < keyPoints.length; sIdx++) {
+            const candSentenceIdx = (i + sIdx + round) % keyPoints.length;
+            const vars = sentenceVariations[candSentenceIdx];
+            const storyVars = vars.filter(v => v.isStoryWordsOnly);
+            storyVars.sort((a, b) => (globalDistractorCounts[a.text] || 0) - (globalDistractorCounts[b.text] || 0));
+
+            let foundStory = false;
+            for (let v = 0; v < storyVars.length; v++) {
+                const cand = storyVars[v].text;
+                if (!questionDistractorSet.has(cand.toLowerCase())) {
+                    distractors.push(cand);
+                    questionDistractorSet.add(cand.toLowerCase());
+                    globalDistractorCounts[cand] = (globalDistractorCounts[cand] || 0) + 1;
+                    foundStory = true;
+                    break;
                 }
-                break;
+            }
+            if (foundStory) break;
+        }
+
+        // Priority 2: Pick varied distractors across different sentences using rotation, preferring least used
+        for (let sIdx = 1; sIdx < keyPoints.length && distractors.length < 3; sIdx++) {
+            const candSentenceIdx = (i + sIdx + round) % keyPoints.length;
+            const vars = sentenceVariations[candSentenceIdx].slice();
+            vars.sort((a, b) => (globalDistractorCounts[a.text] || 0) - (globalDistractorCounts[b.text] || 0));
+            
+            for (let v = 0; v < vars.length && distractors.length < 3; v++) {
+                const cand = vars[v].text;
+                if (!questionDistractorSet.has(cand.toLowerCase())) {
+                    distractors.push(cand);
+                    questionDistractorSet.add(cand.toLowerCase());
+                    globalDistractorCounts[cand] = (globalDistractorCounts[cand] || 0) + 1;
+                }
             }
         }
 
+        // Priority 3: Variations of correctRaw itself
+        if (distractors.length < 3) {
+            const selfVars = sentenceVariations[i % keyPoints.length].slice();
+            selfVars.sort((a, b) => (globalDistractorCounts[a.text] || 0) - (globalDistractorCounts[b.text] || 0));
+            for (let v = 0; v < selfVars.length && distractors.length < 3; v++) {
+                const cand = selfVars[v].text;
+                if (!questionDistractorSet.has(cand.toLowerCase())) {
+                    distractors.push(cand);
+                    questionDistractorSet.add(cand.toLowerCase());
+                    globalDistractorCounts[cand] = (globalDistractorCounts[cand] || 0) + 1;
+                }
+            }
+        }
+
+        // Validity Gate: Question MUST have at least 3 distinct valid distractors
+        if (distractors.length < 3) {
+            continue;
+        }
+
         const targetPos = (i * 3 + 1) % 4;
-        const options = [...distractors];
+        const options = [...distractors.slice(0, 3)];
         options.splice(targetPos, 0, correctText);
 
-        questions.push({
-            id: `${baseIdPrefix}_${i + 1}`,
+        const q = {
+            id: `${baseIdPrefix}_${questions.length + 1}`,
             title: stem,
             options: options,
             correctOption: targetPos,
             explanation: `Based on the story: ${correctRaw.replace(/\s+/g, ' ').trim()}`,
             category: cat,
             pts: 11
-        });
+        };
+
+        if (isWellFormedQuestion(q)) {
+            questions.push(q);
+        }
     }
 
     return questions;
@@ -2576,8 +3213,18 @@ function generateDynamicQuizPoolFromContent(title, articleText, dateKey) {
 // Resolves 50-question pools per date/story (Athulya, Snabbit, BLive, Carrier, dynamic)
 // -------------------------------------------------------------
 function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
+    // 0. Strict input validation against prototype pollution & malformed parameters
+    const safeMsId = String(msId || '1').trim();
+    if (!/^\d{1,4}$/.test(safeMsId) || ['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'].includes(safeMsId)) {
+        return [];
+    }
+    const safeDateKey = String(dateKey || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDateKey) || ['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'].includes(safeDateKey)) {
+        return [];
+    }
+
     const allConfigs = getMilestoneConfigsFromDb();
-    const diskConfig = (allConfigs && allConfigs[msId]?.pod?.[dateKey]) || null;
+    const diskConfig = (allConfigs && Object.prototype.hasOwnProperty.call(allConfigs, safeMsId) && allConfigs[safeMsId]?.pod && Object.prototype.hasOwnProperty.call(allConfigs[safeMsId].pod, safeDateKey)) ? allConfigs[safeMsId].pod[safeDateKey] : null;
     const dayConfig = context ? { ...diskConfig, ...context } : diskConfig;
 
     // 1. If not forcing regeneration and dayConfig already has a rich questions array (length >= 3), return it
@@ -2587,82 +3234,174 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
 
     const title = String(dayConfig?.title || context?.title || '').toLowerCase();
     const article = String(dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '').toLowerCase();
+    const hasRealArticle = Boolean(article && article.trim().length > 30);
 
-    // 2. Check for BLive case (matching keywords, or day 549)
-    const isBlive = title.includes('blive') || article.includes('blive') || title.includes('smart mobility') || article.includes('smart mobility') || title.includes('549') || article.includes('549');
+    // If this date is explicitly configured with an empty questions array and has no real article,
+    // it is a blank day waiting for story publication. Return [] (leads to 404 on session-questions).
+    if (dayConfig && Array.isArray(dayConfig.questions) && dayConfig.questions.length === 0 && !hasRealArticle && !context?.forceRegenerate) {
+        return [];
+    }
+
+    let pool = null;
+
+    // 2. Check for BLive case (matching exact keywords or date 2026-09-18)
+    const isBlive = title.includes('blive') || article.includes('blive') || title.includes('smart mobility') || article.includes('smart mobility') || (safeDateKey === '2026-09-18' && (!title || title.includes('blive')));
     if (isBlive) {
         const blivePath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_blive.json'))
             ? path.join(DATA_DIR, 'pod_quiz_pool_blive.json')
             : path.join(__dirname, 'data', 'pod_quiz_pool_blive.json');
         if (fs.existsSync(blivePath)) {
-            try { return JSON.parse(fs.readFileSync(blivePath, 'utf8')); } catch(e) {}
+            try { 
+                pool = JSON.parse(fs.readFileSync(blivePath, 'utf8')); 
+                if (pool) pool._isFallback = !hasRealArticle;
+            } catch(e) {}
         }
     }
 
-    // 3. Check for Carrier India case (matching keywords, or default for 2026-09-07)
-    const isCarrier = title.includes('carrier') || article.includes('carrier') || title.includes('cooling ai') || article.includes('cooling ai') || title.includes('hvac');
-    if (isCarrier || (dateKey === '2026-09-07' && (!title || isCarrier))) {
-        const carrierPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_carrier.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_carrier.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_carrier.json');
-        if (fs.existsSync(carrierPath)) {
-            try { return JSON.parse(fs.readFileSync(carrierPath, 'utf8')); } catch(e) {}
+    // 3. Check for Carrier India case (matching keywords, or date 2026-09-07)
+    if (!pool) {
+        const isCarrier = title.includes('carrier') || article.includes('carrier') || title.includes('cooling ai') || article.includes('cooling ai') || title.includes('hvac');
+        if (isCarrier || (safeDateKey === '2026-09-07' && (!title || isCarrier))) {
+            const carrierPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_carrier.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_carrier.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_carrier.json');
+            if (fs.existsSync(carrierPath)) {
+                try { 
+                    pool = JSON.parse(fs.readFileSync(carrierPath, 'utf8')); 
+                    if (pool) pool._isFallback = !hasRealArticle;
+                } catch(e) {}
+            }
         }
     }
 
-    // 4. Check for Athulya case (matching keywords, or default for 2026-09-10 if not overridden)
-    const isAthulya = title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair');
-    if (isAthulya || (dateKey === '2026-09-10' && (!title || isAthulya))) {
-        const athulyaPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_athulya.json');
-        if (fs.existsSync(athulyaPath)) {
-            try { return JSON.parse(fs.readFileSync(athulyaPath, 'utf8')); } catch(e) {}
+    // 4. Check for Athulya case (matching keywords, or date 2026-09-10)
+    if (!pool) {
+        const isAthulya = title.includes('atulya') || title.includes('athulya') || article.includes('athulya') || article.includes('grey hair');
+        if (isAthulya || (safeDateKey === '2026-09-10' && (!title || isAthulya))) {
+            const athulyaPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_athulya.json');
+            if (fs.existsSync(athulyaPath)) {
+                try { 
+                    pool = JSON.parse(fs.readFileSync(athulyaPath, 'utf8')); 
+                    if (pool) pool._isFallback = !hasRealArticle;
+                } catch(e) {}
+            }
         }
     }
 
-    // 5. Check for Snabbit case (matching keywords, or default for 2026-09-09 if not overridden)
-    const isSnabbit = title.includes('snabbit') || article.includes('snabbit') || article.includes('15-minute beauty');
-    if (isSnabbit || (dateKey === '2026-09-09' && (!title || isSnabbit))) {
-        const snabbitPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
-        if (fs.existsSync(snabbitPath)) {
-            try { return JSON.parse(fs.readFileSync(snabbitPath, 'utf8')); } catch(e) {}
+    // 5. Check for Snabbit case (matching keywords, or date 2026-09-09)
+    if (!pool) {
+        const isSnabbit = title.includes('snabbit') || article.includes('snabbit') || article.includes('15-minute beauty');
+        if (isSnabbit || (safeDateKey === '2026-09-09' && (!title || isSnabbit))) {
+            const snabbitPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json');
+            if (fs.existsSync(snabbitPath)) {
+                try { 
+                    pool = JSON.parse(fs.readFileSync(snabbitPath, 'utf8')); 
+                    if (pool) pool._isFallback = !hasRealArticle;
+                } catch(e) {}
+            }
         }
     }
 
-    // 6. Check for Kirloskar case (matching keywords, or default for 2026-09-11 if not overridden)
-    const isKirloskar = title.includes('kirloskar') || title.includes('avante') || article.includes('kirloskar') || article.includes('avante spaces');
-    if (isKirloskar || (dateKey === '2026-09-11' && (!title || isKirloskar))) {
-        const kirloskarPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json')
-            : path.join(__dirname, 'data', 'pod_quiz_pool_kirloskar.json');
-        if (fs.existsSync(kirloskarPath)) {
-            try { return JSON.parse(fs.readFileSync(kirloskarPath, 'utf8')); } catch(e) {}
+    // 6. Check for Kirloskar case (matching keywords, or date 2026-09-11)
+    if (!pool) {
+        const isKirloskar = title.includes('kirloskar') || title.includes('avante') || article.includes('kirloskar') || article.includes('avante spaces');
+        if (isKirloskar || (safeDateKey === '2026-09-11' && (!title || isKirloskar))) {
+            const kirloskarPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_kirloskar.json')
+                : path.join(__dirname, 'data', 'pod_quiz_pool_kirloskar.json');
+            if (fs.existsSync(kirloskarPath)) {
+                try { 
+                    pool = JSON.parse(fs.readFileSync(kirloskarPath, 'utf8')); 
+                    if (pool) pool._isFallback = !hasRealArticle;
+                } catch(e) {}
+            }
         }
     }
 
     // 7. Dynamic generation for any new story (from fresh context or disk)
     const effectiveTitle = dayConfig?.title || context?.title || '';
     const effectiveArticle = dayConfig?.articleText || dayConfig?.description || context?.articleText || context?.description || '';
-    if (effectiveArticle || effectiveTitle) {
-        const generated = generateDynamicQuizPoolFromContent(effectiveTitle, effectiveArticle, dateKey);
-        if (generated && generated.length >= 3) return generated;
+    const existingWellFormed = countWellFormedQuestions(dayConfig?.questions);
+
+    if (!pool && (effectiveArticle || effectiveTitle)) {
+        const generated = generateDynamicQuizPoolFromContent(effectiveTitle, effectiveArticle, safeDateKey);
+        const genWellFormed = countWellFormedQuestions(generated);
+
+        // DOWNGRADE GATING: Never replace a well-formed existing pool with an inferior one!
+        if (existingWellFormed >= 10 && genWellFormed < existingWellFormed) {
+            console.log(`[Pool Guard] Retaining existing pool (${existingWellFormed} valid questions) for ${safeDateKey} - generated pool has only ${genWellFormed} valid questions.`);
+            pool = dayConfig.questions;
+        } else if (genWellFormed >= 3) {
+            pool = generated;
+            pool._isFallback = !hasRealArticle;
+        }
     }
 
-    // 8. Default fallback
-    const defaultPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_blive.json'))
-        ? path.join(DATA_DIR, 'pod_quiz_pool_blive.json')
-        : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
-            ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
-            : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
-                ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
-                : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json')));
-    if (fs.existsSync(defaultPath)) {
-        try { return JSON.parse(fs.readFileSync(defaultPath, 'utf8')); } catch(e) {}
+    // 8. Default fallback (marked as fallback so it is never permanently locked into milestone_configs.json)
+    if (!pool || pool.length < 3) {
+        const defaultPath = fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_blive.json'))
+            ? path.join(DATA_DIR, 'pod_quiz_pool_blive.json')
+            : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_athulya.json'))
+                ? path.join(DATA_DIR, 'pod_quiz_pool_athulya.json')
+                : (fs.existsSync(path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json'))
+                    ? path.join(DATA_DIR, 'pod_quiz_pool_snabbit.json')
+                    : path.join(__dirname, 'data', 'pod_quiz_pool_snabbit.json')));
+        if (fs.existsSync(defaultPath)) {
+            try { 
+                pool = JSON.parse(fs.readFileSync(defaultPath, 'utf8')); 
+                if (pool) pool._isFallback = true;
+            } catch(e) {}
+        }
     }
-    return [];
+
+    // CRITICAL: Disk persistence ONLY on explicit persist flag (e.g. from Google Sheet sync or creator upload)
+    // and ONLY when the pool is generated from REAL content (effectiveArticle.length > 30) with >= 10 well-formed questions.
+    // Generic fallback pools and empty/blank articles must NEVER write to disk!
+    const poolWellFormed = countWellFormedQuestions(pool);
+    const diskExistingWellFormed = countWellFormedQuestions(diskConfig?.questions);
+    const isWorseThanExisting = diskExistingWellFormed >= 10 && poolWellFormed < diskExistingWellFormed;
+
+    if (context?.persist === true && pool && pool.length >= 3 && !pool._isFallback && hasRealArticle) {
+        if (!isWorseThanExisting && poolWellFormed >= 10) {
+            try {
+                if (!Object.prototype.hasOwnProperty.call(allConfigs, safeMsId)) {
+                    allConfigs[safeMsId] = Object.create(null);
+                }
+                if (!Object.prototype.hasOwnProperty.call(allConfigs[safeMsId], 'pod')) {
+                    allConfigs[safeMsId].pod = Object.create(null);
+                }
+                if (!Object.prototype.hasOwnProperty.call(allConfigs[safeMsId].pod, safeDateKey)) {
+                    allConfigs[safeMsId].pod[safeDateKey] = {
+                        date: safeDateKey,
+                        dateKey: safeDateKey,
+                        title: effectiveTitle || 'cMPLi POD Audio Reflection',
+                        audioTitle: effectiveTitle || 'cMPLi POD Audio Reflection',
+                        articleText: effectiveArticle,
+                        description: effectiveArticle,
+                        questions: pool,
+                        autoGenerated: true,
+                        generatorVersion: 2,
+                        generatedAt: Date.now()
+                    };
+                    saveMilestoneConfigsToDb(allConfigs);
+                } else if (!allConfigs[safeMsId].pod[safeDateKey].questions || allConfigs[safeMsId].pod[safeDateKey].questions.length < 3 || context?.forceRegenerate) {
+                    allConfigs[safeMsId].pod[safeDateKey].questions = pool;
+                    allConfigs[safeMsId].pod[safeDateKey].autoGenerated = true;
+                    allConfigs[safeMsId].pod[safeDateKey].generatorVersion = 2;
+                    allConfigs[safeMsId].pod[safeDateKey].generatedAt = Date.now();
+                    saveMilestoneConfigsToDb(allConfigs);
+                }
+            } catch(saveErr) {
+                console.warn('[Pod Quiz Pool] Could not auto-persist generated pool:', saveErr.message);
+            }
+        }
+    }
+
+    return pool || [];
 }
 
 let isGoogleSheetSyncing = false;
@@ -2790,6 +3529,7 @@ async function syncGoogleSheetData(sheetIdInput) {
         const autoVoiceTasks = [];
 
         for (let i = 1; i < rows.length; i++) {
+            try {
             const row = rows[i];
             if (!row || row.length === 0) continue;
 
@@ -2805,13 +3545,13 @@ async function syncGoogleSheetData(sheetIdInput) {
 
             // Safe Merge: Preserve existing title/article/question if cell in sheet is blank
             const rawTitle = titleIdx !== -1 ? String(row[titleIdx] || '').trim() : '';
-            const title = rawTitle || existing.title || existing.audioTitle || `cMPLi ${module.toUpperCase()} Insights`;
+            let title = rawTitle || existing.title || existing.audioTitle || `cMPLi ${module.toUpperCase()} Insights`;
 
             const rawDesc = descIdx !== -1 ? String(row[descIdx] || '').trim() : '';
             const cleanTitleKey = (rawTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const richDesc = richTextMap[cleanTitleKey] || '';
-            const articleText = richDesc || rawDesc || existing.articleText || existing.description || '';
-            const description = articleText;
+            let articleText = richDesc || rawDesc || existing.articleText || existing.description || '';
+            let description = articleText;
 
             const rawMainQ = mainQIdx !== -1 ? String(row[mainQIdx] || '').trim() : '';
             const mainQuestion = rawMainQ || existing.mainQuestion || '';
@@ -2868,75 +3608,118 @@ async function syncGoogleSheetData(sheetIdInput) {
 
             // Questions builder
             let questions = [];
+            const isCreatorUploaded = Boolean(existing.manualQuestionsUploaded || existing.questionsSource === 'creator_upload');
+            const rawQuizQ = quizQIdx !== -1 ? String(row[quizQIdx] || '').trim() : '';
+
             if (module === 'pod') {
-                const hasExplicitQuizQ = (quizQIdx !== -1 && row[quizQIdx] && String(row[quizQIdx]).trim());
-                const optionsStr = (quizOptIdx !== -1 ? String(row[quizOptIdx] || '').trim() : '');
-                const answerStr = (quizAnsIdx !== -1 ? String(row[quizAnsIdx] || '').trim() : '');
-                const optA = (row[getIdx(['option a', 'opt a'])] || '').trim();
-                const hasExplicitOptions = Boolean(optionsStr || optA);
+                const existingStory = String(existing.articleText || existing.description || '').trim();
+                const currentStory = String(articleText || description || '').trim();
+                const storyChanged = (existingStory === '' && currentStory !== '') || (existingStory !== '' && currentStory !== '' && existingStory !== currentStory);
+                const isAutoGeneratedPool = Array.isArray(existing.questions) && existing.questions.some(q => String(q.id || '').startsWith('q_dyn_'));
+                const isOldGenerator = isAutoGeneratedPool && (!existing.generatorVersion || existing.generatorVersion < 2);
+                const hasRealCurrentStory = currentStory.length >= 30;
+                const isPreservedNonDyn = Array.isArray(existing.questions) && existing.questions.length >= 3 && !isAutoGeneratedPool;
 
-                // Detect if story text or title has changed in the Google Sheet:
-                const storyChanged = Boolean(
-                    (rawTitle && rawTitle !== (existing.title || existing.audioTitle)) ||
-                    (rawDesc && rawDesc !== (existing.articleText || existing.description))
-                );
-
-                // If existing has a valid question pool (at least 3 questions), sheet didn't supply explicit quiz questions, and story has NOT changed:
-                if (existing.questions && existing.questions.length >= 3 && !hasExplicitQuizQ && !hasExplicitOptions && !storyChanged) {
-                    // PRESERVE the entire question pool intact
+                // RULE 1: Creator uploaded questions via Mobile/Laptop CSV upload or Studio modal
+                // OR legacy creator-uploaded check-in pools (non-q_dyn IDs)
+                // MUST BE 100% PRESERVED UNCONDITIONALLY! Never overwritten by periodic sheet sync.
+                if ((isCreatorUploaded || isPreservedNonDyn) && Array.isArray(existing.questions) && existing.questions.length >= 3) {
                     questions = existing.questions;
-                } else if (!hasExplicitQuizQ && !hasExplicitOptions) {
-                    // Automatically generate/assign the full 50-question pool for this story/date using freshly parsed context
-                    questions = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description, forceRegenerate: storyChanged });
-                } else {
-                    let quizTitle = (hasExplicitQuizQ ? String(row[quizQIdx]).trim() : '') || rawMainQ || (existing.questions?.[0]?.title) || 'cMPLi POD Reflection Quiz';
-                    let options = [];
-                    if (optionsStr) {
-                        options = optionsStr.split('|').map(o => o.trim()).filter(Boolean);
-                    }
-                    if (options.length === 0 && optA) {
-                        const optB = (row[getIdx(['option b', 'opt b'])] || '').trim();
-                        const optC = (row[getIdx(['option c', 'opt c'])] || '').trim();
-                        const optD = (row[getIdx(['option d', 'opt d'])] || '').trim();
-                        options = [optA || 'Option A', optB || 'Option B', optC || 'Option C', optD || 'Option D'];
-                    }
-                    if (options.length === 0 && existing.questions?.[0]?.options) {
-                        options = existing.questions[0].options;
-                    }
-                    if (options.length === 0) {
-                        options = ['Option A', 'Option B', 'Option C', 'Option D'];
+                } else if (rawQuizQ && !isCreatorUploaded && !isPreservedNonDyn) {
+                    // Creator/admin provided explicit quiz question in Google Sheet columns
+                    const rawQuizOpts = quizOptIdx !== -1 ? String(row[quizOptIdx] || '').trim() : '';
+                    const rawQuizAns = quizAnsIdx !== -1 ? String(row[quizAnsIdx] || '').trim() : '';
+
+                    let parsedOpts = [];
+                    if (rawQuizOpts.includes('\n')) {
+                        parsedOpts = rawQuizOpts.split('\n').map(s => s.trim().replace(/^[A-D]\s*[\)\.\:\-]\s*/i, '')).filter(Boolean);
+                    } else if (rawQuizOpts.includes('|')) {
+                        parsedOpts = rawQuizOpts.split('|').map(s => s.trim().replace(/^[A-D]\s*[\)\.\:\-]\s*/i, '')).filter(Boolean);
+                    } else if (/[A-D]\)/i.test(rawQuizOpts)) {
+                        parsedOpts = rawQuizOpts.split(/[A-D]\)/i).map(s => s.trim()).filter(Boolean);
+                    } else if (rawQuizOpts.includes(',')) {
+                        parsedOpts = rawQuizOpts.split(',').map(s => s.trim()).filter(Boolean);
                     }
 
-                    let correctOpt = 0;
-                    if (answerStr) {
-                        const textMatchIdx = options.findIndex(opt => opt.trim().toLowerCase() === answerStr.toLowerCase());
-                        if (textMatchIdx !== -1) {
-                            correctOpt = textMatchIdx;
-                        } else {
-                            const upper = answerStr.toUpperCase();
-                            if (upper === 'B' || upper === '2') correctOpt = 1;
-                            else if (upper === 'C' || upper === '3') correctOpt = 2;
-                            else if (upper === 'D' || upper === '4') correctOpt = 3;
-                            else if (!isNaN(parseInt(upper, 10)) && parseInt(upper, 10) >= 0 && parseInt(upper, 10) < options.length) {
-                                correctOpt = parseInt(upper, 10);
+                    if (parsedOpts.length >= 2) {
+                        let correctPos = 0;
+                        if (rawQuizAns) {
+                            const ansClean = rawQuizAns.toLowerCase().trim();
+                            const matchedIdx = parsedOpts.findIndex(opt => opt.toLowerCase().trim() === ansClean || opt.toLowerCase().includes(ansClean));
+                            if (matchedIdx !== -1) {
+                                correctPos = matchedIdx;
+                            } else if (/^[A-D]$/i.test(ansClean)) {
+                                correctPos = ansClean.toUpperCase().charCodeAt(0) - 65;
+                            } else if (/^\d+$/.test(ansClean)) {
+                                correctPos = parseInt(ansClean, 10);
+                                if (correctPos >= 1 && correctPos <= parsedOpts.length) correctPos -= 1;
                             }
                         }
-                    } else if (existing.questions?.[0]?.correctOption !== undefined) {
-                        correctOpt = existing.questions[0].correctOption;
+
+                        const explicitQ = {
+                            id: `q_sheet_${(dateKey || 'day').replace(/[^a-zA-Z0-9]/g, '')}_1`,
+                            title: rawQuizQ,
+                            options: parsedOpts.slice(0, 4),
+                            correctOption: Math.max(0, Math.min(correctPos, parsedOpts.length - 1)),
+                            explanation: `Based on the assigned reading: ${rawQuizAns || parsedOpts[correctPos] || ''}`,
+                            category: 'Key Comprehension',
+                            pts: 11
+                        };
+
+                        const basePool = getPodQuizPoolForDate(dateKey, msId, { 
+                            title, 
+                            articleText, 
+                            description, 
+                            forceRegenerate: (storyChanged || isOldGenerator), 
+                            persist: hasRealCurrentStory 
+                        });
+                        const filteredPool = (basePool || []).filter(q => q.title !== explicitQ.title);
+                        questions = [explicitQ, ...filteredPool].slice(0, 50);
+                    } else {
+                        questions = getPodQuizPoolForDate(dateKey, msId, { 
+                            title, 
+                            articleText, 
+                            description, 
+                            forceRegenerate: (storyChanged || isOldGenerator), 
+                            persist: hasRealCurrentStory 
+                        });
                     }
-                    correctOpt = Math.max(0, Math.min(options.length - 1, correctOpt));
+                } else if (existing.questions && Array.isArray(existing.questions) && existing.questions.length >= 3 && !storyChanged && !isOldGenerator) {
+                    // Stable auto-generated pool with matching story and modern generator version
+                    questions = existing.questions;
+                } else if (hasRealCurrentStory) {
+                    // RULE 2: Real story exists -> Generate 50 questions & persist to milestone_configs.json!
+                    const genPool = generateDynamicQuizPoolFromContent(title, articleText || description, dateKey);
+                    const genWellFormed = countWellFormedQuestions(genPool);
+                    const existingWellFormed = countWellFormedQuestions(existing.questions);
+                    if (genWellFormed >= 10) {
+                        questions = genPool;
+                    } else if (existingWellFormed >= 10) {
+                        console.log(`[Sync Guard] Story for ${dateKey} has insufficient sentences to generate dynamic pool. Retaining existing story and pool (${existingWellFormed} questions) to prevent story-quiz mispairing.`);
+                        questions = existing.questions;
+                        if (existing.title) title = existing.title;
+                        if (existing.articleText || existing.description) {
+                            articleText = existing.articleText || existing.description;
+                            description = articleText;
+                        }
+                    } else {
+                        // Insufficient usable sentences (< 6) and no prior pool: leave empty array (do NOT pad or use fallback)
+                        questions = [];
+                    }
+                } else {
+                    // Blank story (no article text yet in the Google Sheet row)
+                    // DO NOT save a canned pool! Keep empty array or existing questions if creator uploaded
+                    questions = isCreatorUploaded ? (existing.questions || []) : [];
+                }
 
-                    const primaryQuestion = {
-                        id: existing.questions?.[0]?.id || `q_${Date.now()}_${i}`,
-                        title: quizTitle,
-                        type: 'mcq',
-                        options: options,
-                        correctOption: correctOpt,
-                        pts: 11
-                    };
-
-                    const storyPool = getPodQuizPoolForDate(dateKey, msId, { title, articleText, description, forceRegenerate: storyChanged });
-                    questions = [primaryQuestion, ...storyPool.filter(q => q.title !== primaryQuestion.title)];
+                // DOWNGRADE GATING: Never replace a well-formed existing pool with an inferior one!
+                const existingWellFormed = countWellFormedQuestions(existing.questions);
+                const proposedWellFormed = countWellFormedQuestions(questions);
+                if (existingWellFormed >= 10 && proposedWellFormed < existingWellFormed) {
+                    console.log(`[Sync Guard] Retaining existing story and pool for ${dateKey} (${existingWellFormed} valid questions) - proposed pool has only ${proposedWellFormed} valid questions.`);
+                    questions = existing.questions;
+                    if (existing.title) title = existing.title;
+                    if (existing.articleText || existing.description) articleText = existing.articleText || existing.description;
                 }
             } else if (module === 'immerse') {
                 if (rawMainQ) {
@@ -2985,6 +3768,7 @@ async function syncGoogleSheetData(sheetIdInput) {
                 }
             }
 
+            const isPreservedNonDyn = Array.isArray(existing.questions) && existing.questions.length >= 3 && !Array.isArray(existing.questions).some?.(q => String(q.id || '').startsWith('q_dyn_'));
             const dayConfig = {
                 date: dateKey,
                 dateKey: dateKey,
@@ -3004,7 +3788,12 @@ async function syncGoogleSheetData(sheetIdInput) {
                 questions: questions,
                 tasks: existing.tasks || [],
                 extra: Boolean(existing.extra),
-                cancelled: Boolean(existing.cancelled)
+                cancelled: Boolean(existing.cancelled),
+                manualQuestionsUploaded: Boolean(isCreatorUploaded || isPreservedNonDyn),
+                questionsSource: (isCreatorUploaded || isPreservedNonDyn)
+                    ? 'creator_upload' 
+                    : (rawQuizQ ? 'sheet_creator' : ((existing.questions && existing.questions.length >= 3 && !isOldGenerator) ? (existing.questionsSource || 'preserved') : 'auto_generated')),
+                generatorVersion: 2
             };
 
             // Smart Diff: Skip if existing config is completely identical
@@ -3020,6 +3809,10 @@ async function syncGoogleSheetData(sheetIdInput) {
             syncedCount++;
             syncedEntries.push({ milestone: msId, module: module, dateKey: dateKey, title: title, day: dayNum, window: `${startTime} - ${endTime}` });
             console.log(`[GoogleSheetSync] ⚡ Synced change for ${module.toUpperCase()} (${dateKey}): "${title}" [${startTime} - ${endTime}]`);
+            } catch (rowErr) {
+                // One bad sheet row must never abort the whole sync run or discard the other rows
+                console.warn(`[GoogleSheetSync] Skipped row ${i + 1} due to error: ${rowErr.message}`);
+            }
         }
 
         if (syncedCount > 0) {
@@ -5376,9 +6169,17 @@ app.get(['/api/pod/session-questions', '/gamification/api/pod/session-questions'
     try {
         const dateKey = String(req.query.dateKey || '').trim();
         const msId = String(req.query.milestoneId || '1').trim();
+
+        if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || ['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'].includes(dateKey)) {
+            return res.status(400).json({ success: false, error: 'Invalid or missing dateKey format (expected YYYY-MM-DD)' });
+        }
+        if (!/^\d{1,4}$/.test(msId) || ['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'].includes(msId)) {
+            return res.status(400).json({ success: false, error: 'Invalid milestoneId format' });
+        }
+
         const pool = getPodQuizPoolForDate(dateKey, msId);
 
-        if (!Array.isArray(pool) || pool.length === 0) {
+        if (!Array.isArray(pool) || pool.length === 0 || pool._isFallback) {
             return res.status(404).json({ success: false, error: 'Quiz pool questions not found for this session' });
         }
 
@@ -5528,6 +6329,16 @@ app.post(['/api/pod/grade-session', '/gamification/api/pod/grade-session'], (req
 app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
     try {
         const sub = req.body;
+        const authSess = getAuthenticatedSession(req);
+        if (authSess && authSess.userId) {
+            sub.userId = authSess.userId;
+            if (authSess.email) {
+                sub.userEmail = authSess.email;
+            } else {
+                const uMatch = (store.users || []).find(u => String(u.id) === String(authSess.userId) || String(u.userId) === String(authSess.userId));
+                sub.userEmail = (uMatch && uMatch.email) ? uMatch.email : '';
+            }
+        }
         if (!sub || (!sub.userId && !sub.userEmail)) return res.status(400).json({ success: false, error: 'userId or userEmail required' });
         if (!store.submissions) store.submissions = [];
 
@@ -5616,31 +6427,74 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         // SERVER-SIDE EVALUATION & SINGLE-ATTEMPT GUARD FOR cMPLi POD
         // -------------------------------------------------------------
         if (modType === 'POD') {
-            const alreadyCompleted = store.submissions.find(s =>
-                (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase().trim() === sub.userEmail.toLowerCase().trim())) &&
-                String(s.milestoneId || 1) === String(msId) &&
-                String(s.type || s.moduleType || '').toUpperCase() === 'POD' &&
-                String(s.day) === String(dayNum) &&
-                (s.status === 'completed' || Number(s.lcReward) > 0)
-            );
+            // AUTHENTICATED IDENTITY GUARD (Item 2a)
+            // Return 401 when there is no valid session token for POD submissions
+            if (!authSess || !authSess.userId) {
+                console.log(`[POD Auth Guard] Rejecting unauthenticated POD submission (no valid session token)`);
+                return res.status(401).json({ success: false, error: 'Authentication required: A valid session token is required to submit cMPLi POD check-ins.' });
+            }
+
+            const subDate = String(sub.dateKey || sub.date || '').split('T')[0];
+            if (!subDate || !/^\d{4}-\d{2}-\d{2}$/.test(subDate) || ['__proto__', 'prototype', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'].includes(subDate)) {
+                return res.status(400).json({ success: false, error: 'Invalid or missing dateKey format (expected YYYY-MM-DD)' });
+            }
+
+            const allConfigs = getMilestoneConfigsFromDb();
+            const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][subDate]) || null;
+            const canonicalDayNum = podDayCfg 
+                ? (Number(podDayCfg.dayNumber) || deriveDayNumber('pod', subDate, podDayCfg.dayNumber) || dayNum)
+                : dayNum;
+
+            const alreadyCompleted = store.submissions.find(s => {
+                const userMatch = (String(s.userId) === String(sub.userId) || (s.userEmail && sub.userEmail && s.userEmail.toLowerCase().trim() === sub.userEmail.toLowerCase().trim()));
+                const msMatch = String(s.milestoneId || 1) === String(msId);
+                const typeMatch = String(s.type || s.moduleType || '').toUpperCase() === 'POD';
+                if (!userMatch || !msMatch || !typeMatch) return false;
+
+                const sDate = s.dateKey || (s.date ? String(s.date).split('T')[0] : null);
+                const matchesDateOrDay = (subDate && sDate === subDate) || (canonicalDayNum && String(s.day || s.sessionDay) === String(canonicalDayNum));
+                if (!matchesDateOrDay) return false;
+
+                return (s.status === 'completed' || Number(s.lcReward) > 0);
+            });
             if (alreadyCompleted) {
-                console.log(`[POD Single Attempt Guard] Rejecting duplicate submission for user ${sub.userEmail || sub.userId} MS${msId} D${dayNum}`);
+                console.log(`[POD Single Attempt Guard] Rejecting duplicate submission for user ${sub.userEmail || sub.userId} MS${msId} Date ${subDate} (Day ${canonicalDayNum})`);
                 return res.status(400).json({
                     success: false,
-                    error: `cMPLi POD Day ${dayNum} check-in has already been completed. Single attempt only.`,
+                    error: `cMPLi POD Day ${canonicalDayNum} check-in has already been completed. Single attempt only.`,
                     data: alreadyCompleted
                 });
             }
 
             // SYNCHRONOUS SERVER-SIDE QUIZ VERIFICATION FOR POD
-            const allConfigs = getMilestoneConfigsFromDb();
-            const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][sub.date || sub.dateKey]) || {};
-            const questionPool = Array.isArray(podDayCfg.questions) ? podDayCfg.questions : [];
+            const questionPool = Array.isArray(podDayCfg?.questions) ? podDayCfg.questions : [];
 
             let calculatedLcReward = 0;
             const verifiedAnswers = [];
 
-            if (Array.isArray(subAnswers)) {
+            if (questionPool.length === 0 && (!Array.isArray(subAnswers) || subAnswers.length === 0)) {
+                // Must have a saved check-in configuration for this date
+                if (!podDayCfg) {
+                    return res.status(400).json({ success: false, error: 'No scheduled session found for this date.' });
+                }
+                // Date must be today or earlier in IST (UTC+05:30) or learner local timezone
+                // Between 00:00 and 05:30 IST, local date is 1 day ahead of UTC
+                const istTodayStr = new Date(Date.now() + 5.5 * 3600000).toISOString().split('T')[0];
+                if (subDate > istTodayStr) {
+                    return res.status(400).json({ success: false, error: 'Cannot complete check-in for future sessions.' });
+                }
+                // Content check (Item 2c): Require a real story of more than 30 characters, or an audio URL.
+                // A blank day with a default title from the sync must NOT award 33 LCs!
+                const storyContent = String(podDayCfg.articleText || podDayCfg.description || '').trim();
+                const hasAudio = Boolean(podDayCfg.audioUrl && String(podDayCfg.audioUrl).trim().length > 5);
+                const hasRealStoryOrAudio = (storyContent.length > 30) || hasAudio;
+                if (!hasRealStoryOrAudio) {
+                    return res.status(400).json({ success: false, error: 'No active session story or audio configured for this date.' });
+                }
+
+                // Listening-only check-in when no quiz is scheduled: award standard 33 LCs
+                calculatedLcReward = 33;
+            } else if (Array.isArray(subAnswers)) {
                 const cappedAnswers = subAnswers.slice(0, 3);
                 cappedAnswers.forEach(ans => {
                     let isCorrect = false;
@@ -5657,8 +6511,10 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                             isCorrect = true;
                         }
                     } else {
-                        isCorrect = Boolean(ans.isCorrect && ans.selectedOption !== undefined && ans.selectedOption === ans.correctOption);
-                        pts = ans.pts || 11;
+                        // FORGEABLE QUIZ ANSWERS FIX (Item 2c):
+                        // If question title doesn't match saved pool, NEVER trust client-supplied isCorrect or pts!
+                        isCorrect = false;
+                        pts = 0;
                     }
 
                     if (isCorrect) calculatedLcReward += pts;
@@ -5686,10 +6542,10 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 milestoneId: msId,
                 moduleType: 'pod',
                 type: 'pod',
-                day: dayNum,
-                sessionDay: dayNum,
-                date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
-                dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
+                day: canonicalDayNum,
+                sessionDay: canonicalDayNum,
+                date: subDate,
+                dateKey: subDate,
                 status: 'completed',
                 lcReward: finalLcReward,
                 originalLcReward: finalLcReward,
@@ -5708,7 +6564,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 (String(s.userId) === String(completedSub.userId) || (s.userEmail && completedSub.userEmail && s.userEmail.toLowerCase() === completedSub.userEmail.toLowerCase())) &&
                 String(s.milestoneId || 1) === String(msId) &&
                 String(s.type || s.moduleType || '').toUpperCase() === 'POD' &&
-                String(s.day) === String(dayNum)
+                ((s.dateKey && s.dateKey === subDate) || String(s.day) === String(canonicalDayNum))
             ));
 
             store.submissions.push(completedSub);
@@ -7337,5 +8193,11 @@ module.exports = {
     evaluateReflectionAgainstRubric,
     verifyCreatorToken,
     checkCreatorAuth,
-    validCreatorTokens
+    validCreatorTokens,
+    generateDynamicQuizPoolFromContent,
+    getPodQuizPoolForDate,
+    syncGoogleSheetData,
+    isWellFormedQuestion,
+    countWellFormedQuestions,
+    stripMarkdown
 };

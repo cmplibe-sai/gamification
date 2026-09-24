@@ -1,9 +1,100 @@
-const APP_CLIENT_VERSION = '2.9.28';
+const APP_CLIENT_VERSION = '2.9.30';
+
+// Safe Storage Subsystem with Automatic Quota Recovery & Resilient Fallbacks
+const safeStorage = {
+    _memory: {},
+    getItem(key) {
+        if (this._memory[key] !== undefined && this._memory[key] !== null) return this._memory[key];
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const val = localStorage.getItem(key);
+                if (val !== null) return val;
+            }
+        } catch(e) {}
+        try {
+            if (typeof sessionStorage !== 'undefined') {
+                const val = sessionStorage.getItem(key);
+                if (val !== null) return val;
+            }
+        } catch(e) {}
+        if (typeof document !== 'undefined' && key === 'cmpli_session_token') {
+            const m = document.cookie.match(/(?:^|;\s*)cmpli_session_token=([^;]+)/);
+            if (m) return decodeURIComponent(m[1]);
+        }
+        return null;
+    },
+    setItem(key, value, isCritical = false) {
+        const isAuthKey = isCritical || key === 'cmpli_session_token' || key === 'cmpli_creator_token' || key === 'cmpli_admin_secret';
+        if (isAuthKey) {
+            this._memory[key] = value;
+            if (key === 'cmpli_session_token') {
+                window._cmpli_session_token = value;
+                try {
+                    if (typeof document !== 'undefined') {
+                        const isHttps = typeof location !== 'undefined' && location.protocol === 'https:';
+                        document.cookie = `cmpli_session_token=${encodeURIComponent(value)}; path=/; max-age=1209600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+                    }
+                } catch(e) {}
+            }
+            try {
+                if (typeof sessionStorage !== 'undefined') {
+                    sessionStorage.setItem(key, value);
+                }
+            } catch(e) {}
+        }
+        // Do not write sensitive creator token or admin secret to persistent localStorage (keep in memory and sessionStorage only)
+        if (key === 'cmpli_creator_token' || key === 'cmpli_admin_secret') {
+            return true;
+        }
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(key, value);
+                return true;
+            }
+        } catch(err) {
+            if (isAuthKey) {
+                console.warn(`[SafeStorage] localStorage quota error for "${key}". Triggering cache eviction...`);
+                this.evictBulkyCaches();
+                try {
+                    localStorage.setItem(key, value);
+                    return true;
+                } catch(retryErr) {
+                    console.warn(`[SafeStorage] Fallback to memory and sessionStorage for "${key}".`);
+                }
+            }
+        }
+        return false;
+    },
+    removeItem(key) {
+        delete this._memory[key];
+        if (key === 'cmpli_session_token') {
+            window._cmpli_session_token = null;
+            try {
+                if (typeof document !== 'undefined') {
+                    const isHttps = typeof location !== 'undefined' && location.protocol === 'https:';
+                    document.cookie = `cmpli_session_token=; path=/; max-age=0; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+                }
+            } catch(e) {}
+        }
+        try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); } catch(e) {}
+        try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key); } catch(e) {}
+    },
+    evictBulkyCaches() {
+        try {
+            if (typeof localStorage === 'undefined') return;
+            // Safely evict bulky caches that exist in memory and on the server
+            localStorage.removeItem('allUserSubmissionsDB');
+            localStorage.removeItem('customProjectsDB');
+        } catch(e) {}
+    }
+};
+window.safeStorage = safeStorage;
+
 if (typeof localStorage !== 'undefined') {
     try {
-        const storedVer = localStorage.getItem('cmpli_client_version');
+        const storedVer = safeStorage.getItem('cmpli_client_version');
         if (storedVer !== APP_CLIENT_VERSION) {
-            localStorage.setItem('cmpli_client_version', APP_CLIENT_VERSION);
+            safeStorage.setItem('cmpli_client_version', APP_CLIENT_VERSION);
         }
     } catch(e) {}
 }
@@ -34,17 +125,17 @@ function apiFetch(endpoint, options = {}) {
         opt.headers[name] = val;
     };
 
-    const sessToken = (typeof localStorage !== 'undefined' ? localStorage.getItem('cmpli_session_token') : null) || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_session_token') : null);
+    const sessToken = window._cmpli_session_token || safeStorage.getItem('cmpli_session_token');
     if (sessToken && !getHeader('x-session-token') && !getHeader('authorization')) {
         setHeader('authorization', `Bearer ${sessToken}`);
         setHeader('x-session-token', sessToken);
     }
 
-    const crtToken = window._creatorAuthToken || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_creator_token') : null);
+    const crtToken = window._creatorAuthToken || safeStorage.getItem('cmpli_creator_token');
     if (crtToken && !getHeader('x-creator-token') && !getHeader('authorization')) {
         setHeader('x-creator-token', crtToken);
     }
-    const crtSecret = window._creatorAdminSecret || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_admin_secret') : null);
+    const crtSecret = window._creatorAdminSecret || safeStorage.getItem('cmpli_admin_secret');
     if (crtSecret && !getHeader('x-admin-secret')) {
         setHeader('x-admin-secret', crtSecret);
     }
@@ -2570,14 +2661,21 @@ async function syncCustomProjectsDBFromServer() {
 window.syncCustomProjectsDBFromServer = syncCustomProjectsDBFromServer;
 
 // High-Performance In-Memory Cache for Submissions DB
+// High-Performance In-Memory Cache for Submissions DB
+let _fullSubmissionsInMemory = null;
 let _cachedAllUserSubmissionsDB = null;
 let _cachedAllUserSubmissionsDBRaw = null;
 
 function getAllUserSubmissions() {
+    // 1. Prefer full in-memory array if available (prevents creator cohort views from truncating)
+    if (_fullSubmissionsInMemory !== null && Array.isArray(_fullSubmissionsInMemory)) {
+        return _fullSubmissionsInMemory;
+    }
+    // 2. Fall back to offline localStorage snapshot on initial cold boot
     try {
         const raw = localStorage.getItem('allUserSubmissionsDB');
         if (!raw) {
-            _cachedAllUserSubmissionsDB = [];
+            _cachedAllUserSubmissionsDB = _fullSubmissionsInMemory || [];
             _cachedAllUserSubmissionsDBRaw = null;
             return _cachedAllUserSubmissionsDB;
         }
@@ -2586,19 +2684,49 @@ function getAllUserSubmissions() {
         }
         _cachedAllUserSubmissionsDBRaw = raw;
         _cachedAllUserSubmissionsDB = JSON.parse(raw) || [];
+        if (!_fullSubmissionsInMemory && _cachedAllUserSubmissionsDB.length > 0) {
+            _fullSubmissionsInMemory = _cachedAllUserSubmissionsDB;
+        }
         return _cachedAllUserSubmissionsDB;
     } catch(e) {
-        return _cachedAllUserSubmissionsDB || [];
+        return _fullSubmissionsInMemory || _cachedAllUserSubmissionsDB || [];
     }
 }
 window.getAllUserSubmissions = getAllUserSubmissions;
 
 function setAllUserSubmissions(data) {
     try {
-        _cachedAllUserSubmissionsDB = Array.isArray(data) ? data : [];
-        const raw = JSON.stringify(_cachedAllUserSubmissionsDB);
-        _cachedAllUserSubmissionsDBRaw = raw;
-        localStorage.setItem('allUserSubmissionsDB', raw);
+        const list = Array.isArray(data) ? data : [];
+        // Keep the complete, un-truncated dataset in memory for the creator grid and cohort analytics
+        _fullSubmissionsInMemory = list;
+        _cachedAllUserSubmissionsDB = list;
+        _cachedAllUserSubmissionsDBRaw = null;
+
+        // Quota-Safe Local Storage Snapshot:
+        // Do not let huge full-database dumps brick mobile localStorage.
+        const raw = JSON.stringify(list);
+        if (raw.length < 350000) {
+            try {
+                localStorage.setItem('allUserSubmissionsDB', raw);
+                _cachedAllUserSubmissionsDBRaw = raw;
+            } catch(e) {
+                if (typeof safeStorage !== 'undefined') safeStorage.evictBulkyCaches();
+            }
+        } else {
+            // Trim to current active user's own submissions to keep localStorage light and protect auth quota
+            try {
+                const uId = (typeof currentUser !== 'undefined' && currentUser && (currentUser._id || currentUser.id));
+                const uEmail = (typeof currentUser !== 'undefined' && currentUser && currentUser.email);
+                if (uId || uEmail) {
+                    const mySubs = list.filter(s => (uId && (s.userId === uId || s.studentId === uId)) || (uEmail && s.userEmail === uEmail));
+                    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(mySubs));
+                } else {
+                    localStorage.removeItem('allUserSubmissionsDB');
+                }
+            } catch(e) {
+                localStorage.removeItem('allUserSubmissionsDB');
+            }
+        }
     } catch(e) {}
 }
 window.setAllUserSubmissions = setAllUserSubmissions;
@@ -2620,9 +2748,12 @@ async function syncGlobalServerData() {
         const rawRes = await apiFetch('/api/sync').catch(() => null);
         if (rawRes && rawRes.status === 401) {
             console.warn('[Sync Auth] Server returned 401 Unauthorized. Session token has expired or is invalid.');
+            if (typeof safeStorage !== 'undefined') safeStorage.removeItem('cmpli_session_token');
             if (typeof localStorage !== 'undefined') localStorage.removeItem('cmpli_session_token');
             if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('cmpli_session_token');
+            window._cmpli_session_token = null;
             isSyncInProgress = false;
+            // Only show toast if user was already logged in and session actually expired
             if (typeof currentUser !== 'undefined' && currentUser && !window._sessionExpiryNotified && typeof document !== 'undefined') {
                 window._sessionExpiryNotified = true;
                 const toast = document.createElement('div');
@@ -10593,16 +10724,23 @@ function saveAdminPodCheckinConfig(dateKey) {
         questions: questions,
         tasks: tasks,
         extra: isExtra,
-        cancelled: isCancelled
+        cancelled: isCancelled,
+        manualQuestionsUploaded: true,
+        questionsSource: 'creator_upload',
+        lastQuestionsUpdate: Date.now()
     };
 
     customMilestoneConfigs[activeAdminMilestoneId]['pod'][chosenDate] = dayConfig;
     activeAdminDateKey = chosenDate;
 
     try {
-        localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+        if (typeof safeStorage !== 'undefined') {
+            safeStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+        } else {
+            localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
+        }
     } catch(e) {
-        console.warn('localStorage save warning:', e);
+        console.warn('safeStorage save warning:', e);
     }
 
     // Sync to Server backend for cross-browser persistence
@@ -10657,19 +10795,18 @@ async function loadPodQuizPool(targetDateKey) {
     try {
         let token = window._creatorAuthToken;
         if (!token) {
-            try {
-                token = sessionStorage.getItem('cmpli_creator_token');
-                if (token) window._creatorAuthToken = token;
-            } catch(e) {}
+            token = (typeof safeStorage !== 'undefined' ? safeStorage.getItem('cmpli_creator_token') : null) ||
+                    (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('cmpli_creator_token') : null) ||
+                    (typeof safeStorage !== 'undefined' ? safeStorage.getItem('cmpli_session_token') : null) ||
+                    window._cmpli_session_token;
+            if (token) window._creatorAuthToken = token;
         }
-
-        if (!token) return false;
 
         const dateKey = targetDateKey || activeAdminDateKey || getLocalDateKey(new Date());
         const msId = activeAdminMilestoneId || '1';
 
         const res = await apiFetch(`/api/pod/quiz-pool?dateKey=${encodeURIComponent(dateKey)}&milestoneId=${encodeURIComponent(msId)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         }).then(r => r.json());
 
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
@@ -10678,8 +10815,6 @@ async function loadPodQuizPool(targetDateKey) {
             return true;
         } else if (res && res.error) {
             console.warn('Creator question bank access notice:', res.error);
-            window._creatorAuthToken = null;
-            try { sessionStorage.removeItem('cmpli_creator_token'); } catch(e) {}
             return false;
         }
     } catch(err) {
@@ -11036,16 +11171,9 @@ async function synthesizePodElevenLabsAudio(dateKey) {
     }
 
     // 1. Ensure creator token, session, or admin secret is present
-    let token = window._creatorAuthToken;
-    if (!token) {
-        try { token = sessionStorage.getItem('cmpli_creator_token'); } catch(e) {}
-    }
-    let sessToken = null;
-    try { sessToken = localStorage.getItem('cmpli_session_token') || sessionStorage.getItem('cmpli_session_token'); } catch(e) {}
-    let secret = window._creatorAdminSecret;
-    if (!secret) {
-        try { secret = sessionStorage.getItem('cmpli_admin_secret'); } catch(e) {}
-    }
+    let token = window._creatorAuthToken || (typeof safeStorage !== 'undefined' ? safeStorage.getItem('cmpli_creator_token') : null);
+    let sessToken = window._cmpli_session_token || (typeof safeStorage !== 'undefined' ? safeStorage.getItem('cmpli_session_token') : null);
+    let secret = window._creatorAdminSecret || (typeof safeStorage !== 'undefined' ? safeStorage.getItem('cmpli_admin_secret') : null);
 
     if (!token && !secret && (!sessToken || (typeof currentUser !== 'undefined' && currentUser && currentUser.role !== 'creator'))) {
         const enteredSecret = prompt('🔐 cMPLi POD Creator Authentication:\n\nEnter Creator Security Key to synthesize ElevenLabs podcast audio:');
@@ -12946,13 +13074,19 @@ async function openPodSessionModal(dayNum, dateKey) {
     // Secure server-side question session: answers and explanations are NEVER sent to the learner
     window._activePodSessionId = null;
     let learnerQuestions = [];
+    let serverReturned404 = false;
 
     if (!isAlreadyCompleted) {
         try {
-            const sessRes = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}&dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(msId)}`).then(r => r.json());
-            if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
-                window._activePodSessionId = sessRes.sessionId;
-                learnerQuestions = sessRes.questions;
+            const resp = await apiFetch(`/api/pod/session-questions?count=3&userId=${encodeURIComponent(uId)}&dateKey=${encodeURIComponent(activePodSessionDateKey)}&milestoneId=${encodeURIComponent(msId)}`);
+            if (resp && resp.status === 404) {
+                serverReturned404 = true;
+            } else if (resp && resp.ok) {
+                const sessRes = await resp.json();
+                if (sessRes && sessRes.success && Array.isArray(sessRes.questions) && sessRes.questions.length > 0) {
+                    window._activePodSessionId = sessRes.sessionId;
+                    learnerQuestions = sessRes.questions;
+                }
             }
         } catch(err) {
             console.warn('Could not fetch server-side pod session questions, using local pool:', err);
@@ -12969,45 +13103,45 @@ async function openPodSessionModal(dayNum, dateKey) {
         }));
     }
 
-    if (learnerQuestions.length === 0) {
-        const pool = (dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0) 
-            ? dayConfig.questions 
-            : getPodQuestionsPool();
-
-        const shuffled = [...pool].sort(() => 0.5 - Math.random());
-        const chosen = [];
-        const seenTitles = new Set();
-        for (const q of shuffled) {
-            const norm = (q.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!seenTitles.has(norm)) {
-                seenTitles.add(norm);
-                chosen.push(q);
-                if (chosen.length === 3) break;
-            }
-        }
-        if (chosen.length < 3) {
+    if (learnerQuestions.length === 0 && !serverReturned404) {
+        const hasExplicitQuestions = dayConfig.questions && Array.isArray(dayConfig.questions) && dayConfig.questions.length > 0;
+        if (hasExplicitQuestions) {
+            const pool = dayConfig.questions;
+            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            const chosen = [];
+            const seenTitles = new Set();
             for (const q of shuffled) {
-                if (!chosen.includes(q)) {
+                const norm = (q.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (!seenTitles.has(norm)) {
+                    seenTitles.add(norm);
                     chosen.push(q);
                     if (chosen.length === 3) break;
                 }
             }
+            if (chosen.length < 3) {
+                for (const q of shuffled) {
+                    if (!chosen.includes(q)) {
+                        chosen.push(q);
+                        if (chosen.length === 3) break;
+                    }
+                }
+            }
+
+            learnerQuestions = chosen.map(q => {
+                const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
+                const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
+                const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
+                const jumbled = [...tagged].sort(() => 0.5 - Math.random());
+                const newCorrectIndex = jumbled.findIndex(item => item.isCorrect);
+
+                return {
+                    ...q,
+                    options: jumbled.map(item => item.text),
+                    correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
+                    pts: q.pts || 11
+                };
+            });
         }
-
-        learnerQuestions = chosen.map(q => {
-            const originalOptions = [...(q.options || ['Option A', 'Option B', 'Option C', 'Option D'])];
-            const correctIndex = (q.correctOption !== undefined && q.correctOption >= 0 && q.correctOption < originalOptions.length) ? q.correctOption : 0;
-            const tagged = originalOptions.map((optText, idx) => ({ text: optText, isCorrect: idx === correctIndex }));
-            const jumbled = [...tagged].sort(() => 0.5 - Math.random());
-            const newCorrectIndex = jumbled.findIndex(item => item.isCorrect);
-
-            return {
-                ...q,
-                options: jumbled.map(item => item.text),
-                correctOption: newCorrectIndex > -1 ? newCorrectIndex : 0,
-                pts: q.pts || 11
-            };
-        });
     }
 
     activePodSessionQuestions = learnerQuestions;
@@ -13157,37 +13291,52 @@ async function openPodSessionModal(dayNum, dateKey) {
                     </div>
 
                     <div id="podQuizQuestionsArea" class="${isAlreadyCompleted ? '' : 'hidden'} space-y-5">
-                        <div class="flex items-center justify-between pb-2 border-b border-slate-700">
-                            <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                                <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
-                            </h4>
-                            <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
-                        </div>
-
-                        ${activePodSessionQuestions.map((q, qIdx) => `
-                            <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
-                                <div class="flex justify-between items-center">
-                                    <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
-                                    <span class="text-[10px] font-bold text-indigo-300 font-mono">+${q.pts || 11} LCs</span>
-                                </div>
-                                <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
-                                <div class="space-y-2 pt-1">
-                                    ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => {
-                                        const isChecked = isAlreadyCompleted && (q.selectedOption === optIdx || (q.selectedOption === undefined && q.correctOption === optIdx));
-                                        const isCorrectOpt = isAlreadyCompleted && (q.correctOption === optIdx);
-                                        return `
-                                            <label class="flex items-center justify-between p-3 rounded-xl bg-slate-950 border ${isChecked ? (isCorrectOpt ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-indigo-500/60') : 'border-slate-800'} ${isAlreadyCompleted ? 'cursor-default' : 'hover:border-indigo-500/50 cursor-pointer'} transition-all">
-                                                <div class="flex items-center gap-3">
-                                                    <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" ${isChecked ? 'checked' : ''} ${isAlreadyCompleted ? 'disabled' : ''} class="text-indigo-600 focus:ring-0">
-                                                    <span class="text-xs ${isChecked ? 'text-white font-semibold' : 'text-slate-300'} font-medium">${opt}</span>
-                                                </div>
-                                                ${isAlreadyCompleted && isCorrectOpt ? `<span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40"><i class="fas fa-check mr-1"></i> Correct</span>` : ''}
-                                            </label>
-                                        `;
-                                    }).join('')}
-                                </div>
+                        ${activePodSessionQuestions.length > 0 ? `
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                                <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fas fa-bolt text-amber-400"></i> Comprehension Quiz (${activePodSessionQuestions.length} Questions)
+                                </h4>
+                                <span class="text-xs font-bold text-emerald-400 bg-emerald-900/30 px-2.5 py-0.5 rounded-full border border-emerald-700/50">+33 LCs Total</span>
                             </div>
-                        `).join('')}
+
+                            ${activePodSessionQuestions.map((q, qIdx) => `
+                                <div class="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="badge-pill badge-indigo text-[10px]">Question ${qIdx + 1} of ${activePodSessionQuestions.length}</span>
+                                        <span class="text-[10px] font-bold text-indigo-300 font-mono">+${q.pts || 11} LCs</span>
+                                    </div>
+                                    <h5 class="text-sm font-bold text-white leading-relaxed">${q.title}</h5>
+                                    <div class="space-y-2 pt-1">
+                                        ${(q.options || ['Option A', 'Option B', 'Option C', 'Option D']).map((opt, optIdx) => {
+                                            const isChecked = isAlreadyCompleted && (q.selectedOption === optIdx || (q.selectedOption === undefined && q.correctOption === optIdx));
+                                            const isCorrectOpt = isAlreadyCompleted && (q.correctOption === optIdx);
+                                            return `
+                                                <label class="flex items-center justify-between p-3 rounded-xl bg-slate-950 border ${isChecked ? (isCorrectOpt ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-indigo-500/60') : 'border-slate-800'} ${isAlreadyCompleted ? 'cursor-default' : 'hover:border-indigo-500/50 cursor-pointer'} transition-all">
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="radio" name="pod_session_q_${qIdx}" value="${optIdx}" ${isChecked ? 'checked' : ''} ${isAlreadyCompleted ? 'disabled' : ''} class="text-indigo-600 focus:ring-0">
+                                                        <span class="text-xs ${isChecked ? 'text-white font-semibold' : 'text-slate-300'} font-medium">${opt}</span>
+                                                    </div>
+                                                    ${isAlreadyCompleted && isCorrectOpt ? `<span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40"><i class="fas fa-check mr-1"></i> Correct</span>` : ''}
+                                                </label>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        ` : `
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+                                <h4 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fas fa-calendar-day text-indigo-400"></i> Check-in Status
+                                </h4>
+                            </div>
+                            <div class="p-6 bg-slate-900/80 rounded-2xl border border-slate-700/80 text-center space-y-2">
+                                <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-lg mb-2">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <h5 class="text-sm font-bold text-white">No Quiz Scheduled For Today</h5>
+                                <p class="text-xs text-slate-400 max-w-md mx-auto">Today's session check-in is complete upon listening to the audio narration above. Check back tomorrow for the next quiz challenge!</p>
+                            </div>
+                        `}
                     </div>
                 </div>
 
@@ -13201,7 +13350,7 @@ async function openPodSessionModal(dayNum, dateKey) {
                         </button>
                     ` : `
                         <button id="btnSubmitPodSession" onclick="submitPodSessionQuiz()" class="btn-primary py-2.5 px-6 text-xs opacity-50 cursor-not-allowed" disabled>
-                            <i class="fas fa-paper-plane mr-2"></i> Submit &amp; Claim LCs
+                            <i class="fas ${activePodSessionQuestions.length > 0 ? 'fa-paper-plane' : 'fa-check-circle'} mr-2"></i> ${activePodSessionQuestions.length > 0 ? 'Submit &amp; Claim LCs' : 'Complete Check-in &amp; Claim LCs'}
                         </button>
                     `}
                 </div>
@@ -13523,6 +13672,9 @@ async function submitPodSessionQuiz() {
         } catch(gradeErr) {
             console.warn('Server grading failed, falling back to local calculation:', gradeErr);
         }
+    }
+    if (activePodSessionQuestions.length === 0) {
+        calculatedPoints = 33;
     }
 
     const answers = [];
@@ -17999,12 +18151,10 @@ async function submitActiveStudentProject() {
     };
 
     // Save locally
-    let allSubs = [];
-    try { allSubs = JSON.parse(localStorage.getItem('allUserSubmissionsDB')) || []; } catch(e) {}
+    let allSubs = [...getAllUserSubmissions()];
     allSubs = allSubs.filter(s => !(s.userId === subRecord.userId && String(s.milestoneId) === String(msId) && (s.projectId === String(proj.id) || s.day === String(proj.id))));
     allSubs.push(subRecord);
-    localStorage.setItem('allUserSubmissionsDB', JSON.stringify(allSubs));
-    _cachedAllUserSubmissionsDB = null;
+    setAllUserSubmissions(allSubs);
 
     // Update user project lifecycle to completed
     const uId = currentUser._id || currentUser.id || 'guest';
@@ -19998,8 +20148,24 @@ async function verifyOTP() {
             });
             const sessData = await sessRes.json();
             if (sessData && sessData.success && sessData.token) {
-                localStorage.setItem('cmpli_session_token', sessData.token);
-                sessionStorage.setItem('cmpli_session_token', sessData.token);
+                try {
+                    if (typeof safeStorage !== 'undefined') {
+                        safeStorage.setItem('cmpli_session_token', sessData.token, true);
+                    }
+                    if (typeof sessionStorage !== 'undefined') {
+                        try { sessionStorage.setItem('cmpli_session_token', sessData.token); } catch(e) {}
+                    }
+                    if (typeof localStorage !== 'undefined') {
+                        try { localStorage.setItem('cmpli_session_token', sessData.token); } catch(qErr) {
+                            if (typeof safeStorage !== 'undefined') safeStorage.evictBulkyCaches();
+                            try { localStorage.setItem('cmpli_session_token', sessData.token); } catch(e2) {}
+                        }
+                    }
+                } catch(storageErr) {
+                    console.warn('Storage warning for session token:', storageErr);
+                }
+                window._cmpli_session_token = sessData.token;
+
                 if (sessData.employer && authUser) {
                     if (Array.isArray(sessData.employer.permittedMangoes)) {
                         authUser.permittedMangoes = sessData.employer.permittedMangoes;
@@ -20007,8 +20173,11 @@ async function verifyOTP() {
                     if (sessData.employer.companyName) authUser.companyName = sessData.employer.companyName;
                 }
                 if (role === 'creator' && creatorSecretInput) {
-                    sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
-                    if (typeof localStorage !== 'undefined') localStorage.removeItem('cmpli_admin_secret');
+                    try {
+                        if (typeof safeStorage !== 'undefined') safeStorage.setItem('cmpli_admin_secret', creatorSecretInput);
+                        if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('cmpli_admin_secret', creatorSecretInput);
+                        if (typeof localStorage !== 'undefined') localStorage.removeItem('cmpli_admin_secret');
+                    } catch(e) {}
                     window._creatorAdminSecret = creatorSecretInput;
                 }
                 sessionTokenAcquired = true;
@@ -20158,13 +20327,30 @@ function logout() {
     partnerAllowedMangoes = [];
     tempLoginId = '';
     window._pendingAuth = null;
+    window._cmpli_session_token = null;
+    window._creatorAuthToken = null;
+    window._creatorAdminSecret = null;
+    _fullSubmissionsInMemory = null;
+    _cachedAllUserSubmissionsDB = null;
+    _cachedAllUserSubmissionsDBRaw = null;
+
+    if (typeof safeStorage !== 'undefined') {
+        safeStorage.removeItem('cmpli_session_token');
+        safeStorage.removeItem('cmpli_creator_token');
+        safeStorage.removeItem('cmpli_admin_secret');
+    }
+
     try {
         localStorage.removeItem('currentUser');
         localStorage.removeItem('isAdminLogin');
         localStorage.removeItem('isRecruiterLogin');
         localStorage.removeItem('cmpli_session_token');
+        localStorage.removeItem('cmpli_creator_token');
+        localStorage.removeItem('cmpli_admin_secret');
         sessionStorage.removeItem('isAdminLogin');
         sessionStorage.removeItem('cmpli_session_token');
+        sessionStorage.removeItem('cmpli_creator_token');
+        sessionStorage.removeItem('cmpli_admin_secret');
     } catch(e) {}
 
     const partnerNav = document.getElementById('partnerNav');
@@ -21623,7 +21809,17 @@ if (typeof window !== 'undefined') {
         if (e.key === 'allUserSubmissionsDB' && e.newValue) {
             try {
                 _cachedAllUserSubmissionsDBRaw = e.newValue;
-                _cachedAllUserSubmissionsDB = JSON.parse(e.newValue) || [];
+                const parsed = JSON.parse(e.newValue) || [];
+                _cachedAllUserSubmissionsDB = parsed;
+                // Multi-tab sync: update _fullSubmissionsInMemory for learner roles ONLY.
+                // Privileged roles (creator, admin, recruiter, partner) preserve their full cohort analytics cache.
+                const isPrivilegedUser = (typeof isAdminLogin !== 'undefined' && isAdminLogin) || 
+                                         (typeof isCampusPartner !== 'undefined' && isCampusPartner) || 
+                                         (typeof isRecruiterLogin !== 'undefined' && isRecruiterLogin) || 
+                                         (typeof currentUser !== 'undefined' && currentUser && (currentUser.role === 'creator' || currentUser.role === 'admin' || currentUser.role === 'recruiter' || currentUser.role === 'partner'));
+                if (!isPrivilegedUser && (!currentUser || currentUser.role !== 'creator') && Array.isArray(parsed) && parsed.length > 0) {
+                    _fullSubmissionsInMemory = parsed;
+                }
             } catch(err) {}
             try {
                 if (window._storageSubmissionsDebounce) clearTimeout(window._storageSubmissionsDebounce);
