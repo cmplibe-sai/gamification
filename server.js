@@ -383,7 +383,7 @@ function syncCampusPartnersDB() {
     }
 }
 
-// Seed default SimplyBe team members if empty
+// Seed default cMPLiBe team members if empty
 if (store.teamMembers.length === 0) {
     store.teamMembers = [
         {
@@ -1389,7 +1389,7 @@ app.get(['/api/config', '/gamification/api/config'], (req, res) => {
     const envAdmins = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
     const adminEmails = envAdmins.length > 0 ? envAdmins : defaultAdmins;
 
-    // Enforce inclusion of SimplyBe team members in recognized admin identifiers
+    // Enforce inclusion of cMPLiBe team members in recognized admin identifiers
     if (Array.isArray(store.teamMembers)) {
         store.teamMembers.forEach(tm => {
             if (tm.email && !adminEmails.includes(tm.email.toLowerCase().trim())) {
@@ -7370,11 +7370,11 @@ app.get(['/api/config/geo', '/gamification/api/config/geo'], (req, res) => {
 // (checkCreatorAuth is defined above in core security middleware)
 
 // -------------------------------------------------------------
-// 1. SIMPLYBE TEAM MANAGEMENT ENDPOINTS (Strictly Creator Gated)
+// 1. cMPLiBe TEAM MANAGEMENT ENDPOINTS (Strictly Creator Gated)
 // -------------------------------------------------------------
 app.get(['/api/management/team', '/gamification/api/management/team'], (req, res) => {
     if (!checkCreatorAuth(req)) {
-        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view SimplyBe team' });
+        return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to view cMPLiBe team' });
     }
     res.json({ success: true, team: store.teamMembers || [] });
 });
@@ -7382,7 +7382,7 @@ app.get(['/api/management/team', '/gamification/api/management/team'], (req, res
 app.post(['/api/management/team', '/gamification/api/management/team'], (req, res) => {
     try {
         if (!checkCreatorAuth(req)) {
-            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage SimplyBe team' });
+            return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to manage cMPLiBe team' });
         }
         const { id, name, email, phone, employeeId, role } = req.body || {};
         if (!name || !email) {
@@ -7395,7 +7395,16 @@ app.post(['/api/management/team', '/gamification/api/management/team'], (req, re
         const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
         const memberRole = ['super_creator', 'content_creator', 'evaluator', 'ops'].includes(role) ? role : 'content_creator';
 
-        const existingIdx = store.teamMembers.findIndex(m => m.id === id || (m.email && m.email.toLowerCase() === cleanEmail));
+        // When editing (id supplied) match by id first; never let an edited email overwrite a different member
+        let existingIdx = id ? store.teamMembers.findIndex(m => m.id === id) : -1;
+        if (existingIdx === -1) {
+            existingIdx = store.teamMembers.findIndex(m => m.email && m.email.toLowerCase() === cleanEmail);
+        } else {
+            const clash = store.teamMembers.find((m, i) => i !== existingIdx && m.email && m.email.toLowerCase() === cleanEmail);
+            if (clash) {
+                return res.status(409).json({ success: false, error: 'Another team member already uses this email' });
+            }
+        }
         const memberData = {
             id: id || ('tm_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6)),
             name: String(name).trim(),
@@ -7610,7 +7619,7 @@ app.post(['/api/employers/register', '/gamification/api/employers/register'], (r
             if (existing.status === 'pending') {
                 return res.json({ 
                     success: true, 
-                    message: 'Your empanelment application has already been submitted and is pending SimplyBe Creator review.', 
+                    message: 'Your empanelment application has already been submitted and is pending cMPLiBe Creator review.', 
                     status: 'pending' 
                 });
             }
@@ -7742,7 +7751,7 @@ app.get(['/api/employer/candidates', '/gamification/api/employer/candidates'], (
         }
 
         const effectiveEmployerId = isCreator ? (req.headers['x-employer-id'] || 'creator_preview') : verifiedEmployer.id;
-        const effectiveCompanyName = isCreator ? (req.headers['x-company-name'] || req.query.companyName || 'SimplyBe Talent Operations') : verifiedEmployer.companyName;
+        const effectiveCompanyName = isCreator ? (req.headers['x-company-name'] || req.query.companyName || 'cMPLiBe Talent Operations') : verifiedEmployer.companyName;
         const effectiveRecruiterName = isCreator ? (req.headers['x-recruiter-name'] || req.query.recruiterName || 'Internal Reviewer') : (verifiedEmployer.recruiterName || 'Talent Acquisition');
 
         const { state, district, solutionId, minLq, search, campusId } = req.query;
@@ -8069,7 +8078,7 @@ app.post(['/api/telemetry/event', '/gamification/api/telemetry/event'], async (r
         }
 
         const effEmployerId = isCreator ? (employerId || 'creator_preview') : verifiedEmployer.id;
-        const effCompanyName = sanitizePlainText(companyName || (isCreator ? 'SimplyBe Talent Operations' : verifiedEmployer.companyName) || 'Corporate Partner', 80);
+        const effCompanyName = sanitizePlainText(companyName || (isCreator ? 'cMPLiBe Talent Operations' : verifiedEmployer.companyName) || 'Corporate Partner', 80);
         const effRecruiterName = sanitizePlainText(recruiterName || (isCreator ? 'Internal Reviewer' : verifiedEmployer.recruiterName) || 'Talent Acquisition', 80);
 
         const logged = await logTelemetryEvent({

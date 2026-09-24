@@ -71,7 +71,7 @@ This document provides a comprehensive technical breakdown of three major functi
 ## 3. Issue 3: Partner Editing Capability
 
 ### Problem Identified
-- Once a Campus Partner or Corporate Employer was saved in the **SimplyBe Management Hub**, there was no "Edit" option.
+- Once a Campus Partner or Corporate Employer was saved in the **cMPLiBe Management Hub**, there was no "Edit" option.
 - Creators had no way to update contact details, phone numbers, designations, or permitted solution cohorts (mangoes) after initial onboarding.
 
 ### Solution Applied (`index.html:985-1100`, `app.js:18770-19030`, `server.js:5030-5145`)

@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.30';
+const APP_CLIENT_VERSION = '2.9.31';
 
 // Safe Storage Subsystem with Automatic Quota Recovery & Resilient Fallbacks
 const safeStorage = {
@@ -1681,12 +1681,6 @@ async function initAdminApp() {
         }
     });
 
-    // 1b. Hide Management Console button for Campus Partners (only for Creators)
-    const mgmtBtnBox = document.getElementById('creatorManagementBtnContainer');
-    if (mgmtBtnBox) {
-        mgmtBtnBox.style.display = (isAdminLogin && !isCampusPartner) ? '' : 'none';
-    }
-
     // 2. Remove Serial Numbers (1., 2., 3.) robustly by targeting text nodes only
     document.querySelectorAll('label, h3, h4, h5, p, span').forEach(el => {
         Array.from(el.childNodes).forEach(node => {
@@ -1720,29 +1714,6 @@ async function initAdminApp() {
     // 5. Remove the old misplaced search bar (from Issue 1)
     const oldSearch = document.getElementById('creatorSolutionSearchContainer');
     if (oldSearch) oldSearch.remove();
-
-    // 6. Inject "Manage Campus Partners" Button safely into the DOM
-    let manageBtnContainer = document.getElementById('managePartnersBtnContainer');
-    if (!manageBtnContainer) {
-        const filtersRow = courseSelect ? courseSelect.closest('.grid') || courseSelect.parentElement.parentElement : null;
-        if (filtersRow && filtersRow.parentNode) {
-            manageBtnContainer = document.createElement('div');
-            manageBtnContainer.id = 'managePartnersBtnContainer';
-            manageBtnContainer.className = 'w-full flex justify-end mb-4';
-            filtersRow.parentNode.insertBefore(manageBtnContainer, filtersRow);
-        }
-    }
-    
-    if (manageBtnContainer) {
-        if (isAdminLogin && !isCampusPartner) {
-            manageBtnContainer.innerHTML = `
-                <button onclick="switchTab('managementTab'); if (typeof switchManagementSubTab === 'function') switchManagementSubTab('campuses');" class="px-5 py-2.5 bg-indigo-600/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white rounded-xl text-sm font-bold transition-all shadow-md">
-                    <i class="fas fa-university mr-2"></i> Manage Campus Partners
-                </button>`;
-        } else {
-            manageBtnContainer.innerHTML = ''; 
-        }
-    }
 
     try {
         const response = await window.fetchTagMango(window.TagMangoAPI.Mangos.getAll);
@@ -19796,7 +19767,7 @@ function resolvePlatformUserRole(rawInput) {
         return false;
     }) || (isValidPhone && defaultAdminPhones.includes(cleanPhone));
 
-    // Check cached/stored SimplyBe Team Members
+    // Check cached/stored cMPLiBe Team Members
     const teamPool = (window._cachedTeamMembers && window._cachedTeamMembers.length > 0)
         ? window._cachedTeamMembers
         : (window.APP_CONFIG && Array.isArray(window.APP_CONFIG.teamMembers) ? window.APP_CONFIG.teamMembers : []);
@@ -20048,7 +20019,7 @@ async function requestOTP() {
             if (recruiterKeyContainer) recruiterKeyContainer.classList.add('hidden');
             if (otpInputContainer) otpInputContainer.classList.add('hidden');
             if (step2Banner) {
-                step2Banner.innerHTML = `<i class="fas fa-shield-alt text-rose-400 mr-1.5"></i> SimplyBe Creator Console.<br><span class="text-[11px] text-slate-400">Master Creator Security Key is strictly required for administrative access.</span>`;
+                step2Banner.innerHTML = `<i class="fas fa-shield-alt text-rose-400 mr-1.5"></i> cMPLiBe Creator Console.<br><span class="text-[11px] text-slate-400">Master Creator Security Key is strictly required for administrative access.</span>`;
             }
             const crtKeyInp = document.getElementById('creatorAdminSecretInput');
             if (crtKeyInp) {
@@ -21242,7 +21213,7 @@ async function switchTab(tab) {
     // Guard: Management Tab is strictly Creator-only (hidden & blocked for campus partners & recruiters)
     if (tab === 'managementTab') {
         if (!isAdminLogin || isCampusPartner) {
-            console.warn("Unauthorized: SimplyBe Management Hub is strictly restricted to Creators.");
+            console.warn("Unauthorized: cMPLiBe Management Hub is strictly restricted to Creators.");
             switchTab(isCampusPartner ? 'adminTab' : 'dashboardTab');
             return;
         }
@@ -21863,7 +21834,7 @@ if (typeof window !== 'undefined') {
 }
 
 // =============================================================
-// SIMPLYBE MANAGEMENT HUB & CORPORATE TALENT ARENA ENGINE
+// cMPLiBe MANAGEMENT HUB & CORPORATE TALENT ARENA ENGINE
 // =============================================================
 
 // In-memory state for Management console
@@ -21991,7 +21962,7 @@ function populateMgmtDistrictOptions() {
 window.populateMgmtDistrictOptions = populateMgmtDistrictOptions;
 
 // -------------------------------------------------------------
-// 3. SIMPLYBE TEAM HUB OPERATIONS
+// 3. cMPLiBe TEAM HUB OPERATIONS
 // -------------------------------------------------------------
 function renderManagementTeam() {
     const tbody = document.getElementById('mgmtTeamTableBody');
@@ -22004,7 +21975,7 @@ function renderManagementTeam() {
     if (members.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" class="p-8 text-center text-slate-500 italic">No SimplyBe team members onboarded yet. Use the form to add staff.</td>
+                <td colspan="5" class="p-8 text-center text-slate-500 italic">No cMPLiBe team members onboarded yet. Use the form to add staff.</td>
             </tr>
         `;
         return;
@@ -22036,7 +22007,10 @@ function renderManagementTeam() {
                 <div class="text-[11px] text-slate-500 font-mono">${m.phone ? ('+91 ' + m.phone) : 'No Phone'}</div>
             </td>
             <td class="p-4 font-mono font-bold text-slate-300 text-xs">${m.employeeId || 'CMPLI'}</td>
-            <td class="p-4 text-right">
+            <td class="p-4 text-right whitespace-nowrap sticky right-0 bg-slate-900/95">
+                <button onclick="editTeamMember('${m.id}')" class="w-7 h-7 mr-1 rounded-lg bg-slate-800 hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-300 inline-flex items-center justify-center transition-colors" title="Edit Member">
+                    <i class="fas fa-pen text-xs"></i>
+                </button>
                 <button onclick="deleteTeamMember('${m.id}')" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 inline-flex items-center justify-center transition-colors" title="Remove Member">
                     <i class="fas fa-trash-alt text-xs"></i>
                 </button>
@@ -22052,6 +22026,7 @@ async function saveTeamMember() {
     const phone = document.getElementById('newTeamPhone')?.value.trim();
     const empId = document.getElementById('newTeamEmpId')?.value.trim();
     const role = document.getElementById('newTeamRole')?.value || 'content_creator';
+    const editingId = document.getElementById('editingTeamId')?.value.trim() || '';
 
     if (!name || !email) {
         alert("Please provide the full name and email for the team member.");
@@ -22062,20 +22037,17 @@ async function saveTeamMember() {
         const res = await apiFetch('/api/management/team', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, phone, employeeId: empId, role })
+            body: JSON.stringify({ id: editingId || undefined, name, email, phone, employeeId: empId, role })
         });
         const data = await res.json();
         if (data.success) {
-            document.getElementById('newTeamName').value = '';
-            document.getElementById('newTeamEmail').value = '';
-            document.getElementById('newTeamPhone').value = '';
-            document.getElementById('newTeamEmpId').value = '';
+            cancelTeamEdit();
             
             // Refresh list
             const updated = await apiFetch('/api/management/team').then(r => r.json());
             if (updated.success) window._cachedTeamMembers = updated.team;
             renderManagementTeam();
-            alert("SimplyBe team member saved successfully!");
+            alert(editingId ? "cMPLiBe team member updated successfully!" : "cMPLiBe team member saved successfully!");
         } else {
             alert("Error saving team member: " + (data.error || 'Server error'));
         }
@@ -22084,6 +22056,49 @@ async function saveTeamMember() {
     }
 }
 window.saveTeamMember = saveTeamMember;
+
+function editTeamMember(id) {
+    const m = (window._cachedTeamMembers || []).find(t => t.id === id);
+    if (!m) return;
+    const set = (elId, v) => { const el = document.getElementById(elId); if (el) el.value = v || ''; };
+    set('editingTeamId', m.id);
+    set('newTeamName', m.name);
+    set('newTeamEmail', m.email);
+    set('newTeamPhone', m.phone);
+    set('newTeamEmpId', m.employeeId);
+    set('newTeamRole', m.role || 'content_creator');
+
+    const heading = document.getElementById('mgmtTeamFormHeading');
+    if (heading) heading.innerText = 'Edit Team Member';
+    const badge = document.getElementById('mgmtTeamEditBadge');
+    if (badge) badge.classList.remove('hidden');
+    const btnText = document.getElementById('btnSaveTeamText');
+    if (btnText) btnText.innerText = 'Update Team Member';
+    const cancelBtn = document.getElementById('btnCancelTeamEdit');
+    if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+    document.getElementById('mgmtSubTab-team')?.scrollIntoView({ behavior: 'smooth' });
+}
+window.editTeamMember = editTeamMember;
+
+function cancelTeamEdit() {
+    ['editingTeamId', 'newTeamName', 'newTeamEmail', 'newTeamPhone', 'newTeamEmpId'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (el) el.value = '';
+    });
+    const role = document.getElementById('newTeamRole');
+    if (role) role.value = 'content_creator';
+
+    const heading = document.getElementById('mgmtTeamFormHeading');
+    if (heading) heading.innerText = 'Onboard Team Member';
+    const badge = document.getElementById('mgmtTeamEditBadge');
+    if (badge) badge.classList.add('hidden');
+    const btnText = document.getElementById('btnSaveTeamText');
+    if (btnText) btnText.innerText = 'Save Team Member';
+    const cancelBtn = document.getElementById('btnCancelTeamEdit');
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+}
+window.cancelTeamEdit = cancelTeamEdit;
 
 async function deleteTeamMember(id) {
     if (!confirm("Are you sure you want to remove this team member's access?")) return;
