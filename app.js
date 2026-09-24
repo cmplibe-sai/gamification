@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.31';
+const APP_CLIENT_VERSION = '2.9.32';
 
 // Safe Storage Subsystem with Automatic Quota Recovery & Resilient Fallbacks
 const safeStorage = {
@@ -15784,6 +15784,26 @@ function showCheckinSetupInProgressModal(moduleName, dateDisplayStr) {
 }
 window.showCheckinSetupInProgressModal = showCheckinSetupInProgressModal;
 
+// ---- Story reading size (cMPLi Dip): remembered per device, clamped to a comfortable range ----
+const STORY_FONT_MIN_PX = 15;
+const STORY_FONT_MAX_PX = 32;
+function getStoryFontPx() {
+    let px = 0;
+    try { px = parseInt(localStorage.getItem('cmpli_story_font_px'), 10); } catch (e) {}
+    if (!px || isNaN(px)) px = (typeof window !== 'undefined' && window.innerWidth >= 640) ? 21 : 19;
+    return Math.min(STORY_FONT_MAX_PX, Math.max(STORY_FONT_MIN_PX, px));
+}
+function adjustStoryFontSize(delta) {
+    const vp = document.getElementById('teleprompter_viewport');
+    if (!vp) return;
+    const current = parseFloat(getComputedStyle(vp).fontSize) || getStoryFontPx();
+    const next = Math.min(STORY_FONT_MAX_PX, Math.max(STORY_FONT_MIN_PX, Math.round(current + delta)));
+    vp.style.setProperty('--story-font', next + 'px');
+    try { localStorage.setItem('cmpli_story_font_px', String(next)); } catch (e) {}
+}
+window.getStoryFontPx = getStoryFontPx;
+window.adjustStoryFontSize = adjustStoryFontSize;
+
 function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
     if (!currentUser) return alert('Please login to start your check-in.');
 
@@ -16017,7 +16037,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
 
                 <!-- MASTER REFERENCE ARTICLE & AUDIO RECORDER (DIP ONLY) -->
                 ${(!isImmerse) ? `
-                <div class="glass-card p-4 sm:p-5 rounded-2xl border border-indigo-500/40 bg-slate-950/90 shadow-xl space-y-3.5">
+                <div class="glass-card p-3 sm:p-5 rounded-2xl border border-indigo-500/40 bg-slate-950/90 shadow-xl space-y-3.5">
                     <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 flex-wrap gap-2">
                         <div class="flex items-center gap-2">
                             <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/30">
@@ -16030,11 +16050,15 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                                 <p class="text-[10px] text-slate-400">Read today's story and scroll at your own pace while recording your reflection below.</p>
                             </div>
                         </div>
+                        <div class="flex items-center gap-1.5 shrink-0" role="group" aria-label="Story text size">
+                            <button type="button" onclick="adjustStoryFontSize(-2)" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-700" aria-label="Decrease text size" title="Smaller text">A&minus;</button>
+                            <button type="button" onclick="adjustStoryFontSize(2)" class="w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg border border-indigo-400/50" aria-label="Increase text size" title="Larger text">A+</button>
+                        </div>
                     </div>
 
                     <!-- Scrollable Story Viewport (Situated directly above record button) -->
-                    <div id="teleprompter_viewport" class="relative max-h-60 sm:max-h-72 overflow-y-auto custom-scrollbar p-4 bg-slate-900/80 rounded-xl border border-slate-800/90 leading-relaxed text-xs sm:text-sm shadow-inner">
-                        <div id="teleprompter_content" class="text-slate-200 select-text leading-relaxed space-y-2">
+                    <div id="teleprompter_viewport" style="--story-font:${getStoryFontPx()}px" class="relative overflow-y-auto custom-scrollbar bg-slate-900/80 rounded-xl border border-slate-800/90 shadow-inner">
+                        <div id="teleprompter_content" class="text-slate-100 select-text">
                             ${renderMarkdownText(dayConfig.articleText || dayConfig.description || dayConfig.mainQuestion || 'Please record your reflection answering today\'s focus prompt.')}
                         </div>
                     </div>

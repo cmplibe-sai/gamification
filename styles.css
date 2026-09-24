@@ -544,3 +544,35 @@ button:active {
     }
 }
 
+/* ==========================================================================
+   cMPLi Dip - Story reading area (shown above the voice recorder)
+   Comfortable, large, high-contrast text so customers can read the whole story
+   aloud on a phone. Size is adjustable with the A- / A+ buttons (--story-font).
+   ========================================================================== */
+#teleprompter_viewport {
+    --story-font: 19px;
+    font-size: var(--story-font);
+    max-height: 60vh;
+    padding: 1.1rem 0.85rem;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+@media (min-width: 640px) {
+    #teleprompter_viewport { --story-font: 21px; max-height: 65vh; padding: 1.5rem 1.75rem; }
+}
+#teleprompter_content { font-size: 1em; line-height: 1.85; letter-spacing: 0.01em; }
+#teleprompter_content p,
+#teleprompter_content li {
+    font-size: 1em;
+    line-height: 1.85;
+    color: #f1f5f9;
+    margin-bottom: 1.15em;
+    overflow-wrap: anywhere;
+}
+#teleprompter_content li { margin-bottom: 0.7em; }
+#teleprompter_content ul, #teleprompter_content ol { font-size: 1em; color: #f1f5f9; margin: 0.6em 0 1.15em; }
+#teleprompter_content h2 { font-size: 1.35em; line-height: 1.35; margin: 1.2em 0 0.6em; }
+#teleprompter_content h3 { font-size: 1.22em; line-height: 1.4; margin: 1.1em 0 0.55em; }
+#teleprompter_content h4 { font-size: 1.1em; line-height: 1.45; margin: 1em 0 0.5em; }
+#teleprompter_content strong, #teleprompter_content em { color: #ffffff; }
