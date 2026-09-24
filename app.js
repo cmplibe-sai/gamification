@@ -2444,6 +2444,11 @@ async function displayAdminLearnerDataById(userId, shouldScroll = true) {
                 <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${getActualLearnerHighestMilestone(learner._id || learner)}</strong></p>
                 <p><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></p>
             </div>
+            <div class="pt-3 border-t border-slate-800">
+                <button onclick="openAutoCv('${learner._id || learner.id || ''}')" class="w-full py-2 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20">
+                    <i class="fas fa-wand-magic-sparkles"></i> View cMPLiBe CV (auto-built)
+                </button>
+            </div>
             <div id="adminLearnerCvSection" class="pt-3 border-t border-slate-800">
                 <div class="flex items-center justify-center p-2 text-slate-500 text-xs"><i class="fas fa-circle-notch fa-spin mr-1.5"></i> Checking CV status...</div>
             </div>

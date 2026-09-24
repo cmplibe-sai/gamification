@@ -996,6 +996,9 @@
                             </div>
 
                             <div class="space-y-2">
+                                <button onclick="openOwnAutoCv()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                                    <i class="fas fa-wand-magic-sparkles"></i> My cMPLiBe CV (built automatically from your projects)
+                                </button>
                                 <input type="file" id="learnerCvFileInput" accept=".pdf,.doc,.docx" class="hidden" onchange="handleLearnerCvSelected(event)">
                                 <button onclick="document.getElementById('learnerCvFileInput').click()" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/20">
                                     <i class="fas fa-cloud-arrow-up"></i> <span id="btnUploadCvText">Upload / Update CV</span>
@@ -1541,6 +1544,9 @@
                         </div>
                     </div>
                     <div id="dossierCvAction" class="flex items-center gap-2">
+                        <button id="btnDossierAutoCv" onclick="openAutoCv(window._activeDossierCandidate && window._activeDossierCandidate.id)" class="py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                            <i class="fas fa-wand-magic-sparkles"></i> cMPLiBe CV
+                        </button>
                         <button id="btnDossierPreviewCv" onclick="previewDossierCv()" class="hidden py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs border border-slate-700 transition-colors flex items-center gap-1.5 whitespace-nowrap">
                             <i class="fas fa-eye text-cyan-400"></i> Preview CV
                         </button>
@@ -1713,6 +1719,7 @@
     <script src="courses.js?v=2.9.2"></script>
     <script src="api.js?v=2.9.6"></script>
     <script src="app.js?v=2.9.33"></script>
+    <script src="cv.js?v=1.0.0"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">

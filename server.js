@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const cvEngine = require('./cvEngine');
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch(e) {}
 const dns = require('dns');
@@ -231,7 +232,7 @@ function saveBase64MediaToFile(dataUrl, prefix, originalFilename) {
 // ASSEMBLYAI AUDIO TRANSCRIPTION ENGINE
 // Uploads audio file to AssemblyAI, polls until complete, returns transcript.
 // ==============================================================
-async function transcribeAudioWithAssemblyAI(audioFilePath) {
+async function transcribeAudioWithAssemblyAI(audioFilePath, options = {}) {
     if (!ASSEMBLYAI_API_KEY) {
         console.warn('[AssemblyAI] No API key configured in .env (ASSEMBLYAI_API_KEY missing). Cannot transcribe audio.');
         return null;
@@ -299,7 +300,7 @@ async function transcribeAudioWithAssemblyAI(audioFilePath) {
         console.log(`[AssemblyAI] Transcription job queued: ${transcriptId}`);
 
         // Poll for completion (up to 30 seconds, checking every 2.5s)
-        const maxAttempts = 15;
+        const maxAttempts = Number(options.maxAttempts) > 0 ? Number(options.maxAttempts) : 15;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             await new Promise(resolve => setTimeout(resolve, 2500));
             const pollRes = await fetch(`${AAI_BASE}/v2/transcript/${transcriptId}`, { headers });
@@ -508,7 +509,8 @@ function loadStore() {
         coachingSessions: [],
         coachingActionItems: [],
         courseProgress: {},
-        studentCVs: {}
+        studentCVs: {},
+        studentCvProfiles: {}
     };
 }
 
@@ -522,6 +524,7 @@ if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
 if (!Array.isArray(store.campuses)) store.campuses = [];
 if (!Array.isArray(store.employers)) store.employers = [];
 if (!store.studentCVs || typeof store.studentCVs !== 'object') store.studentCVs = {};
+if (!store.studentCvProfiles || typeof store.studentCvProfiles !== 'object') store.studentCvProfiles = {};
 if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
 
 // Helper to keep legacy campusPartnersDB in sync with multi-coordinator campuses
@@ -2151,8 +2154,10 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
             timestamp: Date.now()
         };
 
+        let storedSub = subRecord;
         if (existingIdx > -1) {
-            store.submissions[existingIdx] = Object.assign({}, store.submissions[existingIdx], subRecord);
+            storedSub = Object.assign({}, store.submissions[existingIdx], subRecord);
+            store.submissions[existingIdx] = storedSub;
         } else {
             store.submissions.push(subRecord);
         }
@@ -2166,6 +2171,15 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
                 completedAt: Date.now(),
                 module: normMod
             };
+        }
+
+        // Automatic CV: add this project to the student's CV right away from the written answers,
+        // then transcribe any audio/video answers in the background and refresh the entry.
+        try {
+            refreshCvEntryForSubmission(storedSub);
+            queueCvJob(() => transcribeSubmissionForCv(storedSub.id));
+        } catch (cvErr) {
+            console.warn('[Auto CV] Could not update CV for submission:', cvErr.message);
         }
 
         store.submissionsRevision = Date.now();
@@ -8239,6 +8253,267 @@ app.get(['/api/learner/cv/:studentId', '/gamification/api/learner/cv/:studentId'
             (userEmail && store.studentCVs[userEmail])
         )) || null;
         res.json({ success: true, studentId, cv });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 4c. AUTOMATIC CV (built from project submissions, see cvEngine.js)
+// store.studentCvProfiles[studentId] = {
+//   studentId,
+//   generated: { experiences: [...], updatedAt },   // rewritten by the engine, never edited by hand
+//   manual: { intro, headline, photoUrl, academics, languages, extraCompetencies, extraSkills } // written by the student
+// }
+// -------------------------------------------------------------
+const CV_PROJECT_TYPES = new Set(['cmpli_ai', 'insight_engine']);
+const CV_JOB_CONCURRENCY = 2;
+const CV_TRANSCRIBE_MAX_POLLS = 120; // 120 polls x 2.5 s = up to 5 minutes per recording
+const cvJobQueue = [];
+let cvJobsRunning = 0;
+
+// Runs slow work (transcription) a couple at a time so a busy morning cannot flood AssemblyAI or the server.
+function queueCvJob(job) {
+    cvJobQueue.push(job);
+    pumpCvJobs();
+}
+
+function pumpCvJobs() {
+    while (cvJobsRunning < CV_JOB_CONCURRENCY && cvJobQueue.length) {
+        const job = cvJobQueue.shift();
+        cvJobsRunning += 1;
+        Promise.resolve()
+            .then(job)
+            .catch(err => console.warn('[Auto CV] Background job failed:', err.message))
+            .finally(() => {
+                cvJobsRunning -= 1;
+                pumpCvJobs();
+            });
+    }
+}
+
+function getCvProfile(studentId, create) {
+    const id = String(studentId);
+    if (!store.studentCvProfiles || typeof store.studentCvProfiles !== 'object') store.studentCvProfiles = {};
+    let profile = store.studentCvProfiles[id];
+    if (!profile && create) {
+        profile = store.studentCvProfiles[id] = { studentId: id, generated: { experiences: [], updatedAt: null }, manual: {} };
+    }
+    return profile || null;
+}
+
+// Transcripts live in the CV profile (profile.transcripts[mediaUrl] = { text } or { failed }), not in the
+// submission, so the submissions that every browser downloads stay small. Keying by the recording's URL
+// also means a resubmission with the same recording never pays for transcription twice.
+function withCvTranscripts(sub) {
+    const bank = (getCvProfile(sub.userId, false) || {}).transcripts || {};
+    return Object.assign({}, sub, {
+        responses: (Array.isArray(sub.responses) ? sub.responses : []).map(r => {
+            const t = r && r.answer && bank[r.answer];
+            return t ? Object.assign({}, r, { transcript: t.text || '', transcriptFailed: t.failed || '' }) : r;
+        })
+    });
+}
+
+function refreshCvEntryForSubmission(sub) {
+    if (!sub || !sub.userId || !sub.projectId || !CV_PROJECT_TYPES.has(String(sub.moduleType || sub.type))) return null;
+    const entry = cvEngine.buildExperienceEntry(withCvTranscripts(sub));
+    const profile = getCvProfile(sub.userId, true);
+    const experiences = profile.generated.experiences;
+    const idx = experiences.findIndex(e => cvEngine.entryKey(e) === cvEngine.entryKey(entry));
+    if (idx > -1) experiences[idx] = entry; else experiences.push(entry);
+    profile.generated.updatedAt = new Date().toISOString();
+    saveStoreDebounced();
+    return entry;
+}
+
+function resolveUploadedFile(url) {
+    const clean = String(url || '').split('?')[0];
+    if (!/^\/(gamification\/)?uploads\//.test(clean)) return null;
+    const full = path.join(UPLOADS_DIR, path.basename(clean));
+    return fs.existsSync(full) ? full : null;
+}
+
+// Turns each recorded (audio/video) answer of a submission into text, then refreshes the CV entry.
+async function transcribeSubmissionForCv(submissionId) {
+    const find = () => (store.submissions || []).find(s => s && s.id === submissionId);
+    let sub = find();
+    if (!sub || !sub.userId || !Array.isArray(sub.responses)) return;
+    const profile = getCvProfile(sub.userId, true);
+    if (!profile.transcripts) profile.transcripts = {};
+
+    for (const r of sub.responses) {
+        if (!r || (r.type !== 'audio' && r.type !== 'video') || !r.answer || /^data:/i.test(r.answer)) continue;
+        const known = profile.transcripts[r.answer];
+        if (known && (known.text || (known.failed && !(known.failed === 'no_key' && ASSEMBLYAI_API_KEY)))) continue;
+
+        if (!ASSEMBLYAI_API_KEY) {
+            profile.transcripts[r.answer] = { failed: 'no_key' };
+            continue;
+        }
+        const file = resolveUploadedFile(r.answer);
+        if (!file) {
+            profile.transcripts[r.answer] = { failed: 'not_local' }; // external link (Loom, YouTube, Drive) cannot be read
+            continue;
+        }
+        const text = await transcribeAudioWithAssemblyAI(file, { maxAttempts: CV_TRANSCRIBE_MAX_POLLS });
+        profile.transcripts[r.answer] = text ? { text } : { failed: 'failed' };
+        sub = find();
+        if (sub) refreshCvEntryForSubmission(sub);
+    }
+    sub = find();
+    if (sub) refreshCvEntryForSubmission(sub);
+    saveStoreDebounced();
+}
+
+function getStudentProjectSubmissions(learnerId, learnerEmail) {
+    return (store.submissions || []).filter(s => s && s.projectId &&
+        CV_PROJECT_TYPES.has(String(s.moduleType || s.type)) &&
+        (String(s.userId) === String(learnerId) || (learnerEmail && s.userEmail === learnerEmail)));
+}
+
+// Builds (or rebuilds) a student's CV entries from every project they ever submitted.
+function rebuildCvProfileForStudent(learnerId, learnerEmail) {
+    const subs = getStudentProjectSubmissions(learnerId, learnerEmail);
+    const profile = getCvProfile(learnerId, true);
+    profile.generated.experiences = [];
+    subs.forEach(sub => {
+        const entry = cvEngine.buildExperienceEntry(withCvTranscripts(Object.assign({}, sub, { userId: String(learnerId) })));
+        profile.generated.experiences.push(entry);
+        if (entry.awaitingTranscripts) queueCvJob(() => transcribeSubmissionForCv(sub.id));
+    });
+    profile.generated.updatedAt = new Date().toISOString();
+    saveStoreDebounced();
+    return profile;
+}
+
+function cvBadgesFor(learnerId) {
+    const approvals = getCertificateApprovalsFromDb() || {};
+    const badges = [];
+    Object.keys(approvals).forEach(key => {
+        const m = key.match(/^(.+)_MS(\d+)$/);
+        if (!m || m[1] !== String(learnerId)) return;
+        const rec = approvals[key];
+        if (rec === true || (rec && rec.approved === true)) {
+            badges.push({ milestoneId: Number(m[2]), credentialId: (rec && rec.credentialId) || null, issuedAt: (rec && rec.issuedAt) || null });
+        }
+    });
+    return badges.sort((a, b) => a.milestoneId - b.milestoneId);
+}
+
+function cvCampusLabel(learner) {
+    if (!learner) return '';
+    const genericSharedMangoes = new Set(['6714e7d8eb97f72e99e3316c', '66ac8a14a04c8e9d18af993d']);
+    const mangoes = Array.isArray(learner.subscribedMangoes) ? learner.subscribedMangoes : [];
+    const campus = (store.campuses || []).find(c => Array.isArray(c.mangoIds) &&
+        c.mangoIds.some(id => !genericSharedMangoes.has(id) && mangoes.includes(id)));
+    return (campus && campus.name) || learner.college || learner.institution || '';
+}
+
+function findLearnerForCv(studentId) {
+    const clean = String(studentId).toLowerCase().trim();
+    return getLearnerBase().find(u => String(u._id || u.id) === String(studentId) || (u.email && u.email.toLowerCase().trim() === clean)) || null;
+}
+
+// Same viewing rights as the uploaded CV: the student, the creator, verified recruiters and the student's campus partner.
+function canViewLearnerCv(req, studentId, learner) {
+    if (checkCreatorAuth(req) || verifyEmployerAuth(req)) return true;
+    const session = getAuthenticatedSession(req);
+    const clean = String(studentId).toLowerCase().trim();
+    if (session && session.role === 'customer' && (String(session.userId) === String(studentId) ||
+        (session.email && session.email.toLowerCase().trim() === clean))) return true;
+    return isAuthorizedCampusCoordinator(session, learner);
+}
+
+function canEditLearnerCv(req, learnerId) {
+    if (checkCreatorAuth(req)) return true;
+    const session = getAuthenticatedSession(req);
+    return Boolean(session && session.role === 'customer' && String(session.userId) === String(learnerId));
+}
+
+function cleanCvText(value, max) {
+    return String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function cleanCvList(value, maxItems, maxLen) {
+    if (!Array.isArray(value)) return [];
+    return value.map(v => cleanCvText(v, maxLen)).filter(Boolean).slice(0, maxItems);
+}
+
+app.get(['/api/learner/cv-profile/:studentId', '/gamification/api/learner/cv-profile/:studentId'], (req, res) => {
+    try {
+        const { studentId } = req.params;
+        const learner = findLearnerForCv(studentId);
+        const learnerId = learner ? String(learner._id || learner.id) : String(studentId);
+        if (!canViewLearnerCv(req, studentId, learner)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: You do not have permission to view this student\'s CV.' });
+        }
+        let profile = getCvProfile(learnerId, false);
+        if (!profile) {
+            // First view for a student who submitted projects before this feature existed
+            if (getStudentProjectSubmissions(learnerId, learner && learner.email && learner.email.toLowerCase().trim()).length) {
+                profile = rebuildCvProfileForStudent(learnerId, learner && learner.email && learner.email.toLowerCase().trim());
+            }
+        }
+        const cv = cvEngine.assembleCv(profile || { studentId: learnerId, generated: { experiences: [] }, manual: {} },
+            learner || { _id: learnerId, name: 'Learner' }, cvBadgesFor(learnerId), cvCampusLabel(learner));
+        res.json({ success: true, cv });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/learner/cv-profile', '/gamification/api/learner/cv-profile'], (req, res) => {
+    try {
+        const body = req.body || {};
+        const learner = findLearnerForCv(body.studentId || '');
+        const learnerId = learner ? String(learner._id || learner.id) : String(body.studentId || '');
+        if (!learnerId) return res.status(400).json({ success: false, error: 'studentId is required' });
+        if (!canEditLearnerCv(req, learnerId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized: Only the student or creator can edit this CV.' });
+        }
+
+        const profile = getCvProfile(learnerId, true);
+        const manual = profile.manual = profile.manual || {};
+        if ('intro' in body) manual.intro = cleanCvText(body.intro, 700);
+        if ('headline' in body) manual.headline = cleanCvText(body.headline, 80);
+        if ('languages' in body) manual.languages = cleanCvList(body.languages, 10, 30);
+        if ('extraCompetencies' in body) manual.extraCompetencies = cleanCvList(body.extraCompetencies, 12, 50);
+        if ('extraSkills' in body) manual.extraSkills = cleanCvList(body.extraSkills, 12, 50);
+        if ('photoUrl' in body) {
+            const photo = String(body.photoUrl || '').trim();
+            manual.photoUrl = /^(https:\/\/|\/gamification\/uploads\/|\/uploads\/)/.test(photo) && photo.length <= 500 ? photo : '';
+        }
+        if ('academics' in body && Array.isArray(body.academics)) {
+            manual.academics = body.academics.slice(0, 8).map(a => ({
+                degree: cleanCvText(a && a.degree, 80),
+                institution: cleanCvText(a && a.institution, 80),
+                year: cleanCvText(a && a.year, 20),
+                score: cleanCvText(a && a.score, 20)
+            })).filter(a => a.degree);
+        }
+        saveStoreDebounced();
+        const cv = cvEngine.assembleCv(profile, learner || { _id: learnerId, name: 'Learner' }, cvBadgesFor(learnerId), cvCampusLabel(learner));
+        res.json({ success: true, cv });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/learner/cv-profile/rebuild', '/gamification/api/learner/cv-profile/rebuild'], (req, res) => {
+    try {
+        const learner = findLearnerForCv((req.body && req.body.studentId) || '');
+        const learnerId = learner ? String(learner._id || learner.id) : String((req.body && req.body.studentId) || '');
+        if (!learnerId) return res.status(400).json({ success: false, error: 'studentId is required' });
+        if (!canEditLearnerCv(req, learnerId)) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        const email = learner && learner.email ? learner.email.toLowerCase().trim() : null;
+        // Give recordings that failed earlier another chance
+        const bank = (getCvProfile(learnerId, true).transcripts) || {};
+        Object.keys(bank).forEach(url => { if (bank[url] && bank[url].failed === 'failed') delete bank[url]; });
+        const profile = rebuildCvProfileForStudent(learnerId, email);
+        res.json({ success: true, cv: cvEngine.assembleCv(profile, learner || { _id: learnerId, name: 'Learner' }, cvBadgesFor(learnerId), cvCampusLabel(learner)) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
