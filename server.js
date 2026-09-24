@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const cvEngine = require('./cvEngine');
+const cvGemini = require('./cvGemini');
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch(e) {}
 const dns = require('dns');
@@ -27,6 +28,9 @@ process.on('unhandledRejection', (reason, promise) => {
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const ASSEMBLYAI_API_KEY = (process.env.ASSEMBLYAI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || '').trim() || cvGemini.DEFAULT_MODEL;
+console.log(`[Gemini CV Writer]: ${GEMINI_API_KEY ? `ACTIVE (model ${GEMINI_MODEL})` : 'INACTIVE (GEMINI_API_KEY missing in .env, CV uses the built-in writer)'}`);
 console.log(`[AssemblyAI Engine]: ${ASSEMBLYAI_API_KEY ? 'ACTIVE (API Key loaded)' : 'INACTIVE (ASSEMBLYAI_API_KEY missing in .env)'}`);
 
 const app = express();
@@ -8317,14 +8321,62 @@ function withCvTranscripts(sub) {
 
 function refreshCvEntryForSubmission(sub) {
     if (!sub || !sub.userId || !sub.projectId || !CV_PROJECT_TYPES.has(String(sub.moduleType || sub.type))) return null;
-    const entry = cvEngine.buildExperienceEntry(withCvTranscripts(sub));
+    const hydrated = withCvTranscripts(sub);
+    const entry = cvEngine.buildExperienceEntry(hydrated);
     const profile = getCvProfile(sub.userId, true);
+    applyGeminiResult(profile, entry, hydrated);
     const experiences = profile.generated.experiences;
     const idx = experiences.findIndex(e => cvEngine.entryKey(e) === cvEngine.entryKey(entry));
     if (idx > -1) experiences[idx] = entry; else experiences.push(entry);
     profile.generated.updatedAt = new Date().toISOString();
     saveStoreDebounced();
     return entry;
+}
+
+// Gemini results are cached per project (profile.ai[key] = { hash, bullets, competencies, technicalSkills, model }).
+// The cache is only used while the student's text is unchanged, so an edited resubmission is written again.
+function cvSourceHash(hydratedSub, entry) {
+    const { pieces } = cvEngine.collectSubmissionText(hydratedSub);
+    return { pieces, hash: cvGemini.fingerprint(entry.title, cvGemini.buildSourceText(pieces)) };
+}
+
+function applyGeminiResult(profile, entry, hydratedSub) {
+    const cached = profile.ai && profile.ai[cvEngine.entryKey(entry)];
+    if (!cached || cached.hash !== cvSourceHash(hydratedSub, entry).hash) return;
+    entry.bullets = cached.bullets;
+    if (cached.competencies.length) entry.competencies = cached.competencies;
+    cached.technicalSkills.forEach(skill => {
+        const lower = skill.toLowerCase();
+        if (!entry.technicalSkills.some(x => x.toLowerCase().includes(lower) || lower.includes(x.toLowerCase()))) entry.technicalSkills.push(skill);
+    });
+    entry.writer = 'gemini';
+}
+
+// Asks Gemini for three short bullets once all recordings are transcribed. On any problem the CV keeps the built-in bullets.
+async function polishSubmissionWithGemini(submissionId) {
+    if (!GEMINI_API_KEY) return;
+    const sub = (store.submissions || []).find(s => s && s.id === submissionId);
+    if (!sub || !sub.userId || !CV_PROJECT_TYPES.has(String(sub.moduleType || sub.type))) return;
+    const hydrated = withCvTranscripts(sub);
+    const entry = cvEngine.buildExperienceEntry(hydrated);
+    if (entry.awaitingTranscripts) return; // the transcription job calls this again when it finishes
+
+    const profile = getCvProfile(sub.userId, true);
+    const key = cvEngine.entryKey(entry);
+    const { pieces, hash } = cvSourceHash(hydrated, entry);
+    if (profile.ai && profile.ai[key] && profile.ai[key].hash === hash) return; // already written for this exact text
+
+    try {
+        const result = await cvGemini.writeExperienceWithGemini(
+            { title: entry.title, moduleLabel: entry.moduleLabel, pieces },
+            { apiKey: GEMINI_API_KEY, model: GEMINI_MODEL });
+        if (!result) return;
+        if (!profile.ai) profile.ai = {};
+        profile.ai[key] = { hash: result.hash, bullets: result.bullets, competencies: result.competencies, technicalSkills: result.technicalSkills, model: result.model };
+        refreshCvEntryForSubmission(sub);
+    } catch (err) {
+        console.warn(`[Gemini CV Writer] Kept built-in bullets for project ${entry.projectId}:`, err.message);
+    }
 }
 
 function resolveUploadedFile(url) {
@@ -8364,6 +8416,8 @@ async function transcribeSubmissionForCv(submissionId) {
     sub = find();
     if (sub) refreshCvEntryForSubmission(sub);
     saveStoreDebounced();
+    await polishSubmissionWithGemini(submissionId);
+    saveStoreDebounced();
 }
 
 function getStudentProjectSubmissions(learnerId, learnerEmail) {
@@ -8378,9 +8432,11 @@ function rebuildCvProfileForStudent(learnerId, learnerEmail) {
     const profile = getCvProfile(learnerId, true);
     profile.generated.experiences = [];
     subs.forEach(sub => {
-        const entry = cvEngine.buildExperienceEntry(withCvTranscripts(Object.assign({}, sub, { userId: String(learnerId) })));
+        const hydrated = withCvTranscripts(Object.assign({}, sub, { userId: String(learnerId) }));
+        const entry = cvEngine.buildExperienceEntry(hydrated);
+        applyGeminiResult(profile, entry, hydrated);
         profile.generated.experiences.push(entry);
-        if (entry.awaitingTranscripts) queueCvJob(() => transcribeSubmissionForCv(sub.id));
+        if (entry.awaitingTranscripts || GEMINI_API_KEY) queueCvJob(() => transcribeSubmissionForCv(sub.id));
     });
     profile.generated.updatedAt = new Date().toISOString();
     saveStoreDebounced();

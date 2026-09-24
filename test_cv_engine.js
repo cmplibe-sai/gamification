@@ -58,5 +58,20 @@ run('assembled CV merges manual details and never loses them', () => {
     assert.deepStrictEqual(out.languages, ['English']);
 });
 
+const gem = require('./cvGemini');
+const src = 'I analysed 1,200 customer records in Excel and found that 32% of customers left within 3 months across 4 regions.';
+const good = { bullets: ['Analysed 1,200 customer records in Excel.', 'Found that 32% of customers left within 3 months.', 'Compared churn across 4 regions.'], competencies: ['Data Analysis', 'Made Up'], technicalSkills: ['Excel', 'Tableau'] };
+run('Gemini answer is accepted when every number comes from the student text', () => {
+    const r = gem.validateResult(good, src);
+    assert.strictEqual(r.bullets.length, 3);
+    assert.deepStrictEqual(r.competencies, ['Data Analysis']);
+    assert.deepStrictEqual(r.technicalSkills, ['Excel'], 'skills the student never named are dropped');
+});
+run('Gemini answer is rejected for invented numbers, wrong bullet count or first person', () => {
+    assert.strictEqual(gem.validateResult({ bullets: ['Analysed 9,999 records in Excel today.', good.bullets[1], good.bullets[2]], competencies: [], technicalSkills: [] }, src), null);
+    assert.strictEqual(gem.validateResult({ bullets: good.bullets.slice(0, 2), competencies: [], technicalSkills: [] }, src), null);
+    assert.strictEqual(gem.validateResult({ bullets: ['We analysed 1,200 customer records in Excel.', good.bullets[1], good.bullets[2]], competencies: [], technicalSkills: [] }, src), null);
+});
+
 console.log(`\n${passed}/${total} passed`);
 process.exit(passed === total ? 0 : 1);
