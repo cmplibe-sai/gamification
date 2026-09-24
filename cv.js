@@ -26,7 +26,8 @@
     }
 
     // Returns the CV as a self-contained HTML string with inline styles (works on screen and in the print window).
-    function renderAutoCvHtml(cv) {
+    function renderAutoCvHtml(cv, options) {
+        const forPrint = Boolean(options && options.forPrint);
         const heading = 'font-size:13pt;font-weight:bold;letter-spacing:.5px;margin:16px 0 6px;border-bottom:1.5px solid #222;padding-bottom:2px;';
         const list = (items) => items.map((v, i) => `<div style="margin:3px 0;">${i + 1}. ${esc(v)}</div>`).join('');
 
@@ -57,7 +58,8 @@
                     <div style="font-size:26pt;font-weight:bold;text-transform:uppercase;line-height:1.1;">${esc(cv.name)}</div>
                     <div style="font-size:13pt;font-weight:bold;margin-top:6px;">${esc(cv.headline)}</div>
                 </div>
-                ${photo ? `<img src="${esc(photo)}" alt="" style="width:120px;height:130px;object-fit:cover;object-position:top;border-radius:4px;flex:none;" onerror="this.style.display='none'">` : ''}
+                ${photo ? `<img src="${esc(photo)}" alt="" style="width:120px;height:130px;object-fit:cover;object-position:top;border-radius:4px;flex:none;" onerror="this.style.display='none'">`
+                    : (forPrint ? '' : `<div style="width:120px;height:130px;flex:none;border:2px dashed #999;border-radius:4px;display:flex;align-items:center;justify-content:center;text-align:center;color:#777;font-size:10pt;padding:6px;box-sizing:border-box;">Add your photo<br>(Edit details)</div>`)}
             </div>
             <div style="display:flex;gap:26px;margin-top:6px;">
                 <div style="flex:1 1 62%;min-width:0;">
@@ -155,7 +157,7 @@
         win.document.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${esc(base)}">
             <title>${esc(cv.name)} - cMPLiBe CV</title>
             <style>@page{size:A4;margin:10mm} body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>
-            </head><body>${renderAutoCvHtml(cv)}</body></html>`);
+            </head><body>${renderAutoCvHtml(cv, { forPrint: true })}</body></html>`);
         win.document.close();
         win.onload = () => setTimeout(() => { win.focus(); win.print(); }, 350);
     }
@@ -244,7 +246,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ dataUrl, prefix: 'cv_photo', filename: `cv_photo_${Date.now()}.${photoFile.type === 'image/png' ? 'png' : 'jpg'}` })
                 })).json();
-                if (up && up.success && up.url) body.photoUrl = up.url;
+                if (!(up && up.success && up.url)) throw new Error('Photo upload failed. Please try again.');
+                body.photoUrl = up.url;
             }
 
             const data = await (await apiFetch('/api/learner/cv-profile', {

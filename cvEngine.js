@@ -331,7 +331,8 @@ function assembleCv(profile, learner, badges, campusLabel) {
         studentId: String((profile && profile.studentId) || (learner && (learner._id || learner.id)) || ''),
         name: firstName,
         headline: manual.headline || `${campusLabel ? campusLabel + ' - ' : ''}cMPLiBe Learner`,
-        photoUrl: manual.photoUrl || (learner && learner.profilePicUrl) || '',
+        // TagMango's grey placeholder avatar is not a real photo, so treat it as "no photo yet"
+        photoUrl: manual.photoUrl || (learner && learner.profilePicUrl && !/avatar-placeholder|placeholder/i.test(learner.profilePicUrl) ? learner.profilePicUrl : ''),
         intro: manual.intro || defaultIntro,
         introIsCustom: Boolean(manual.intro),
         experiences,
