@@ -12,7 +12,19 @@
 const OPPORTUNITY_TYPES = ['rapid_xp', 'residency', 'placement'];
 const TYPE_LABELS = { rapid_xp: 'Rapid XP Engine', residency: 'Corporate Residency', placement: 'Final Placement' };
 const LQ_ORDER = { any: 0, average: 1, strong: 2 };
-const FINAL_STATUSES = new Set(['selected', 'rejected', 'withdrawn', 'no_show', 'completed']);
+// offer_letter is final for the student; on_hold and final_shortlist are decisions the Creator can still change.
+const FINAL_STATUSES = new Set(['selected', 'offer_letter', 'rejected', 'withdrawn', 'no_show', 'completed']);
+// What the Creator can record for an interview round. 'shortlisted' means the student cleared the round and moves on.
+const RESULT_OUTCOMES = ['shortlisted', 'rejected', 'selected', 'offer', 'on_hold', 'final_shortlist'];
+const CLEARED_OUTCOMES = ['shortlisted'];
+const STATUS_FOR_OUTCOME = { shortlisted: 'interview_stage', rejected: 'rejected', selected: 'selected', offer: 'offer_letter', on_hold: 'on_hold', final_shortlist: 'final_shortlist' };
+const DEFAULT_ROUND_NAMES = ['Screening round', 'Technical round', 'HR round'];
+
+// The interview rounds of an opening, in order (the Creator names them; older openings get the default three).
+function roundNamesOf(opp) {
+    const names = (opp && Array.isArray(opp.rounds) ? opp.rounds : []).map(r => cleanText(r, 60)).filter(Boolean).slice(0, 10);
+    return names.length ? names : DEFAULT_ROUND_NAMES.slice();
+}
 const DAY_MS = 86400000;
 const MIN_QUESTIONS = 1;
 const MAX_QUESTIONS = 20;
@@ -81,7 +93,7 @@ function summarize(nominations, now) {
         interviews += attendedRoundCount(n);
         (n.rounds || []).forEach(r => { if (r.outcome === 'shortlisted') shortlisted += 1; });
         if (n.status === 'rejected') rejected += 1;
-        if (n.status === 'selected' || n.status === 'completed') selected += 1;
+        if (n.status === 'selected' || n.status === 'completed' || n.status === 'offer_letter') selected += 1;
         if (n.status === 'no_show') noShows += 1;
         if (n.status === 'withdrawn') withdrawn += 1;
         if (!isFinal(n)) active += 1;
@@ -141,7 +153,7 @@ function withdrawalHasCooldown(nomination) {
 }
 
 module.exports = {
-    OPPORTUNITY_TYPES, TYPE_LABELS, FINAL_STATUSES, MIN_QUESTIONS, MAX_QUESTIONS, CHECK_IN_DELAY_MS,
+    OPPORTUNITY_TYPES, TYPE_LABELS, FINAL_STATUSES, RESULT_OUTCOMES, CLEARED_OUTCOMES, STATUS_FOR_OUTCOME, roundNamesOf, MIN_QUESTIONS, MAX_QUESTIONS, CHECK_IN_DELAY_MS,
     cleanText, effectiveAttendance, attendedRoundCount, isFinal, pendingCheckIns, upcomingInterviews, summarize,
     evaluateEligibility, cleanQuestions, cooldownEnd, withdrawalHasCooldown
 };

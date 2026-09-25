@@ -9145,6 +9145,10 @@ function studentNominationFacts(studentId, learner, opp, lqZone, now) {
     };
 }
 
+function opportunityClosedNow(o, now) {
+    return o.status !== 'open' || Boolean(o.nominationDeadline && new Date(o.nominationDeadline).getTime() < now);
+}
+
 function publicOpportunity(o) {
     return {
         id: o.id, type: o.type, typeLabel: nominationsEngine.TYPE_LABELS[o.type], title: o.title, company: o.company,
@@ -9172,11 +9176,21 @@ app.get(['/api/opportunities', '/gamification/api/opportunities'], (req, res) =>
     const learner = findLearnerForCv(studentId) || { _id: studentId, email: session.email };
     const lqZone = req.query.lqZone;
     const block = activeBlock(studentId, now);
+    const mine = new Map(store.nominations.filter(n => n.studentId === studentId).map(n => [n.opportunityId, n]));
+    // Closed openings stay visible: the student sees what was presented, what they nominated for and what they missed.
     const list = store.opportunities
-        .filter(o => o.status === 'open' && opportunityReachesLearner(o, learner))
+        .filter(o => o.status !== 'draft' && (mine.has(o.id) || opportunityReachesLearner(o, learner)))
         .map(o => {
             const ev = nominationsEngine.evaluateEligibility(o, studentNominationFacts(studentId, learner, o, lqZone, now), now);
-            return Object.assign(publicOpportunity(o), { eligibility: ev });
+            const nomination = mine.get(o.id);
+            const closed = opportunityClosedNow(o, now);
+            return Object.assign(publicOpportunity(o), {
+                eligibility: ev,
+                closed,
+                state: nomination ? 'nominated' : (closed ? 'closed' : 'open'),
+                nominationStatus: nomination ? nomination.status : null,
+                nominatedAt: nomination ? nomination.nominatedAt : null
+            });
         });
     res.json({ success: true, opportunities: list, blockedUntil: block ? block.until : null, blockReason: block ? block.reason : '' });
 });
@@ -9221,6 +9235,16 @@ app.post(['/api/nominations', '/gamification/api/nominations'], (req, res) => {
     }
 });
 
+// How many openings were presented to the student, how many they nominated for, and how many closed without a nomination.
+function studentOpportunityStats(studentId, myNominations, now) {
+    const learner = findLearnerForCv(studentId) || { _id: String(studentId) };
+    const nominatedIds = new Set(myNominations.map(n => n.opportunityId));
+    const presented = store.opportunities.filter(o => o.status !== 'draft' && (nominatedIds.has(o.id) || opportunityReachesLearner(o, learner)));
+    const notNominated = presented.filter(o => !nominatedIds.has(o.id));
+    const missed = notNominated.filter(o => opportunityClosedNow(o, now)).length;
+    return { presented: presented.length, nominated: presented.length - notNominated.length, missed, open: notNominated.length - missed };
+}
+
 app.get(['/api/nominations/mine', '/gamification/api/nominations/mine'], (req, res) => {
     const session = customerSession(req);
     if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
@@ -9234,6 +9258,7 @@ app.get(['/api/nominations/mine', '/gamification/api/nominations/mine'], (req, r
         summary: nominationsEngine.summarize(mine, now),
         pendingCheckIns: nominationsEngine.pendingCheckIns(mine, now),
         upcoming: nominationsEngine.upcomingInterviews(mine, now),
+        opportunityStats: studentOpportunityStats(session.userId, mine, now),
         blockedUntil: block ? block.until : null,
         blockReason: block ? block.reason : ''
     });
@@ -9362,7 +9387,7 @@ app.get(['/api/creator/opportunities', '/gamification/api/creator/opportunities'
         success: true,
         settings: store.nominationSettings,
         opportunities: store.opportunities.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .map(o => Object.assign({}, o, { nominationCount: counts[o.id] || 0, audience: countLearnersReached(x => opportunityReachesLearner(o, x)) }))
+            .map(o => Object.assign({}, o, { rounds: nominationsEngine.roundNamesOf(o), nominationCount: counts[o.id] || 0, audience: countLearnersReached(x => opportunityReachesLearner(o, x)) }))
     });
 });
 
@@ -9401,7 +9426,8 @@ app.post(['/api/creator/opportunities', '/gamification/api/creator/opportunities
                 minResidency: cleanPrereqNumber(p.minResidency, 20),
                 minLqZone: ['any', 'average', 'strong'].includes(p.minLqZone) ? p.minLqZone : 'any'
             },
-            nominationDeadline: deadline && !isNaN(deadline) ? deadline.toISOString() : null
+            nominationDeadline: deadline && !isNaN(deadline) ? deadline.toISOString() : null,
+            rounds: (Array.isArray(b.rounds) ? b.rounds : String(b.rounds || '').split('\n')).map(r => nominationsEngine.cleanText(r, 60)).filter(Boolean).slice(0, 10)
         };
         let opp = b.id ? store.opportunities.find(o => o.id === b.id) : null;
         if (opp) Object.assign(opp, fields);
@@ -9537,7 +9563,7 @@ function applyCreatorRoundUpdate(nom, round, b, now) {
             historyPush(nom, `Round ${round.number} marked as attended by cMPLiBe`, now);
         }
     }
-    if (['pending', 'shortlisted', 'rejected', 'selected'].includes(b.outcome)) {
+    if (b.outcome === 'pending' || nominationsEngine.RESULT_OUTCOMES.includes(b.outcome)) {
         if (b.outcome !== 'pending' && nominationsEngine.effectiveAttendance(round) === null) {
             round.creatorAttended = true;
             round.creatorMarkedAt = new Date(now).toISOString();
@@ -9545,11 +9571,11 @@ function applyCreatorRoundUpdate(nom, round, b, now) {
         round.outcome = b.outcome;
         round.outcomeAt = new Date(now).toISOString();
         round.outcomeReason = nominationsEngine.cleanText(b.reason, 300);
-        if (b.outcome === 'rejected') nom.status = 'rejected';
-        else if (b.outcome === 'selected') nom.status = 'selected';
-        else if (nominationsEngine.isFinal(nom) && nom.status !== 'no_show') nom.status = 'interview_stage';
+        const mapped = nominationsEngine.STATUS_FOR_OUTCOME[b.outcome];
+        if (mapped && mapped !== 'interview_stage') nom.status = mapped;
+        else if (['on_hold', 'final_shortlist'].includes(nom.status) || (nominationsEngine.isFinal(nom) && nom.status !== 'no_show')) nom.status = 'interview_stage';
         if (b.outcome !== 'pending') historyPush(nom, `Round ${round.number} result: ${b.outcome}${round.outcomeReason ? ' - ' + round.outcomeReason : ''}`, now);
-        if (b.outcome === 'rejected' || b.outcome === 'selected') nom.statusReason = round.outcomeReason;
+        if (mapped && mapped !== 'interview_stage') nom.statusReason = round.outcomeReason;
     }
 }
 
@@ -9569,8 +9595,9 @@ async function notifyInterviewScheduled(nom, round, moved) {
     }
 }
 
-// Schedule interviews for many nominees of one opening at once: the same time for everybody (slot = 0)
-// or one after the other, every `slotMinutes` minutes.
+// Schedule one interview round for many nominees of one opening at once: the same time for everybody (gap 0)
+// or one after another every `slotMinutes` minutes. Round 2 and later are only scheduled for students who
+// cleared the round before; a student who already has that round gets it moved instead.
 app.post(['/api/creator/opportunities/:id/schedule', '/gamification/api/creator/opportunities/:id/schedule'], (req, res) => {
     try {
         if (!creatorOnly(req, res)) return;
@@ -9580,65 +9607,124 @@ app.post(['/api/creator/opportunities/:id/schedule', '/gamification/api/creator/
         const start = new Date(b.startAt);
         if (isNaN(start)) return res.status(400).json({ success: false, error: 'Please give the interview date and time.' });
         const slot = Math.min(240, Math.max(0, parseInt(b.slotMinutes, 10) || 0));
+        const names = nominationsEngine.roundNamesOf(opp);
+        const roundNumber = Math.min(10, Math.max(1, parseInt(b.roundNumber, 10) || 1));
+        const roundLabel = nominationsEngine.cleanText(b.label, 60) || names[roundNumber - 1] || `Round ${roundNumber}`;
         const ids = new Set((Array.isArray(b.nominationIds) ? b.nominationIds : []).map(String).slice(0, 500));
-        const noms = store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id) && !nominationsEngine.isFinal(n));
-        if (!noms.length) return res.status(400).json({ success: false, error: 'Select at least one student who is still in the process.' });
+        const chosen = store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id) && !nominationsEngine.isFinal(n));
+        if (!chosen.length) return res.status(400).json({ success: false, error: 'Select at least one student who is still in the process.' });
+
+        const notCleared = [];
+        const noms = chosen.filter(n => {
+            if (roundNumber === 1) return true;
+            const previous = (n.rounds || []).find(r => r.number === roundNumber - 1);
+            const ok = previous && nominationsEngine.CLEARED_OUTCOMES.includes(previous.outcome);
+            if (!ok) notCleared.push(n.studentName);
+            return ok;
+        });
+        if (!noms.length) {
+            return res.status(400).json({ success: false, error: `Round ${roundNumber} can only be scheduled for students who cleared round ${roundNumber - 1}. Mark them as cleared first.` });
+        }
         const now = Date.now();
         const duration = Math.min(480, Math.max(5, parseInt(b.durationMinutes, 10) || (slot || 30)));
         noms.forEach((nom, i) => {
             const at = new Date(start.getTime() + i * slot * 60000);
-            const round = {
-                id: 'rnd_' + now.toString(36) + crypto.randomBytes(2).toString('hex'),
-                number: (nom.rounds || []).length + 1,
-                label: nominationsEngine.cleanText(b.label, 60),
-                scheduledAt: at.toISOString(),
-                durationMinutes: duration,
-                venue: nominationsEngine.cleanText(b.venue, 200),
-                note: nominationsEngine.cleanText(b.note, 300),
-                studentAttended: null, creatorAttended: null, outcome: 'pending', questions: []
-            };
             nom.rounds = nom.rounds || [];
-            nom.rounds.push(round);
-            if (nom.status === 'nominated') nom.status = 'interview_stage';
-            historyPush(nom, `Interview round ${round.number} scheduled for ${round.scheduledAt}`, now);
-            notifyInterviewScheduled(nom, round);
+            let round = nom.rounds.find(r => r.number === roundNumber);
+            const moved = Boolean(round);
+            if (!round) {
+                round = { id: 'rnd_' + now.toString(36) + crypto.randomBytes(2).toString('hex'), number: roundNumber, questions: [] };
+                nom.rounds.push(round);
+                nom.rounds.sort((x, y) => x.number - y.number);
+            }
+            // moving an existing round keeps its name, place and note unless new ones are given
+            Object.assign(round, {
+                label: nominationsEngine.cleanText(b.label, 60) || round.label || roundLabel,
+                scheduledAt: at.toISOString(),
+                durationMinutes: b.durationMinutes ? duration : (round.durationMinutes || duration),
+                venue: b.venue !== undefined ? nominationsEngine.cleanText(b.venue, 200) : (round.venue || ''),
+                note: b.note !== undefined ? nominationsEngine.cleanText(b.note, 300) : (round.note || ''),
+                studentAttended: null, studentReportedAt: null, creatorAttended: null, creatorMarkedAt: null,
+                outcome: 'pending', outcomeReason: '', noShowReason: '', reminderSentAt: null
+            });
+            if (moved) liftNominationBlock(nom.studentId, `${nom.id}:${round.id}`);
+            if (['nominated', 'no_show', 'on_hold', 'final_shortlist'].includes(nom.status)) nom.status = 'interview_stage';
+            historyPush(nom, `${round.label} ${moved ? 'rescheduled to' : 'scheduled for'} ${round.scheduledAt}`, now);
+            notifyInterviewScheduled(nom, round, moved);
         });
         saveStore();
-        res.json({ success: true, scheduled: noms.length, skipped: ids.size - noms.length });
+        res.json({ success: true, scheduled: noms.length, skipped: ids.size - noms.length, notCleared });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// Set the result (shortlisted / rejected / selected) for the latest interview round of many nominees at once.
+// The nominee's round to act on: the one asked for, or their latest.
+function nominationRound(nom, roundNumber) {
+    const rounds = nom.rounds || [];
+    return roundNumber ? rounds.find(r => r.number === roundNumber) : rounds.slice(-1)[0];
+}
+
+// Set the result of a round for many nominees at once: cleared (moves on), not selected, on hold, or a final decision.
 app.post(['/api/creator/opportunities/:id/result', '/gamification/api/creator/opportunities/:id/result'], (req, res) => {
     try {
         if (!creatorOnly(req, res)) return;
         const opp = store.opportunities.find(o => o.id === req.params.id);
         if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
         const b = req.body || {};
-        if (!['shortlisted', 'rejected', 'selected'].includes(b.outcome)) return res.status(400).json({ success: false, error: 'Choose shortlisted, rejected or selected.' });
+        if (!nominationsEngine.RESULT_OUTCOMES.includes(b.outcome)) return res.status(400).json({ success: false, error: 'Choose a valid result.' });
         const ids = new Set((Array.isArray(b.nominationIds) ? b.nominationIds : []).map(String).slice(0, 500));
         const noms = store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id) && !nominationsEngine.isFinal(n));
         if (!noms.length) return res.status(400).json({ success: false, error: 'Select at least one student who is still in the process.' });
+        const roundNumber = parseInt(b.roundNumber, 10) || 0;
         const now = Date.now();
         let updated = 0;
+        const withoutRound = [];
         noms.forEach(nom => {
-            const round = (nom.rounds || []).slice(-1)[0];
+            const round = nominationRound(nom, roundNumber);
             if (round) {
                 applyCreatorRoundUpdate(nom, round, { outcome: b.outcome, reason: b.reason }, now);
+            } else if (roundNumber) {
+                withoutRound.push(nom.studentName);
+                return;
             } else if (b.outcome === 'shortlisted') {
                 historyPush(nom, 'Shortlisted by cMPLiBe' + (b.reason ? ': ' + nominationsEngine.cleanText(b.reason, 300) : ''), now);
                 nom.status = 'interview_stage';
             } else {
-                nom.status = b.outcome;
+                nom.status = nominationsEngine.STATUS_FOR_OUTCOME[b.outcome] || 'interview_stage';
                 nom.statusReason = nominationsEngine.cleanText(b.reason, 300);
-                historyPush(nom, `Status set to ${b.outcome} by cMPLiBe`, now);
+                historyPush(nom, `Status set to ${nom.status} by cMPLiBe`, now);
             }
             updated += 1;
         });
         saveStore();
-        res.json({ success: true, updated, skipped: ids.size - updated });
+        res.json({ success: true, updated, skipped: ids.size - updated, withoutRound });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Mark many nominees as attended or not attended for one round.
+app.post(['/api/creator/opportunities/:id/attendance', '/gamification/api/creator/opportunities/:id/attendance'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const opp = store.opportunities.find(o => o.id === req.params.id);
+        if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
+        const b = req.body || {};
+        if (b.attended !== true && b.attended !== false) return res.status(400).json({ success: false, error: 'Choose attended or not attended.' });
+        const ids = new Set((Array.isArray(b.nominationIds) ? b.nominationIds : []).map(String).slice(0, 500));
+        const roundNumber = parseInt(b.roundNumber, 10) || 0;
+        const now = Date.now();
+        let updated = 0;
+        store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id)).forEach(nom => {
+            const round = nominationRound(nom, roundNumber);
+            if (!round) return;
+            applyCreatorRoundUpdate(nom, round, { attended: b.attended, reason: b.reason, noPenalty: b.noPenalty === true }, now);
+            updated += 1;
+        });
+        if (!updated) return res.status(400).json({ success: false, error: 'None of the selected students has this round scheduled.' });
+        saveStore();
+        res.json({ success: true, updated });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -9665,7 +9751,7 @@ app.post(['/api/creator/nominations/:id/status', '/gamification/api/creator/nomi
     const nom = store.nominations.find(n => n.id === req.params.id);
     if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
     const status = (req.body || {}).status;
-    if (!['nominated', 'interview_stage', 'selected', 'rejected', 'completed'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid status.' });
+    if (!['nominated', 'interview_stage', 'selected', 'offer_letter', 'on_hold', 'final_shortlist', 'rejected', 'completed'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid status.' });
     nom.status = status;
     nom.statusReason = nominationsEngine.cleanText(req.body.reason, 300);
     historyPush(nom, `Status set to ${status} by cMPLiBe${nom.statusReason ? ': ' + nom.statusReason : ''}`, Date.now());

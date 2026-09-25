@@ -74,5 +74,19 @@ run('cooldown end is clamped to 1-90 days', () => {
     assert.strictEqual(new Date(eng.cooldownEnd(NOW, 0)).getTime() - NOW, 15 * 86400000, 'no value falls back to 15 days');
 });
 
+run('an opening without rounds gets the default three; named rounds are kept and trimmed', () => {
+    assert.deepStrictEqual(eng.roundNamesOf({}), ['Screening round', 'Technical round', 'HR round']);
+    assert.deepStrictEqual(eng.roundNamesOf({ rounds: ['  Screening ', '', 'Case study'] }), ['Screening', 'Case study']);
+});
+run('only "cleared" opens the next round; final decisions map to statuses', () => {
+    assert.deepStrictEqual(eng.CLEARED_OUTCOMES, ['shortlisted']);
+    assert.strictEqual(eng.STATUS_FOR_OUTCOME.offer, 'offer_letter');
+    assert.strictEqual(eng.STATUS_FOR_OUTCOME.on_hold, 'on_hold');
+    assert.ok(eng.isFinal({ status: 'offer_letter' }) && !eng.isFinal({ status: 'on_hold' }) && !eng.isFinal({ status: 'final_shortlist' }));
+});
+run('an offer letter counts as selected in the summary', () => {
+    assert.strictEqual(eng.summarize([{ status: 'offer_letter', rounds: [] }, { status: 'on_hold', rounds: [] }], NOW).selected, 1);
+});
+
 console.log(`\n${passed}/${total} passed`);
 process.exit(passed === total ? 0 : 1);

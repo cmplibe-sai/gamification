@@ -918,7 +918,10 @@
                         <i class="fas fa-bullhorn"></i> <span>Corporate Requests</span> <span id="creatorReqCount" class="hidden min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-black items-center justify-center px-1">0</span>
                     </button>
                     <button id="creatorOppSubBtn-openings" onclick="switchCreatorOppSubTab('openings')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-                        <i class="fas fa-briefcase"></i> <span>Openings &amp; Nominations</span>
+                        <i class="fas fa-briefcase"></i> <span>Openings</span>
+                    </button>
+                    <button id="creatorOppSubBtn-nominations" onclick="switchCreatorOppSubTab('nominations')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-table-list"></i> <span>Nominations</span>
                     </button>
                 </div>
                 <div id="creatorOppSub-requests" class="space-y-4">
@@ -926,8 +929,12 @@
                     <div id="creatorRequestsHost"></div>
                 </div>
                 <div id="creatorOppSub-openings" class="hidden space-y-4">
-                    <p class="text-xs text-slate-400">Create openings, then open an opening to see everyone who nominated and schedule interviews for all of them at once.</p>
+                    <p class="text-xs text-slate-400">Create and manage openings. Open the round board of an opening to schedule interviews, record results and move students from round to round.</p>
                     <div id="creatorOpportunitiesHost"></div>
+                </div>
+                <div id="creatorOppSub-nominations" class="hidden space-y-4">
+                    <p class="text-xs text-slate-400">Every company and role with how many students nominated and where each one stands. Open the board of a row to act on it.</p>
+                    <div id="creatorNominationsHost"></div>
                 </div>
             </section>
 
@@ -1755,7 +1762,7 @@
     <script src="app.js?v=2.9.34"></script>
     <script src="cv.js?v=1.0.2"></script>
     <script src="requirements.js?v=2.1.0"></script>
-    <script src="nominations.js?v=2.0.0"></script>
+    <script src="nominations.js?v=3.0.0"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
