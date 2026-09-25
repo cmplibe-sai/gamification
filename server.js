@@ -2362,9 +2362,53 @@ function saveMilestoneConfigsToDb(configs) {
     }
 }
 
+// Quiz answer keys must never reach learners' browsers. Everyone except a creator gets the check-in setup
+// with the correct answers and explanations removed (grading always happens on the server from the full data).
+const ANSWER_KEY_FIELDS = ['correctOption', 'correctAnswer', 'correctIndex', 'correctOptions', 'answer', 'explanation', 'isCorrect'];
+let _learnerSafeConfigsCache = { key: null, data: null };
+function stripAnswerKeysFromConfigs(configs) {
+    const safe = {};
+    for (const msId of Object.keys(configs || {})) {
+        const modules = configs[msId];
+        if (!modules || typeof modules !== 'object') { safe[msId] = modules; continue; }
+        safe[msId] = {};
+        for (const mod of Object.keys(modules)) {
+            const days = modules[mod];
+            if (!days || typeof days !== 'object') { safe[msId][mod] = days; continue; }
+            safe[msId][mod] = {};
+            for (const dKey of Object.keys(days)) {
+                const day = days[dKey];
+                if (day && typeof day === 'object' && Array.isArray(day.questions)) {
+                    safe[msId][mod][dKey] = {
+                        ...day,
+                        questions: day.questions.map(q => {
+                            if (!q || typeof q !== 'object') return q;
+                            const copy = { ...q };
+                            ANSWER_KEY_FIELDS.forEach(f => { delete copy[f]; });
+                            return copy;
+                        })
+                    };
+                } else {
+                    safe[msId][mod][dKey] = day;
+                }
+            }
+        }
+    }
+    return safe;
+}
+// Cached per version of the config file, because /api/sync is called every few seconds by every open browser
+function getLearnerSafeMilestoneConfigs() {
+    let key = null;
+    try { const st = fs.statSync(MILESTONE_CONFIGS_FILE); key = st.mtimeMs + ':' + st.size; } catch (e) { /* no file yet */ }
+    if (key && _learnerSafeConfigsCache.key === key && _learnerSafeConfigsCache.data) return _learnerSafeConfigsCache.data;
+    const data = stripAnswerKeysFromConfigs(getMilestoneConfigsFromDb());
+    _learnerSafeConfigsCache = { key, data };
+    return data;
+}
+
 // GET endpoint — returns current milestone configs (fresh disk read)
 app.get(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req, res) => {
-    const data = getMilestoneConfigsFromDb();
+    const data = checkCreatorAuth(req) ? getMilestoneConfigsFromDb() : getLearnerSafeMilestoneConfigs();
     res.json({ success: true, data });
 });
 
@@ -2461,7 +2505,7 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 });
 
 // Lets the owner confirm which server code is actually running on the VPS after a pull and restart
-const SERVER_BUILD = '2026-09-25-pod-questions-guard';
+const SERVER_BUILD = '2026-09-25-answer-keys-hidden';
 const SERVER_STARTED_AT = new Date().toISOString();
 app.get(['/api/version', '/gamification/api/version'], (req, res) => {
     res.json({ success: true, build: SERVER_BUILD, startedAt: SERVER_STARTED_AT });
@@ -5005,7 +5049,7 @@ app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
             submissionsRevision: store.submissionsRevision || 1000,
             configsRevision: store.configsRevision || 1000,
             lastUpdated: store.lastUpdated || 1000,
-            milestoneConfigs: getMilestoneConfigsFromDb(),
+            milestoneConfigs: isCreator ? getMilestoneConfigsFromDb() : getLearnerSafeMilestoneConfigs(),
             moduleAccess: getModuleAccessFromDb(),
             moduleActivationDates: getModuleActivationDatesFromDb(),
             joinDates: getUserJoinDatesFromDb(),
