@@ -9177,9 +9177,10 @@ app.get(['/api/opportunities', '/gamification/api/opportunities'], (req, res) =>
     const lqZone = req.query.lqZone;
     const block = activeBlock(studentId, now);
     const mine = new Map(store.nominations.filter(n => n.studentId === studentId).map(n => [n.opportunityId, n]));
+    // Every published opening is shown to every student; the requirements (campus, milestone, projects, level) decide who can nominate.
     // Closed openings stay visible: the student sees what was presented, what they nominated for and what they missed.
     const list = store.opportunities
-        .filter(o => o.status !== 'draft' && (mine.has(o.id) || opportunityReachesLearner(o, learner)))
+        .filter(o => o.status !== 'draft')
         .map(o => {
             const ev = nominationsEngine.evaluateEligibility(o, studentNominationFacts(studentId, learner, o, lqZone, now), now);
             const nomination = mine.get(o.id);
@@ -9239,7 +9240,7 @@ app.post(['/api/nominations', '/gamification/api/nominations'], (req, res) => {
 function studentOpportunityStats(studentId, myNominations, now) {
     const learner = findLearnerForCv(studentId) || { _id: String(studentId) };
     const nominatedIds = new Set(myNominations.map(n => n.opportunityId));
-    const presented = store.opportunities.filter(o => o.status !== 'draft' && (nominatedIds.has(o.id) || opportunityReachesLearner(o, learner)));
+    const presented = store.opportunities.filter(o => o.status !== 'draft');
     const notNominated = presented.filter(o => !nominatedIds.has(o.id));
     const missed = notNominated.filter(o => opportunityClosedNow(o, now)).length;
     return { presented: presented.length, nominated: presented.length - notNominated.length, missed, open: notNominated.length - missed };

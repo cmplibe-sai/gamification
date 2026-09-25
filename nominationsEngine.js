@@ -112,6 +112,7 @@ function evaluateEligibility(opp, facts, now) {
     const checks = [];
     const add = (label, ok, have, need) => checks.push({ label, ok, have, need });
 
+    if (opp.targetAllCampuses !== true) add('Offered to your campus', Boolean(facts.campusTargeted), facts.campusTargeted ? 'Yes' : 'No', 'Yes');
     if (pre.milestoneId) add(`Reach Milestone ${pre.milestoneId}`, facts.highestMilestone >= pre.milestoneId, `Milestone ${facts.highestMilestone}`, `Milestone ${pre.milestoneId}`);
     if (pre.minProjectsAi) add('cMPLi-ai projects completed', facts.projectsAi >= pre.minProjectsAi, facts.projectsAi, pre.minProjectsAi);
     if (pre.minProjectsInsight) add('Insight Engine projects completed', facts.projectsInsight >= pre.minProjectsInsight, facts.projectsInsight, pre.minProjectsInsight);
@@ -125,7 +126,6 @@ function evaluateEligibility(opp, facts, now) {
     let blocker = null;
     if (opp.status !== 'open') blocker = 'This opportunity is not open.';
     else if (opp.nominationDeadline && new Date(opp.nominationDeadline).getTime() < now) blocker = 'The nomination deadline has passed.';
-    else if (!facts.campusTargeted) blocker = 'This opportunity is not offered to your campus.';
     else if (facts.alreadyNominated) blocker = 'You have already nominated for this opportunity.';
     else if (facts.blockedUntil && new Date(facts.blockedUntil).getTime() > now) {
         blocker = `Nominations are paused for you until ${new Date(facts.blockedUntil).toLocaleDateString('en-GB')} because of a missed or abandoned interview.`;

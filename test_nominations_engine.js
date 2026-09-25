@@ -15,7 +15,7 @@ function run(name, fn) {
 
 const NOW = Date.parse('2026-10-01T10:00:00Z');
 const facts = (over) => Object.assign({ campusTargeted: true, highestMilestone: 3, projectsAi: 2, projectsInsight: 1, rapidXpDone: 1, residencyDone: 0, lqZone: 'strong', blockedUntil: null, alreadyNominated: false }, over);
-const opp = (pre, over) => Object.assign({ id: 'o1', status: 'open', prerequisites: pre }, over);
+const opp = (pre, over) => Object.assign({ id: 'o1', status: 'open', targetAllCampuses: true, prerequisites: pre }, over);
 
 console.log('=== test_nominations_engine.js ===');
 run('student meeting every prerequisite is eligible', () => {
@@ -29,7 +29,10 @@ run('each unmet prerequisite makes the student ineligible and is listed', () => 
     assert.deepStrictEqual(r.checks.filter(c => !c.ok).length, 3);
 });
 run('campus, status, deadline, duplicate and cooldown each block nomination', () => {
-    assert.ok(eng.evaluateEligibility(opp({}), facts({ campusTargeted: false }), NOW).blocker);
+    const otherCampus = eng.evaluateEligibility(opp({}, { targetAllCampuses: false }), facts({ campusTargeted: false }), NOW);
+    assert.strictEqual(otherCampus.eligible, false);
+    assert.strictEqual(otherCampus.checks[0].label, 'Offered to your campus', 'the campus shows as a requirement, not as a reason to hide the opening');
+    assert.strictEqual(eng.evaluateEligibility(opp({}, { targetAllCampuses: true }), facts({ campusTargeted: false }), NOW).eligible, true, 'an opening for all campuses has no campus requirement');
     assert.ok(eng.evaluateEligibility(opp({}, { status: 'closed' }), facts(), NOW).blocker);
     assert.ok(eng.evaluateEligibility(opp({}, { nominationDeadline: '2026-09-30T00:00:00Z' }), facts(), NOW).blocker);
     assert.ok(eng.evaluateEligibility(opp({}), facts({ alreadyNominated: true }), NOW).blocker);
