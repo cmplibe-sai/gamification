@@ -8905,7 +8905,7 @@ function buildDaySubMap(subs, milestoneStartDate, moduleName, totalSessions, msI
     const explicitDayMap = {};
     Object.keys(msConfigs || {}).forEach(dk => {
         const cfg = msConfigs[dk];
-        if (!cfg || cfg.cancelled) return;
+        if (!cfg || cfg.cancelled || cfg.sharedFrom) return; // a day borrowed from another milestone has no day number of its own
 
         let dayNum = Number(cfg.dayNumber || cfg.sessionDay || cfg.day);
         if (!dayNum && cfg.title) {
@@ -9171,7 +9171,7 @@ function renderAdminCohortSubmissions() {
         let isApproved = isCertificateApproved(user._id, activeAdminMilestoneId || 1);
         const certRec = (typeof mockApprovedCertificates !== 'undefined' && mockApprovedCertificates[`${user._id}_MS${activeAdminMilestoneId || 1}`]) || null;
         const isClaimRequested = Boolean(certRec && certRec.status === 'pending_approval' && !isApproved);
-        const isPending = isClaimRequested || (completionPct >= 90 && !isApproved);
+        const isPending = isClaimRequested;
 
         if (isPending) totalPending++;
         if (filterStatus === 'pending' && !isPending) return;
@@ -9538,20 +9538,16 @@ function renderAdminNeedApprovalView() {
         const isAppr = typeof isCertificateApproved === 'function' ? isCertificateApproved(uid, msId) : false;
         if (isAppr) return; // already approved
 
-        let claimReq = false;
-        try {
-            const claims = JSON.parse(localStorage.getItem('userCredentialClaims') || '{}');
-            if (claims[`${uid}_${msId}`] || claims[`${uid}_MS${msId}`]) claimReq = true;
-        } catch(e) {}
-
+        // Only students who applied for the credential appear here (test and dummy accounts never do).
+        if (typeof isTestUser === 'function' && isTestUser(u)) return;
         const certRec = (typeof mockApprovedCertificates !== 'undefined' && (mockApprovedCertificates[`${uid}_MS${msId}`] || mockApprovedCertificates[`${uid}_${msId}`])) || null;
-        if (certRec && certRec.status === 'pending_approval') claimReq = true;
+        const claimReq = Boolean(certRec && certRec.status === 'pending_approval');
 
         const userSubs = allSubs.filter(s => (String(s.userId) === uid || (s.userEmail && u.email && s.userEmail.toLowerCase().trim() === u.email.toLowerCase().trim())) && Number(s.milestoneId || 1) === msId);
         const earnedLcs = userSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
         const completedCount = userSubs.filter(s => s.status === 'completed' || Number(s.lcReward) > 0).length;
 
-        if (claimReq || completedCount >= 1) {
+        if (claimReq) {
             pendingCandidates.push({
                 ...u,
                 claimReq,
@@ -9639,7 +9635,10 @@ async function batchApproveAllPendingClaims() {
     for (const u of users) {
         const uid = String(u._id || u.id);
         const isAppr = typeof isCertificateApproved === 'function' ? isCertificateApproved(uid, msId) : false;
-        if (!isAppr && typeof adminApproveCredential === 'function') {
+        // Only students who applied for the credential are approved in bulk
+        const certRec = (typeof mockApprovedCertificates !== 'undefined' && (mockApprovedCertificates[`${uid}_MS${msId}`] || mockApprovedCertificates[`${uid}_${msId}`])) || null;
+        const applied = Boolean(certRec && certRec.status === 'pending_approval');
+        if (!isAppr && applied && !(typeof isTestUser === 'function' && isTestUser(u)) && typeof adminApproveCredential === 'function') {
             await adminApproveCredential(uid, msId);
             count++;
         }
@@ -15937,6 +15936,16 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
     const msConfigs = (customMilestoneConfigs && customMilestoneConfigs[msId] && (customMilestoneConfigs[msId][normMod] || customMilestoneConfigs[msId][moduleName])) || {};
     const targetDay = Number(dayNum) || 1;
 
+    // A day number written on a config (from the sheet or the Creator) is a cohort day. It only decides the date of
+    // learner day N when that date is not earlier than the learner's own N-th day (start date + N - 1), so a student who
+    // joined later, or is in a later milestone, gets a timeline that starts on their own start date.
+    let minDateKey = '';
+    if (milestoneStartDate && typeof milestoneStartDate.getTime === 'function' && !isNaN(milestoneStartDate.getTime())) {
+        const minDate = new Date(milestoneStartDate.getTime());
+        minDate.setDate(minDate.getDate() + targetDay - 1);
+        minDateKey = getLocalDateKey(minDate);
+    }
+
     // Helper to test if a config object has content
     const isConfigValid = (c) => Boolean(
         c && !c.cancelled && (
@@ -15952,7 +15961,7 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
         const c = msConfigs[k];
         if (!c || c.cancelled) continue;
         const cDay = Number(c.dayNumber || c.sessionDay || c.day);
-        if (cDay === targetDay && isConfigValid(c)) {
+        if (cDay === targetDay && isConfigValid(c) && !(minDateKey && (c.date || c.dateKey || k) < minDateKey)) {
             const dateKey = c.date || c.dateKey || k;
             const dateObj = new Date(dateKey + 'T00:00:00');
             return {
@@ -15970,9 +15979,9 @@ function getResolvedMilestoneDateKey(msId, moduleName, milestoneStartDate, dayNu
     // 2. SECONDARY MATCH: Title explicitly matching "Session N:" or "Day N:"
     for (const k of Object.keys(msConfigs)) {
         const c = msConfigs[k];
-        if (!c || !c.title || c.cancelled) continue;
+        if (!c || !c.title || c.cancelled || c.sharedFrom) continue;
         const m = String(c.title).match(/(?:Session|Day)\s*(\d+)/i);
-        if (m && Number(m[1]) === targetDay && isConfigValid(c)) {
+        if (m && Number(m[1]) === targetDay && isConfigValid(c) && !(minDateKey && (c.date || c.dateKey || k) < minDateKey)) {
             const dateKey = c.date || c.dateKey || k;
             const dateObj = new Date(dateKey + 'T00:00:00');
             return {
@@ -16278,6 +16287,15 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
     const endTime = dayConfig.endTime || (isImmerse ? '23:59' : '17:00');
     const isTest = (typeof isTestUser === 'function') && isTestUser();
 
+    const lateTiming = window.CmpliCheckinRules ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime }) : null;
+    const lateRewardShown = lcLate > 0 ? lcLate : 3;
+    const lateBannerHtml = (lateTiming && lateTiming.allowed && lateTiming.isLate) ? `
+        <div class="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2">
+            <i class="fas fa-hourglass-half mt-0.5"></i>
+            <div><strong>Late check-in.</strong> ${lateTiming.daysLate > 0 ? `This session was ${lateTiming.daysLate} day${lateTiming.daysLate === 1 ? '' : 's'} ago.` : 'The on-time window for today has ended.'}
+            You can still complete it and keep your streak, but a late check-in earns <strong>+${lateRewardShown} LCs</strong>. Full LCs are only for on-time check-ins.</div>
+        </div>` : '';
+
     if (typeof closeSubmissionModal === 'function') {
         closeSubmissionModal();
     } else {
@@ -16345,6 +16363,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                 </div>
                 ` : ''}
 
+                ${lateBannerHtml}
                 <!-- Reward and Window Bar (On-Time Only for Immerse) -->
                 <div class="grid grid-cols-2 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
                     <div>
@@ -16357,6 +16376,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
                     </div>
                 </div>
                 ` : `
+                ${lateBannerHtml}
                 <!-- Reward and Window Bar for DIP -->
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
                     <div>
@@ -17184,11 +17204,22 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
             });
         }
 
-        // Check on-time vs late (Immerse uses ontime LCs only)
-        const now = new Date();
-        const currentHHMM = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-        const isLate = (!isImmerseMod && endTime) ? (currentHHMM > endTime) : false;
-        const basePoints = (isLate && !isImmerseMod) ? (Number(lcLate) || 3) : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
+        // On time or late is decided by the session DATE and the end time (India time), exactly as the server does.
+        const timing = window.CmpliCheckinRules
+            ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: endTime || '23:59' })
+            : { allowed: true, isLate: false, reason: '' };
+        const testBypass = (typeof isTestUser === 'function') && isTestUser();
+        if (!timing.allowed && !testBypass) {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<i class="fas ${isImmerseMod ? 'fa-video' : 'fa-paper-plane'} mr-1.5"></i> ${isImmerseMod ? 'Submit Video Reflection' : 'Submit Check-in'}`;
+            }
+            alert((window.CmpliCheckinRules && window.CmpliCheckinRules.REASON_TEXT[timing.reason]) || 'This check-in cannot be submitted now.');
+            return;
+        }
+        const isLate = timing.allowed ? timing.isLate : true;
+        const lateReward = Number(lcLate) > 0 ? Number(lcLate) : 3;
+        const basePoints = isLate ? lateReward : (Number(lcOnTime) || (msId === 1 ? 33 : 133));
 
         const userEmailStr = currentUser.email ? currentUser.email.toLowerCase().trim() : '';
         const userIdStr = String(currentUser._id || currentUser.id || 'usr_anon');
@@ -17444,46 +17475,22 @@ function calculateModuleStreak(daySubMap, totalSessions, milestoneStartDate, mod
         return !isEvaluating && !isMismatch && (sub.status === 'completed' || Number(sub.matchPercentage) >= 50 || Number(sub.lcReward) > 0);
     };
 
-    let completedCount = 0;
-    const sessionCompletion = dates.map((dk, idx) => {
+    // A submission counts for a session only when it belongs to that date (never by day number alone, which
+    // could credit a day to the wrong session after a reschedule or a cancelled day).
+    const sessions = dates.map((dk, idx) => {
         const dayNum = idx + 1;
-        const sub = (daySubMap && (daySubMap[dk] || daySubMap[dayNum])) || null;
-        const ok = isSubCompleted(sub);
-        if (ok) completedCount++;
-        return { dateKey: dk, dayNum, ok };
+        let sub = (daySubMap && daySubMap[dk]) || null;
+        if (!sub && daySubMap && daySubMap[dayNum]) {
+            const cand = daySubMap[dayNum];
+            const candDate = cand.dateKey || cand.date;
+            if (!candDate || String(candDate).split('T')[0] === dk) sub = cand;
+        }
+        return { dateKey: dk, dayNum, ok: isSubCompleted(sub) };
     });
-
-    // Sessions scheduled on or before today
-    const pastOrTodaySessions = sessionCompletion.filter(s => s.dateKey <= todayKey);
-    const todaySession = sessionCompletion.find(s => s.dateKey === todayKey);
-
-    // Calculate current streak: walk backwards from today (or yesterday if today's check-in is pending)
-    let currentStreak = 0;
-    let streakSessions = [...pastOrTodaySessions];
-    if (todaySession && !todaySession.ok) {
-        streakSessions = streakSessions.filter(s => s.dateKey !== todayKey);
-    }
-    for (let i = streakSessions.length - 1; i >= 0; i--) {
-        if (streakSessions[i].ok) {
-            currentStreak++;
-        } else {
-            break;
-        }
-    }
-
-    // Calculate longest streak: scan all past/today sessions chronologically
-    let longestStreak = 0;
-    let runningStreak = 0;
-    for (let i = 0; i < pastOrTodaySessions.length; i++) {
-        if (pastOrTodaySessions[i].ok) {
-            runningStreak++;
-            if (runningStreak > longestStreak) {
-                longestStreak = runningStreak;
-            }
-        } else {
-            runningStreak = 0;
-        }
-    }
+    const streaks = window.CmpliCheckinRules
+        ? window.CmpliCheckinRules.computeStreaks(sessions, todayKey)
+        : { completedCount: sessions.filter(x => x.ok).length, currentStreak: 0, longestStreak: 0 };
+    const completedCount = streaks.completedCount, currentStreak = streaks.currentStreak, longestStreak = streaks.longestStreak;
 
     return { completedCount, currentStreak, longestStreak };
 }
@@ -18915,17 +18922,37 @@ function switchMilestoneTab(moduleName, btnElement) {
         const isPast = (cardDateKey < todayKey);
         const isFuture = (cardDateKey > todayKey);
 
+        // Catch-up: a missed day stays open for 7 days at the late reward; a finished milestone is closed for new check-ins
+        const rulesApi = window.CmpliCheckinRules;
+        const defaultEnd = (normalizeLevelUpType(moduleName) === 'dip') ? '17:00' : '23:59';
+        const catchUp = rulesApi ? rulesApi.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: dayCfg.endTime || defaultEnd }) : { allowed: false, daysLate: 99 };
+        const lateLcs = rulesApi ? rulesApi.lateLcsFor(dayCfg) : 3;
+        const milestoneClosed = Boolean(isCompletedMilestone) && !isTestMode;
+        const catchUpButton = (label, cls) => {
+            if (moduleName === 'pod') {
+                return `<button onclick="openPodSessionModal(${dayNum}, '${cardDateKey}')" class="${cls}"><i class="fas fa-podcast mr-1"></i> ${label}</button>`;
+            }
+            if (isImmerse) {
+                const hasDipDone = hasUserCompletedDipForDate(currentUser, activeMilestoneId, cardDateKey, dayNum);
+                if (!hasDipDone && !isTestMode) {
+                    return `<button onclick="showImmerseDipPrereqModal('${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-300 border border-amber-500/40 bg-amber-500/10 shrink-0 whitespace-nowrap"><i class="fas fa-lock mr-1.5 text-amber-400"></i> Complete Dip First</button>`;
+                }
+                return `<button onclick="openSubmissionModal(${dayNum}, 'immerse', '${cardDateKey}')" class="${cls}"><i class="fas fa-video mr-1"></i> ${label}</button>`;
+            }
+            return `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="${cls}"><i class="fas fa-pen mr-1"></i> ${label}</button>`;
+        };
+
         let statusBadge = '<span class="badge-pill bg-slate-800 text-slate-400 text-[10px]">Upcoming</span>';
         let actionBtn = '';
 
         if (isEvaluating) {
             statusBadge = '<span class="badge-pill bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i> Evaluating...</span>';
             actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-indigo-300 border border-indigo-500/40"><i class="fas fa-robot mr-1"></i> Checking...</button>`;
-        } else if (isMismatch) {
+        } else if (isMismatch && !milestoneClosed && (isTestMode || (catchUp.allowed))) {
             statusBadge = '<span class="badge-pill bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-times-circle mr-1"></i> Needs Re-submission</span>';
             actionBtn = `
                 <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
-                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry</button>
+                    <button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-primary py-1 px-2.5 sm:px-3 text-[11px] font-bold bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-lg cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"><i class="fas fa-redo"></i> Retry${catchUp.isLate && !isTestMode ? ` (late, +${lateLcs} LCs)` : ''}</button>
                     <button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2 sm:px-2.5 text-[11px] font-bold text-slate-300 hover:text-white shrink-0" title="View Evaluation Feedback"><i class="fas fa-eye"></i></button>
                 </div>
             `;
@@ -18941,6 +18968,9 @@ function switchMilestoneTab(moduleName, btnElement) {
             } else {
                 actionBtn = `<button onclick="viewMySubmission(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold shrink-0 whitespace-nowrap"><i class="fas fa-eye mr-1"></i> View</button>`;
             }
+        } else if ((isToday || isPast) && milestoneClosed) {
+            statusBadge = '<span class="badge-pill bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-flag-checkered mr-1"></i> Milestone completed</span>';
+            actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap">Closed</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -18970,9 +19000,13 @@ function switchMilestoneTab(moduleName, btnElement) {
                 } else {
                     actionBtn = `<button onclick="openSubmissionModal(${dayNum}, '${moduleName}', '${cardDateKey}')" class="btn-secondary py-1 px-2.5 text-[11px] font-bold text-amber-400 border-amber-500/40 shrink-0 whitespace-nowrap"><i class="fas fa-bolt mr-1"></i> Bypass</button>`;
                 }
+            } else if (catchUp.allowed) {
+                const daysLeft = Math.max(0, (rulesApi ? rulesApi.LATE_WINDOW_DAYS : 7) - catchUp.daysLate);
+                statusBadge = `<span class="badge-pill bg-amber-950/40 text-amber-300 border border-amber-700/50 text-[10px] whitespace-nowrap"><i class="fas fa-hourglass-half mr-1"></i> Missed - catch up (${daysLeft}d left)</span>`;
+                actionBtn = catchUpButton(`Complete late (+${lateLcs} LCs)`, 'btn-primary py-1 px-2.5 text-[11px] font-bold bg-amber-600 hover:bg-amber-500 text-white shrink-0 whitespace-nowrap');
             } else {
                 statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px] whitespace-nowrap">Missed</span>';
-                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap">Locked</button>`;
+                actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap" title="Check-ins can be completed up to 7 days late">Closed</button>`;
             }
         } else if (isFuture) {
             if (isTestMode) {
@@ -19044,7 +19078,9 @@ function switchMilestoneTab(moduleName, btnElement) {
     // Today's direct check-in action under Progress bar
     const todaySessionIdx = orderedSessionDateKeys.indexOf(todayKey);
     let todayActionHtml = '';
-    if (todaySessionIdx >= 0) {
+    if (todaySessionIdx >= 0 && isCompletedMilestone && !isTestMode) {
+        todayActionHtml = `<div class="mt-2.5 text-center text-[10px] font-bold text-slate-300 bg-slate-800/70 border border-slate-700 py-1.5 px-3 rounded-xl"><i class="fas fa-flag-checkered mr-1 text-emerald-400"></i> Milestone completed - check-ins are closed. Continue in the next milestone.</div>`;
+    } else if (todaySessionIdx >= 0) {
         const todayDayNum = sessionDayMap[todayKey] || (todaySessionIdx + 1);
         const todaySub = (typeSubs.find(s => (s.dateKey === todayKey || s.date === todayKey))) || daySubMap[todayKey] || null;
         const isPod = (normalizedMod === 'pod');

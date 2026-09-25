@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const cvEngine = require('./cvEngine');
+const checkinRules = require('./checkinRules');
 const cvGemini = require('./cvGemini');
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch(e) {}
@@ -367,7 +368,7 @@ function resolvePodAudioSource(msId, dateKey) {
     const safeMs = parseInt(msId, 10) || 1;
     let configured = '';
     try {
-        const cfgs = getMilestoneConfigsFromDb();
+        const cfgs = getSharedMilestoneConfigs();
         const day = cfgs && cfgs[String(safeMs)] && cfgs[String(safeMs)].pod && cfgs[String(safeMs)].pod[dateKey];
         configured = (day && typeof day.audioUrl === 'string') ? day.audioUrl.trim() : '';
     } catch (e) { /* fall through to conventional file names */ }
@@ -2372,6 +2373,69 @@ function getMilestoneConfigsFromDb() {
     return store.customMilestoneConfigs || {};
 }
 
+// The same daily content in every milestone: a session date that exists in some milestone is offered to all of them.
+// Students are on different days of different milestones on the same calendar date, but the story of a date is one.
+// Derived on read (never saved): a milestone's own entry always wins; a borrowed entry carries no day number
+// (day numbers are per student and per milestone) and is marked `sharedFrom` so nothing treats it as an override.
+const SHARED_MILESTONE_IDS = ['1', '2', '3', '4'];
+// Only recent and upcoming days are borrowed (older days are history that no learner can still check in to), which keeps the
+// data every browser downloads small.
+const SHARED_CONFIG_LOOKBACK_DAYS = 45;
+
+function hasRealDayContent(cfg) {
+    return Boolean(cfg && typeof cfg === 'object' && (
+        (cfg.title && String(cfg.title).trim()) || (cfg.mainQuestion && String(cfg.mainQuestion).trim()) ||
+        (cfg.articleText && String(cfg.articleText).trim()) || (cfg.description && String(cfg.description).trim()) ||
+        (Array.isArray(cfg.questions) && cfg.questions.length > 0)));
+}
+let sharedConfigsCache = { key: null, value: null };
+
+function deriveSharedMilestoneConfigs(raw, oldestDateKey) {
+    const out = {};
+    const msIds = [...new Set([...SHARED_MILESTONE_IDS, ...Object.keys(raw || {})])].sort((a, b) => Number(a) - Number(b));
+    msIds.forEach(ms => { out[ms] = Object.assign({}, (raw && raw[ms]) || {}); });
+    const modules = new Set();
+    Object.keys(raw || {}).forEach(ms => Object.keys(raw[ms] || {}).forEach(mod => modules.add(mod)));
+    modules.forEach(mod => {
+        const source = {}; // dateKey -> { ms, cfg } from the lowest milestone that has it
+        Object.keys(raw || {}).sort((a, b) => Number(a) - Number(b)).forEach(ms => {
+            const byDate = (raw[ms] && raw[ms][mod]) || {};
+            Object.keys(byDate).forEach(dk => {
+                const cfg = byDate[dk];
+                if (cfg && typeof cfg === 'object' && !cfg.sharedFrom && !source[dk]) source[dk] = { ms, cfg };
+            });
+        });
+        msIds.forEach(ms => {
+            const own = (raw && raw[ms] && raw[ms][mod]) || {};
+            const merged = Object.assign({}, own);
+            let borrowed = false;
+            Object.keys(source).forEach(dk => {
+                if (hasRealDayContent(own[dk])) return;
+                if (oldestDateKey && dk < oldestDateKey) return;
+                const { ms: fromMs, cfg } = source[dk];
+                if (fromMs === ms) return;
+                const copy = Object.assign({}, cfg, own[dk] || {}, { sharedFrom: fromMs });
+                delete copy.dayNumber; delete copy.sessionDay; delete copy.day;
+                merged[dk] = copy;
+                borrowed = true;
+            });
+            if (borrowed || (raw && raw[ms] && raw[ms][mod])) out[ms][mod] = merged;
+        });
+    });
+    return out;
+}
+
+function getSharedMilestoneConfigs() {
+    const todayKey = checkinRules.istParts(Date.now()).dateKey;
+    let key = 'store';
+    try { const st = fs.statSync(MILESTONE_CONFIGS_FILE); key = `${st.mtimeMs}:${st.size}`; } catch (e) { key = 'store:' + (store.configsRevision || 0); }
+    key += '|' + todayKey;
+    if (sharedConfigsCache.key === key && sharedConfigsCache.value) return sharedConfigsCache.value;
+    const value = deriveSharedMilestoneConfigs(getMilestoneConfigsFromDb(), checkinRules.addDays(todayKey, -SHARED_CONFIG_LOOKBACK_DAYS));
+    sharedConfigsCache = { key, value };
+    return value;
+}
+
 function saveMilestoneConfigsToDb(configs) {
     try {
         const obj = (configs && typeof configs === 'object') ? configs : {};
@@ -2426,14 +2490,14 @@ function getLearnerSafeMilestoneConfigs() {
     let key = null;
     try { const st = fs.statSync(MILESTONE_CONFIGS_FILE); key = st.mtimeMs + ':' + st.size; } catch (e) { /* no file yet */ }
     if (key && _learnerSafeConfigsCache.key === key && _learnerSafeConfigsCache.data) return _learnerSafeConfigsCache.data;
-    const data = stripAnswerKeysFromConfigs(getMilestoneConfigsFromDb());
+    const data = stripAnswerKeysFromConfigs(getSharedMilestoneConfigs());
     _learnerSafeConfigsCache = { key, data };
     return data;
 }
 
 // GET endpoint — returns current milestone configs (fresh disk read)
 app.get(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req, res) => {
-    const data = checkCreatorAuth(req) ? getMilestoneConfigsFromDb() : getLearnerSafeMilestoneConfigs();
+    const data = checkCreatorAuth(req) ? getSharedMilestoneConfigs() : getLearnerSafeMilestoneConfigs();
     res.json({ success: true, data });
 });
 
@@ -2485,12 +2549,19 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
             if (!MILESTONE_CONFIG_KEY_RE.test(msId) || !MILESTONE_CONFIG_MODULE_RE.test(mod) || !MILESTONE_CONFIG_DATE_RE.test(dKey)) {
                 return res.status(400).json({ success: false, error: 'Invalid milestoneId, moduleName or dateKey' });
             }
-            if (!current[msId]) current[msId] = {};
-            if (!current[msId][mod]) current[msId][mod] = {};
-            const existingDay = Object.prototype.hasOwnProperty.call(current[msId][mod], dKey) ? current[msId][mod][dKey] : null;
-            let toSave = config;
+            let targetMs = msId;
+            if (config.sharedFrom && MILESTONE_CONFIG_KEY_RE.test(String(config.sharedFrom)) && !hasRealDayContent((((current[msId] || {})[mod] || {})[dKey]))) {
+                targetMs = String(config.sharedFrom); // the story of a date is one: edit it where it lives
+            }
+            const cleanConfig = Object.assign({}, config);
+            delete cleanConfig.sharedFrom;
+            if (!current[targetMs]) current[targetMs] = {};
+            if (!current[targetMs][mod]) current[targetMs][mod] = {};
+            const existingDay = Object.prototype.hasOwnProperty.call(current[targetMs][mod], dKey) ? current[targetMs][mod][dKey] : null;
+            if (targetMs !== msId && existingDay && existingDay.dayNumber && !cleanConfig.dayNumber) cleanConfig.dayNumber = existingDay.dayNumber;
+            let toSave = cleanConfig;
             if (mod === 'pod') toSave = protectCreatorPodQuestions(existingDay, config, `MS${msId} pod ${dKey}`);
-            current[msId][mod][dKey] = toSave;
+            current[targetMs][mod][dKey] = toSave;
             savedDay = toSave;
             if (mod === 'pod') {
                 const n = Array.isArray(toSave.questions) ? toSave.questions.length : 0;
@@ -2506,6 +2577,7 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
                     if (!MILESTONE_CONFIG_MODULE_RE.test(mod) || !allConfigs[msId][mod] || typeof allConfigs[msId][mod] !== 'object') continue;
                     for (const dKey of Object.keys(allConfigs[msId][mod])) {
                         if (!MILESTONE_CONFIG_DATE_RE.test(dKey)) continue;
+                        if (allConfigs[msId][mod][dKey] && allConfigs[msId][mod][dKey].sharedFrom) continue; // borrowed copy, not a real day
                         if (!current[msId]) current[msId] = {};
                         if (!current[msId][mod]) current[msId][mod] = {};
                         if (!Object.prototype.hasOwnProperty.call(current[msId][mod], dKey)) {
@@ -2530,7 +2602,7 @@ app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req
 });
 
 // Lets the owner confirm which server code is actually running on the VPS after a pull and restart
-const SERVER_BUILD = '2026-09-25-answer-keys-hidden';
+const SERVER_BUILD = '2026-09-26-checkin-catchup';
 const SERVER_STARTED_AT = new Date().toISOString();
 app.get(['/api/version', '/gamification/api/version'], (req, res) => {
     res.json({ success: true, build: SERVER_BUILD, startedAt: SERVER_STARTED_AT });
@@ -3552,7 +3624,7 @@ function getPodQuizPoolForDate(dateKey, msId = '1', context = null) {
         return [];
     }
 
-    const allConfigs = getMilestoneConfigsFromDb();
+    const allConfigs = getSharedMilestoneConfigs();
     const diskConfig = (allConfigs && Object.prototype.hasOwnProperty.call(allConfigs, safeMsId) && allConfigs[safeMsId]?.pod && Object.prototype.hasOwnProperty.call(allConfigs[safeMsId].pod, safeDateKey)) ? allConfigs[safeMsId].pod[safeDateKey] : null;
     const dayConfig = context ? { ...diskConfig, ...context } : diskConfig;
 
@@ -4630,6 +4702,39 @@ app.get(['/api/certificate-approvals', '/gamification/api/certificate-approvals'
     res.json({ success: true, data });
 });
 
+const LAST_MILESTONE_ID = 4;
+const MILESTONE_MODULES_TO_START = ['dip', 'pod', 'immerse'];
+
+// After a credential is approved: Day 1 of the next milestone is the following day (IST) for Dip, POD and Immerse.
+// Dates the Creator already set for the learner are kept.
+function startNextMilestoneAfterApproval(userId, approvedMilestone, approvedAtMs) {
+    const nextMs = Number(approvedMilestone) + 1;
+    if (!(nextMs >= 2 && nextMs <= LAST_MILESTONE_ID)) return null;
+    const startKey = checkinRules.addDays(checkinRules.istParts(approvedAtMs || Date.now()).dateKey, 1);
+    const learner = findLearnerForCv(userId);
+    const email = learner && learner.email ? learner.email.toLowerCase().trim() : '';
+
+    const joins = getUserJoinDatesFromDb();
+    let changed = false;
+    [`${userId}_MS${nextMs}`, email ? `${email}_MS${nextMs}` : ''].filter(Boolean).forEach(k => { if (!joins[k]) { joins[k] = startKey; changed = true; } });
+    if (changed) saveUserJoinDatesToDb(joins);
+
+    const starts = getUserModuleStartDatesFromDb();
+    changed = false;
+    MILESTONE_MODULES_TO_START.forEach(mod => {
+        [`${userId}_MS${nextMs}_${mod}`, email ? `${email}_MS${nextMs}_${mod}` : ''].filter(Boolean).forEach(k => { if (!starts[k]) { starts[k] = startKey; changed = true; } });
+    });
+    if (changed) saveUserModuleStartDatesToDb(starts);
+
+    const states = getUserMilestoneStateFromDb();
+    if (!states[userId]) states[userId] = { highestUnlocked: nextMs };
+    if (!states[userId].started) states[userId].started = {};
+    states[userId].started[nextMs] = true;
+    saveUserMilestoneStateToDb(states);
+    console.log(`[Milestone Advance] ${userId} approved for Milestone ${approvedMilestone}; Milestone ${nextMs} Day 1 is ${startKey}`);
+    return startKey;
+}
+
 // POST — { key, approved, credentialId, issuedAt } for one user+milestone, or { allApprovals } for bulk merge
 app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals'], (req, res) => {
     try {
@@ -4666,6 +4771,10 @@ app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals
                     uStates[uId].highestUnlocked = Math.max(uStates[uId].highestUnlocked || 1, msNum + 1);
                     saveUserMilestoneStateToDb(uStates);
                 }
+
+                // Milestone N is now closed for check-ins; Day 1 of Milestone N+1 is the day after this approval.
+                const nextStart = uId ? startNextMilestoneAfterApproval(uId, msNum, current[String(key)].approvedAt) : null;
+                if (nextStart) current[String(key)].nextMilestoneStart = nextStart;
 
                 // Resolve corresponding creator notification
                 if (Array.isArray(store.creatorNotifications)) {
@@ -5082,7 +5191,7 @@ app.get(['/api/sync', '/gamification/api/sync'], async (req, res) => {
             submissionsRevision: store.submissionsRevision || 1000,
             configsRevision: store.configsRevision || 1000,
             lastUpdated: store.lastUpdated || 1000,
-            milestoneConfigs: isCreator ? getMilestoneConfigsFromDb() : getLearnerSafeMilestoneConfigs(),
+            milestoneConfigs: isCreator ? getSharedMilestoneConfigs() : getLearnerSafeMilestoneConfigs(),
             moduleAccess: getModuleAccessFromDb(),
             moduleActivationDates: getModuleActivationDatesFromDb(),
             joinDates: getUserJoinDatesFromDb(),
@@ -5500,7 +5609,7 @@ function generatePersonalizedCheckinFeedback(coverage, options = {}) {
 }
 
 function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, options = {}) {
-    const { basePoints = 33, isLate = false, hasAudio = false, transcribedByServer = false, pastCheckinsCount = 0, userName = '' } = options;
+    const { basePoints = 33, isLate = false, lateLcs = 3, hasAudio = false, transcribedByServer = false, pastCheckinsCount = 0, userName = '' } = options;
     const refClean = (referenceArticle || '').trim();
     const studentText = (studentResponse || '').trim();
 
@@ -5510,7 +5619,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // ── No description configured by creator ─────────────────────────────────
     if (!refClean || refClean.length < 15) {
         if (hasAudio || studentText.length > 20) {
-            const pts = isLate ? 3 : basePoints;
+            const pts = isLate ? lateLcs : basePoints;
             const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
                 pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
             });
@@ -5554,7 +5663,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     const studentWords = clean(studentText);
 
     if (refWordSet.size === 0) {
-        const pts = isLate ? 3 : basePoints;
+        const pts = isLate ? lateLcs : basePoints;
         const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(91, {
             pastCheckinsCount, studentText, userName, pts, fullExpected: Number(basePoints) || 33, isLate
         });
@@ -5602,7 +5711,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // TIER 3 — Moderate Partial Match (50% – 80%) → ~50% of basePoints LCs
     if (coverage <= 80) {
         const fullExpected = Number(basePoints) || 33;
-        const pts = isLate ? 3 : Math.round(fullExpected * 0.50);
+        const pts = isLate ? lateLcs : Math.round(fullExpected * 0.50);
         const deduction = Math.max(0, fullExpected - pts);
         const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
             pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
@@ -5632,7 +5741,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
     // TIER 2 — Good Match (81% – 90%) → ~70% of basePoints LCs
     if (coverage <= 90) {
         const fullExpected = Number(basePoints) || 33;
-        const pts = isLate ? 3 : Math.round(fullExpected * 0.70);
+        const pts = isLate ? lateLcs : Math.round(fullExpected * 0.70);
         const deduction = Math.max(0, fullExpected - pts);
         const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
             pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
@@ -5661,7 +5770,7 @@ function evaluateReflectionAgainstRubric(referenceArticle, studentResponse, opti
 
     // TIER 1 — Excellent Match (> 90%) → Full basePoints LCs
     const fullExpected = Number(basePoints) || 33;
-    const pts = isLate ? 3 : fullExpected;
+    const pts = isLate ? lateLcs : fullExpected;
     const { progressNote, vocalFeedback, improvementTip } = generatePersonalizedCheckinFeedback(coverage, {
         pastCheckinsCount, studentText, userName, pts, fullExpected, isLate
     });
@@ -6491,7 +6600,9 @@ app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (
             return res.status(400).json({ success: false, error: 'dateKey query parameter required' });
         }
 
-        const safeMsId = parseInt(msId, 10) || 1;
+        const requestedMs = parseInt(msId, 10) || 1;
+        const sharedEntry = ((getSharedMilestoneConfigs()[String(requestedMs)] || {}).pod || {})[dateKey];
+        const safeMsId = (sharedEntry && sharedEntry.sharedFrom) ? (parseInt(sharedEntry.sharedFrom, 10) || requestedMs) : requestedMs;
         const safeDateKey = dateKey.replace(/[^a-zA-Z0-9_\-]/g, '_');
         const fileName = `pod_m${safeMsId}_${safeDateKey}.mp3`;
         const fileNameUnderscore = `pod_m${safeMsId}_${safeDateKey.replace(/-/g, '_')}.mp3`;
@@ -6529,7 +6640,7 @@ app.get(['/api/pod/ensure-audio', '/gamification/api/pod/ensure-audio'], async (
         }
 
         // 3. If file missing, lookup story text from milestone configs and synthesize British voice automatically
-        const currentConfigs = getMilestoneConfigsFromDb();
+        const currentConfigs = getSharedMilestoneConfigs();
         const podEntry = currentConfigs[String(safeMsId)]?.pod?.[dateKey];
         const storyText = podEntry?.articleText || podEntry?.description || '';
 
@@ -6710,6 +6821,73 @@ app.post(['/api/pod/grade-session', '/gamification/api/pod/grade-session'], (req
     }
 });
 
+// Accounts used by the team to test check-ins; they may use the Bypass buttons for any date.
+function isKnownTestAccount(sub) {
+    const email = String(sub.userEmail || '').toLowerCase().trim();
+    const phone = String(sub.userPhone || sub.phone || '').replace(/\D/g, '').slice(-10);
+    const id = String(sub.userId || '').toLowerCase();
+    return ['saiyedamala02@gmail.com', 'engineersai02@gmail.com', 'test@cmplibe.com', 'tester@cmplibe.com'].includes(email) ||
+        ['6309764212', '6309764213'].includes(phone) ||
+        id.includes('test') || id.includes('saiyedamala') || id.includes('engineersai');
+}
+
+function isCredentialApprovedFor(userId, msId) {
+    const rec = getCertificateApprovalsFromDb()[`${userId}_MS${msId}`];
+    return Boolean(rec === true || (rec && typeof rec === 'object' && rec.approved === true));
+}
+
+// Start date of a learner for a milestone module, from the dates the Creator or an approval set (null when none).
+function learnerModuleStartDate(sub, msId, moduleName) {
+    const dates = getUserModuleStartDatesFromDb();
+    const email = String(sub.userEmail || '').toLowerCase().trim();
+    return dates[`${sub.userId}_MS${msId}_${moduleName}`] || (email && dates[`${email}_MS${msId}_${moduleName}`]) || null;
+}
+
+function checkinRuleVerdict(sub, msId, dayNum, modType) {
+    const moduleName = modType.toLowerCase();
+    const sessionDateKey = String(sub.dateKey || sub.date || '').split('T')[0];
+    if (!checkinRules.isDateKey(sessionDateKey)) return { ok: false, error: checkinRules.REASON_TEXT.invalid_date };
+
+    const dayCfg = (getSharedMilestoneConfigs()[String(msId)] || {})[moduleName];
+    const cfg = dayCfg && dayCfg[sessionDateKey];
+    if (!cfg || cfg.cancelled) return { ok: false, error: 'No scheduled session was found for this date.' };
+
+    if (isCredentialApprovedFor(sub.userId, msId)) {
+        return { ok: false, error: `Your Milestone ${msId} credential has been approved, so check-ins for this milestone are closed. Continue in Milestone ${msId + 1}.` };
+    }
+    if (msId > 1) {
+        const startKey = learnerModuleStartDate(sub, msId, moduleName);
+        if (startKey && sessionDateKey < startKey) return { ok: false, error: `Milestone ${msId} check-ins start on ${startKey}.` };
+    }
+
+    const timing = checkinRules.classifyCheckin({
+        sessionDateKey, nowMs: Date.now(),
+        endTime: cfg.endTime || (moduleName === 'dip' ? '17:00' : '23:59')
+    });
+    if (!timing.allowed) return { ok: false, error: checkinRules.REASON_TEXT[timing.reason] || 'This check-in cannot be submitted now.' };
+
+    // a check-in that already earned LCs is never paid a second time; a rejected one may be retried (as long as the window is open)
+    const previous = (store.submissions || []).find(x =>
+        (String(x.userId) === String(sub.userId) || (x.userEmail && sub.userEmail && x.userEmail.toLowerCase() === String(sub.userEmail).toLowerCase())) &&
+        String(x.milestoneId || 1) === String(msId) &&
+        String(x.type || x.moduleType || '').toLowerCase() === moduleName &&
+        ((x.dateKey && x.dateKey === sessionDateKey) || String(x.day) === String(dayNum)));
+    if (previous && (previous.status === 'completed' && Number(previous.lcReward) > 0)) {
+        return { ok: false, error: `This ${moduleName.toUpperCase()} check-in has already been completed and its LCs were credited.` };
+    }
+    if (previous && previous.status === 'evaluating' && Date.now() - new Date(previous.updatedAt || previous.submittedAt || 0).getTime() < 10 * 60000) {
+        return { ok: false, error: 'Your previous submission for this check-in is still being checked. Please wait a few minutes.' };
+    }
+
+    return {
+        ok: true,
+        isLate: timing.isLate,
+        daysLate: timing.daysLate,
+        onTimeLcs: Number(cfg.lcOnTime) || (msId === 1 ? 33 : 133),
+        lateLcs: checkinRules.lateLcsFor(cfg)
+    };
+}
+
 app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res) => {
     try {
         const sub = req.body;
@@ -6730,6 +6908,20 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         const dayNum = Number(sub.day) || Number(sub.sessionDay) || 1;
         const subAnswers = sub.answers || sub.responses || [];
         const modType = String(sub.moduleType || sub.type || 'dip').toUpperCase();
+
+        // -------------------------------------------------------------
+        // CHECK-IN RULES (decided on the server, never trusted from the browser):
+        // right session date, on time or late (3 LCs) for up to 7 days, closed after that, closed once the
+        // milestone credential is approved, and no second credit for a check-in that is already completed.
+        // -------------------------------------------------------------
+        if (['DIP', 'POD', 'IMMERSE'].includes(modType) && !isKnownTestAccount(sub)) {
+            const verdict = checkinRuleVerdict(sub, msId, dayNum, modType);
+            if (!verdict.ok) return res.status(400).json({ success: false, error: verdict.error });
+            sub.isLate = verdict.isLate;
+            sub.daysLate = verdict.daysLate;
+            sub.serverOnTimeLcs = verdict.onTimeLcs;
+            sub.serverLateLcs = verdict.lateLcs;
+        }
 
         // -------------------------------------------------------------
         // SERVER-SIDE PREREQUISITE GUARD FOR cMPLi IMMERSE
@@ -6786,7 +6978,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
         // -------------------------------------------------------------
         // SERVER-SIDE REQUIRED TASKS GATING GUARD
         // -------------------------------------------------------------
-        const allConfigs = getMilestoneConfigsFromDb();
+        const allConfigs = getSharedMilestoneConfigs();
         const subDate = sub.dateKey || (sub.date ? String(sub.date).split('T')[0] : null);
         const normMod = String(sub.moduleType || sub.type || 'dip').toLowerCase();
         const sessionCfg = (allConfigs && allConfigs[String(msId)] && allConfigs[String(msId)][normMod] && subDate)
@@ -6823,7 +7015,7 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 return res.status(400).json({ success: false, error: 'Invalid or missing dateKey format (expected YYYY-MM-DD)' });
             }
 
-            const allConfigs = getMilestoneConfigsFromDb();
+            const allConfigs = getSharedMilestoneConfigs();
             const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][subDate]) || null;
             const canonicalDayNum = podDayCfg 
                 ? (Number(podDayCfg.dayNumber) || deriveDayNumber('pod', subDate, podDayCfg.dayNumber) || dayNum)
@@ -6912,9 +7104,14 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 });
             }
 
-            const finalLcReward = Math.min(33, Math.max(0, calculatedLcReward));
-            const finalMatchPct = Math.min(100, Math.round((finalLcReward / 33) * 100));
-            const finalRemarks = `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.`;
+            const quizLcs = Math.min(33, Math.max(0, calculatedLcReward));
+            // a late POD (after the end time or on a later day) is credited with the late reward at most
+            const podLate = sub.isLate === true;
+            const finalLcReward = podLate ? Math.min(quizLcs, Number(sub.serverLateLcs) || checkinRules.DEFAULT_LATE_LCS) : quizLcs;
+            const finalMatchPct = Math.min(100, Math.round((quizLcs / 33) * 100));
+            const finalRemarks = podLate
+                ? `⚠️ [cMPLi POD Late Check-in — ${finalLcReward} LCs Awarded]\nQuiz score ${quizLcs} / 33; late check-ins earn the late reward only (${finalLcReward} LCs).`
+                : `✅ [cMPLi POD Quiz Completed — ${finalLcReward} LCs Awarded]\nScore: ${finalLcReward} / 33 LCs | Status: Graded & Verified (Server Validated)\nActive listening requirement verified (≥85%). Points credited to TagMango wallet.`;
 
             const completedSub = {
                 id: sub.id || `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -6933,6 +7130,8 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
                 status: 'completed',
                 lcReward: finalLcReward,
                 originalLcReward: finalLcReward,
+                isLate: podLate,
+                daysLate: Number(sub.daysLate) || 0,
                 matchPercentage: finalMatchPct,
                 similarityScore: finalMatchPct,
                 aiRemarks: finalRemarks,
@@ -7036,8 +7235,10 @@ app.post(['/api/submissions', '/gamification/api/submissions'], async (req, res)
             date: sub.date || sub.dateKey || new Date().toISOString().split('T')[0],
             dateKey: sub.dateKey || sub.date || new Date().toISOString().split('T')[0],
             status: 'evaluating',
+            isLate: sub.isLate === true,
+            daysLate: Number(sub.daysLate) || 0,
             lcReward: 0,
-            originalLcReward: Number(sub.lcReward) || 33,
+            originalLcReward: Number(sub.serverOnTimeLcs) || Number(sub.lcReward) || 33,
             matchPercentage: null,
             similarityScore: null,
             aiRemarks: 'AI evaluation in progress — transcribing audio and analyzing key takeaways against today\'s session concepts...',
@@ -7100,7 +7301,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     // -------------------------------------------------------------
     if (String(sub.moduleType || sub.type || modType || '').toLowerCase() === 'pod') {
         // SERVER-SIDE RECOMPUTATION OF QUIZ SCORE AGAINST STORED QUESTION POOL
-        const allConfigs = getMilestoneConfigsFromDb();
+        const allConfigs = getSharedMilestoneConfigs();
         const podDayCfg = (allConfigs[msId] && allConfigs[msId]['pod'] && allConfigs[msId]['pod'][sub.date || sub.dateKey]) || {};
         const questionPool = Array.isArray(podDayCfg.questions) ? podDayCfg.questions : [];
 
@@ -7197,7 +7398,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     // cMPLi IMMERSE MODULE: 2-FACTOR VIDEO EVALUATION (70% ATTEMPT / 30% RELATABILITY)
     // -------------------------------------------------------------
     if (String(sub.moduleType || sub.type || modType || '').toLowerCase() === 'immerse') {
-        const allConfigs = getMilestoneConfigsFromDb();
+        const allConfigs = getSharedMilestoneConfigs();
         const immerseDayCfg = (allConfigs[msId] && allConfigs[msId]['immerse'] && allConfigs[msId]['immerse'][sub.date || sub.dateKey]) || {};
         const mainQuestion = (immerseDayCfg.mainQuestion || sub.mainQuestion || immerseDayCfg.title || 'Main Reflection Question').trim();
         const sessionDescription = (immerseDayCfg.description || sub.sessionDescription || sub.description || '').trim();
@@ -7284,8 +7485,12 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             factor2Earned = true;
         }
 
+        // a late Immerse check-in earns the late reward at most
+        const immerseLate = sub.isLate === true;
+        if (immerseLate) finalLcReward = Math.min(finalLcReward, Number(sub.serverLateLcs) || checkinRules.DEFAULT_LATE_LCS);
+
         const finalStatus = 'completed';
-        const finalRemarks = `✅ [cMPLi Immerse Video Verified — ${finalLcReward} / ${basePoints} LCs Awarded]\n` +
+        const finalRemarks = (immerseLate ? `⚠️ [Late check-in - late reward applies]\n` : '') + `✅ [cMPLi Immerse Video Verified — ${finalLcReward} / ${basePoints} LCs Awarded]\n` +
             `• Factor 1 (70% Video Attempt): +${factor1Earned ? completionPoints : 0} LCs (${factor1Earned ? 'Verified' : 'Missing video'})\n` +
             `• Factor 2 (30% Relatability): +${factor2Earned ? relatabilityPoints : 0} LCs (${wordCount} words spoken; ${factor2Earned ? 'Relatability Verified' : 'Min 10 words answering main question required'})\n` +
             (sessionTitle ? `• Session Title: "${sessionTitle}"\n` : '') +
@@ -7301,6 +7506,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
                 ...store.submissions[idx],
                 status: finalStatus,
                 lcReward: finalLcReward,
+                isLate: immerseLate,
                 basePoints: basePoints,
                 completionPoints: completionPoints,
                 relatabilityPoints: relatabilityPoints,
@@ -7351,7 +7557,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     // -------------------------------------------------------------
     // ARTICLE SIMILARITY & RIGOROUS RUBRIC EVALUATION (DIP)
     // -------------------------------------------------------------
-    const allConfigs = getMilestoneConfigsFromDb();
+    const allConfigs = getSharedMilestoneConfigs();
     const dayCfg = (allConfigs[msId] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()] && allConfigs[msId][(sub.moduleType || sub.type || 'dip').toLowerCase()][sub.date || sub.dateKey]) || {};
     const refArticle = dayCfg.articleText || dayCfg.description || dayCfg.title || '';
 
@@ -7407,7 +7613,8 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
     const pastCheckinsCount = userPastSubs.length;
 
     const evalResult = evaluateReflectionAgainstRubric(refArticle, combinedStudentText, {
-        basePoints: Number(sub.lcReward) || 33,
+        basePoints: Number(sub.serverOnTimeLcs) || Number(sub.lcReward) || 33,
+        lateLcs: Number(sub.serverLateLcs) || checkinRules.DEFAULT_LATE_LCS,
         isLate: sub.isLate || false,
         hasAudio: hasAudioSubmission,
         pastCheckinsCount: pastCheckinsCount,
@@ -7430,6 +7637,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
         ...store.submissions[idx],
         status: finalStatus,
         lcReward: finalLcReward,
+        isLate: sub.isLate === true,
         matchPercentage: finalMatchPct,
         similarityScore: finalMatchPct,
         attemptsCount: store.submissions[idx].attemptsCount || 1,
