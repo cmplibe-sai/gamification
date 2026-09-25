@@ -9047,6 +9047,489 @@ app.post(['/api/recruiter/requirements/:id/status', '/gamification/api/recruiter
 });
 
 // -------------------------------------------------------------
+// 4e. OPPORTUNITIES AND NOMINATIONS (Rapid XP Engine, Corporate Residency, Final Placements)
+// Rules and pure helpers are in nominationsEngine.js. Data:
+//   store.opportunities[]      { id, type, title, company, description, location, compensation, duration,
+//                                status:'draft'|'open'|'closed', targetAllCampuses, targetCampusIds,
+//                                prerequisites:{ milestoneId, minProjectsAi, minProjectsInsight, minRapidXp,
+//                                minResidency, minLqZone }, nominationDeadline, createdAt }
+//   store.nominations[]        { id, opportunityId, studentId, studentName, studentEmail, nominatedAt, consentAt,
+//                                lqZone, status:'nominated'|'interview_stage'|'selected'|'rejected'|'withdrawn'|
+//                                'no_show'|'completed', statusReason, rounds:[{ id, number, label, scheduledAt, note,
+//                                studentAttended, studentReportedAt, noShowReason, questions[], questionsSubmittedAt,
+//                                creatorAttended, creatorMarkedAt, outcome:'pending'|'shortlisted'|'rejected'|'selected'|'no_show',
+//                                outcomeReason, reminderSentAt }], history:[{ at, text }] }
+//   store.nominationBlocks{}   studentId -> [{ id, until, reason, sourceKey, createdAt }]  (cooldown after a missed or abandoned interview)
+//   store.nominationSettings   { cooldownDays }  (set by the Creator)
+// The LQ level is worked out in the student's browser (the server has no LQ engine yet), so it is stored with the
+// nomination as reported; every other prerequisite is checked from server data.
+// -------------------------------------------------------------
+const nominationsEngine = require('./nominationsEngine');
+
+if (!Array.isArray(store.opportunities)) store.opportunities = [];
+if (!Array.isArray(store.nominations)) store.nominations = [];
+if (!store.nominationBlocks || typeof store.nominationBlocks !== 'object') store.nominationBlocks = {};
+if (!store.nominationSettings || typeof store.nominationSettings !== 'object') store.nominationSettings = { cooldownDays: 15 };
+
+const NO_SHOW_REASONS = new Set(['not_interested', 'other_offer', 'personal', 'schedule_clash', 'company_cancelled', 'other']);
+
+function customerSession(req) {
+    const s = getAuthenticatedSession(req);
+    return s && s.role === 'customer' ? s : null;
+}
+
+function activeBlock(studentId, now) {
+    const list = (store.nominationBlocks[String(studentId)] || []).filter(b => new Date(b.until).getTime() > now);
+    if (!list.length) return null;
+    return list.reduce((a, b) => (new Date(a.until) > new Date(b.until) ? a : b));
+}
+
+function addNominationBlock(studentId, sourceKey, reason, now) {
+    const id = String(studentId);
+    const list = (store.nominationBlocks[id] || []).filter(b => new Date(b.until).getTime() > now && b.sourceKey !== sourceKey);
+    list.push({ id: 'blk_' + now.toString(36), until: nominationsEngine.cooldownEnd(now, store.nominationSettings.cooldownDays), reason, sourceKey, createdAt: new Date(now).toISOString() });
+    store.nominationBlocks[id] = list;
+}
+
+function liftNominationBlock(studentId, sourceKey) {
+    const id = String(studentId);
+    if (store.nominationBlocks[id]) store.nominationBlocks[id] = store.nominationBlocks[id].filter(b => b.sourceKey !== sourceKey);
+}
+
+function opportunityReachesLearner(opp, learner) {
+    if (opp.targetAllCampuses) return true;
+    if (!learner) return false;
+    return (opp.targetCampusIds || []).some(cid => {
+        const campus = (store.campuses || []).find(c => c.id === cid);
+        return campus && learnerBelongsToCampus(campus, learner);
+    });
+}
+
+function studentNominationFacts(studentId, learner, opp, lqZone, now) {
+    const id = String(studentId);
+    const email = learner && learner.email ? learner.email.toLowerCase().trim() : null;
+    const done = { cmpli_ai: new Set(), insight_engine: new Set() };
+    (store.submissions || []).forEach(s => {
+        if (!s || !s.projectId || s.status !== 'completed') return;
+        if (String(s.userId) !== id && !(email && s.userEmail === email)) return;
+        const t = String(s.moduleType || s.type);
+        if (done[t]) done[t].add(String(s.projectId));
+    });
+    const mine = store.nominations.filter(n => n.studentId === id);
+    const completedOfType = type => mine.filter(n => n.status === 'completed' && (store.opportunities.find(o => o.id === n.opportunityId) || {}).type === type).length;
+    const block = activeBlock(id, now);
+    const state = (store.userMilestoneState && store.userMilestoneState[id]) || {};
+    return {
+        campusTargeted: opportunityReachesLearner(opp, learner),
+        highestMilestone: Math.min(20, Math.max(1, Number(state.highestUnlocked) || 1)),
+        projectsAi: done.cmpli_ai.size,
+        projectsInsight: done.insight_engine.size,
+        rapidXpDone: completedOfType('rapid_xp'),
+        residencyDone: completedOfType('residency'),
+        lqZone: ['strong', 'average', 'weak'].includes(lqZone) ? lqZone : null,
+        blockedUntil: block ? block.until : null,
+        alreadyNominated: mine.some(n => n.opportunityId === opp.id)
+    };
+}
+
+function publicOpportunity(o) {
+    return {
+        id: o.id, type: o.type, typeLabel: nominationsEngine.TYPE_LABELS[o.type], title: o.title, company: o.company,
+        description: o.description, location: o.location, compensation: o.compensation, duration: o.duration,
+        nominationDeadline: o.nominationDeadline || null, prerequisites: o.prerequisites || {}
+    };
+}
+
+function nominationView(n) {
+    const opp = store.opportunities.find(o => o.id === n.opportunityId) || {};
+    return Object.assign({}, n, { opportunity: publicOpportunity(opp), opportunityMissing: !opp.id });
+}
+
+function historyPush(n, text, now) {
+    n.history = n.history || [];
+    n.history.push({ at: new Date(now).toISOString(), text });
+}
+
+// ---------------- student side ----------------
+app.get(['/api/opportunities', '/gamification/api/opportunities'], (req, res) => {
+    const session = customerSession(req);
+    if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+    const now = Date.now();
+    const studentId = String(session.userId);
+    const learner = findLearnerForCv(studentId) || { _id: studentId, email: session.email };
+    const lqZone = req.query.lqZone;
+    const block = activeBlock(studentId, now);
+    const list = store.opportunities
+        .filter(o => o.status === 'open' && opportunityReachesLearner(o, learner))
+        .map(o => {
+            const ev = nominationsEngine.evaluateEligibility(o, studentNominationFacts(studentId, learner, o, lqZone, now), now);
+            return Object.assign(publicOpportunity(o), { eligibility: ev });
+        });
+    res.json({ success: true, opportunities: list, blockedUntil: block ? block.until : null, blockReason: block ? block.reason : '' });
+});
+
+app.post(['/api/nominations', '/gamification/api/nominations'], (req, res) => {
+    try {
+        const session = customerSession(req);
+        if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+        const now = Date.now();
+        const studentId = String(session.userId);
+        const learner = findLearnerForCv(studentId) || { _id: studentId, email: session.email, name: session.name };
+        const opp = store.opportunities.find(o => o.id === (req.body || {}).opportunityId);
+        if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
+        if (!(req.body && req.body.consent === true)) {
+            return res.status(400).json({ success: false, error: 'Please agree to share your profile with the hiring company to nominate.' });
+        }
+        const ev = nominationsEngine.evaluateEligibility(opp, studentNominationFacts(studentId, learner, opp, req.body.lqZone, now), now);
+        if (!ev.eligible) {
+            const unmet = ev.checks.filter(c => !c.ok).map(c => c.label).join(', ');
+            return res.status(403).json({ success: false, error: ev.blocker || `You do not meet the requirements yet: ${unmet}.` });
+        }
+        const nomination = {
+            id: 'nom_' + now.toString(36) + crypto.randomBytes(3).toString('hex'),
+            opportunityId: opp.id,
+            studentId,
+            studentName: nominationsEngine.cleanText(learner.name || session.name || 'Student', 80),
+            studentEmail: learner.email || session.email || '',
+            nominatedAt: new Date(now).toISOString(),
+            consentAt: new Date(now).toISOString(),
+            lqZone: ['strong', 'average', 'weak'].includes(req.body.lqZone) ? req.body.lqZone : null,
+            status: 'nominated',
+            statusReason: '',
+            rounds: [],
+            history: []
+        };
+        historyPush(nomination, 'Nominated and agreed to share profile with the company', now);
+        store.nominations.push(nomination);
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nomination) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get(['/api/nominations/mine', '/gamification/api/nominations/mine'], (req, res) => {
+    const session = customerSession(req);
+    if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+    const now = Date.now();
+    const mine = store.nominations.filter(n => n.studentId === String(session.userId))
+        .sort((a, b) => new Date(b.nominatedAt) - new Date(a.nominatedAt));
+    const block = activeBlock(session.userId, now);
+    res.json({
+        success: true,
+        nominations: mine.map(nominationView),
+        summary: nominationsEngine.summarize(mine, now),
+        pendingCheckIns: nominationsEngine.pendingCheckIns(mine, now),
+        blockedUntil: block ? block.until : null,
+        blockReason: block ? block.reason : ''
+    });
+});
+
+// "Did you attend?" - the student's answer after a scheduled interview.
+app.post(['/api/nominations/:id/rounds/:roundId/check-in', '/gamification/api/nominations/:id/rounds/:roundId/check-in'], (req, res) => {
+    try {
+        const session = customerSession(req);
+        if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+        const now = Date.now();
+        const nom = store.nominations.find(n => n.id === req.params.id && n.studentId === String(session.userId));
+        if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
+        const round = (nom.rounds || []).find(r => r.id === req.params.roundId);
+        if (!round) return res.status(404).json({ success: false, error: 'Interview round not found.' });
+        if (nominationsEngine.isFinal(nom)) return res.status(400).json({ success: false, error: 'This nomination is already closed.' });
+        if (nominationsEngine.effectiveAttendance(round) !== null) return res.status(400).json({ success: false, error: 'This interview has already been recorded.' });
+        if (new Date(round.scheduledAt).getTime() > now) return res.status(400).json({ success: false, error: 'This interview has not happened yet.' });
+
+        const body = req.body || {};
+        if (body.attended === true) {
+            const questions = nominationsEngine.cleanQuestions(body.questions);
+            if (questions.length < nominationsEngine.MIN_QUESTIONS) {
+                return res.status(400).json({ success: false, error: 'Please write down the questions you were asked (at least one).' });
+            }
+            round.studentAttended = true;
+            round.studentReportedAt = new Date(now).toISOString();
+            round.questions = questions;
+            round.questionsSubmittedAt = round.studentReportedAt;
+            nom.status = 'interview_stage';
+            historyPush(nom, `Attended round ${round.number}${round.label ? ' (' + round.label + ')' : ''} and shared ${questions.length} question${questions.length === 1 ? '' : 's'}`, now);
+        } else if (body.attended === false) {
+            const code = NO_SHOW_REASONS.has(body.reasonCode) ? body.reasonCode : 'other';
+            const note = nominationsEngine.cleanText(body.note, 300);
+            round.studentAttended = false;
+            round.studentReportedAt = new Date(now).toISOString();
+            round.noShowReason = note ? `${code}: ${note}` : code;
+            round.outcome = 'no_show';
+            nom.status = 'no_show';
+            nom.statusReason = round.noShowReason;
+            addNominationBlock(nom.studentId, `${nom.id}:${round.id}`, `Did not attend interview (${nom.opportunityId})`, now);
+            historyPush(nom, `Did not attend round ${round.number}: ${round.noShowReason}`, now);
+        } else {
+            return res.status(400).json({ success: false, error: 'Please answer yes or no.' });
+        }
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/nominations/:id/withdraw', '/gamification/api/nominations/:id/withdraw'], (req, res) => {
+    try {
+        const session = customerSession(req);
+        if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+        const now = Date.now();
+        const nom = store.nominations.find(n => n.id === req.params.id && n.studentId === String(session.userId));
+        if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
+        if (nominationsEngine.isFinal(nom)) return res.status(400).json({ success: false, error: 'This nomination is already closed.' });
+        const reason = nominationsEngine.cleanText(req.body && req.body.reason, 300);
+        const cooldown = nominationsEngine.withdrawalHasCooldown(nom);
+        nom.status = 'withdrawn';
+        nom.statusReason = reason || 'Withdrawn by the student';
+        if (cooldown) addNominationBlock(nom.studentId, `${nom.id}:withdraw`, `Withdrew a nomination before the second round (${nom.opportunityId})`, now);
+        historyPush(nom, `Withdrew from the process${cooldown ? ' (nominations paused for a while)' : ''}${reason ? ': ' + reason : ''}`, now);
+        saveStore();
+        res.json({ success: true, cooldownApplied: cooldown, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ---------------- Creator side ----------------
+function creatorOnly(req, res) {
+    if (checkCreatorAuth(req)) return true;
+    res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+    return false;
+}
+
+function cleanPrereqNumber(v, max) {
+    return Math.min(max, Math.max(0, parseInt(v, 10) || 0));
+}
+
+app.get(['/api/creator/opportunities', '/gamification/api/creator/opportunities'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    const counts = {};
+    store.nominations.forEach(n => { counts[n.opportunityId] = (counts[n.opportunityId] || 0) + 1; });
+    res.json({
+        success: true,
+        settings: store.nominationSettings,
+        opportunities: store.opportunities.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .map(o => Object.assign({}, o, { nominationCount: counts[o.id] || 0 }))
+    });
+});
+
+app.post(['/api/creator/opportunities', '/gamification/api/creator/opportunities'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const b = req.body || {};
+        const type = nominationsEngine.OPPORTUNITY_TYPES.includes(b.type) ? b.type : null;
+        const title = nominationsEngine.cleanText(b.title, 120);
+        const company = nominationsEngine.cleanText(b.company, 80);
+        const description = nominationsEngine.cleanText(b.description, 3000);
+        if (!type) return res.status(400).json({ success: false, error: 'Choose the type: Rapid XP, Corporate Residency or Final Placement.' });
+        if (title.length < 5 || company.length < 2) return res.status(400).json({ success: false, error: 'Please give a title (5+ characters) and the company name.' });
+        if (description.length < 20) return res.status(400).json({ success: false, error: 'Please describe the opportunity (at least 20 characters).' });
+
+        const targetAllCampuses = b.targetAllCampuses === true;
+        const known = new Set((store.campuses || []).map(c => c.id));
+        const targetCampusIds = [...new Set((Array.isArray(b.targetCampusIds) ? b.targetCampusIds : []).map(String))].filter(id => known.has(id));
+        if (!targetAllCampuses && !targetCampusIds.length) return res.status(400).json({ success: false, error: 'Choose at least one campus, or all campuses.' });
+
+        const p = b.prerequisites || {};
+        const deadline = b.nominationDeadline ? new Date(b.nominationDeadline) : null;
+        const fields = {
+            type, title, company, description,
+            location: nominationsEngine.cleanText(b.location, 80),
+            compensation: nominationsEngine.cleanText(b.compensation, 80),
+            duration: nominationsEngine.cleanText(b.duration, 60),
+            status: ['draft', 'open', 'closed'].includes(b.status) ? b.status : 'open',
+            targetAllCampuses,
+            targetCampusIds: targetAllCampuses ? [] : targetCampusIds,
+            prerequisites: {
+                milestoneId: cleanPrereqNumber(p.milestoneId, 20),
+                minProjectsAi: cleanPrereqNumber(p.minProjectsAi, 100),
+                minProjectsInsight: cleanPrereqNumber(p.minProjectsInsight, 100),
+                minRapidXp: cleanPrereqNumber(p.minRapidXp, 20),
+                minResidency: cleanPrereqNumber(p.minResidency, 20),
+                minLqZone: ['any', 'average', 'strong'].includes(p.minLqZone) ? p.minLqZone : 'any'
+            },
+            nominationDeadline: deadline && !isNaN(deadline) ? deadline.toISOString() : null
+        };
+        let opp = b.id ? store.opportunities.find(o => o.id === b.id) : null;
+        if (opp) Object.assign(opp, fields);
+        else {
+            opp = Object.assign({ id: 'opp_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'), createdAt: new Date().toISOString() }, fields);
+            store.opportunities.push(opp);
+        }
+        saveStore();
+        res.json({ success: true, opportunity: opp });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/creator/opportunities/:id/status', '/gamification/api/creator/opportunities/:id/status'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    const opp = store.opportunities.find(o => o.id === req.params.id);
+    if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
+    if (!['draft', 'open', 'closed'].includes(req.body && req.body.status)) return res.status(400).json({ success: false, error: 'Invalid status.' });
+    opp.status = req.body.status;
+    saveStore();
+    res.json({ success: true, opportunity: opp });
+});
+
+app.post(['/api/creator/nomination-settings', '/gamification/api/creator/nomination-settings'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    const days = parseInt(req.body && req.body.cooldownDays, 10);
+    if (!(days >= 1 && days <= 90)) return res.status(400).json({ success: false, error: 'Cooldown must be between 1 and 90 days.' });
+    store.nominationSettings.cooldownDays = days;
+    saveStore();
+    res.json({ success: true, settings: store.nominationSettings });
+});
+
+app.get(['/api/creator/nominations', '/gamification/api/creator/nominations'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    const now = Date.now();
+    let list = store.nominations;
+    if (req.query.studentId) list = list.filter(n => n.studentId === String(req.query.studentId));
+    if (req.query.opportunityId) list = list.filter(n => n.opportunityId === String(req.query.opportunityId));
+    list = list.slice().sort((a, b) => new Date(b.nominatedAt) - new Date(a.nominatedAt));
+    const block = req.query.studentId ? activeBlock(req.query.studentId, now) : null;
+    res.json({
+        success: true,
+        nominations: list.map(nominationView),
+        summary: nominationsEngine.summarize(list, now),
+        blockedUntil: block ? block.until : null,
+        blockReason: block ? block.reason : ''
+    });
+});
+
+app.post(['/api/creator/nominations/:id/rounds', '/gamification/api/creator/nominations/:id/rounds'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const nom = store.nominations.find(n => n.id === req.params.id);
+        if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
+        if (nominationsEngine.isFinal(nom)) return res.status(400).json({ success: false, error: 'This nomination is already closed.' });
+        const when = new Date((req.body || {}).scheduledAt);
+        if (isNaN(when)) return res.status(400).json({ success: false, error: 'Please give the interview date and time.' });
+        const now = Date.now();
+        const round = {
+            id: 'rnd_' + now.toString(36) + crypto.randomBytes(2).toString('hex'),
+            number: (nom.rounds || []).length + 1,
+            label: nominationsEngine.cleanText(req.body.label, 60),
+            scheduledAt: when.toISOString(),
+            note: nominationsEngine.cleanText(req.body.note, 300),
+            studentAttended: null, creatorAttended: null, outcome: 'pending', questions: []
+        };
+        nom.rounds = nom.rounds || [];
+        nom.rounds.push(round);
+        if (nom.status === 'nominated') nom.status = 'interview_stage';
+        historyPush(nom, `Interview round ${round.number} scheduled for ${when.toISOString()}`, now);
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// The Creator can record attendance and the round result directly (this overrides what the student said).
+app.post(['/api/creator/nominations/:id/rounds/:roundId', '/gamification/api/creator/nominations/:id/rounds/:roundId'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const nom = store.nominations.find(n => n.id === req.params.id);
+        const round = nom && (nom.rounds || []).find(r => r.id === req.params.roundId);
+        if (!round) return res.status(404).json({ success: false, error: 'Interview round not found.' });
+        const now = Date.now();
+        const b = req.body || {};
+        const sourceKey = `${nom.id}:${round.id}`;
+
+        if (b.attended === true || b.attended === false) {
+            round.creatorAttended = b.attended;
+            round.creatorMarkedAt = new Date(now).toISOString();
+            if (b.attended === false) {
+                round.outcome = 'no_show';
+                nom.status = 'no_show';
+                nom.statusReason = nominationsEngine.cleanText(b.reason, 300) || 'Marked as not attended by cMPLiBe';
+                if (b.noPenalty !== true) addNominationBlock(nom.studentId, sourceKey, `Did not attend interview (${nom.opportunityId})`, now);
+                historyPush(nom, `Round ${round.number} marked as not attended by cMPLiBe`, now);
+            } else {
+                liftNominationBlock(nom.studentId, sourceKey);
+                if (round.outcome === 'no_show') round.outcome = 'pending';
+                if (nom.status === 'no_show') nom.status = 'interview_stage';
+                historyPush(nom, `Round ${round.number} marked as attended by cMPLiBe`, now);
+            }
+        }
+        if (['pending', 'shortlisted', 'rejected', 'selected'].includes(b.outcome)) {
+            if (b.outcome !== 'pending' && nominationsEngine.effectiveAttendance(round) === null) {
+                round.creatorAttended = true;
+                round.creatorMarkedAt = new Date(now).toISOString();
+            }
+            round.outcome = b.outcome;
+            round.outcomeAt = new Date(now).toISOString();
+            round.outcomeReason = nominationsEngine.cleanText(b.reason, 300);
+            if (b.outcome === 'rejected') nom.status = 'rejected';
+            else if (b.outcome === 'selected') nom.status = 'selected';
+            else if (nominationsEngine.isFinal(nom) && nom.status !== 'no_show') nom.status = 'interview_stage';
+            if (b.outcome !== 'pending') historyPush(nom, `Round ${round.number} result: ${b.outcome}${round.outcomeReason ? ' - ' + round.outcomeReason : ''}`, now);
+            if (b.outcome === 'rejected' || b.outcome === 'selected') nom.statusReason = round.outcomeReason;
+        }
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Final result of the whole nomination: selected, rejected, or (Rapid XP / Residency) internship completed.
+app.post(['/api/creator/nominations/:id/status', '/gamification/api/creator/nominations/:id/status'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    const nom = store.nominations.find(n => n.id === req.params.id);
+    if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
+    const status = (req.body || {}).status;
+    if (!['nominated', 'interview_stage', 'selected', 'rejected', 'completed'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid status.' });
+    nom.status = status;
+    nom.statusReason = nominationsEngine.cleanText(req.body.reason, 300);
+    historyPush(nom, `Status set to ${status} by cMPLiBe${nom.statusReason ? ': ' + nom.statusReason : ''}`, Date.now());
+    saveStore();
+    res.json({ success: true, nomination: nominationView(nom) });
+});
+
+app.post(['/api/creator/blocks/:studentId/clear', '/gamification/api/creator/blocks/:studentId/clear'], (req, res) => {
+    if (!creatorOnly(req, res)) return;
+    store.nominationBlocks[String(req.params.studentId)] = [];
+    saveStore();
+    res.json({ success: true });
+});
+
+// Reminder e-mail after an interview time has passed (in-app the student also sees the question on the Opportunities tab).
+async function sendInterviewCheckInReminders() {
+    if (!mailTransporter) return;
+    const now = Date.now();
+    for (const n of store.nominations) {
+        if (!n.studentEmail) continue;
+        for (const p of nominationsEngine.pendingCheckIns([n], now)) {
+            const round = n.rounds.find(r => r.id === p.roundId);
+            if (!round || round.reminderSentAt) continue;
+            const opp = store.opportunities.find(o => o.id === n.opportunityId) || {};
+            try {
+                await mailTransporter.sendMail({
+                    from: process.env.SMTP_FROM || '"cMPLiBe Platform" <noreply@cmplibe.com>',
+                    to: n.studentEmail,
+                    subject: `Did you attend your interview with ${opp.company || 'the company'}?`,
+                    text: `Hi ${n.studentName || ''},\n\nYour interview for "${opp.title || 'the opportunity'}" was scheduled for ${new Date(round.scheduledAt).toUTCString()}.\nPlease open cMPLiBe > Opportunities, tell us whether you attended and note down the questions you were asked. You will then see your selection status.\n\ncMPLiBe team`
+                });
+                round.reminderSentAt = new Date(now).toISOString();
+                saveStoreDebounced();
+            } catch (err) {
+                console.warn('[Interview Reminder] Could not e-mail', n.studentEmail, err.message);
+            }
+        }
+    }
+}
+if (process.env.NODE_ENV !== 'test') {
+    const reminderTimer = setInterval(() => { sendInterviewCheckInReminders().catch(() => {}); }, 15 * 60 * 1000);
+    if (reminderTimer.unref) reminderTimer.unref();
+}
+
+// -------------------------------------------------------------
 // 5. LINKEDIN-STYLE TELEMETRY & NOTIFICATION FEEDS
 // -------------------------------------------------------------
 

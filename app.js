@@ -2444,7 +2444,10 @@ async function displayAdminLearnerDataById(userId, shouldScroll = true) {
                 <p><span class="text-slate-400">Current Milestone:</span> <strong class="text-indigo-400 font-bold">Milestone ${getActualLearnerHighestMilestone(learner._id || learner)}</strong></p>
                 <p><span class="text-slate-400">MS1 Completion:</span> <strong class="${ms1Pct >= 90 ? 'text-emerald-400' : 'text-amber-400'} font-bold">${ms1Pct}%</strong></p>
             </div>
-            <div class="pt-3 border-t border-slate-800">
+            <div class="pt-3 border-t border-slate-800 space-y-2">
+                <button onclick="openStudentPipeline('${learner._id || learner.id || ''}')" class="w-full py-2 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-amber-600/20">
+                    <i class="fas fa-route"></i> Nominations &amp; interviews
+                </button>
                 <button onclick="openAutoCv('${learner._id || learner.id || ''}')" class="w-full py-2 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20">
                     <i class="fas fa-wand-magic-sparkles"></i> View cMPLiBe CV (auto-built)
                 </button>
@@ -21519,7 +21522,7 @@ async function switchTab(tab) {
         syncGlobalServerData().catch(() => {});
     }
 
-    const tabs = ['dashboardTab', 'levelUpTab', 'careerViewsTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab', 'managementTab', 'recruiterTab'];
+    const tabs = ['dashboardTab', 'levelUpTab', 'opportunitiesTab', 'careerViewsTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab', 'managementTab', 'recruiterTab'];
     
     // 1. Hide all tab content sections
     tabs.forEach(t => {
@@ -21559,6 +21562,10 @@ async function switchTab(tab) {
         if (typeof loadCustomerNotifications === 'function') {
             loadCustomerNotifications();
         }
+    }
+
+    if (tab === 'opportunitiesTab' && typeof renderOpportunitiesTab === 'function') {
+        renderOpportunitiesTab();
     }
 
     if (tab === 'careerViewsTab') {
@@ -22239,7 +22246,7 @@ const LOCAL_FALLBACK_GEO = {
 // -------------------------------------------------------------
 function switchManagementSubTab(subTab) {
     window._mgmtActiveSubTab = subTab;
-    const tabs = ['team', 'corporates', 'requests', 'campuses'];
+    const tabs = ['team', 'corporates', 'requests', 'opportunities', 'campuses'];
     
     tabs.forEach(t => {
         const pane = document.getElementById(`mgmtSubTab-${t}`);
@@ -22264,6 +22271,7 @@ function switchManagementSubTab(subTab) {
     if (subTab === 'corporates') renderManagementCorporates();
     if (subTab === 'campuses') renderManagementCampuses();
     if (subTab === 'requests' && typeof renderCreatorRequirements === 'function') renderCreatorRequirements();
+    if (subTab === 'opportunities' && typeof renderCreatorOpportunities === 'function') renderCreatorOpportunities();
 }
 window.switchManagementSubTab = switchManagementSubTab;
 

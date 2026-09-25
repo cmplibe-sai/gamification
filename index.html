@@ -96,6 +96,7 @@
                     <button onclick="switchTab('dashboardTab')" id="nav-dashboardTab" class="nav-tab-btn active" title="Home"><i class="fas fa-home"></i> <span class="hidden sm:inline">Home</span></button>
                     <button onclick="switchTab('levelUpTab')" id="nav-levelUpTab" class="nav-tab-btn" title="Level-Up"><i class="fas fa-layer-group"></i> <span class="hidden sm:inline">Level-Up</span><span class="hidden md:inline"> (4 Milestones)</span></button>
                     <button onclick="switchTab('careerViewsTab')" id="nav-careerViewsTab" class="nav-tab-btn" title="Career Views & Talent Search"><i class="fas fa-eye text-emerald-400"></i> <span class="hidden sm:inline">Career Views</span><span id="careerViewsBadge" class="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hidden">0</span></button>
+                    <button onclick="switchTab('opportunitiesTab')" id="nav-opportunitiesTab" class="nav-tab-btn" title="Opportunities and Interviews"><i class="fas fa-briefcase text-amber-400"></i> <span class="hidden sm:inline">Opportunities</span><span id="opportunitiesBadge" class="ml-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full bg-rose-500/30 text-rose-200 border border-rose-500/40 hidden">0</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-leaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span><span class="hidden lg:inline"> Leaderboard</span></button>
                     
                     <!-- LC Currency Pill -->
@@ -902,6 +903,8 @@
             <!-- ==============================================================
                  5. LEARNER CAREER VIEWS & LINKEDIN-STYLE SEARCH APPEARANCES
                  ============================================================== -->
+            <section id="opportunitiesTab" class="hidden space-y-6 animate-fade-in"><div id="opportunitiesTabContent"></div></section>
+
             <section id="careerViewsTab" class="hidden space-y-8 animate-fade-in">
                 <!-- Welcome Banner -->
                 <div class="glass-card p-6 md:p-8 relative overflow-hidden border-emerald-500/30 bg-gradient-to-r from-slate-900/90 via-emerald-950/20 to-slate-900/90">
@@ -1074,6 +1077,9 @@
                     <button id="mgmtSubTabBtn-requests" onclick="switchManagementSubTab('requests')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-bullhorn"></i> <span>Corporate Requests</span> <span id="mgmtReqCount" class="hidden min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center px-1">0</span>
                     </button>
+                    <button id="mgmtSubTabBtn-opportunities" onclick="switchManagementSubTab('opportunities')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-route"></i> <span>Opportunities &amp; Nominations</span>
+                    </button>
                     <button id="mgmtSubTabBtn-campuses" onclick="switchManagementSubTab('campuses')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-university"></i> <span>Campus Partnerships</span>
                     </button>
@@ -1218,6 +1224,15 @@
                         <p class="text-xs text-slate-400 mt-1">Recruiters describe a project need. Approve it, set its LCs and choose the campuses whose students can take it.</p>
                     </div>
                     <div id="creatorRequestsHost"></div>
+                </div>
+
+                <!-- SUB-HUB: Rapid XP / Residency / Placement openings and every student's nominations and interviews -->
+                <div id="mgmtSubTab-opportunities" class="hidden space-y-4">
+                    <div class="pb-2 border-b border-slate-800">
+                        <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-route text-amber-400 mr-2"></i> Opportunities &amp; Nominations</h3>
+                        <p class="text-xs text-slate-400 mt-1">Create Rapid XP, Corporate Residency and Final Placement openings, set who can nominate, and follow each student's interviews.</p>
+                    </div>
+                    <div id="creatorOpportunitiesHost"></div>
                 </div>
 
                 <!-- SUB-HUB 3: Campus Partnerships -->
@@ -1736,6 +1751,7 @@
     <script src="app.js?v=2.9.34"></script>
     <script src="cv.js?v=1.0.2"></script>
     <script src="requirements.js?v=2.0.0"></script>
+    <script src="nominations.js?v=1.0.0"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">
