@@ -52,6 +52,16 @@ run('late reward is the Creator value, otherwise 3', () => {
     assert.strictEqual(R.lateLcsFor(null), 3);
 });
 
+run('Immerse has no catch-up: on its date inside the window only', () => {
+    const inside = R.classifyCheckin({ sessionDateKey: '2026-09-25', nowMs: NOW, endTime: '23:59', moduleName: 'immerse' });
+    assert.deepStrictEqual([inside.allowed, inside.isLate], [true, false]);
+    const after = R.classifyCheckin({ sessionDateKey: '2026-09-25', nowMs: at('2026-09-25', '20:00'), endTime: '19:00', moduleName: 'immerse' });
+    assert.deepStrictEqual([after.allowed, after.reason], [false, 'window_closed']);
+    const yesterday = R.classifyCheckin({ sessionDateKey: '2026-09-24', nowMs: NOW, endTime: '23:59', moduleName: 'immerse' });
+    assert.strictEqual(yesterday.allowed, false);
+    assert.strictEqual(R.classifyCheckin({ sessionDateKey: '2026-09-24', nowMs: NOW, endTime: '23:59', moduleName: 'pod' }).allowed, true, 'POD keeps the 7-day catch-up');
+});
+
 const days = (n, missing) => Array.from({ length: n }, (_, i) => ({ dateKey: R.addDays('2026-09-01', i), ok: !(missing || []).includes(i + 1) }));
 run('owner example: days 1-8 done, day 9 missed, days 10-11 done gives longest 8, current 2', () => {
     const s = R.computeStreaks(days(11, [9]), '2026-09-11');

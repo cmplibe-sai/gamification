@@ -3113,10 +3113,15 @@ async function syncGlobalServerData() {
                 if (isSelf) {
                     const srv = serverUserMilestoneStates[uid] || {};
                     const loc = userMilestoneState[uid] || {};
+                    // when the Creator takes a credential back the server level is lowered on purpose: use it once
+                    const levelResetAt = Number(srv.highestUnlockedResetAt) || 0;
+                    const levelResetSeen = Number(loc.highestUnlockedResetSeen) || 0;
+                    const useServerLevel = levelResetAt > levelResetSeen;
                     userMilestoneState[uid] = {
                         ...srv,
                         ...loc,
-                        highestUnlocked: Math.max(Number(srv.highestUnlocked) || 1, Number(loc.highestUnlocked) || 1),
+                        highestUnlockedResetSeen: Math.max(levelResetAt, levelResetSeen),
+                        highestUnlocked: useServerLevel ? (Number(srv.highestUnlocked) || 1) : Math.max(Number(srv.highestUnlocked) || 1, Number(loc.highestUnlocked) || 1),
                         started: { ...(srv.started || {}), ...(loc.started || {}) },
                         viewedTerms: Array.from(new Set([...(Array.isArray(srv.viewedTerms) ? srv.viewedTerms : []), ...(Array.isArray(loc.viewedTerms) ? loc.viewedTerms : [])]))
                     };
@@ -7388,6 +7393,43 @@ window.renderAdminNotificationsList = renderAdminNotificationsList;
 // 3. Claim Pending Creator Approval -> Shows pending badge & timestamp
 // 4. Credential Approved & Issued -> Shows official badge image, Certificate ID & PDF download
 // ==============================================================
+// Where a learner stands for the milestone credential: every prerequisite row, whether all are met, and the claim state.
+function getMilestoneClaimStatus(msId) {
+    const empty = { rows: [], meetsAll: false, isPending: false, isIssued: false };
+    if (!currentUser) return empty;
+    const cfg = getMilestonePrereqConfig(msId);
+    const userSubs = getUserSubmissionsByUserId(currentUser).filter(s => String(s.milestoneId || 1) === String(msId));
+    const rows = (cfg.prerequisites || []).map(p => {
+        const modCode = normalizeLevelUpType(p.module || 'dip');
+        const modSubs = userSubs.filter(s => normalizeLevelUpType(s.type) === modCode);
+        const targetVal = Number(p.targetValue) || 0;
+        if (p.type === 'lcs') {
+            const earned = modSubs.reduce((sum, s) => sum + (Number(s.lcReward) || 0), 0);
+            return { module: modCode, have: earned, need: targetVal, ok: targetVal === 0 || earned >= targetVal };
+        }
+        return { module: modCode, have: modSubs.length, need: targetVal, ok: targetVal === 0 || modSubs.length >= targetVal };
+    });
+    const certRecord = mockApprovedCertificates[`${currentUser._id}_MS${msId}`];
+    const isIssued = isCertificateApproved(currentUser._id, msId);
+    const isPending = Boolean(certRecord && certRecord.status === 'pending_approval' && !isIssued);
+    return { rows, meetsAll: rows.length > 0 && rows.every(r => r.ok), isPending, isIssued };
+}
+window.getMilestoneClaimStatus = getMilestoneClaimStatus;
+
+// The "Claim my Credential" button glows as soon as every requirement is met, so the learner goes and claims it.
+function refreshClaimCredentialButton() {
+    const btn = document.getElementById('btnClaimCredential');
+    if (!btn || !currentUser) return;
+    const st = getMilestoneClaimStatus(activeMilestoneId || 1);
+    const ready = st.meetsAll && !st.isPending && !st.isIssued;
+    btn.classList.toggle('claim-glow', ready);
+    if (st.isIssued) btn.innerHTML = '<i class="fas fa-certificate text-amber-300"></i> View my Credential';
+    else if (st.isPending) btn.innerHTML = '<i class="fas fa-hourglass-half text-amber-300"></i> Claim submitted - awaiting approval';
+    else if (ready) btn.innerHTML = '<i class="fas fa-certificate text-amber-200"></i> All requirements met - Claim my Credential now!';
+    else btn.innerHTML = '<i class="fas fa-certificate text-amber-300"></i> Claim my Credential';
+}
+window.refreshClaimCredentialButton = refreshClaimCredentialButton;
+
 function openClaimCredentialModal() {
     const modal = document.getElementById('claimCredentialModal');
     const content = document.getElementById('claimCredentialContent');
@@ -9521,7 +9563,60 @@ window.confirmRemoveCustomerFromChallenge = confirmRemoveCustomerFromChallenge;
 // ==============================================================
 // CREATOR DASHBOARD: DEDICATED NEED APPROVAL QUEUE
 // ==============================================================
+function renderAdminApprovedCredentials() {
+    const host = document.getElementById('adminApprovedCredentialsList');
+    if (!host) return;
+    const users = (typeof adminRealtimeUsers !== 'undefined' && Array.isArray(adminRealtimeUsers)) ? adminRealtimeUsers : [];
+    const rows = [];
+    let hiddenTests = 0;
+    Object.keys(mockApprovedCertificates || {}).forEach(key => {
+        const rec = mockApprovedCertificates[key];
+        const m = key.match(/^(.+)_MS(\d+)$/);
+        if (!m || !rec || !(rec === true || rec.approved === true)) return;
+        const uid = m[1], ms = Number(m[2]);
+        const user = users.find(u => String(u._id || u.id) === uid) || null;
+        if (/^test_(learner|synth)/i.test(uid)) { hiddenTests++; return; } // records left by automated checks
+        const isTeamTest = Boolean(user && typeof isTestUser === 'function' && isTestUser(user));
+        rows.push({ uid, ms, rec, isTeamTest, name: (user && user.name) || (rec && rec.userName) || 'Learner', email: (user && user.email) || (rec && rec.userEmail) || '' });
+    });
+    rows.sort((a, b) => Number((b.rec && b.rec.approvedAt) || 0) - Number((a.rec && a.rec.approvedAt) || 0));
+    if (!rows.length) {
+        host.innerHTML = `<div class="text-xs text-slate-500 p-3 border border-dashed border-slate-800 rounded-xl">No credential has been approved yet${hiddenTests ? ` (${hiddenTests} test account record${hiddenTests === 1 ? '' : 's'} hidden)` : ''}.</div>`;
+        return;
+    }
+    host.innerHTML = rows.map(r => `
+        <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div class="min-w-0">
+                <div class="text-sm font-bold text-white truncate">${escapeHtml(r.name)} <span class="text-[11px] font-normal text-slate-400">${escapeHtml(r.email)}</span>${r.isTeamTest ? ' <span class="badge-pill badge-slate text-[9px]">Test account</span>' : ''}</div>
+                <div class="text-[11px] text-emerald-300">Milestone ${r.ms} credential ${escapeHtml((r.rec && r.rec.credentialId) || '')}${r.rec && r.rec.approvedAt ? ' &bull; approved ' + new Date(Number(r.rec.approvedAt)).toLocaleDateString() : ''}${r.rec && r.rec.nextMilestoneStart ? ' &bull; next milestone started ' + escapeHtml(r.rec.nextMilestoneStart) : ''}</div>
+            </div>
+            <button type="button" onclick="adminRevokeCredential('${escapeHtml(r.uid)}', ${r.ms})" class="px-3 py-1.5 rounded-lg bg-rose-900/40 hover:bg-rose-800/60 text-rose-200 border border-rose-700/60 text-[11px] font-bold"><i class="fas fa-rotate-left mr-1"></i> Take credential back</button>
+        </div>`).join('') + (hiddenTests ? `<div class="text-[10px] text-slate-500">${hiddenTests} test account record${hiddenTests === 1 ? '' : 's'} hidden.</div>` : '');
+}
+window.renderAdminApprovedCredentials = renderAdminApprovedCredentials;
+
+async function adminRevokeCredential(userId, msId) {
+    const user = ((typeof adminRealtimeUsers !== 'undefined' && adminRealtimeUsers) || []).find(u => String(u._id || u.id) === String(userId));
+    const who = (user && user.name) || 'this learner';
+    if (!confirm(`Take the Milestone ${msId} credential back from ${who}?\n\nThey return to Milestone ${msId} and continue its check-ins. Nothing they submitted is deleted.`)) return;
+    try {
+        const res = await apiFetch('/api/credential/revoke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, milestoneId: msId }) });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Could not take the credential back.');
+        mockApprovedCertificates[`${userId}_MS${msId}`] = data.data;
+        try { localStorage.setItem('mockApprovedCertificates', JSON.stringify(mockApprovedCertificates)); } catch (e) {}
+        if (typeof syncGlobalServerData === 'function') await syncGlobalServerData().catch(() => {});
+        renderAdminNeedApprovalView();
+        if (typeof renderAdminCohortSubmissions === 'function') renderAdminCohortSubmissions();
+        alert(`Credential taken back from ${who}.${data.note ? '\n' + data.note : ''}`);
+    } catch (err) {
+        alert(err.message);
+    }
+}
+window.adminRevokeCredential = adminRevokeCredential;
+
 function renderAdminNeedApprovalView() {
+    renderAdminApprovedCredentials();
     const listContainer = document.getElementById('adminNeedApprovalList');
     const headerCount = document.getElementById('approvalQueueCountHeader');
     const badge = document.getElementById('needApprovalCountBadge');
@@ -16287,7 +16382,7 @@ function openSubmissionModal(dayNum, moduleName, cardDateKeyOverride) {
     const endTime = dayConfig.endTime || (isImmerse ? '23:59' : '17:00');
     const isTest = (typeof isTestUser === 'function') && isTestUser();
 
-    const lateTiming = window.CmpliCheckinRules ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime }) : null;
+    const lateTiming = window.CmpliCheckinRules ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime, moduleName }) : null;
     const lateRewardShown = lcLate > 0 ? lcLate : 3;
     const lateBannerHtml = (lateTiming && lateTiming.allowed && lateTiming.isLate) ? `
         <div class="p-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-2">
@@ -17206,7 +17301,7 @@ async function submitCheckinForm(dayNum, moduleName, cardDateKey, lcOnTime, lcLa
 
         // On time or late is decided by the session DATE and the end time (India time), exactly as the server does.
         const timing = window.CmpliCheckinRules
-            ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: endTime || '23:59' })
+            ? window.CmpliCheckinRules.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: endTime || '23:59', moduleName })
             : { allowed: true, isLate: false, reason: '' };
         const testBypass = (typeof isTestUser === 'function') && isTestUser();
         if (!timing.allowed && !testBypass) {
@@ -18588,6 +18683,7 @@ async function submitActiveStudentProject() {
 window.submitActiveStudentProject = submitActiveStudentProject;
 
 function switchMilestoneTab(moduleName, btnElement) {
+    if (typeof refreshClaimCredentialButton === 'function') refreshClaimCredentialButton();
     if (btnElement) {
         document.querySelectorAll('.milestone-nav-btn').forEach(btn => {
             btn.classList.remove('bg-indigo-600/20', 'text-indigo-400', 'border-b-2', 'border-indigo-500');
@@ -18804,9 +18900,24 @@ function switchMilestoneTab(moduleName, btnElement) {
             elapsedSessionsTillToday++;
         }
         // elapsedSessionsTillToday - 1 is today (or the most recent session date on or before today)
-        // Add a rolling buffer of 3 upcoming days so learners always see upcoming schedule
-        const upcomingBuffer = 3;
-        dynamicSessions = Math.max(baseTargetSessions, (elapsedSessionsTillToday - 1) + upcomingBuffer);
+        const modLcTarget = (prereqCfg.prerequisites || []).find(p => normalizeLevelUpType(p.module) === normalizedMod && p.type === 'lcs');
+        if (modLcTarget && Number(modLcTarget.targetValue) > 0) {
+            // LC prerequisite (for example 100 LCs at 33 per check-in = 4 check-ins): only as many days as still needed are offered.
+            // A missed or late day earns less, so more days appear automatically until the requirement is met.
+            const targetLcs = Number(modLcTarget.targetValue);
+            const earnedLcs = typeSubs.reduce((sum, s) => sum + ((s.status === 'completed' || Number(s.lcReward) > 0) ? (Number(s.lcReward) || 0) : 0), 0);
+            const perDayLcs = (typeof getLqPerDayMaxLc === 'function' ? getLqPerDayMaxLc(activeMilestoneId, normalizedMod) : 33) || 33;
+            const stillNeeded = Math.ceil(Math.max(0, targetLcs - earnedLcs) / perDayLcs);
+            const sessionsThroughToday = elapsedSessionsTillToday - 1;
+            const todayIsSession = sessionsThroughToday >= 1 && getLocalDateKey(getMilestoneSessionDate(milestoneStartDate, sessionsThroughToday, moduleName)) === todayKey;
+            const todayDone = typeSubs.some(s => (s.dateKey === todayKey || s.date === todayKey) && (s.status === 'completed' || Number(s.lcReward) > 0));
+            const upcomingNeeded = Math.max(0, stillNeeded - ((todayIsSession && !todayDone) ? 1 : 0));
+            dynamicSessions = Math.max(1, sessionsThroughToday + upcomingNeeded);
+        } else {
+            // Add a rolling buffer of 3 upcoming days so learners always see upcoming schedule
+            const upcomingBuffer = 3;
+            dynamicSessions = Math.max(baseTargetSessions, (elapsedSessionsTillToday - 1) + upcomingBuffer);
+        }
     }
 
     // Also ensure any higher submission days are included
@@ -18868,6 +18979,10 @@ function switchMilestoneTab(moduleName, btnElement) {
         if (isCompletedMilestone && !hasSubOnDate && orderedSessionDateKeys.length >= totalSessions) return;
 
         const hasContent = Boolean(cfg.extra || cfg.rescheduled || cfg.dayNumber || cfg.title || cfg.mainQuestion || (Array.isArray(cfg.questions) && cfg.questions.length > 0));
+        // Content that only exists because the sheet is filled weeks ahead does not create days: only the days the
+        // milestone still needs (standard slots), Creator extras and days with a submission are shown.
+        const lastStandardKey = orderedSessionDateKeys.length ? orderedSessionDateKeys[orderedSessionDateKeys.length - 1] : '';
+        if (!hasSubOnDate && !cfg.extra && !cfg.rescheduled && lastStandardKey && dk > lastStandardKey) return;
         if (hasContent) {
             orderedSessionDateKeys.push(dk);
             if (cfg.dayNumber && !standardSlotDateMap[dk]) {
@@ -18925,7 +19040,7 @@ function switchMilestoneTab(moduleName, btnElement) {
         // Catch-up: a missed day stays open for 7 days at the late reward; a finished milestone is closed for new check-ins
         const rulesApi = window.CmpliCheckinRules;
         const defaultEnd = (normalizeLevelUpType(moduleName) === 'dip') ? '17:00' : '23:59';
-        const catchUp = rulesApi ? rulesApi.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: dayCfg.endTime || defaultEnd }) : { allowed: false, daysLate: 99 };
+        const catchUp = rulesApi ? rulesApi.classifyCheckin({ sessionDateKey: cardDateKey, nowMs: Date.now(), endTime: dayCfg.endTime || defaultEnd, moduleName }) : { allowed: false, daysLate: 99 };
         const lateLcs = rulesApi ? rulesApi.lateLcsFor(dayCfg) : 3;
         const milestoneClosed = Boolean(isCompletedMilestone) && !isTestMode;
         const catchUpButton = (label, cls) => {
@@ -18971,6 +19086,9 @@ function switchMilestoneTab(moduleName, btnElement) {
         } else if ((isToday || isPast) && milestoneClosed) {
             statusBadge = '<span class="badge-pill bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold whitespace-nowrap"><i class="fas fa-flag-checkered mr-1"></i> Milestone completed</span>';
             actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap">Closed</button>`;
+        } else if (isToday && isImmerse && !catchUp.allowed && !isTestMode) {
+            statusBadge = '<span class="badge-pill bg-red-950/40 text-red-400 border border-red-900/40 text-[10px] whitespace-nowrap">Window ended</span>';
+            actionBtn = `<button disabled class="btn-secondary py-1 px-2.5 text-[11px] opacity-40 cursor-not-allowed shrink-0 whitespace-nowrap" title="Immerse can only be done inside its time window">Closed</button>`;
         } else if (isToday) {
             statusBadge = '<span class="badge-pill badge-amber text-[10px] font-bold animate-pulse whitespace-nowrap"><i class="fas fa-clock mr-1"></i> Open Today</span>';
             if (moduleName === 'pod') {
@@ -21907,6 +22025,7 @@ function renderMilestoneModulesUI(msId) {
     document.getElementById('milestoneGridContainer')?.classList.add('hidden');
     document.getElementById('btnBackToGrid')?.classList.remove('hidden');
     document.getElementById('milestoneDetailContainer')?.classList.remove('hidden');
+    if (typeof refreshClaimCredentialButton === 'function') refreshClaimCredentialButton();
 
     const titleEl = document.getElementById('activeMilestoneTitle');
     const descEl = document.getElementById('activeMilestoneDesc');

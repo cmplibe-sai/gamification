@@ -4811,6 +4811,61 @@ app.post(['/api/certificate-approvals', '/gamification/api/certificate-approvals
     }
 });
 
+// POST /api/credential/revoke - the Creator takes an approved credential back. The learner returns to that milestone
+// (check-ins reopen with the current rules) and the start dates the approval set for the next milestone are removed,
+// unless the learner has already started the next milestone. Submissions are kept.
+app.post(['/api/credential/revoke', '/gamification/api/credential/revoke'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required to take back a credential.' });
+        const userId = String((req.body || {}).userId || '').trim();
+        const msNum = Number((req.body || {}).milestoneId);
+        if (!userId || !(msNum >= 1)) return res.status(400).json({ success: false, error: 'userId and milestoneId are required' });
+
+        const key = `${userId}_MS${msNum}`;
+        const approvals = getCertificateApprovalsFromDb();
+        const existing = approvals[key];
+        if (!(existing === true || (existing && existing.approved === true))) {
+            return res.status(400).json({ success: false, error: 'This learner has no approved credential for that milestone.' });
+        }
+        const now = Date.now();
+        approvals[key] = Object.assign({}, existing === true ? {} : existing, {
+            status: 'revoked', approved: false, revokedAt: now, revokedFromApprovalAt: existing.approvedAt || null, userId, milestoneId: msNum
+        });
+        saveCertificateApprovalsToDb(approvals);
+
+        const nextMs = msNum + 1;
+        const learner = findLearnerForCv(userId);
+        const email = learner && learner.email ? learner.email.toLowerCase().trim() : '';
+        const startedNext = (store.submissions || []).some(x => (String(x.userId) === userId || (email && x.userEmail && x.userEmail.toLowerCase() === email)) && Number(x.milestoneId) === nextMs);
+
+        let note = '';
+        const states = getUserMilestoneStateFromDb();
+        if (!startedNext) {
+            const st = states[userId] || {};
+            st.highestUnlocked = Math.min(Number(st.highestUnlocked) || msNum, msNum);
+            st.highestUnlockedResetAt = now; // tells every browser to lower its remembered level once
+            if (st.started) delete st.started[nextMs];
+            states[userId] = st;
+            saveUserMilestoneStateToDb(states);
+
+            const joins = getUserJoinDatesFromDb();
+            [`${userId}_MS${nextMs}`, email ? `${email}_MS${nextMs}` : ''].filter(Boolean).forEach(k => { delete joins[k]; });
+            saveUserJoinDatesToDb(joins);
+            const starts = getUserModuleStartDatesFromDb();
+            MILESTONE_MODULES_TO_START.forEach(mod => {
+                [`${userId}_MS${nextMs}_${mod}`, email ? `${email}_MS${nextMs}_${mod}` : ''].filter(Boolean).forEach(k => { delete starts[k]; });
+            });
+            saveUserModuleStartDatesToDb(starts);
+        } else {
+            note = `The learner has already started Milestone ${nextMs}, so it was left as it is.`;
+        }
+        console.log(`[Credential Revoked] ${userId} Milestone ${msNum}. ${note}`);
+        res.json({ success: true, data: approvals[key], note });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST /api/credential/claim-request — Customer submits credential claim to Creator for verification
 app.post(['/api/credential/claim-request', '/gamification/api/credential/claim-request'], (req, res) => {
     try {
@@ -6861,7 +6916,7 @@ function checkinRuleVerdict(sub, msId, dayNum, modType) {
     }
 
     const timing = checkinRules.classifyCheckin({
-        sessionDateKey, nowMs: Date.now(),
+        sessionDateKey, nowMs: Date.now(), moduleName,
         endTime: cfg.endTime || (moduleName === 'dip' ? '17:00' : '23:59')
     });
     if (!timing.allowed) return { ok: false, error: checkinRules.REASON_TEXT[timing.reason] || 'This check-in cannot be submitted now.' };

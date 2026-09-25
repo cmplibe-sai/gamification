@@ -35,8 +35,11 @@
 
     // Decides what may happen to a check-in for `sessionDateKey` at time `nowMs`.
     //   returns { allowed, reason, isLate, daysLate }
-    function classifyCheckin({ sessionDateKey, nowMs, endTime, windowDays }) {
-        const limit = windowDays == null ? LATE_WINDOW_DAYS : windowDays;
+    // Dip and POD can be caught up for LATE_WINDOW_DAYS days at the late reward. Immerse has no catch-up: it can only
+    // be done on its own date, inside its time window.
+    function classifyCheckin({ sessionDateKey, nowMs, endTime, windowDays, moduleName }) {
+        const isImmerse = String(moduleName || '').toLowerCase() === 'immerse';
+        const limit = isImmerse ? 0 : (windowDays == null ? LATE_WINDOW_DAYS : windowDays);
         if (!isDateKey(sessionDateKey)) return { allowed: false, reason: 'invalid_date', isLate: false, daysLate: 0 };
         const now = istParts(nowMs);
         const daysLate = dayDiff(sessionDateKey, now.dateKey);
@@ -44,6 +47,7 @@
         if (daysLate > limit) return { allowed: false, reason: 'closed', isLate: true, daysLate };
         const end = /^\d{2}:\d{2}$/.test(String(endTime || '')) ? endTime : '23:59';
         const onTime = daysLate === 0 && now.hhmm <= end;
+        if (isImmerse && !onTime) return { allowed: false, reason: 'window_closed', isLate: true, daysLate };
         return { allowed: true, reason: onTime ? 'on_time' : 'late', isLate: !onTime, daysLate };
     }
 
@@ -56,7 +60,8 @@
     const REASON_TEXT = {
         invalid_date: 'This check-in has no valid session date.',
         future: 'This check-in is for a future date and cannot be completed yet.',
-        closed: `This check-in closed more than ${LATE_WINDOW_DAYS} days ago and can no longer be completed.`
+        closed: `This check-in closed more than ${LATE_WINDOW_DAYS} days ago and can no longer be completed.`,
+        window_closed: 'The cMPLi Immerse time window for this day has ended. Immerse check-ins can only be completed inside their window.'
     };
 
     // Longest and current streak over session days. `sessions` = [{ dateKey, ok }] in any order; only sessions
