@@ -527,7 +527,8 @@ function loadStore() {
         coachingActionItems: [],
         courseProgress: {},
         studentCVs: {},
-        studentCvProfiles: {}
+        studentCvProfiles: {},
+        corporateRequirements: []
     };
 }
 
@@ -541,6 +542,7 @@ if (!Array.isArray(store.teamMembers)) store.teamMembers = [];
 if (!Array.isArray(store.campuses)) store.campuses = [];
 if (!Array.isArray(store.employers)) store.employers = [];
 if (!store.studentCVs || typeof store.studentCVs !== 'object') store.studentCVs = {};
+if (!Array.isArray(store.corporateRequirements)) store.corporateRequirements = [];
 if (!store.studentCvProfiles || typeof store.studentCvProfiles !== 'object') store.studentCvProfiles = {};
 if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
 
@@ -2053,7 +2055,7 @@ app.get(['/api/custom-projects', '/gamification/api/custom-projects'], (req, res
         if (!store.customProjectsDB || typeof store.customProjectsDB !== 'object') {
             store.customProjectsDB = {};
         }
-        res.json({ success: true, data: store.customProjectsDB });
+        res.json({ success: true, data: customProjectsWithCorporate() });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -2071,7 +2073,7 @@ app.post(['/api/custom-projects', '/gamification/api/custom-projects'], (req, re
             store.customProjectsDB[msKey] = [];
         }
 
-        if (action === 'save_project' && project && project.id) {
+        if (action === 'save_project' && project && project.id && !project.corporate) {
             const list = store.customProjectsDB[msKey];
             const idx = list.findIndex(p => p.id === project.id);
             if (idx > -1) {
@@ -2080,6 +2082,9 @@ app.post(['/api/custom-projects', '/gamification/api/custom-projects'], (req, re
                 list.push(project);
             }
         } else if (action === 'delete_project' && projectId) {
+            // Corporate requirements are owned by the recruiter; deleting one here closes it instead of erasing student work
+            const corp = store.corporateRequirements.find(r => r.id === projectId);
+            if (corp) corp.status = 'closed';
             store.customProjectsDB[msKey] = store.customProjectsDB[msKey].filter(p => p.id !== projectId);
         } else if (allProjects && typeof allProjects === 'object') {
             store.customProjectsDB = allProjects;
@@ -2100,8 +2105,13 @@ app.post(['/api/custom-projects', '/gamification/api/custom-projects'], (req, re
             store.customProjectsDB[msKey] = merged;
         }
 
+        // Corporate requirements live in store.corporateRequirements and are added on read, never saved twice here
+        Object.keys(store.customProjectsDB).forEach(k => {
+            if (Array.isArray(store.customProjectsDB[k])) store.customProjectsDB[k] = store.customProjectsDB[k].filter(p => !(p && p.corporate));
+        });
+
         saveStore();
-        res.json({ success: true, data: store.customProjectsDB });
+        res.json({ success: true, data: customProjectsWithCorporate() });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -8454,6 +8464,7 @@ function refreshCvEntryForSubmission(sub) {
     const entry = cvEngine.buildExperienceEntry(hydrated);
     const profile = getCvProfile(sub.userId, true);
     applyGeminiResult(profile, entry, hydrated);
+    applyCorporateInfo(entry);
     const experiences = profile.generated.experiences;
     const idx = experiences.findIndex(e => cvEngine.entryKey(e) === cvEngine.entryKey(entry));
     if (idx > -1) experiences[idx] = entry; else experiences.push(entry);
@@ -8564,6 +8575,7 @@ function rebuildCvProfileForStudent(learnerId, learnerEmail) {
         const hydrated = withCvTranscripts(Object.assign({}, sub, { userId: String(learnerId) }));
         const entry = cvEngine.buildExperienceEntry(hydrated);
         applyGeminiResult(profile, entry, hydrated);
+        applyCorporateInfo(entry);
         profile.generated.experiences.push(entry);
         if (entry.awaitingTranscripts || GEMINI_API_KEY) queueCvJob(() => transcribeSubmissionForCv(sub.id));
     });
@@ -8699,6 +8711,175 @@ app.post(['/api/learner/cv-profile/rebuild', '/gamification/api/learner/cv-profi
         Object.keys(bank).forEach(url => { if (bank[url] && bank[url].failed === 'failed') delete bank[url]; });
         const profile = rebuildCvProfileForStudent(learnerId, email);
         res.json({ success: true, cv: cvEngine.assembleCv(profile, learner || { _id: learnerId, name: 'Learner' }, cvBadgesFor(learnerId), cvCampusLabel(learner)) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// -------------------------------------------------------------
+// 4d. CORPORATE REQUIREMENTS (recruiters post project requirements for students)
+// store.corporateRequirements = [{ id, employerId, companyName, title, description, sector, location, module,
+//   milestoneId, durationDays, pts, questions:[{title,type}], status:'open'|'closed', createdAt }]
+// A requirement is shown to students as an ordinary cMPLi-ai / Insight Engine project of its milestone
+// (see customProjectsWithCorporate), so starting it, submitting it, the dashboard and the automatic CV all
+// work through the existing project flow. Filtering by student prerequisites and location comes later.
+// -------------------------------------------------------------
+const REQUIREMENT_MODULES = new Set(['cmpli_ai', 'insight_engine']);
+const REQUIREMENT_QUESTION_TYPES = new Set(['text', 'audio', 'video', 'doc']);
+const REQUIREMENT_DEFAULT_LCS = 500;
+const MAX_REQUIREMENTS_PER_EMPLOYER = 100;
+
+// Recruiter text is shown inside student pages as HTML, so angle brackets, quotes and backslashes are removed.
+function cleanRequirementText(value, max) {
+    return String(value == null ? '' : value)
+        .replace(/[<>"`\\\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .trim()
+        .slice(0, max);
+}
+
+function requirementToProject(r) {
+    return {
+        id: r.id,
+        module: r.module,
+        title: r.title,
+        sector: r.sector || 'General',
+        spec: 'Corporate Project',
+        specialization: 'Corporate Project',
+        code: '[CORP]',
+        pts: r.pts || REQUIREMENT_DEFAULT_LCS,
+        duration: `${r.durationDays} Days`,
+        durationDays: r.durationDays,
+        desc: r.description,
+        questions: r.questions,
+        corporate: { requirementId: r.id, companyName: r.companyName, location: r.location },
+        closed: r.status !== 'open'
+    };
+}
+
+// Creator-built projects plus every recruiter requirement, grouped by milestone.
+function customProjectsWithCorporate() {
+    const base = store.customProjectsDB || {};
+    const out = {};
+    Object.keys(base).forEach(k => {
+        out[k] = (Array.isArray(base[k]) ? base[k] : []).filter(p => !(p && p.corporate));
+    });
+    (store.corporateRequirements || []).forEach(r => {
+        const k = String(r.milestoneId);
+        if (!out[k]) out[k] = [];
+        out[k].push(requirementToProject(r));
+    });
+    return out;
+}
+
+function applyCorporateInfo(entry) {
+    const r = (store.corporateRequirements || []).find(x => x.id === entry.projectId);
+    if (r) entry.company = r.companyName;
+}
+
+function requirementActor(req) {
+    if (checkCreatorAuth(req)) return { creator: true, employer: null };
+    const employer = verifyEmployerAuth(req);
+    return employer ? { creator: false, employer } : null;
+}
+
+function requirementStats(requirementId) {
+    let started = 0, completed = 0;
+    Object.values(store.userProjectLifecycles || {}).forEach(byProject => {
+        const life = byProject && byProject[requirementId];
+        if (!life) return;
+        if (life.status === 'completed') completed += 1; else started += 1;
+    });
+    return { inProgress: started, completed };
+}
+
+function publicRequirement(r) {
+    return Object.assign({}, r, { stats: requirementStats(r.id) });
+}
+
+app.get(['/api/recruiter/requirements', '/gamification/api/recruiter/requirements'], (req, res) => {
+    const actor = requirementActor(req);
+    if (!actor) return res.status(403).json({ success: false, error: 'Unauthorized: recruiter or creator access required.' });
+    const list = (store.corporateRequirements || [])
+        .filter(r => actor.creator || r.employerId === actor.employer.id)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(publicRequirement);
+    res.json({ success: true, requirements: list });
+});
+
+app.post(['/api/recruiter/requirements', '/gamification/api/recruiter/requirements'], (req, res) => {
+    try {
+        const actor = requirementActor(req);
+        if (!actor) return res.status(403).json({ success: false, error: 'Unauthorized: recruiter or creator access required.' });
+        const body = req.body || {};
+
+        let employerId, companyName;
+        if (actor.creator) {
+            const emp = (store.employers || []).find(e => e.id === body.employerId);
+            employerId = emp ? emp.id : 'creator';
+            companyName = cleanRequirementText(emp ? emp.companyName : body.companyName, 80);
+        } else {
+            employerId = actor.employer.id;
+            companyName = cleanRequirementText(actor.employer.companyName, 80);
+        }
+        if (!companyName) return res.status(400).json({ success: false, error: 'Company name is required.' });
+
+        const title = cleanRequirementText(body.title, 120);
+        const description = cleanRequirementText(body.description, 2000);
+        if (title.length < 5) return res.status(400).json({ success: false, error: 'Please give the project a title of at least 5 characters.' });
+        if (description.length < 20) return res.status(400).json({ success: false, error: 'Please describe what the students should do (at least 20 characters).' });
+
+        const owned = store.corporateRequirements.filter(r => r.employerId === employerId).length;
+        if (owned >= MAX_REQUIREMENTS_PER_EMPLOYER) return res.status(400).json({ success: false, error: 'Requirement limit reached. Please close or delete old ones.' });
+
+        const moduleKey = REQUIREMENT_MODULES.has(body.module) ? body.module : 'cmpli_ai';
+        const milestoneId = Math.min(20, Math.max(1, parseInt(body.milestoneId, 10) || (moduleKey === 'insight_engine' ? 3 : 2)));
+        const durationDays = Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || 15));
+        const sector = String(body.sector || 'General').replace(/[^A-Za-z0-9 &\/,.\-]/g, '').trim().slice(0, 40) || 'General';
+
+        let questions = (Array.isArray(body.questions) ? body.questions : [])
+            .slice(0, 10)
+            .map(q => ({ title: cleanRequirementText(q && q.title, 200), type: REQUIREMENT_QUESTION_TYPES.has(q && q.type) ? q.type : 'text' }))
+            .filter(q => q.title);
+        if (!questions.length) questions = [{ title: 'Final Project Deliverable', type: 'doc' }];
+
+        const requirement = {
+            id: 'corp_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
+            employerId,
+            companyName,
+            title,
+            description,
+            sector,
+            location: cleanRequirementText(body.location, 80) || 'Across all campuses',
+            module: moduleKey,
+            milestoneId,
+            durationDays,
+            pts: REQUIREMENT_DEFAULT_LCS,
+            questions,
+            status: 'open',
+            createdAt: new Date().toISOString()
+        };
+        store.corporateRequirements.push(requirement);
+        saveStore();
+        res.json({ success: true, requirement: publicRequirement(requirement) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/recruiter/requirements/:id/status', '/gamification/api/recruiter/requirements/:id/status'], (req, res) => {
+    try {
+        const actor = requirementActor(req);
+        if (!actor) return res.status(403).json({ success: false, error: 'Unauthorized: recruiter or creator access required.' });
+        const r = store.corporateRequirements.find(x => x.id === req.params.id);
+        if (!r || (!actor.creator && r.employerId !== actor.employer.id)) {
+            return res.status(404).json({ success: false, error: 'Requirement not found.' });
+        }
+        const status = req.body && req.body.status;
+        if (status !== 'open' && status !== 'closed') return res.status(400).json({ success: false, error: 'status must be open or closed' });
+        r.status = status;
+        saveStore();
+        res.json({ success: true, requirement: publicRequirement(r) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

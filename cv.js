@@ -34,7 +34,7 @@
         const experiences = cv.experiences.length
             ? cv.experiences.map((e, i) => `
                 <div style="margin:0 0 12px;page-break-inside:avoid;">
-                    <div style="font-weight:bold;">${i + 1}. ${esc(e.title)} <span style="font-weight:normal;font-size:10.5pt;">- ${esc(e.moduleLabel)}, Milestone ${esc(e.milestoneId)}</span></div>
+                    <div style="font-weight:bold;">${i + 1}. ${esc(e.title)} <span style="font-weight:normal;font-size:10.5pt;">- ${esc(e.moduleLabel)}${e.company ? ' for ' + esc(e.company) : ''}, Milestone ${esc(e.milestoneId)}</span></div>
                     <ul style="margin:4px 0 0 22px;padding:0;list-style:disc;">
                         ${e.bullets.map(b => `<li style="margin:3px 0;">${esc(b)}</li>`).join('')}
                     </ul>

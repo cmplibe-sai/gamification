@@ -12402,6 +12402,15 @@ function renderAdminProjectsList() {
     } else {
         projectsList.forEach((proj) => {
             const isActive = proj.id === activeAdminProjectId;
+            if (proj.corporate) {
+                html += `
+            <div class="w-full p-3 rounded-lg border border-cyan-700/50 bg-cyan-950/20 flex flex-col gap-1">
+                <span class="text-xs font-bold text-slate-200 line-clamp-1">${proj.title || 'Untitled'}</span>
+                <span class="text-[9px] text-cyan-300"><i class="fas fa-building mr-1"></i>${proj.corporate.companyName} &bull; posted by recruiter${proj.closed ? ' &bull; CLOSED' : ''}</span>
+                <button onclick="toggleCorporateRequirement('${proj.id}', ${proj.closed ? "'open'" : "'closed'"})" class="mt-1 text-[10px] font-bold px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300 hover:text-white">${proj.closed ? 'Reopen for students' : 'Close for students'}</button>
+            </div>`;
+                return;
+            }
             html += `
             <div onclick="loadAdminProjectEditor('${proj.id}')" class="w-full cursor-pointer p-3 rounded-lg border ${isActive ? 'border-emerald-500 bg-emerald-900/20' : 'border-slate-700 bg-slate-800 hover:bg-slate-700'} transition-all flex flex-col gap-1">
                 <div class="flex justify-between items-start">
@@ -17531,7 +17540,9 @@ async function startStudentProject(projectId, moduleName) {
     try { lifecycle = JSON.parse(localStorage.getItem(storeKey)) || {}; } catch(e) {}
 
     const startedAt = Date.now();
-    const deadline = startedAt + 7 * 86400000;
+    const projectDef = ((typeof customProjectsDB !== 'undefined' && customProjectsDB[activeMilestoneId]) || []).find(p => p.id === projectId);
+    const sprintDays = Number(projectDef && projectDef.durationDays) > 0 ? Number(projectDef.durationDays) : 7;
+    const deadline = startedAt + sprintDays * 86400000;
 
     lifecycle[projectId] = {
         status: 'in_progress',
@@ -17557,7 +17568,7 @@ async function startStudentProject(projectId, moduleName) {
         }).catch(e => console.warn('[Lifecycle Sync Warning]', e));
     } catch(e) {}
 
-    alert('🚀 7-Day Sprint Started! This project is now in your "In Progress" tab. You have 7 days to complete and upload your deliverables.');
+    alert(`🚀 ${sprintDays}-Day Sprint Started! This project is now in your "In Progress" tab. You have ${sprintDays} days to complete and upload your deliverables.`);
 
     window._activeProjectLifecycleTab = 'in_progress';
     renderCustomerProjectsView(moduleName);
@@ -17839,7 +17850,7 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
             completedProjects.push({ ...proj, lifecycle });
         } else if (lifecycle.status === 'in_progress') {
             inProgressProjects.push({ ...proj, lifecycle });
-        } else {
+        } else if (!proj.closed) {
             availableProjects.push({ ...proj, lifecycle });
         }
     });
@@ -18031,6 +18042,7 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                         </div>
 
                         <div>
+                            ${proj.corporate ? `<div class="text-[10px] font-bold text-cyan-300 mb-1 flex items-center gap-1.5 flex-wrap"><span class="px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-500/40"><i class="fas fa-building mr-1"></i> Corporate project by ${proj.corporate.companyName}</span><span class="text-slate-400 font-normal"><i class="fas fa-location-dot mr-1"></i>${proj.corporate.location || ''}</span></div>` : ''}
                             <h4 class="text-base font-bold text-white font-heading">${proj.title || 'Untitled Project'}</h4>
                         </div>
 
@@ -21575,6 +21587,9 @@ async function switchTab(tab) {
     if (tab === 'recruiterTab') {
         if (typeof initRecruiterPortal === 'function') {
             initRecruiterPortal();
+        }
+        if (typeof initRecruiterRequirements === 'function') {
+            initRecruiterRequirements();
         }
         setTimeout(() => {
             if (typeof renderRecruiterDashboardLcGrowthChart === 'function') {
