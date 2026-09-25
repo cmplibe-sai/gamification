@@ -16,8 +16,8 @@ const FINAL_STATUSES = new Set(['selected', 'rejected', 'withdrawn', 'no_show', 
 const DAY_MS = 86400000;
 const MIN_QUESTIONS = 1;
 const MAX_QUESTIONS = 20;
-// The student is asked "did you attend?" this long after the scheduled start, so a long interview is not interrupted.
-const CHECK_IN_DELAY_MS = 60 * 60 * 1000;
+// The student is asked "did you attend?" this long after the scheduled start.
+const CHECK_IN_DELAY_MS = 15 * 60 * 1000;
 const ROUNDS_BEFORE_WITHDRAW_IS_FREE = 2;
 
 function cleanText(value, max) {

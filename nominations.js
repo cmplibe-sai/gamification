@@ -74,6 +74,7 @@
                     ${r.questions && r.questions.length ? `<details><summary class="cursor-pointer text-cyan-300">${r.questions.length} question${r.questions.length === 1 ? '' : 's'} asked</summary><ol class="list-decimal ml-5 mt-1 text-slate-300 space-y-0.5">${r.questions.map(q => `<li>${esc(q)}</li>`).join('')}</ol></details>` : ''}
                     ${r.outcomeReason ? `<div class="text-slate-300">Feedback: ${esc(r.outcomeReason)}</div>` : ''}
                     ${creator ? `<div class="flex flex-wrap gap-1.5 pt-1">
+                        <button class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-amber-300" onclick="creatorRescheduleRound('${esc(n.id)}','${esc(r.id)}')">Reschedule</button>
                         <button class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-emerald-300" onclick="creatorMarkRound('${esc(n.id)}','${esc(r.id)}',{attended:true})">Mark attended</button>
                         <button class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-rose-300" onclick="creatorMarkRound('${esc(n.id)}','${esc(r.id)}',{attended:false})">Mark not attended</button>
                         <button class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 border border-slate-700 text-cyan-300" onclick="creatorRoundResult('${esc(n.id)}','${esc(r.id)}','shortlisted')">Shortlisted</button>
@@ -98,7 +99,8 @@
                 <div class="space-y-1.5">${rounds || '<div class="text-[11px] text-slate-500">No interview has been scheduled yet. You will be notified when it is.</div>'}</div>
                 ${(n.history || []).length ? `<details><summary class="cursor-pointer text-[11px] text-slate-400">History</summary><ul class="text-[11px] text-slate-400 mt-1 space-y-0.5">${n.history.map(h => `<li>${esc(when(h.at))} - ${esc(h.text)}</li>`).join('')}</ul></details>` : ''}
                 <div class="flex flex-wrap gap-2 pt-1">
-                    ${!creator && !['selected', 'rejected', 'withdrawn', 'no_show', 'completed'].includes(n.status) ? `<button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" onclick="withdrawNomination('${esc(n.id)}')">Withdraw</button>` : ''}
+                    ${!creator && !['selected', 'rejected', 'withdrawn', 'no_show', 'completed'].includes(n.status) ? `<button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-cyan-300 hover:text-white" onclick="openReportInterview('${esc(n.id)}')">I had an interview - add details</button>
+                        <button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" onclick="withdrawNomination('${esc(n.id)}')">Withdraw</button>` : ''}
                     ${creator ? `
                         <button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-cyan-300" onclick="creatorAddRound('${esc(n.id)}')">+ Schedule interview</button>
                         <button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-emerald-300" onclick="creatorSetNominationStatus('${esc(n.id)}','selected')">Mark selected</button>
@@ -161,9 +163,64 @@
             <p class="text-xs text-slate-300 whitespace-pre-line">${esc(o.description)}</p>
             ${ev.checks.length ? `<ul class="text-[11px] space-y-0.5">${ev.checks.map(c => `<li class="${c.ok ? 'text-emerald-300' : 'text-slate-400'}"><i class="fas ${c.ok ? 'fa-circle-check' : 'fa-lock'} mr-1"></i>${esc(c.label)}: ${esc(c.have)} / ${esc(c.need)}</li>`).join('')}</ul>` : ''}
             ${ev.blocker ? `<div class="text-[11px] text-rose-300">${esc(ev.blocker)}</div>` : ''}
-            <button class="btn-primary py-1.5 px-4 text-xs" ${ev.eligible ? '' : 'disabled style="opacity:.45;cursor:not-allowed;"'} onclick="openNominateDialog('${esc(o.id)}')">${ev.eligible ? 'Nominate me' : 'Not available yet'}</button>
+            <button class="btn-primary py-1.5 px-4 text-xs" ${ev.eligible ? '' : 'disabled style="opacity:.45;cursor:not-allowed;"'} onclick="openNominateDialog('${esc(o.id)}')">${ev.eligible ? 'Nominate' : 'Not available yet'}</button>
         </div>`;
     }
+
+    const STAGE_HELP = {
+        rapid_xp: 'Paid micro internships of one or two months.',
+        residency: 'A dedicated three-month internship.',
+        placement: 'Full-time jobs sourced by cMPLiBe from the market.'
+    };
+    const CLOSED_STATUSES = ['selected', 'rejected', 'withdrawn', 'no_show', 'completed'];
+
+    function effective(r) {
+        if (r.creatorAttended === true || r.creatorAttended === false) return r.creatorAttended;
+        if (r.studentAttended === true || r.studentAttended === false) return r.studentAttended;
+        return null;
+    }
+
+    function stageTabHtml(type, list, active) {
+        const open = list.filter(o => o.eligibility.eligible).length;
+        return `<button onclick="setOpportunitiesTab('${type}')" class="text-left p-3 rounded-2xl border transition-all ${active ? 'border-indigo-500 bg-indigo-950/40' : 'border-slate-800 bg-slate-900/60 hover:border-slate-600'}" style="min-width:150px;flex:1;">
+            <div class="text-xs font-extrabold text-white">${esc(TYPES[type])}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${esc(STAGE_HELP[type])}</div>
+            <div class="text-[11px] mt-1 ${open ? 'text-emerald-300' : 'text-slate-400'}">${list.length ? `${list.length} opening${list.length === 1 ? '' : 's'}${open ? ` &bull; ${open} you can nominate for` : ' &bull; requirements to unlock'}` : 'No opening yet'}</div>
+        </button>`;
+    }
+
+    function ongoingHtml(nominations) {
+        const ongoing = nominations.filter(n => !CLOSED_STATUSES.includes(n.status));
+        if (!ongoing.length) return '<div class="text-xs text-slate-500 p-3 border border-dashed border-slate-800 rounded-xl">No process is running right now.</div>';
+        return ongoing.map(n => {
+            const rounds = n.rounds || [];
+            const next = rounds.find(r => new Date(r.scheduledAt) > new Date() && effective(r) === null);
+            const last = rounds.filter(r => effective(r) === true).slice(-1)[0];
+            let text = 'Nominated. Waiting for cMPLiBe to schedule your interview.';
+            if (next) text = `Next: round ${next.number}${next.label ? ' (' + next.label + ')' : ''} on ${when(next.scheduledAt)}.`;
+            else if (last) text = `Round ${last.number} attended${last.outcome === 'shortlisted' ? ' and shortlisted. Waiting for the next step.' : '. Waiting for the result.'}`;
+            return `<div class="p-3 rounded-xl border border-amber-500/30 bg-amber-950/10 text-xs"><strong class="text-white">${esc((n.opportunity || {}).title)}</strong> <span class="text-slate-400">at ${esc((n.opportunity || {}).company)}</span><div class="text-amber-200 mt-0.5">${esc(text)}</div></div>`;
+        }).join('');
+    }
+
+    function upcomingHtml(nominations) {
+        const list = [];
+        nominations.forEach(n => (n.rounds || []).forEach(r => {
+            if (!CLOSED_STATUSES.includes(n.status) && effective(r) === null && new Date(r.scheduledAt) > new Date()) list.push({ n, r });
+        }));
+        return list.sort((a, b) => new Date(a.r.scheduledAt) - new Date(b.r.scheduledAt)).map(({ n, r }) => `
+            <div class="p-3 rounded-xl border border-cyan-500/40 bg-cyan-950/20 text-xs text-cyan-100"><i class="fas fa-calendar-check mr-1.5"></i>
+                Upcoming interview: <strong>${esc((n.opportunity || {}).company)}</strong> &bull; ${esc((n.opportunity || {}).title)} &bull; Round ${esc(r.number)}${r.label ? ' (' + esc(r.label) + ')' : ''} &bull; <strong>${esc(when(r.scheduledAt))}</strong>${r.note ? ' &bull; ' + esc(r.note) : ''}</div>`).join('');
+    }
+
+    window.setOpportunitiesTab = function (tab) {
+        window._oppTab = tab;
+        renderOpportunitiesTab();
+    };
+    window.openOpportunitiesMine = function () {
+        window._oppTab = 'mine';
+        if (typeof switchTab === 'function') switchTab('opportunitiesTab');
+    };
 
     async function renderOpportunitiesTab() {
         const host = document.getElementById('opportunitiesTabContent');
@@ -173,27 +230,111 @@
             const zone = myLqZone();
             const [mine, opps] = await Promise.all([api('/api/nominations/mine'), api('/api/opportunities' + (zone ? `?lqZone=${encodeURIComponent(zone)}` : ''))]);
             window._oppList = opps.opportunities;
+            window._myNominations = mine.nominations;
             window._oppZone = zone;
             updateBadge(mine.pendingCheckIns.length);
-            const sections = ['rapid_xp', 'residency', 'placement'].map(t => {
-                const list = opps.opportunities.filter(o => o.type === t);
-                return list.length ? `<h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-5 mb-2">${esc(TYPES[t])} openings (${list.length})</h4><div class="grid grid-cols-1 lg:grid-cols-2 gap-3">${list.map(opportunityCard).join('')}</div>` : '';
-            }).join('');
+            const byType = t => opps.opportunities.filter(o => o.type === t);
+            const tab = window._oppTab || 'rapid_xp';
+            let body;
+            if (tab === 'mine') {
+                body = `
+                    ${summaryHtml(mine.summary)}
+                    <h4 class="text-[11px] font-black text-amber-300 uppercase tracking-widest mt-5 mb-2">Ongoing process (${mine.summary.active})</h4>
+                    <div class="space-y-2">${ongoingHtml(mine.nominations)}</div>
+                    <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-5 mb-2">All nominations, interviews and results</h4>
+                    <div class="space-y-3">${timelineHtml(mine.nominations, false)}</div>`;
+            } else {
+                const list = byType(tab);
+                body = `<div class="text-xs text-slate-400 mb-3">${esc(STAGE_HELP[tab])} Openings you have not unlocked yet are shown with what you still need.</div>` +
+                    (list.length ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">${list.map(opportunityCard).join('')}</div>`
+                        : `<div class="text-xs text-slate-500 p-6 border border-dashed border-slate-800 rounded-2xl text-center">No ${esc(TYPES[tab])} opening is available for you yet. New openings will appear here as soon as cMPLiBe publishes them.</div>`);
+            }
             host.innerHTML = `
                 <div class="space-y-4">
                     <div><h2 class="text-2xl font-extrabold text-white font-heading">Opportunities</h2>
                         <p class="text-xs text-slate-400 mt-1">Rapid XP internships, the 3-month Corporate Residency and final placements. Complete the requirements to unlock each step.</p></div>
                     ${mine.blockedUntil ? `<div class="p-3 rounded-xl border border-rose-500/40 bg-rose-950/20 text-xs text-rose-200"><i class="fas fa-pause-circle mr-1"></i> New nominations are paused for you until <strong>${esc(day(mine.blockedUntil))}</strong> because an interview was missed or a nomination was withdrawn early.</div>` : ''}
                     ${mine.pendingCheckIns.map(p => checkInHtml(p, mine.nominations)).join('')}
-                    ${summaryHtml(mine.summary)}
-                    ${sections || '<div class="text-xs text-slate-500 p-4 border border-dashed border-slate-800 rounded-2xl text-center">No opening is available for your campus right now. New ones will appear here.</div>'}
-                    <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-6">My nominations and interviews</h4>
-                    <div class="space-y-3">${timelineHtml(mine.nominations, false)}</div>
+                    ${upcomingHtml(mine.nominations)}
+                    <div class="flex flex-wrap gap-2">
+                        ${['rapid_xp', 'residency', 'placement'].map(t => stageTabHtml(t, byType(t), tab === t)).join('')}
+                        <button onclick="setOpportunitiesTab('mine')" class="text-left p-3 rounded-2xl border transition-all ${tab === 'mine' ? 'border-amber-500 bg-amber-950/30' : 'border-slate-800 bg-slate-900/60 hover:border-slate-600'}" style="min-width:150px;flex:1;">
+                            <div class="text-xs font-extrabold text-white">My nominations</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">Interviews, results and what is ongoing.</div>
+                            <div class="text-[11px] mt-1 text-amber-200">${mine.summary.nominations} nominated &bull; ${mine.summary.active} ongoing &bull; ${mine.summary.interviewsAttended} interviews</div>
+                        </button>
+                    </div>
+                    ${body}
                 </div>`;
         } catch (err) {
             host.innerHTML = `<div class="text-xs text-rose-400 p-6">${esc(err.message)}</div>`;
         }
     }
+
+    // Small summary on the student's Home dashboard; opens the "My nominations" view.
+    async function renderDashboardNominationsCard() {
+        const host = document.getElementById('dashboardNominationsCard');
+        if (!host) return;
+        try {
+            const mine = await api('/api/nominations/mine');
+            const s = mine.summary;
+            const cell = (v, t, c) => `<div class="text-center"><div class="text-lg font-extrabold ${c} font-mono">${v}</div><div class="text-[10px] text-slate-400">${t}</div></div>`;
+            host.innerHTML = `
+                <div class="glass-card p-4 sm:p-5 border-amber-500/30 cursor-pointer hover:border-amber-400/60 transition-colors" onclick="openOpportunitiesMine()">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div class="text-sm font-extrabold text-white"><i class="fas fa-briefcase text-amber-400 mr-2"></i>My nominations and interviews
+                            ${s.pendingCheckIns ? `<span class="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-rose-500/30 text-rose-200 border border-rose-500/40">${s.pendingCheckIns} interview${s.pendingCheckIns === 1 ? '' : 's'} to confirm</span>` : ''}</div>
+                        <span class="text-[11px] text-cyan-300">Open &rarr;</span>
+                    </div>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3">
+                        ${cell(s.nominations, 'Nominated', 'text-white')}${cell(s.active, 'Ongoing', 'text-amber-300')}${cell(s.interviewsAttended, 'Interviews attended', 'text-cyan-300')}
+                        ${cell(s.shortlisted, 'Shortlisted', 'text-emerald-300')}${cell(s.rejected, 'Not selected', 'text-slate-300')}${cell(s.selected, 'Selected', 'text-emerald-300')}
+                    </div>
+                </div>`;
+        } catch (err) {
+            host.innerHTML = '';
+        }
+    }
+    window.renderDashboardNominationsCard = renderDashboardNominationsCard;
+
+    // An interview that never appeared on the platform: the student reports it with the questions asked.
+    function openReportInterview(nominationId) {
+        const n = (window._myNominations || []).find(x => x.id === nominationId) || {};
+        const modal = document.createElement('div');
+        modal.id = 'reportInterviewModal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(2,6,23,.9);overflow:auto;padding:16px;';
+        modal.innerHTML = `
+            <div style="max-width:520px;margin:6vh auto 0;background:#0f172a;border:1px solid #334155;border-radius:16px;padding:18px;color:#e2e8f0;font-family:sans-serif;">
+                <div style="font:700 15px sans-serif;">Report an interview${n.opportunity ? ' - ' + esc(n.opportunity.company) : ''}</div>
+                <label style="${label}margin-top:10px;">When was it?</label><input id="riWhen" type="datetime-local" style="${field}">
+                <label style="${label}margin-top:8px;">Round (optional)</label><input id="riLabel" maxlength="60" style="${field}" placeholder="e.g. HR round">
+                <label style="${label}margin-top:8px;">Questions you were asked (one per line)</label>
+                <textarea id="riQ" rows="6" style="${field}" placeholder="Tell me about yourself&#10;Why do you want this role?"></textarea>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                    <button style="padding:8px 14px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;cursor:pointer;" onclick="document.getElementById('reportInterviewModal').remove()">Cancel</button>
+                    <button id="riGo" style="padding:8px 16px;border-radius:10px;border:0;background:#059669;color:#fff;font-weight:700;cursor:pointer;" onclick="submitReportInterview('${esc(nominationId)}')">Submit</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    async function submitReportInterview(nominationId) {
+        const whenVal = document.getElementById('riWhen').value;
+        if (!whenVal) { alert('Please choose when the interview took place.'); return; }
+        const btn = document.getElementById('riGo');
+        btn.disabled = true;
+        try {
+            await api(`/api/nominations/${encodeURIComponent(nominationId)}/interviews`, 'POST', {
+                scheduledAt: new Date(whenVal).toISOString(), label: document.getElementById('riLabel').value,
+                questions: document.getElementById('riQ').value.split('\n').map(x => x.trim()).filter(Boolean)
+            });
+            document.getElementById('reportInterviewModal').remove();
+            alert('Thank you. Your interview details are saved.');
+            renderOpportunitiesTab();
+        } catch (err) { alert(err.message); btn.disabled = false; }
+    }
+    window.openReportInterview = openReportInterview;
+    window.submitReportInterview = submitReportInterview;
 
     function updateBadge(count) {
         const b = document.getElementById('opportunitiesBadge');
@@ -295,7 +436,7 @@
                 <div class="space-y-2">${creatorOpps.map(o => `
                     <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
                         <div class="min-w-0"><div class="text-sm font-bold text-white">${esc(o.title)}</div>
-                            <div class="text-[11px] text-slate-400"><span class="px-1.5 py-0.5 rounded border ${TYPE_COLORS[o.type] || ''}">${esc(TYPES[o.type])}</span> ${esc(o.company)} &bull; ${o.targetAllCampuses ? 'All campuses' : (o.targetCampusIds || []).map(campusName).map(esc).join(', ')} &bull; ${esc(o.nominationCount)} nominated</div></div>
+                            <div class="text-[11px] text-slate-400"><span class="px-1.5 py-0.5 rounded border ${TYPE_COLORS[o.type] || ''}">${esc(TYPES[o.type])}</span> ${esc(o.company)} &bull; ${o.targetAllCampuses ? 'All campuses' : (o.targetCampusIds || []).map(campusName).map(esc).join(', ')} &bull; ${esc(o.nominationCount)} nominated &bull; <span class="${o.audience ? 'text-cyan-300' : 'text-rose-300 font-bold'}">reaches ${esc(o.audience)} student${o.audience === 1 ? '' : 's'}</span></div></div>
                         <div class="flex items-center gap-2"><span class="badge-pill ${o.status === 'open' ? 'badge-emerald' : 'badge-slate'} text-[9px]">${o.status === 'open' ? 'Open' : (o.status === 'draft' ? 'Draft' : 'Closed')}</span>
                             <button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200" onclick="openOpportunityForm('${esc(o.id)}')">Edit</button>
                             <button class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200" onclick="setOpportunityStatus('${esc(o.id)}','${o.status === 'open' ? 'closed' : 'open'}')">${o.status === 'open' ? 'Close' : 'Open'}</button></div>
@@ -404,6 +545,17 @@
         try { await api(`/api/creator/nominations/${encodeURIComponent(nid)}/rounds`, 'POST', { scheduledAt: iso.toISOString(), label: roundLabel }); afterCreatorChange(); }
         catch (err) { alert(err.message); }
     }
+
+    async function creatorRescheduleRound(nid, rid) {
+        const at = prompt('New interview date and time (e.g. 2026-10-05 15:00):');
+        if (!at) return;
+        const d = new Date(at.replace(' ', 'T'));
+        if (isNaN(d)) { alert('Please use a date like 2026-10-05 15:00'); return; }
+        const note = prompt('Note for the student (optional):', '') || '';
+        try { await api(`/api/creator/nominations/${encodeURIComponent(nid)}/rounds/${encodeURIComponent(rid)}/reschedule`, 'POST', { scheduledAt: d.toISOString(), note }); afterCreatorChange(); }
+        catch (err) { alert(err.message); }
+    }
+    window.creatorRescheduleRound = creatorRescheduleRound;
 
     async function creatorSetNominationStatus(nid, status) {
         const reason = prompt(`Note for "${status}" (optional):`, '');

@@ -2142,7 +2142,7 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
             rawMod === 'problem_solution' || rawMod === 'problem-solution' || rawMod === 'problemsolution' ||
             rawMod.includes('problem') || rawMod.includes('briefing') || rawMod === 'residency' || rawMod.includes('corporate');
         const normMod = corpReq ? corpReq.module : (isInsight ? 'insight_engine' : 'cmpli_ai');
-        const effectiveMilestoneId = corpReq ? corpReq.milestoneId : milestoneId;
+        const effectiveMilestoneId = corpReq && corpReq.milestoneId ? corpReq.milestoneId : milestoneId;
 
         const subId = `sub_proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
         const pts = corpReq ? corpReq.pts : (Number(lcReward) || 500);
@@ -8824,9 +8824,11 @@ function customProjectsWithCorporate(viewer) {
     (store.corporateRequirements || []).forEach(r => {
         const visible = viewer && (viewer.creator ? (r.status === 'approved' || r.status === 'closed') : requirementReachesLearner(r, viewer.learner));
         if (!visible) return;
-        const k = String(r.milestoneId);
-        if (!out[k]) out[k] = [];
-        out[k].push(requirementToProject(r));
+        const keys = r.milestoneId === 0 ? [...new Set(['1', '2', '3', '4', ...Object.keys(out)])] : [String(r.milestoneId)];
+        keys.forEach(k => {
+            if (!out[k]) out[k] = [];
+            out[k].push(requirementToProject(r));
+        });
     });
     return out;
 }
@@ -8853,8 +8855,13 @@ function requirementStats(requirementId) {
 }
 
 // The recruiter sees what they wrote plus the decision; targeting, reward and deliverables are the Creator's business.
+// How many students a targeting choice really reaches; the Creator sees 0 at once when the campus choice matches nobody.
+function countLearnersReached(test) {
+    return getLearnerBase().filter(test).length;
+}
+
 function requirementView(r, actor) {
-    if (actor.creator) return Object.assign({}, r, { stats: requirementStats(r.id) });
+    if (actor.creator) return Object.assign({}, r, { stats: requirementStats(r.id), audience: (r.status === 'approved' || r.status === 'closed') ? countLearnersReached(x => requirementReachesLearner(r, x)) : null });
     return {
         id: r.id, title: r.title, description: r.description, location: r.location, durationDays: r.durationDays,
         status: r.status, rejectReason: r.rejectReason || '', createdAt: r.createdAt,
@@ -8978,7 +8985,9 @@ app.post(['/api/recruiter/requirements/:id/approve', '/gamification/api/recruite
         if (body.durationDays !== undefined) r.durationDays = Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || r.durationDays));
 
         r.module = REQUIREMENT_MODULES.has(body.module) ? body.module : 'cmpli_ai';
-        r.milestoneId = Math.min(20, Math.max(1, parseInt(body.milestoneId, 10) || (r.module === 'insight_engine' ? 3 : 2)));
+        // 0 means "every milestone": the project is offered wherever the student is, so a milestone mismatch can never hide it
+        const ms = parseInt(body.milestoneId, 10);
+        r.milestoneId = (ms === 0 || isNaN(ms)) ? 0 : Math.min(20, Math.max(1, ms));
         r.sector = String(body.sector || 'General').replace(/[^A-Za-z0-9 &\/,.\-]/g, '').trim().slice(0, 40) || 'General';
         r.pts = pts;
         let questions = (Array.isArray(body.questions) ? body.questions : [])
@@ -9272,6 +9281,42 @@ app.post(['/api/nominations/:id/rounds/:roundId/check-in', '/gamification/api/no
     }
 });
 
+// The student reports an interview that was never scheduled on the platform (the company called directly, or cMPLiBe did not add it).
+app.post(['/api/nominations/:id/interviews', '/gamification/api/nominations/:id/interviews'], (req, res) => {
+    try {
+        const session = customerSession(req);
+        if (!session) return res.status(401).json({ success: false, error: 'Please sign in as a student.' });
+        const now = Date.now();
+        const nom = store.nominations.find(n => n.id === req.params.id && n.studentId === String(session.userId));
+        if (!nom) return res.status(404).json({ success: false, error: 'Nomination not found.' });
+        if (nominationsEngine.isFinal(nom)) return res.status(400).json({ success: false, error: 'This nomination is already closed.' });
+        const b = req.body || {};
+        const when = new Date(b.scheduledAt);
+        if (isNaN(when) || when.getTime() > now + 3600000) return res.status(400).json({ success: false, error: 'Please give the date and time the interview took place.' });
+        const questions = nominationsEngine.cleanQuestions(b.questions);
+        if (questions.length < nominationsEngine.MIN_QUESTIONS) return res.status(400).json({ success: false, error: 'Please write down the questions you were asked (at least one).' });
+        const round = {
+            id: 'rnd_' + now.toString(36) + crypto.randomBytes(2).toString('hex'),
+            number: (nom.rounds || []).length + 1,
+            label: nominationsEngine.cleanText(b.label, 60),
+            scheduledAt: when.toISOString(),
+            note: '',
+            selfReported: true,
+            studentAttended: true, studentReportedAt: new Date(now).toISOString(),
+            creatorAttended: null, outcome: 'pending',
+            questions, questionsSubmittedAt: new Date(now).toISOString()
+        };
+        nom.rounds = nom.rounds || [];
+        nom.rounds.push(round);
+        nom.status = 'interview_stage';
+        historyPush(nom, `Reported round ${round.number}${round.label ? ' (' + round.label + ')' : ''} as attended and shared ${questions.length} question${questions.length === 1 ? '' : 's'}`, now);
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post(['/api/nominations/:id/withdraw', '/gamification/api/nominations/:id/withdraw'], (req, res) => {
     try {
         const session = customerSession(req);
@@ -9312,7 +9357,7 @@ app.get(['/api/creator/opportunities', '/gamification/api/creator/opportunities'
         success: true,
         settings: store.nominationSettings,
         opportunities: store.opportunities.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .map(o => Object.assign({}, o, { nominationCount: counts[o.id] || 0 }))
+            .map(o => Object.assign({}, o, { nominationCount: counts[o.id] || 0, audience: countLearnersReached(x => opportunityReachesLearner(o, x)) }))
     });
 });
 
@@ -9423,6 +9468,37 @@ app.post(['/api/creator/nominations/:id/rounds', '/gamification/api/creator/nomi
         nom.rounds.push(round);
         if (nom.status === 'nominated') nom.status = 'interview_stage';
         historyPush(nom, `Interview round ${round.number} scheduled for ${when.toISOString()}`, now);
+        saveStore();
+        res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Move an interview to a new date and time. The round starts fresh: a "did not attend" caused by the old time is undone.
+app.post(['/api/creator/nominations/:id/rounds/:roundId/reschedule', '/gamification/api/creator/nominations/:id/rounds/:roundId/reschedule'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const nom = store.nominations.find(n => n.id === req.params.id);
+        const round = nom && (nom.rounds || []).find(r => r.id === req.params.roundId);
+        if (!round) return res.status(404).json({ success: false, error: 'Interview round not found.' });
+        const when = new Date((req.body || {}).scheduledAt);
+        if (isNaN(when)) return res.status(400).json({ success: false, error: 'Please give the new interview date and time.' });
+        const now = Date.now();
+        const wasNoShow = round.outcome === 'no_show' || nom.status === 'no_show';
+        const old = round.scheduledAt;
+        round.scheduledAt = when.toISOString();
+        if (req.body.note !== undefined) round.note = nominationsEngine.cleanText(req.body.note, 300);
+        round.studentAttended = null;
+        round.studentReportedAt = null;
+        round.creatorAttended = null;
+        round.creatorMarkedAt = null;
+        round.noShowReason = '';
+        round.reminderSentAt = null;
+        if (round.outcome === 'no_show') round.outcome = 'pending';
+        liftNominationBlock(nom.studentId, `${nom.id}:${round.id}`);
+        if (wasNoShow || nom.status === 'nominated') nom.status = 'interview_stage';
+        historyPush(nom, `Round ${round.number} rescheduled from ${old} to ${round.scheduledAt}`, now);
         saveStore();
         res.json({ success: true, nomination: nominationView(nom) });
     } catch (err) {

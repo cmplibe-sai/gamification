@@ -41,10 +41,10 @@ run('creator attendance overrides the student answer', () => {
     assert.strictEqual(eng.effectiveAttendance({ studentAttended: true, creatorAttended: null }), true);
     assert.strictEqual(eng.effectiveAttendance({ studentAttended: null, creatorAttended: null }), null);
 });
-run('check-in is asked only after the interview time plus the delay, and only once', () => {
-    const nom = { id: 'n1', opportunityId: 'o1', status: 'interview_stage', rounds: [{ id: 'r1', number: 1, scheduledAt: '2026-10-01T09:30:00Z' }, { id: 'r2', number: 2, scheduledAt: '2026-10-01T08:00:00Z', studentAttended: true }] };
-    assert.strictEqual(eng.pendingCheckIns([nom], NOW).length, 0, 'only 30 minutes after the start: still within the delay');
-    assert.strictEqual(eng.pendingCheckIns([nom], NOW + 2 * 3600000).length, 1);
+run('check-in is asked 15 minutes after the interview time, and only once', () => {
+    const nom = { id: 'n1', opportunityId: 'o1', status: 'interview_stage', rounds: [{ id: 'r1', number: 1, scheduledAt: '2026-10-01T09:50:00Z' }, { id: 'r2', number: 2, scheduledAt: '2026-10-01T08:00:00Z', studentAttended: true }] };
+    assert.strictEqual(eng.pendingCheckIns([nom], NOW).length, 0, 'only 10 minutes after the start: still within the delay');
+    assert.strictEqual(eng.pendingCheckIns([nom], NOW + 10 * 60000).length, 1, 'answered rounds are never asked again');
     assert.strictEqual(eng.pendingCheckIns([Object.assign({}, nom, { status: 'rejected' })], NOW + 2 * 3600000).length, 0);
 });
 run('withdrawal costs a cooldown before the second attended round, not after', () => {

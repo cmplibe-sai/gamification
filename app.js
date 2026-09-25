@@ -21555,6 +21555,7 @@ async function switchTab(tab) {
     // 5. Run Tab Specific Initializers
     if (tab === 'dashboardTab') {
         if (typeof updateDashboardUI === 'function') updateDashboardUI();
+        if (typeof renderDashboardNominationsCard === 'function') renderDashboardNominationsCard();
         if (typeof renderCustomerDashboardCredentials === 'function') renderCustomerDashboardCredentials();
         if (currentUser && typeof renderSubmissionsAndReflections === 'function') {
             renderSubmissionsAndReflections(currentUser._id, 'myProjects', 'all');

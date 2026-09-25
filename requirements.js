@@ -175,9 +175,9 @@
                 </div>
                 <p class="text-xs text-slate-300 whitespace-pre-line">${esc(r.description)}</p>
                 ${r.status === 'approved' || r.status === 'closed' ? `
-                    <div class="text-[11px] text-slate-400">${esc(r.module === 'insight_engine' ? 'Insight Engine' : 'cMPLi-ai')} &bull; Milestone ${esc(r.milestoneId)} &bull; ${esc(r.pts)} LCs &bull;
+                    <div class="text-[11px] text-slate-400">${esc(r.module === 'insight_engine' ? 'Insight Engine' : 'cMPLi-ai')} &bull; ${r.milestoneId === 0 ? 'All milestones' : 'Milestone ' + esc(r.milestoneId)} &bull; ${esc(r.pts)} LCs &bull;
                         ${r.targetAllCampuses ? 'All campuses' : (r.targetCampusIds || []).map(campusName).map(esc).join(', ')}
-                        &bull; ${r.stats.inProgress} working, ${r.stats.completed} completed</div>` : ''}
+                        &bull; ${r.stats.inProgress} working, ${r.stats.completed} completed &bull; <span class="${r.audience ? 'text-cyan-300' : 'text-rose-300 font-bold'}">reaches ${esc(r.audience)} student${r.audience === 1 ? '' : 's'}</span></div>` : ''}
                 ${r.status === 'rejected' && r.rejectReason ? `<div class="text-[11px] text-rose-300">Reason: ${esc(r.rejectReason)}</div>` : ''}
                 <div class="flex flex-wrap gap-2 pt-1">
                     ${r.status === 'pending' ? `<button class="btn-primary py-1.5 px-3 text-[11px]" onclick="openRequirementApproval('${esc(r.id)}')">Review &amp; approve</button>
@@ -226,7 +226,7 @@
                         <option value="cmpli_ai" ${r.module !== 'insight_engine' ? 'selected' : ''}>cMPLi-ai</option>
                         <option value="insight_engine" ${r.module === 'insight_engine' ? 'selected' : ''}>Insight Engine</option></select></div>
                     <div><label style="${label}">Shown at milestone</label><select id="apMilestone" style="${field}">
-                        ${[1, 2, 3, 4].map(m => `<option value="${m}" ${m === (r.milestoneId || 2) ? 'selected' : ''}>Milestone ${m}</option>`).join('')}</select></div>
+                        ${[[0, 'All milestones (recommended)'], [1, 'Milestone 1'], [2, 'Milestone 2'], [3, 'Milestone 3'], [4, 'Milestone 4']].map(([m, t]) => `<option value="${m}" ${m === (r.milestoneId == null ? 0 : r.milestoneId) ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
                     <div><label style="${label}">Reward (LCs)</label><input id="apPts" type="number" min="0" max="10000" style="${field}" value="${esc(r.pts != null ? r.pts : 1000)}"></div>
                     <div><label style="${label}">Days to complete</label><input id="apDays" type="number" min="1" max="90" style="${field}" value="${esc(r.durationDays)}"></div>
                     <div><label style="${label}">Sector</label><select id="apSector" style="${field}">${optionList(SECTORS, r.sector || 'General')}</select></div>
