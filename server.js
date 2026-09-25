@@ -8781,6 +8781,7 @@ function requirementToProject(r) {
         module: r.module || 'cmpli_ai',
         title: r.title,
         sector: r.sector || 'General',
+        industry: r.industry || r.sector || 'General',
         spec: 'Corporate Project',
         specialization: 'Corporate Project',
         code: '[CORP]',
@@ -8930,6 +8931,8 @@ app.post(['/api/recruiter/requirements', '/gamification/api/recruiter/requiremen
             description,
             location: cleanRequirementText(body.location, 80) || 'Not specified',
             durationDays: Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || 15)),
+            // the company's industry comes from its empanelment record; the Creator can correct it on approval
+            industry: cleanRequirementText(actor.creator ? body.industry : actor.employer.industry, 60),
             status: 'pending',
             createdAt: new Date().toISOString()
         };
@@ -8989,6 +8992,7 @@ app.post(['/api/recruiter/requirements/:id/approve', '/gamification/api/recruite
         const ms = parseInt(body.milestoneId, 10);
         r.milestoneId = (ms === 0 || isNaN(ms)) ? 0 : Math.min(20, Math.max(1, ms));
         r.sector = String(body.sector || 'General').replace(/[^A-Za-z0-9 &\/,.\-]/g, '').trim().slice(0, 40) || 'General';
+        if (body.industry !== undefined) r.industry = cleanRequirementText(body.industry, 60);
         r.pts = pts;
         let questions = (Array.isArray(body.questions) ? body.questions : [])
             .slice(0, 10)
@@ -9229,6 +9233,7 @@ app.get(['/api/nominations/mine', '/gamification/api/nominations/mine'], (req, r
         nominations: mine.map(nominationView),
         summary: nominationsEngine.summarize(mine, now),
         pendingCheckIns: nominationsEngine.pendingCheckIns(mine, now),
+        upcoming: nominationsEngine.upcomingInterviews(mine, now),
         blockedUntil: block ? block.until : null,
         blockReason: block ? block.reason : ''
     });
@@ -9461,6 +9466,8 @@ app.post(['/api/creator/nominations/:id/rounds', '/gamification/api/creator/nomi
             number: (nom.rounds || []).length + 1,
             label: nominationsEngine.cleanText(req.body.label, 60),
             scheduledAt: when.toISOString(),
+            durationMinutes: Math.min(480, Math.max(5, parseInt(req.body.durationMinutes, 10) || 30)),
+            venue: nominationsEngine.cleanText(req.body.venue, 200),
             note: nominationsEngine.cleanText(req.body.note, 300),
             studentAttended: null, creatorAttended: null, outcome: 'pending', questions: []
         };
@@ -9469,6 +9476,7 @@ app.post(['/api/creator/nominations/:id/rounds', '/gamification/api/creator/nomi
         if (nom.status === 'nominated') nom.status = 'interview_stage';
         historyPush(nom, `Interview round ${round.number} scheduled for ${when.toISOString()}`, now);
         saveStore();
+        notifyInterviewScheduled(nom, round);
         res.json({ success: true, nomination: nominationView(nom) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -9489,6 +9497,8 @@ app.post(['/api/creator/nominations/:id/rounds/:roundId/reschedule', '/gamificat
         const old = round.scheduledAt;
         round.scheduledAt = when.toISOString();
         if (req.body.note !== undefined) round.note = nominationsEngine.cleanText(req.body.note, 300);
+        if (req.body.venue !== undefined) round.venue = nominationsEngine.cleanText(req.body.venue, 200);
+        if (req.body.durationMinutes !== undefined) round.durationMinutes = Math.min(480, Math.max(5, parseInt(req.body.durationMinutes, 10) || 30));
         round.studentAttended = null;
         round.studentReportedAt = null;
         round.creatorAttended = null;
@@ -9500,7 +9510,135 @@ app.post(['/api/creator/nominations/:id/rounds/:roundId/reschedule', '/gamificat
         if (wasNoShow || nom.status === 'nominated') nom.status = 'interview_stage';
         historyPush(nom, `Round ${round.number} rescheduled from ${old} to ${round.scheduledAt}`, now);
         saveStore();
+        notifyInterviewScheduled(nom, round, true);
         res.json({ success: true, nomination: nominationView(nom) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Records attendance and/or the result of one interview round (used for one nomination or for many at once).
+function applyCreatorRoundUpdate(nom, round, b, now) {
+    const sourceKey = `${nom.id}:${round.id}`;
+
+    if (b.attended === true || b.attended === false) {
+        round.creatorAttended = b.attended;
+        round.creatorMarkedAt = new Date(now).toISOString();
+        if (b.attended === false) {
+            round.outcome = 'no_show';
+            nom.status = 'no_show';
+            nom.statusReason = nominationsEngine.cleanText(b.reason, 300) || 'Marked as not attended by cMPLiBe';
+            if (b.noPenalty !== true) addNominationBlock(nom.studentId, sourceKey, `Did not attend interview (${nom.opportunityId})`, now);
+            historyPush(nom, `Round ${round.number} marked as not attended by cMPLiBe`, now);
+        } else {
+            liftNominationBlock(nom.studentId, sourceKey);
+            if (round.outcome === 'no_show') round.outcome = 'pending';
+            if (nom.status === 'no_show') nom.status = 'interview_stage';
+            historyPush(nom, `Round ${round.number} marked as attended by cMPLiBe`, now);
+        }
+    }
+    if (['pending', 'shortlisted', 'rejected', 'selected'].includes(b.outcome)) {
+        if (b.outcome !== 'pending' && nominationsEngine.effectiveAttendance(round) === null) {
+            round.creatorAttended = true;
+            round.creatorMarkedAt = new Date(now).toISOString();
+        }
+        round.outcome = b.outcome;
+        round.outcomeAt = new Date(now).toISOString();
+        round.outcomeReason = nominationsEngine.cleanText(b.reason, 300);
+        if (b.outcome === 'rejected') nom.status = 'rejected';
+        else if (b.outcome === 'selected') nom.status = 'selected';
+        else if (nominationsEngine.isFinal(nom) && nom.status !== 'no_show') nom.status = 'interview_stage';
+        if (b.outcome !== 'pending') historyPush(nom, `Round ${round.number} result: ${b.outcome}${round.outcomeReason ? ' - ' + round.outcomeReason : ''}`, now);
+        if (b.outcome === 'rejected' || b.outcome === 'selected') nom.statusReason = round.outcomeReason;
+    }
+}
+
+// E-mail the student when an interview is scheduled or moved (best effort; the interview is always visible in their Opportunities tab).
+async function notifyInterviewScheduled(nom, round, moved) {
+    try {
+        if (!mailTransporter || !nom.studentEmail) return;
+        const opp = store.opportunities.find(o => o.id === nom.opportunityId) || {};
+        await mailTransporter.sendMail({
+            from: process.env.SMTP_FROM || '"cMPLiBe Platform" <noreply@cmplibe.com>',
+            to: nom.studentEmail,
+            subject: `${moved ? 'Interview rescheduled' : 'Interview scheduled'}: ${opp.company || 'company'} - ${opp.title || 'opportunity'}`,
+            text: `Hi ${nom.studentName || ''},\n\nYour interview${round.label ? ' (' + round.label + ')' : ''} for "${opp.title || 'the opportunity'}" at ${opp.company || 'the company'} is ${moved ? 'now ' : ''}scheduled for ${new Date(round.scheduledAt).toUTCString()} (${round.durationMinutes || 30} minutes).\n${round.venue ? 'Where: ' + round.venue + '\n' : ''}${round.note ? 'Note: ' + round.note + '\n' : ''}\nYou can see all your interviews under cMPLiBe > Opportunities > My nominations. After the interview please tell us whether you attended and the questions you were asked.\n\ncMPLiBe team`
+        });
+    } catch (err) {
+        console.warn('[Interview Notice] Could not e-mail', nom.studentEmail, err.message);
+    }
+}
+
+// Schedule interviews for many nominees of one opening at once: the same time for everybody (slot = 0)
+// or one after the other, every `slotMinutes` minutes.
+app.post(['/api/creator/opportunities/:id/schedule', '/gamification/api/creator/opportunities/:id/schedule'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const opp = store.opportunities.find(o => o.id === req.params.id);
+        if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
+        const b = req.body || {};
+        const start = new Date(b.startAt);
+        if (isNaN(start)) return res.status(400).json({ success: false, error: 'Please give the interview date and time.' });
+        const slot = Math.min(240, Math.max(0, parseInt(b.slotMinutes, 10) || 0));
+        const ids = new Set((Array.isArray(b.nominationIds) ? b.nominationIds : []).map(String).slice(0, 500));
+        const noms = store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id) && !nominationsEngine.isFinal(n));
+        if (!noms.length) return res.status(400).json({ success: false, error: 'Select at least one student who is still in the process.' });
+        const now = Date.now();
+        const duration = Math.min(480, Math.max(5, parseInt(b.durationMinutes, 10) || (slot || 30)));
+        noms.forEach((nom, i) => {
+            const at = new Date(start.getTime() + i * slot * 60000);
+            const round = {
+                id: 'rnd_' + now.toString(36) + crypto.randomBytes(2).toString('hex'),
+                number: (nom.rounds || []).length + 1,
+                label: nominationsEngine.cleanText(b.label, 60),
+                scheduledAt: at.toISOString(),
+                durationMinutes: duration,
+                venue: nominationsEngine.cleanText(b.venue, 200),
+                note: nominationsEngine.cleanText(b.note, 300),
+                studentAttended: null, creatorAttended: null, outcome: 'pending', questions: []
+            };
+            nom.rounds = nom.rounds || [];
+            nom.rounds.push(round);
+            if (nom.status === 'nominated') nom.status = 'interview_stage';
+            historyPush(nom, `Interview round ${round.number} scheduled for ${round.scheduledAt}`, now);
+            notifyInterviewScheduled(nom, round);
+        });
+        saveStore();
+        res.json({ success: true, scheduled: noms.length, skipped: ids.size - noms.length });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Set the result (shortlisted / rejected / selected) for the latest interview round of many nominees at once.
+app.post(['/api/creator/opportunities/:id/result', '/gamification/api/creator/opportunities/:id/result'], (req, res) => {
+    try {
+        if (!creatorOnly(req, res)) return;
+        const opp = store.opportunities.find(o => o.id === req.params.id);
+        if (!opp) return res.status(404).json({ success: false, error: 'Opportunity not found.' });
+        const b = req.body || {};
+        if (!['shortlisted', 'rejected', 'selected'].includes(b.outcome)) return res.status(400).json({ success: false, error: 'Choose shortlisted, rejected or selected.' });
+        const ids = new Set((Array.isArray(b.nominationIds) ? b.nominationIds : []).map(String).slice(0, 500));
+        const noms = store.nominations.filter(n => n.opportunityId === opp.id && ids.has(n.id) && !nominationsEngine.isFinal(n));
+        if (!noms.length) return res.status(400).json({ success: false, error: 'Select at least one student who is still in the process.' });
+        const now = Date.now();
+        let updated = 0;
+        noms.forEach(nom => {
+            const round = (nom.rounds || []).slice(-1)[0];
+            if (round) {
+                applyCreatorRoundUpdate(nom, round, { outcome: b.outcome, reason: b.reason }, now);
+            } else if (b.outcome === 'shortlisted') {
+                historyPush(nom, 'Shortlisted by cMPLiBe' + (b.reason ? ': ' + nominationsEngine.cleanText(b.reason, 300) : ''), now);
+                nom.status = 'interview_stage';
+            } else {
+                nom.status = b.outcome;
+                nom.statusReason = nominationsEngine.cleanText(b.reason, 300);
+                historyPush(nom, `Status set to ${b.outcome} by cMPLiBe`, now);
+            }
+            updated += 1;
+        });
+        saveStore();
+        res.json({ success: true, updated, skipped: ids.size - updated });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -9513,40 +9651,7 @@ app.post(['/api/creator/nominations/:id/rounds/:roundId', '/gamification/api/cre
         const nom = store.nominations.find(n => n.id === req.params.id);
         const round = nom && (nom.rounds || []).find(r => r.id === req.params.roundId);
         if (!round) return res.status(404).json({ success: false, error: 'Interview round not found.' });
-        const now = Date.now();
-        const b = req.body || {};
-        const sourceKey = `${nom.id}:${round.id}`;
-
-        if (b.attended === true || b.attended === false) {
-            round.creatorAttended = b.attended;
-            round.creatorMarkedAt = new Date(now).toISOString();
-            if (b.attended === false) {
-                round.outcome = 'no_show';
-                nom.status = 'no_show';
-                nom.statusReason = nominationsEngine.cleanText(b.reason, 300) || 'Marked as not attended by cMPLiBe';
-                if (b.noPenalty !== true) addNominationBlock(nom.studentId, sourceKey, `Did not attend interview (${nom.opportunityId})`, now);
-                historyPush(nom, `Round ${round.number} marked as not attended by cMPLiBe`, now);
-            } else {
-                liftNominationBlock(nom.studentId, sourceKey);
-                if (round.outcome === 'no_show') round.outcome = 'pending';
-                if (nom.status === 'no_show') nom.status = 'interview_stage';
-                historyPush(nom, `Round ${round.number} marked as attended by cMPLiBe`, now);
-            }
-        }
-        if (['pending', 'shortlisted', 'rejected', 'selected'].includes(b.outcome)) {
-            if (b.outcome !== 'pending' && nominationsEngine.effectiveAttendance(round) === null) {
-                round.creatorAttended = true;
-                round.creatorMarkedAt = new Date(now).toISOString();
-            }
-            round.outcome = b.outcome;
-            round.outcomeAt = new Date(now).toISOString();
-            round.outcomeReason = nominationsEngine.cleanText(b.reason, 300);
-            if (b.outcome === 'rejected') nom.status = 'rejected';
-            else if (b.outcome === 'selected') nom.status = 'selected';
-            else if (nominationsEngine.isFinal(nom) && nom.status !== 'no_show') nom.status = 'interview_stage';
-            if (b.outcome !== 'pending') historyPush(nom, `Round ${round.number} result: ${b.outcome}${round.outcomeReason ? ' - ' + round.outcomeReason : ''}`, now);
-            if (b.outcome === 'rejected' || b.outcome === 'selected') nom.statusReason = round.outcomeReason;
-        }
+        applyCreatorRoundUpdate(nom, round, req.body || {}, Date.now());
         saveStore();
         res.json({ success: true, nomination: nominationView(nom) });
     } catch (err) {
@@ -9725,6 +9830,11 @@ app.get(['/api/campus/placement-activity/:campusId', '/gamification/api/campus/p
     }
 });
 
+// Unknown API paths answer with JSON, never with the app's HTML page (a script reading JSON would show "Unexpected token '<'").
+app.all(['/api/*', '/gamification/api/*'], (req, res) => {
+    res.status(404).json({ success: false, error: `API route not found: ${req.method} ${req.path}. The server may need to be updated and restarted.` });
+});
+
 // -------------------------------------------------------------
 // Serve Static Frontend Assets
 // -------------------------------------------------------------
@@ -9740,6 +9850,17 @@ app.use(express.static(path.join(__dirname, '.'), {
 app.get('*', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Any error inside an API call (bad JSON body, too large a body, an unexpected exception) is reported as JSON.
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    const status = err.status || err.statusCode || 500;
+    if (status >= 500) console.error('[API Error]', req.method, req.path, err);
+    if (String(req.path).includes('/api/')) {
+        return res.status(status).json({ success: false, error: status === 413 ? 'The request is too large.' : (status >= 500 ? 'Something went wrong on the server. Please try again.' : err.message) });
+    }
+    next(err);
 });
 
 // Start listening (only when run directly)

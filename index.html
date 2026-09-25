@@ -123,6 +123,7 @@
                     <button onclick="switchTab('adminTab')" id="nav-adminTab" class="nav-tab-btn active" title="Overview"><i class="fas fa-chart-line"></i> <span class="hidden sm:inline">Overview</span></button>
                     <button onclick="switchTab('adminLevelUpTab')" id="nav-adminLevelUpTab" class="nav-tab-btn" title="Level-Up Command"><i class="fas fa-sliders-h"></i> <span class="hidden sm:inline">Command</span><span class="hidden md:inline"> Center</span></button>
                     <button onclick="switchTab('managementTab')" id="nav-managementTab" class="nav-tab-btn" title="Management Console"><i class="fas fa-sitemap text-indigo-400"></i> <span class="hidden sm:inline">Management</span></button>
+                    <button onclick="switchTab('creatorOpportunitiesTab')" id="nav-creatorOpportunitiesTab" class="nav-tab-btn" title="Opportunities: corporate requests, openings and nominations"><i class="fas fa-route text-amber-400"></i> <span class="hidden sm:inline">Opportunities</span><span id="creatorOppNavBadge" class="ml-1 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-black rounded-full px-1 hidden items-center justify-center">0</span></button>
                     <button onclick="switchTab('leaderboardTab')" id="nav-adminLeaderboardTab" class="nav-tab-btn" title="Ranks Leaderboard"><i class="fas fa-trophy"></i> <span class="hidden sm:inline">Ranks</span></button>
                     
                     <div class="bg-emerald-950/40 px-2 sm:px-3.5 py-1 sm:py-1.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-extrabold tracking-wider uppercase ml-0.5 sm:ml-2 shrink-0">
@@ -906,6 +907,30 @@
             <!-- ==============================================================
                  5. LEARNER CAREER VIEWS & LINKEDIN-STYLE SEARCH APPEARANCES
                  ============================================================== -->
+            <!-- CREATOR: corporate requests, openings and nominations (kept out of the Management console) -->
+            <section id="creatorOpportunitiesTab" class="hidden space-y-6 animate-fade-in">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-white font-heading"><i class="fas fa-route text-amber-400 mr-2"></i> Opportunities</h2>
+                    <p class="text-slate-400 text-sm mt-1">Approve corporate project requests, publish Rapid XP, Corporate Residency and Final Placement openings, and follow every candidate through nomination and interviews.</p>
+                </div>
+                <div class="flex gap-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar">
+                    <button id="creatorOppSubBtn-requests" onclick="switchCreatorOppSubTab('requests')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+                        <i class="fas fa-bullhorn"></i> <span>Corporate Requests</span> <span id="creatorReqCount" class="hidden min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-black items-center justify-center px-1">0</span>
+                    </button>
+                    <button id="creatorOppSubBtn-openings" onclick="switchCreatorOppSubTab('openings')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-briefcase"></i> <span>Openings &amp; Nominations</span>
+                    </button>
+                </div>
+                <div id="creatorOppSub-requests" class="space-y-4">
+                    <p class="text-xs text-slate-400">Recruiters describe a project need. Approve it, set its LCs and choose the campuses whose students can take it.</p>
+                    <div id="creatorRequestsHost"></div>
+                </div>
+                <div id="creatorOppSub-openings" class="hidden space-y-4">
+                    <p class="text-xs text-slate-400">Create openings, then open an opening to see everyone who nominated and schedule interviews for all of them at once.</p>
+                    <div id="creatorOpportunitiesHost"></div>
+                </div>
+            </section>
+
             <section id="opportunitiesTab" class="hidden space-y-6 animate-fade-in"><div id="opportunitiesTabContent"></div></section>
 
             <section id="careerViewsTab" class="hidden space-y-8 animate-fade-in">
@@ -1077,12 +1102,6 @@
                     <button id="mgmtSubTabBtn-corporates" onclick="switchManagementSubTab('corporates')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-building"></i> <span>Corporate Empanelment</span>
                     </button>
-                    <button id="mgmtSubTabBtn-requests" onclick="switchManagementSubTab('requests')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-                        <i class="fas fa-bullhorn"></i> <span>Corporate Requests</span> <span id="mgmtReqCount" class="hidden min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center px-1">0</span>
-                    </button>
-                    <button id="mgmtSubTabBtn-opportunities" onclick="switchManagementSubTab('opportunities')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-                        <i class="fas fa-route"></i> <span>Opportunities &amp; Nominations</span>
-                    </button>
                     <button id="mgmtSubTabBtn-campuses" onclick="switchManagementSubTab('campuses')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-university"></i> <span>Campus Partnerships</span>
                     </button>
@@ -1218,24 +1237,6 @@
                             <div id="mgmtCorporateList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- SUB-HUB: Corporate project requests posted by recruiters, approved and targeted here -->
-                <div id="mgmtSubTab-requests" class="hidden space-y-4">
-                    <div class="pb-2 border-b border-slate-800">
-                        <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-bullhorn text-emerald-400 mr-2"></i> Corporate Project Requests</h3>
-                        <p class="text-xs text-slate-400 mt-1">Recruiters describe a project need. Approve it, set its LCs and choose the campuses whose students can take it.</p>
-                    </div>
-                    <div id="creatorRequestsHost"></div>
-                </div>
-
-                <!-- SUB-HUB: Rapid XP / Residency / Placement openings and every student's nominations and interviews -->
-                <div id="mgmtSubTab-opportunities" class="hidden space-y-4">
-                    <div class="pb-2 border-b border-slate-800">
-                        <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-route text-amber-400 mr-2"></i> Opportunities &amp; Nominations</h3>
-                        <p class="text-xs text-slate-400 mt-1">Create Rapid XP, Corporate Residency and Final Placement openings, set who can nominate, and follow each student's interviews.</p>
-                    </div>
-                    <div id="creatorOpportunitiesHost"></div>
                 </div>
 
                 <!-- SUB-HUB 3: Campus Partnerships -->
@@ -1753,8 +1754,8 @@
     <script src="api.js?v=2.9.6"></script>
     <script src="app.js?v=2.9.34"></script>
     <script src="cv.js?v=1.0.2"></script>
-    <script src="requirements.js?v=2.0.0"></script>
-    <script src="nominations.js?v=1.1.0"></script>
+    <script src="requirements.js?v=2.1.0"></script>
+    <script src="nominations.js?v=2.0.0"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">

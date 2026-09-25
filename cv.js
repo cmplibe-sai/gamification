@@ -81,7 +81,9 @@
 
     async function fetchAutoCv(studentId) {
         const res = await apiFetch(`/api/learner/cv-profile/${encodeURIComponent(studentId)}`);
-        const data = await res.json();
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); } catch (e) { throw new Error(`The server sent an unexpected reply (code ${res.status}). Please try again in a minute.`); }
         if (!data.success) throw new Error(data.error || 'Could not load the CV.');
         return data.cv;
     }

@@ -59,6 +59,20 @@ function pendingCheckIns(nominations, now) {
     return out;
 }
 
+// Interviews that are scheduled for later and not yet answered, soonest first.
+function upcomingInterviews(nominations, now) {
+    const out = [];
+    (nominations || []).forEach(n => {
+        if (isFinal(n)) return;
+        (n.rounds || []).forEach(r => {
+            if (r.scheduledAt && effectiveAttendance(r) === null && new Date(r.scheduledAt).getTime() > now) {
+                out.push({ nominationId: n.id, roundId: r.id, opportunityId: n.opportunityId, roundNumber: r.number, label: r.label, scheduledAt: r.scheduledAt });
+            }
+        });
+    });
+    return out.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+}
+
 // Numbers for the student's "my nominations" header and the Creator's per-student view.
 function summarize(nominations, now) {
     const list = nominations || [];
@@ -128,6 +142,6 @@ function withdrawalHasCooldown(nomination) {
 
 module.exports = {
     OPPORTUNITY_TYPES, TYPE_LABELS, FINAL_STATUSES, MIN_QUESTIONS, MAX_QUESTIONS, CHECK_IN_DELAY_MS,
-    cleanText, effectiveAttendance, attendedRoundCount, isFinal, pendingCheckIns, summarize,
+    cleanText, effectiveAttendance, attendedRoundCount, isFinal, pendingCheckIns, upcomingInterviews, summarize,
     evaluateEligibility, cleanQuestions, cooldownEnd, withdrawalHasCooldown
 };

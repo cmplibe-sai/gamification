@@ -7261,6 +7261,12 @@ window.loadCreatorNotifications = loadCreatorNotifications;
 function updateCreatorNotificationBadge() {
     const badge = document.getElementById('adminNotifBadge');
     if (!badge) return;
+    const pendingCorp = (creatorNotificationsList || []).filter(n => n.type === 'corporate_requirement' && !n.resolved).length;
+    const corpBadge = document.getElementById('creatorOppNavBadge');
+    if (corpBadge) {
+        corpBadge.innerText = pendingCorp;
+        corpBadge.classList.toggle('hidden', pendingCorp === 0);
+    }
     const unread = (creatorNotificationsList || []).filter(n => !n.read).length;
     if (unread > 0) {
         badge.innerText = unread > 99 ? '99+' : unread;
@@ -17611,8 +17617,16 @@ function setProjectFilterVal(val) {
 }
 window.setProjectFilterVal = setProjectFilterVal;
 
+function setProjectCorporateOnly(on) {
+    window._projectCorporateOnly = Boolean(on);
+    window._projectFilterVal = 'all';
+    renderCustomerProjectsView(window._activeCustomerProjectsModule || 'cmpli_ai');
+}
+window.setProjectCorporateOnly = setProjectCorporateOnly;
+
 function setProjectLifecycleTab(tab) {
     window._activeProjectLifecycleTab = tab;
+    window._projectCorporateOnly = false;
     window._projectFilterVal = 'all';
     renderCustomerProjectsView(window._activeCustomerProjectsModule || 'cmpli_ai');
 }
@@ -17890,22 +17904,34 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
     else if (currentTab === 'completed') tabBaseList = completedProjects;
     else tabBaseList = availableProjects;
 
-    // Collect Unique Sectors & Specializations for Filter Bar
+    // Corporate projects (posted by companies, approved by the Creator) get their own glowing tab
+    const corporateAll = projectsList
+        .filter(p => p.corporate)
+        .map(p => ({ ...p, lifecycle: getUserProjectLifecycle(p.id) }))
+        .filter(p => !(p.closed && p.lifecycle.status === 'available'));
+    const corporateOpenCount = corporateAll.filter(p => p.lifecycle.status !== 'completed').length;
+    const corporateOnly = Boolean(window._projectCorporateOnly) && corporateAll.length > 0;
+    if (corporateOnly) {
+        tabBaseList = corporateAll;
+        currentTab = '__corporate';
+    }
+
+    // Collect Unique Sectors, Specializations & Industries for Filter Bar
+    const industryOf = p => p.industry || p.sector || 'General';
+    const specOf = p => p.specialization || p.spec || 'General Management';
     const allSectors = Array.from(new Set(projectsList.map(p => p.sector || 'General'))).sort();
-    const allSpecs = Array.from(new Set(projectsList.map(p => p.specialization || p.spec || 'General Management'))).sort();
+    const allSpecs = Array.from(new Set(projectsList.map(specOf))).sort();
+    const allIndustries = Array.from(new Set(projectsList.map(industryOf))).sort();
 
     const filterMode = window._projectFilterMode || 'sector';
     const activeFilterVal = window._projectFilterVal || 'all';
+    const filterKey = p => (filterMode === 'industry' ? industryOf(p) : (filterMode === 'sector' ? (p.sector || 'General') : specOf(p)));
+    const filterItems = filterMode === 'industry' ? allIndustries : (filterMode === 'sector' ? allSectors : allSpecs);
+    const filterAllLabel = filterMode === 'industry' ? 'Industries' : (filterMode === 'sector' ? 'Sectors' : 'Specializations');
 
     // Apply Filter
     let filteredList = [...tabBaseList];
-    if (activeFilterVal !== 'all') {
-        if (filterMode === 'sector') {
-            filteredList = filteredList.filter(p => (p.sector || 'General') === activeFilterVal);
-        } else {
-            filteredList = filteredList.filter(p => (p.specialization || p.spec || 'General Management') === activeFilterVal);
-        }
-    }
+    if (activeFilterVal !== 'all') filteredList = filteredList.filter(p => filterKey(p) === activeFilterVal);
 
     let html = `
         <div class="space-y-6 animate-fade-in">
@@ -17974,6 +18000,11 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                     <i class="fas fa-check-circle"></i> Completed
                     <span class="px-1.5 py-0.5 rounded-full text-[10px] ${currentTab === 'completed' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'} font-mono">${completedProjects.length}</span>
                 </button>
+                ${corporateAll.length ? `
+                <button onclick="setProjectCorporateOnly(${corporateOnly ? 'false' : 'true'})" class="corp-glow px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 shrink-0" title="Projects posted by companies">
+                    <i class="fas fa-building"></i> Corporate Projects
+                    <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-white/25 text-white font-mono">${corporateOpenCount}</span>
+                </button>` : ''}
             </div>
 
             <!-- Dual-Axis Filter Bar: Sector & Specialization -->
@@ -17987,6 +18018,9 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                         <button onclick="setProjectFilterMode('specialization')" class="px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterMode === 'specialization' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                             <i class="fas fa-crosshairs mr-1"></i> By Specialization
                         </button>
+                        <button onclick="setProjectFilterMode('industry')" class="px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterMode === 'industry' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                            <i class="fas fa-industry mr-1"></i> By Industry
+                        </button>
                     </div>
                     <span class="text-[11px] text-slate-400 font-mono">${filteredList.length} of ${tabBaseList.length} Projects in view</span>
                 </div>
@@ -17994,10 +18028,10 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                 <!-- Filter Chips Row -->
                 <div class="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
                     <button onclick="setProjectFilterVal('all')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${activeFilterVal === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
-                        All ${filterMode === 'sector' ? 'Sectors' : 'Specializations'} (${tabBaseList.length})
+                        All ${filterAllLabel} (${tabBaseList.length})
                     </button>
-                    ${(filterMode === 'sector' ? allSectors : allSpecs).map(item => {
-                        const countInTab = tabBaseList.filter(p => (filterMode === 'sector' ? (p.sector || 'General') : (p.specialization || p.spec || 'General Management')) === item).length;
+                    ${filterItems.map(item => {
+                        const countInTab = tabBaseList.filter(p => filterKey(p) === item).length;
                         const isSelected = activeFilterVal === item;
                         return `
                             <button onclick="setProjectFilterVal('${item.replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${isSelected ? 'bg-indigo-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
@@ -18044,7 +18078,7 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
             const specialization = proj.specialization || proj.spec || 'General Management';
 
             html += `
-                <div class="glass-card p-5 rounded-2xl border ${isCompleted ? 'border-emerald-500/40 bg-emerald-950/10' : (isInProgress ? 'border-amber-500/40 bg-amber-950/10' : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700')} flex flex-col justify-between gap-4 transition-all shadow-lg hover:shadow-xl">
+                <div class="glass-card p-5 rounded-2xl border ${isCompleted ? 'border-emerald-500/40 bg-emerald-950/10' : (isInProgress ? 'border-amber-500/40 bg-amber-950/10' : 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700')} flex flex-col justify-between gap-4 transition-all shadow-lg hover:shadow-xl ${proj.corporate && !isCompleted ? 'corp-card-glow' : ''}">
                     <div class="space-y-3">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                             <div class="flex items-center gap-1.5 flex-wrap">
@@ -18064,7 +18098,7 @@ function renderCustomerProjectsView(moduleName, targetContainer) {
                         </div>
 
                         <div>
-                            ${proj.corporate ? `<div class="text-[10px] font-bold text-cyan-300 mb-1 flex items-center gap-1.5 flex-wrap"><span class="px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-500/40"><i class="fas fa-building mr-1"></i> Corporate project by ${proj.corporate.companyName}</span><span class="text-slate-400 font-normal"><i class="fas fa-location-dot mr-1"></i>${proj.corporate.location || ''}</span></div>` : ''}
+                            ${proj.corporate ? `<div class="text-[10px] font-bold text-cyan-300 mb-1 flex items-center gap-1.5 flex-wrap"><span class="px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-500/40"><i class="fas fa-building mr-1"></i> Corporate project by ${proj.corporate.companyName}</span>${proj.industry ? `<span class="px-2 py-0.5 rounded bg-fuchsia-950/60 border border-fuchsia-500/40 text-fuchsia-200"><i class="fas fa-industry mr-1"></i>${proj.industry}</span>` : ''}<span class="text-slate-400 font-normal"><i class="fas fa-location-dot mr-1"></i>${proj.corporate.location || ''}</span></div>` : ''}
                             <h4 class="text-base font-bold text-white font-heading">${proj.title || 'Untitled Project'}</h4>
                         </div>
 
@@ -21522,7 +21556,7 @@ async function switchTab(tab) {
         syncGlobalServerData().catch(() => {});
     }
 
-    const tabs = ['dashboardTab', 'levelUpTab', 'opportunitiesTab', 'careerViewsTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab', 'managementTab', 'recruiterTab'];
+    const tabs = ['dashboardTab', 'levelUpTab', 'opportunitiesTab', 'careerViewsTab', 'leaderboardTab', 'adminTab', 'adminLevelUpTab', 'managementTab', 'creatorOpportunitiesTab', 'recruiterTab'];
     
     // 1. Hide all tab content sections
     tabs.forEach(t => {
@@ -21567,6 +21601,10 @@ async function switchTab(tab) {
 
     if (tab === 'opportunitiesTab' && typeof renderOpportunitiesTab === 'function') {
         renderOpportunitiesTab();
+    }
+
+    if (tab === 'creatorOpportunitiesTab' && typeof switchCreatorOppSubTab === 'function') {
+        switchCreatorOppSubTab(window._creatorOppSub || 'requests');
     }
 
     if (tab === 'careerViewsTab') {
@@ -22247,7 +22285,7 @@ const LOCAL_FALLBACK_GEO = {
 // -------------------------------------------------------------
 function switchManagementSubTab(subTab) {
     window._mgmtActiveSubTab = subTab;
-    const tabs = ['team', 'corporates', 'requests', 'opportunities', 'campuses'];
+    const tabs = ['team', 'corporates', 'campuses'];
     
     tabs.forEach(t => {
         const pane = document.getElementById(`mgmtSubTab-${t}`);
@@ -22271,8 +22309,6 @@ function switchManagementSubTab(subTab) {
     if (subTab === 'team') renderManagementTeam();
     if (subTab === 'corporates') renderManagementCorporates();
     if (subTab === 'campuses') renderManagementCampuses();
-    if (subTab === 'requests' && typeof renderCreatorRequirements === 'function') renderCreatorRequirements();
-    if (subTab === 'opportunities' && typeof renderCreatorOpportunities === 'function') renderCreatorOpportunities();
 }
 window.switchManagementSubTab = switchManagementSubTab;
 

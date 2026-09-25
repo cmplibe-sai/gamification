@@ -23,7 +23,13 @@
             headers: { 'Content-Type': 'application/json' },
             body: body ? JSON.stringify(body) : undefined
         });
-        const data = await res.json();
+        const raw = await res.text();
+        let data;
+        try { data = JSON.parse(raw); }
+        catch (e) {
+            console.warn('[cMPLiBe] Unexpected reply from', path, res.status, raw.slice(0, 200));
+            throw new Error(`The server sent an unexpected reply (code ${res.status}). Please try again in a minute. If it keeps happening, tell the cMPLiBe team.`);
+        }
         if (!data.success) throw new Error(data.error || 'Something went wrong');
         return data;
     }
@@ -161,8 +167,10 @@
         }
         const campusName = id => (creatorCampuses.find(c => c.id === id) || {}).name || id;
         const pending = creatorRequirements.filter(r => r.status === 'pending');
-        const badge = document.getElementById('mgmtReqCount');
-        if (badge) { badge.textContent = pending.length; badge.classList.toggle('hidden', pending.length === 0); }
+        ['creatorReqCount', 'creatorOppNavBadge'].forEach(id => {
+            const badge = document.getElementById(id);
+            if (badge) { badge.textContent = pending.length; badge.classList.toggle('hidden', pending.length === 0); if (pending.length) badge.style.display = 'flex'; else badge.style.display = ''; }
+        });
 
         const card = r => `
             <div class="p-4 rounded-2xl bg-slate-900/70 border ${r.status === 'pending' ? 'border-amber-500/40' : 'border-slate-800'} space-y-2">
@@ -230,6 +238,7 @@
                     <div><label style="${label}">Reward (LCs)</label><input id="apPts" type="number" min="0" max="10000" style="${field}" value="${esc(r.pts != null ? r.pts : 1000)}"></div>
                     <div><label style="${label}">Days to complete</label><input id="apDays" type="number" min="1" max="90" style="${field}" value="${esc(r.durationDays)}"></div>
                     <div><label style="${label}">Sector</label><select id="apSector" style="${field}">${optionList(SECTORS, r.sector || 'General')}</select></div>
+                    <div><label style="${label}">Company industry</label><input id="apIndustry" maxlength="60" style="${field}" value="${esc(r.industry || '')}" placeholder="e.g. EV and clean-tech logistics"></div>
                 </div>
                 <label style="${label};margin-top:12px;">Which campuses can take this project?</label>
                 <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-bottom:6px;"><input type="checkbox" id="apAll" ${r.targetAllCampuses ? 'checked' : ''} onchange="document.getElementById('apCampusList').style.opacity = this.checked ? .4 : 1"> All campuses</label>
@@ -264,7 +273,7 @@
         try {
             await api(`/api/recruiter/requirements/${encodeURIComponent(id)}/approve`, 'POST', {
                 title: val('apTitle'), description: val('apDesc'), module: val('apModule'), milestoneId: parseInt(val('apMilestone'), 10),
-                pts: parseInt(val('apPts'), 10), durationDays: parseInt(val('apDays'), 10), sector: val('apSector'), questions,
+                pts: parseInt(val('apPts'), 10), durationDays: parseInt(val('apDays'), 10), sector: val('apSector'), industry: val('apIndustry'), questions,
                 targetAllCampuses: document.getElementById('apAll').checked,
                 targetCampusIds: [...document.querySelectorAll('.apCampus:checked')].map(c => c.value)
             });
@@ -309,7 +318,7 @@
     window.openCorporateRequestsTab = function () {
         const modal = document.getElementById('adminNotificationsModal');
         if (modal) modal.classList.add('hidden');
-        if (typeof switchTab === 'function') switchTab('managementTab');
-        if (typeof switchManagementSubTab === 'function') switchManagementSubTab('requests');
+        window._creatorOppSub = 'requests';
+        if (typeof switchTab === 'function') switchTab('creatorOpportunitiesTab');
     };
 })();
