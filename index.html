@@ -1071,6 +1071,9 @@
                     <button id="mgmtSubTabBtn-corporates" onclick="switchManagementSubTab('corporates')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-building"></i> <span>Corporate Empanelment</span>
                     </button>
+                    <button id="mgmtSubTabBtn-requests" onclick="switchManagementSubTab('requests')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                        <i class="fas fa-bullhorn"></i> <span>Corporate Requests</span> <span id="mgmtReqCount" class="hidden min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center px-1">0</span>
+                    </button>
                     <button id="mgmtSubTabBtn-campuses" onclick="switchManagementSubTab('campuses')" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
                         <i class="fas fa-university"></i> <span>Campus Partnerships</span>
                     </button>
@@ -1206,6 +1209,15 @@
                             <div id="mgmtCorporateList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                         </div>
                     </div>
+                </div>
+
+                <!-- SUB-HUB: Corporate project requests posted by recruiters, approved and targeted here -->
+                <div id="mgmtSubTab-requests" class="hidden space-y-4">
+                    <div class="pb-2 border-b border-slate-800">
+                        <h3 class="text-lg font-bold text-white font-heading"><i class="fas fa-bullhorn text-emerald-400 mr-2"></i> Corporate Project Requests</h3>
+                        <p class="text-xs text-slate-400 mt-1">Recruiters describe a project need. Approve it, set its LCs and choose the campuses whose students can take it.</p>
+                    </div>
+                    <div id="creatorRequestsHost"></div>
                 </div>
 
                 <!-- SUB-HUB 3: Campus Partnerships -->
@@ -1723,7 +1735,7 @@
     <script src="api.js?v=2.9.6"></script>
     <script src="app.js?v=2.9.34"></script>
     <script src="cv.js?v=1.0.2"></script>
-    <script src="requirements.js?v=1.0.0"></script>
+    <script src="requirements.js?v=2.0.0"></script>
 
     <!-- CLAIM CREDENTIAL MODAL -->
     <div id="claimCredentialModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md hidden">

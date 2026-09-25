@@ -2055,7 +2055,7 @@ app.get(['/api/custom-projects', '/gamification/api/custom-projects'], (req, res
         if (!store.customProjectsDB || typeof store.customProjectsDB !== 'object') {
             store.customProjectsDB = {};
         }
-        res.json({ success: true, data: customProjectsWithCorporate() });
+        res.json({ success: true, data: customProjectsWithCorporate(corporateViewerFromReq(req)) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -2111,7 +2111,7 @@ app.post(['/api/custom-projects', '/gamification/api/custom-projects'], (req, re
         });
 
         saveStore();
-        res.json({ success: true, data: customProjectsWithCorporate() });
+        res.json({ success: true, data: customProjectsWithCorporate(corporateViewerFromReq(req)) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -2127,15 +2127,25 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
             return res.status(400).json({ success: false, error: 'Project ID required' });
         }
 
+        // Corporate projects: only approved ones for the student's targeted campus; reward, module and milestone are the Creator's, not the browser's
+        let corpReq = null;
+        if (String(projectId).startsWith('corp_')) {
+            const life = store.userProjectLifecycles && store.userProjectLifecycles[String(userId)] && store.userProjectLifecycles[String(userId)][String(projectId)];
+            const problem = corporateAccessProblem(projectId, userId || userEmail, { allowClosed: Boolean(life) });
+            if (problem) return res.status(403).json({ success: false, error: problem });
+            corpReq = store.corporateRequirements.find(x => x.id === String(projectId));
+        }
+
         // Comprehensive normalization matching normalizeLevelUpType
         const rawMod = String(moduleType || req.body.type || '').toLowerCase().trim();
         const isInsight = rawMod === 'insight_engine' || rawMod === 'insight-engine' || rawMod.includes('insight') || 
             rawMod === 'problem_solution' || rawMod === 'problem-solution' || rawMod === 'problemsolution' ||
             rawMod.includes('problem') || rawMod.includes('briefing') || rawMod === 'residency' || rawMod.includes('corporate');
-        const normMod = isInsight ? 'insight_engine' : 'cmpli_ai';
+        const normMod = corpReq ? corpReq.module : (isInsight ? 'insight_engine' : 'cmpli_ai');
+        const effectiveMilestoneId = corpReq ? corpReq.milestoneId : milestoneId;
 
         const subId = `sub_proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        const pts = Number(lcReward) || 500;
+        const pts = corpReq ? corpReq.pts : (Number(lcReward) || 500);
         const nowIso = new Date().toISOString();
 
         if (!Array.isArray(store.submissions)) store.submissions = [];
@@ -2143,7 +2153,7 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
         // Check if existing submission for this project by this user
         const existingIdx = store.submissions.findIndex(s => 
             (s.userId === String(userId) || (userEmail && s.userEmail === userEmail.toLowerCase().trim())) &&
-            String(s.milestoneId) === String(milestoneId || 1) &&
+            String(s.milestoneId) === String(effectiveMilestoneId || 1) &&
             (s.projectId === String(projectId) || String(s.day) === String(projectId))
         );
 
@@ -2166,7 +2176,7 @@ app.post(['/api/project/submit', '/gamification/api/project/submit'], async (req
             userEmail: (userEmail || '').toLowerCase().trim(),
             userName: userName || 'Learner',
             userPhone: userPhone || '',
-            milestoneId: Number(milestoneId) || 1,
+            milestoneId: Number(effectiveMilestoneId) || 1,
             type: normMod,
             moduleType: normMod,
             day: String(projectId),
@@ -2242,6 +2252,11 @@ app.post(['/api/project/lifecycle', '/gamification/api/project/lifecycle'], (req
         if (!userId || !projectId) return res.status(400).json({ success: false, error: 'userId and projectId required' });
         if (!store.userProjectLifecycles) store.userProjectLifecycles = {};
         const uId = String(userId);
+        const alreadyStarted = Boolean(store.userProjectLifecycles[uId] && store.userProjectLifecycles[uId][String(projectId)]);
+        if (!alreadyStarted) {
+            const problem = corporateAccessProblem(projectId, userId);
+            if (problem) return res.status(403).json({ success: false, error: problem });
+        }
         if (!store.userProjectLifecycles[uId]) store.userProjectLifecycles[uId] = {};
         
         store.userProjectLifecycles[uId][String(projectId)] = {
@@ -4308,6 +4323,14 @@ function isAuthorizedCampusCoordinator(session, targetUser) {
     const allCampuses = store.campuses || [];
     const coordCampus = allCampuses.find(c => c.id === session.campusId);
     if (!coordCampus) return false;
+
+    return learnerBelongsToCampus(coordCampus, targetUser);
+}
+
+// True when the learner belongs to the campus: college name match, or an exclusive campus cohort in TagMango.
+function learnerBelongsToCampus(coordCampus, targetUser) {
+    const allCampuses = store.campuses || [];
+    if (!coordCampus || !targetUser) return false;
 
     // Check 1: Institution / College text match
     const instName = (targetUser.college || targetUser.institution || '').toLowerCase().trim();
@@ -8717,17 +8740,31 @@ app.post(['/api/learner/cv-profile/rebuild', '/gamification/api/learner/cv-profi
 });
 
 // -------------------------------------------------------------
-// 4d. CORPORATE REQUIREMENTS (recruiters post project requirements for students)
-// store.corporateRequirements = [{ id, employerId, companyName, title, description, sector, location, module,
-//   milestoneId, durationDays, pts, questions:[{title,type}], status:'open'|'closed', createdAt }]
-// A requirement is shown to students as an ordinary cMPLi-ai / Insight Engine project of its milestone
-// (see customProjectsWithCorporate), so starting it, submitting it, the dashboard and the automatic CV all
-// work through the existing project flow. Filtering by student prerequisites and location comes later.
+// 4d. CORPORATE REQUIREMENTS (recruiters post, the Creator approves and targets, students take them up)
+// store.corporateRequirements = [{ id, employerId, companyName,
+//   -- written by the recruiter --  title, description, location, durationDays,
+//   -- written by the Creator on approval --  module, milestoneId, sector, pts, questions:[{title,type}],
+//      targetAllCampuses, targetCampusIds:[campusId], approvedAt, rejectReason,
+//   status: 'pending' | 'approved' | 'rejected' | 'closed', createdAt }]
+// A requirement is shown to eligible students as an ordinary cMPLi-ai / Insight Engine project of its
+// milestone (see customProjectsWithCorporate), so starting it, submitting it, the dashboard and the
+// automatic CV all work through the existing project flow. Students only see a requirement when it is
+// approved and their campus is one of the Creator's target campuses.
 // -------------------------------------------------------------
 const REQUIREMENT_MODULES = new Set(['cmpli_ai', 'insight_engine']);
 const REQUIREMENT_QUESTION_TYPES = new Set(['text', 'audio', 'video', 'doc']);
 const REQUIREMENT_DEFAULT_LCS = 500;
+const REQUIREMENT_MAX_LCS = 10000;
 const MAX_REQUIREMENTS_PER_EMPLOYER = 100;
+
+// Requirements saved by the first version went live at once for everyone, so keep them live for everyone.
+store.corporateRequirements.forEach(r => {
+    if (r.status === 'open') {
+        r.status = 'approved';
+        r.targetAllCampuses = true;
+        r.approvedAt = r.approvedAt || r.createdAt;
+    }
+});
 
 // Recruiter text is shown inside student pages as HTML, so angle brackets, quotes and backslashes are removed.
 function cleanRequirementText(value, max) {
@@ -8741,7 +8778,7 @@ function cleanRequirementText(value, max) {
 function requirementToProject(r) {
     return {
         id: r.id,
-        module: r.module,
+        module: r.module || 'cmpli_ai',
         title: r.title,
         sector: r.sector || 'General',
         spec: 'Corporate Project',
@@ -8753,18 +8790,40 @@ function requirementToProject(r) {
         desc: r.description,
         questions: r.questions,
         corporate: { requirementId: r.id, companyName: r.companyName, location: r.location },
-        closed: r.status !== 'open'
+        closed: r.status !== 'approved'
     };
 }
 
-// Creator-built projects plus every recruiter requirement, grouped by milestone.
-function customProjectsWithCorporate() {
+function requirementReachesLearner(r, learner) {
+    if (r.status !== 'approved' && r.status !== 'closed') return false; // pending and rejected are never shown to students
+    if (r.targetAllCampuses) return true;
+    if (!learner) return false;
+    return (r.targetCampusIds || []).some(id => {
+        const campus = (store.campuses || []).find(c => c.id === id);
+        return campus && learnerBelongsToCampus(campus, learner);
+    });
+}
+
+// Who is asking: the Creator sees every approved requirement, a signed-in student only the ones their campus is targeted for.
+function corporateViewerFromReq(req) {
+    if (checkCreatorAuth(req)) return { creator: true };
+    const session = getAuthenticatedSession(req);
+    if (session && session.role === 'customer') {
+        return { learner: findLearnerForCv(session.userId) || { _id: session.userId, email: session.email } };
+    }
+    return {};
+}
+
+// Creator-built projects plus the corporate requirements this viewer may see, grouped by milestone.
+function customProjectsWithCorporate(viewer) {
     const base = store.customProjectsDB || {};
     const out = {};
     Object.keys(base).forEach(k => {
         out[k] = (Array.isArray(base[k]) ? base[k] : []).filter(p => !(p && p.corporate));
     });
     (store.corporateRequirements || []).forEach(r => {
+        const visible = viewer && (viewer.creator ? (r.status === 'approved' || r.status === 'closed') : requirementReachesLearner(r, viewer.learner));
+        if (!visible) return;
         const k = String(r.milestoneId);
         if (!out[k]) out[k] = [];
         out[k].push(requirementToProject(r));
@@ -8793,8 +8852,31 @@ function requirementStats(requirementId) {
     return { inProgress: started, completed };
 }
 
-function publicRequirement(r) {
-    return Object.assign({}, r, { stats: requirementStats(r.id) });
+// The recruiter sees what they wrote plus the decision; targeting, reward and deliverables are the Creator's business.
+function requirementView(r, actor) {
+    if (actor.creator) return Object.assign({}, r, { stats: requirementStats(r.id) });
+    return {
+        id: r.id, title: r.title, description: r.description, location: r.location, durationDays: r.durationDays,
+        status: r.status, rejectReason: r.rejectReason || '', createdAt: r.createdAt,
+        stats: r.status === 'pending' || r.status === 'rejected' ? { inProgress: 0, completed: 0 } : requirementStats(r.id)
+    };
+}
+
+function findRequirementForActor(req, actor) {
+    const r = store.corporateRequirements.find(x => x.id === req.params.id);
+    if (!r || (!actor.creator && r.employerId !== actor.employer.id)) return null;
+    return r;
+}
+
+// Server-side guard for starting or submitting a corporate project: approved, and the student's campus is targeted.
+function corporateAccessProblem(projectId, learnerRef, { allowClosed } = {}) {
+    if (!String(projectId).startsWith('corp_')) return null;
+    const r = store.corporateRequirements.find(x => x.id === String(projectId));
+    if (!r) return 'This corporate project no longer exists.';
+    if (r.status === 'closed' && !allowClosed) return 'This corporate project is closed.';
+    const learner = findLearnerForCv(learnerRef || '');
+    if (!requirementReachesLearner(r, learner)) return 'This corporate project is not available for your campus.';
+    return null;
 }
 
 app.get(['/api/recruiter/requirements', '/gamification/api/recruiter/requirements'], (req, res) => {
@@ -8803,10 +8885,11 @@ app.get(['/api/recruiter/requirements', '/gamification/api/recruiter/requirement
     const list = (store.corporateRequirements || [])
         .filter(r => actor.creator || r.employerId === actor.employer.id)
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map(publicRequirement);
+        .map(r => requirementView(r, actor));
     res.json({ success: true, requirements: list });
 });
 
+// A recruiter (or the Creator on their behalf) describes the need. It waits for the Creator's approval.
 app.post(['/api/recruiter/requirements', '/gamification/api/recruiter/requirements'], (req, res) => {
     try {
         const actor = requirementActor(req);
@@ -8827,21 +8910,10 @@ app.post(['/api/recruiter/requirements', '/gamification/api/recruiter/requiremen
         const title = cleanRequirementText(body.title, 120);
         const description = cleanRequirementText(body.description, 2000);
         if (title.length < 5) return res.status(400).json({ success: false, error: 'Please give the project a title of at least 5 characters.' });
-        if (description.length < 20) return res.status(400).json({ success: false, error: 'Please describe what the students should do (at least 20 characters).' });
+        if (description.length < 20) return res.status(400).json({ success: false, error: 'Please describe the project like a job description (at least 20 characters).' });
 
         const owned = store.corporateRequirements.filter(r => r.employerId === employerId).length;
         if (owned >= MAX_REQUIREMENTS_PER_EMPLOYER) return res.status(400).json({ success: false, error: 'Requirement limit reached. Please close or delete old ones.' });
-
-        const moduleKey = REQUIREMENT_MODULES.has(body.module) ? body.module : 'cmpli_ai';
-        const milestoneId = Math.min(20, Math.max(1, parseInt(body.milestoneId, 10) || (moduleKey === 'insight_engine' ? 3 : 2)));
-        const durationDays = Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || 15));
-        const sector = String(body.sector || 'General').replace(/[^A-Za-z0-9 &\/,.\-]/g, '').trim().slice(0, 40) || 'General';
-
-        let questions = (Array.isArray(body.questions) ? body.questions : [])
-            .slice(0, 10)
-            .map(q => ({ title: cleanRequirementText(q && q.title, 200), type: REQUIREMENT_QUESTION_TYPES.has(q && q.type) ? q.type : 'text' }))
-            .filter(q => q.title);
-        if (!questions.length) questions = [{ title: 'Final Project Deliverable', type: 'doc' }];
 
         const requirement = {
             id: 'corp_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
@@ -8849,37 +8921,126 @@ app.post(['/api/recruiter/requirements', '/gamification/api/recruiter/requiremen
             companyName,
             title,
             description,
-            sector,
-            location: cleanRequirementText(body.location, 80) || 'Across all campuses',
-            module: moduleKey,
-            milestoneId,
-            durationDays,
-            pts: REQUIREMENT_DEFAULT_LCS,
-            questions,
-            status: 'open',
+            location: cleanRequirementText(body.location, 80) || 'Not specified',
+            durationDays: Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || 15)),
+            status: 'pending',
             createdAt: new Date().toISOString()
         };
         store.corporateRequirements.push(requirement);
+
+        if (!Array.isArray(store.creatorNotifications)) store.creatorNotifications = [];
+        store.creatorNotifications.unshift({
+            id: 'notif_corp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            type: 'corporate_requirement',
+            title: `New corporate project request: ${title}`,
+            message: `${companyName} posted a project requirement (${requirement.durationDays} days, ${requirement.location}). Approve it and choose the campuses that can take it.`,
+            requirementId: requirement.id,
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            read: false,
+            resolved: false
+        });
+        if (store.creatorNotifications.length > 100) store.creatorNotifications = store.creatorNotifications.slice(0, 100);
+
         saveStore();
-        res.json({ success: true, requirement: publicRequirement(requirement) });
+        res.json({ success: true, requirement: requirementView(requirement, actor) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+// Creator only: approve (or change an approved requirement) and decide who gets it and what it is worth.
+app.post(['/api/recruiter/requirements/:id/approve', '/gamification/api/recruiter/requirements/:id/approve'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+        const r = store.corporateRequirements.find(x => x.id === req.params.id);
+        if (!r) return res.status(404).json({ success: false, error: 'Requirement not found.' });
+        if (r.status === 'rejected') return res.status(400).json({ success: false, error: 'This requirement was rejected. Ask the recruiter to post it again.' });
+        const body = req.body || {};
+
+        const targetAllCampuses = body.targetAllCampuses === true;
+        const knownCampusIds = new Set((store.campuses || []).map(c => c.id));
+        const targetCampusIds = [...new Set((Array.isArray(body.targetCampusIds) ? body.targetCampusIds : []).map(String))].filter(id => knownCampusIds.has(id));
+        if (!targetAllCampuses && !targetCampusIds.length) {
+            return res.status(400).json({ success: false, error: 'Choose at least one campus, or choose all campuses.' });
+        }
+        const pts = parseInt(body.pts, 10);
+        if (!(pts >= 0 && pts <= REQUIREMENT_MAX_LCS)) return res.status(400).json({ success: false, error: `LCs must be between 0 and ${REQUIREMENT_MAX_LCS}.` });
+
+        if (body.title !== undefined) {
+            const t = cleanRequirementText(body.title, 120);
+            if (t.length >= 5) r.title = t;
+        }
+        if (body.description !== undefined) {
+            const d = cleanRequirementText(body.description, 2000);
+            if (d.length >= 20) r.description = d;
+        }
+        if (body.durationDays !== undefined) r.durationDays = Math.min(90, Math.max(1, parseInt(body.durationDays, 10) || r.durationDays));
+
+        r.module = REQUIREMENT_MODULES.has(body.module) ? body.module : 'cmpli_ai';
+        r.milestoneId = Math.min(20, Math.max(1, parseInt(body.milestoneId, 10) || (r.module === 'insight_engine' ? 3 : 2)));
+        r.sector = String(body.sector || 'General').replace(/[^A-Za-z0-9 &\/,.\-]/g, '').trim().slice(0, 40) || 'General';
+        r.pts = pts;
+        let questions = (Array.isArray(body.questions) ? body.questions : [])
+            .slice(0, 10)
+            .map(q => ({ title: cleanRequirementText(q && q.title, 200), type: REQUIREMENT_QUESTION_TYPES.has(q && q.type) ? q.type : 'text' }))
+            .filter(q => q.title);
+        if (!questions.length) questions = [{ title: 'Final Project Deliverable', type: 'doc' }];
+        r.questions = questions;
+        r.targetAllCampuses = targetAllCampuses;
+        r.targetCampusIds = targetAllCampuses ? [] : targetCampusIds;
+        r.status = 'approved';
+        r.approvedAt = r.approvedAt || new Date().toISOString();
+        r.rejectReason = '';
+
+        (store.creatorNotifications || []).forEach(n => {
+            if (n.type === 'corporate_requirement' && n.requirementId === r.id) { n.resolved = true; n.read = true; }
+        });
+        saveStore();
+        res.json({ success: true, requirement: requirementView(r, { creator: true }) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post(['/api/recruiter/requirements/:id/reject', '/gamification/api/recruiter/requirements/:id/reject'], (req, res) => {
+    try {
+        if (!checkCreatorAuth(req)) return res.status(403).json({ success: false, error: 'Unauthorized: Creator access required.' });
+        const r = store.corporateRequirements.find(x => x.id === req.params.id);
+        if (!r) return res.status(404).json({ success: false, error: 'Requirement not found.' });
+        if (r.status === 'approved' || r.status === 'closed') return res.status(400).json({ success: false, error: 'This requirement is already live. Close it instead.' });
+        r.status = 'rejected';
+        r.rejectReason = cleanRequirementText(req.body && req.body.reason, 300);
+        (store.creatorNotifications || []).forEach(n => {
+            if (n.type === 'corporate_requirement' && n.requirementId === r.id) { n.resolved = true; n.read = true; }
+        });
+        saveStore();
+        res.json({ success: true, requirement: requirementView(r, { creator: true }) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Close or reopen an approved requirement (recruiter for their own, or the Creator).
 app.post(['/api/recruiter/requirements/:id/status', '/gamification/api/recruiter/requirements/:id/status'], (req, res) => {
     try {
         const actor = requirementActor(req);
         if (!actor) return res.status(403).json({ success: false, error: 'Unauthorized: recruiter or creator access required.' });
-        const r = store.corporateRequirements.find(x => x.id === req.params.id);
-        if (!r || (!actor.creator && r.employerId !== actor.employer.id)) {
-            return res.status(404).json({ success: false, error: 'Requirement not found.' });
-        }
+        const r = findRequirementForActor(req, actor);
+        if (!r) return res.status(404).json({ success: false, error: 'Requirement not found.' });
         const status = req.body && req.body.status;
-        if (status !== 'open' && status !== 'closed') return res.status(400).json({ success: false, error: 'status must be open or closed' });
-        r.status = status;
+        if (status === 'closed') {
+            if (r.status === 'rejected') return res.status(400).json({ success: false, error: 'This requirement was rejected.' });
+            r.status = r.status === 'pending' ? 'rejected' : 'closed';
+            if (r.status === 'rejected') r.rejectReason = 'Withdrawn by the recruiter';
+        } else if (status === 'open') {
+            if (!r.approvedAt) return res.status(400).json({ success: false, error: 'Only approved requirements can be reopened.' });
+            r.status = 'approved';
+        } else {
+            return res.status(400).json({ success: false, error: 'status must be open or closed' });
+        }
         saveStore();
-        res.json({ success: true, requirement: publicRequirement(r) });
+        res.json({ success: true, requirement: requirementView(r, actor) });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

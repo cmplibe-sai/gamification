@@ -2624,6 +2624,10 @@ async function syncCustomProjectsDBFromServer() {
                     merged[ms] = serverDB[ms];
                 }
             });
+            // A corporate project that is no longer sent to this student (campus changed, rejected) must not linger from an old local copy
+            Object.keys(merged).forEach(ms => {
+                if (!(ms in serverDB) && Array.isArray(merged[ms])) merged[ms] = merged[ms].filter(p => !(p && p.corporate));
+            });
             customProjectsDB = merged;
             localStorage.setItem('customProjectsDB', JSON.stringify(customProjectsDB));
         }
@@ -7308,6 +7312,21 @@ function renderAdminNotificationsList() {
     }
 
     container.innerHTML = creatorNotificationsList.map(notif => {
+        if (notif.type === 'corporate_requirement') {
+            const done = Boolean(notif.resolved);
+            return `
+            <div class="p-3.5 rounded-xl border ${done ? 'border-slate-800 bg-slate-900/60' : 'border-cyan-500/40 bg-gradient-to-r from-cyan-950/20 to-slate-900/80 shadow-md'} flex flex-col gap-2">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center justify-center text-xs shrink-0"><i class="fas fa-bullhorn"></i></div>
+                        <h5 class="text-xs font-bold text-white leading-tight">${escapeHtml(notif.title || 'Corporate project request')}</h5>
+                    </div>
+                    ${done ? '<span class="badge-pill badge-emerald text-[9px] font-bold">Reviewed</span>' : '<span class="badge-pill badge-amber text-[9px] font-extrabold animate-pulse">Approval needed</span>'}
+                </div>
+                <p class="text-xs text-slate-300 pl-9">${escapeHtml(notif.message || '')}</p>
+                ${done ? '' : `<div class="pl-9"><button onclick="openCorporateRequestsTab()" class="btn-primary py-1.5 px-3 text-[11px] rounded-lg">Review request</button></div>`}
+            </div>`;
+        }
         const isApproved = isCertificateApproved(notif.userId, notif.milestoneId);
         const timeVal = notif.createdAt || notif.timestamp;
         const timeAgo = timeVal ? new Date(timeVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : 'Recently';
@@ -22220,7 +22239,7 @@ const LOCAL_FALLBACK_GEO = {
 // -------------------------------------------------------------
 function switchManagementSubTab(subTab) {
     window._mgmtActiveSubTab = subTab;
-    const tabs = ['team', 'corporates', 'campuses'];
+    const tabs = ['team', 'corporates', 'requests', 'campuses'];
     
     tabs.forEach(t => {
         const pane = document.getElementById(`mgmtSubTab-${t}`);
@@ -22244,6 +22263,7 @@ function switchManagementSubTab(subTab) {
     if (subTab === 'team') renderManagementTeam();
     if (subTab === 'corporates') renderManagementCorporates();
     if (subTab === 'campuses') renderManagementCampuses();
+    if (subTab === 'requests' && typeof renderCreatorRequirements === 'function') renderCreatorRequirements();
 }
 window.switchManagementSubTab = switchManagementSubTab;
 
