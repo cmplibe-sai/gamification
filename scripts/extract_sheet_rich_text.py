@@ -66,16 +66,27 @@ def get_rich_text_map(sheet_id):
         headers = [h.lower().strip() for h in rows[0]]
         title_idx = -1
         desc_idx = -1
+        module_idx = -1
         for i, h in enumerate(headers):
             if 'title' in h or 'topic' in h: title_idx = i
             elif 'description' in h or 'article' in h: desc_idx = i
+            elif h == 'module': module_idx = i
+
+        def normalize_module(value):
+            # Same rules as normalizeModule() in server.js
+            s = (value or '').lower().strip()
+            if 'immerse' in s or 'mus' in s: return 'immerse'
+            if 'pod' in s: return 'pod'
+            return 'dip'
         
         for r in rows[1:]:
             title = r[title_idx].strip() if title_idx < len(r) and title_idx != -1 else ''
             desc = r[desc_idx].strip() if desc_idx < len(r) and desc_idx != -1 else ''
+            module = normalize_module(r[module_idx]) if module_idx != -1 and module_idx < len(r) else 'dip'
             if title and desc:
                 clean_t = ''.join(c for c in title.lower() if c.isalnum())
-                res_map[clean_t] = desc
+                # Dip, POD and Immerse rows share one title but have different text, so the key must include the module
+                res_map[module + '|' + clean_t] = desc
 
     return res_map
 

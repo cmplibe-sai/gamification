@@ -1,4 +1,4 @@
-const APP_CLIENT_VERSION = '2.9.33';
+const APP_CLIENT_VERSION = '2.9.34';
 
 // Safe Storage Subsystem with Automatic Quota Recovery & Resilient Fallbacks
 const safeStorage = {
@@ -10585,6 +10585,29 @@ window.uploadPodAudioFile = uploadPodAudioFile;
 // -------------------------------------------------------------
 // cMPLi POD: SAVE ADMIN CONFIGURATION TO BACKEND & LOCAL STORAGE
 // -------------------------------------------------------------
+// Saves ONE check-in day to the server and tells the creator clearly when it did NOT reach the server
+// (network drop, expired login, blocked by a proxy). Returns the server reply, or null on failure.
+function postMilestoneConfigToServer(payload, what) {
+    return apiFetch('/api/milestone-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(async (r) => {
+        let data = null;
+        try { data = await r.json(); } catch (e) { /* non-JSON reply (for example a proxy error page) */ }
+        if (!r.ok || !data || !data.success) {
+            throw new Error((data && data.error) || ('server answered ' + r.status));
+        }
+        console.log('\u2705 ' + what + ' saved on the server:', data);
+        return data;
+    }).catch((err) => {
+        console.error('Server save failed for ' + what + ':', err);
+        alert('\u26A0\uFE0F ' + what + ' could NOT be saved on the server (' + err.message + ').\n\nIt is only on this device right now and can disappear. Please check your internet connection and creator login, then press Save again.');
+        return null;
+    });
+}
+window.postMilestoneConfigToServer = postMilestoneConfigToServer;
+
 function saveAdminPodCheckinConfig(dateKey) {
     if (!customMilestoneConfigs[activeAdminMilestoneId]) customMilestoneConfigs[activeAdminMilestoneId] = {};
     if (!customMilestoneConfigs[activeAdminMilestoneId]['pod']) customMilestoneConfigs[activeAdminMilestoneId]['pod'] = {};
@@ -10719,34 +10742,41 @@ function saveAdminPodCheckinConfig(dateKey) {
         console.warn('safeStorage save warning:', e);
     }
 
-    // Sync to Server backend for cross-browser persistence
-    apiFetch('/api/milestone-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            milestoneId: activeAdminMilestoneId,
-            moduleName: 'pod',
-            dateKey: chosenDate,
-            config: dayConfig,
-            allConfigs: customMilestoneConfigs
-        })
-    }).then(r => r.json()).then(data => {
-        console.log('✅ POD Milestone configs synced to server:', data);
-    }).catch(e => console.error('Server sync error for POD:', e));
-
     renderAdminCheckinsList();
 
     const btn = document.getElementById('btnSaveConfig');
+    const oldHtml = btn ? btn.innerHTML : '';
     if (btn) {
-        const oldHtml = btn.innerHTML;
-        const sizeNotice = (questions.length < 20 || questions.length > 50) ? ` (Note: 20-50 recommended)` : '';
-        btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved (${questions.length} Qs)${sizeNotice}!`;
-        btn.classList.replace('btn-primary', 'bg-emerald-600');
-        setTimeout(() => {
-            btn.innerHTML = oldHtml;
-            btn.classList.replace('bg-emerald-600', 'btn-primary');
-        }, 2200);
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i> Saving...';
     }
+
+    // Sync to the server (this day only) and confirm on the button only after the server accepted it
+    postMilestoneConfigToServer({
+        milestoneId: activeAdminMilestoneId,
+        moduleName: 'pod',
+        dateKey: chosenDate,
+        config: dayConfig
+    }, 'POD check-in setup').then((data) => {
+        if (!btn) return;
+        btn.disabled = false;
+        if (data) {
+            const sizeNotice = (questions.length < 20 || questions.length > 50) ? ` (Note: 20-50 recommended)` : '';
+            btn.innerHTML = `<i class="fas fa-check mr-1.5"></i> Saved on server (${questions.length} Qs)${sizeNotice}!`;
+            btn.classList.replace('btn-primary', 'bg-emerald-600');
+            setTimeout(() => {
+                btn.innerHTML = oldHtml;
+                btn.classList.replace('bg-emerald-600', 'btn-primary');
+            }, 2600);
+        } else {
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1.5"></i> Not saved - press Save again';
+            btn.classList.replace('btn-primary', 'bg-rose-600');
+            setTimeout(() => {
+                btn.innerHTML = oldHtml;
+                btn.classList.replace('bg-rose-600', 'btn-primary');
+            }, 4000);
+        }
+    });
 }
 window.saveAdminPodCheckinConfig = saveAdminPodCheckinConfig;
 
@@ -11957,19 +11987,12 @@ function saveAdminCheckinConfig(dateKey) {
     localStorage.setItem('customMilestoneConfigs', JSON.stringify(customMilestoneConfigs));
     
     // Sync to Server backend for cross-browser persistence
-    apiFetch('/api/milestone-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            milestoneId: activeAdminMilestoneId,
-            moduleName: activeAdminModule,
-            dateKey: chosenDate,
-            config: dayConfig,
-            allConfigs: customMilestoneConfigs
-        })
-    }).then(r => r.json()).then(data => {
-        console.log('✅ Milestone configs synced to server:', data);
-    }).catch(e => console.error('Server sync error:', e));
+    postMilestoneConfigToServer({
+        milestoneId: activeAdminMilestoneId,
+        moduleName: activeAdminModule,
+        dateKey: chosenDate,
+        config: dayConfig
+    }, 'Check-in setup');
 
     renderAdminCheckinsList();
     
@@ -12074,19 +12097,12 @@ function saveAdminImmerseCheckinConfig(dateKey) {
         console.warn('localStorage save warning:', e);
     }
 
-    apiFetch('/api/milestone-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            milestoneId: activeAdminMilestoneId,
-            moduleName: 'immerse',
-            dateKey: chosenDate,
-            config: dayConfig,
-            allConfigs: customMilestoneConfigs
-        })
-    }).then(r => r.json()).then(data => {
-        console.log('✅ Immerse Milestone configs synced to server:', data);
-    }).catch(e => console.error('Server sync error for Immerse:', e));
+    postMilestoneConfigToServer({
+        milestoneId: activeAdminMilestoneId,
+        moduleName: 'immerse',
+        dateKey: chosenDate,
+        config: dayConfig
+    }, 'Immerse check-in setup');
 
     renderAdminCheckinsList();
 
@@ -12148,7 +12164,7 @@ function generateMilestoneImmerseDates() {
         body: JSON.stringify({
             milestoneId: msId,
             moduleName: 'immerse',
-            allConfigs: customMilestoneConfigs
+            allConfigs: { [msId]: { immerse: customMilestoneConfigs[msId]['immerse'] } }
         })
     }).catch(() => {});
 
@@ -15272,37 +15288,23 @@ async function startAudioRecording(idx, isResume = false) {
             window._accumulatedAudioBlobs[idx] = [];
         }
 
+        // Record the plain microphone signal. The phone's echo canceller and noise suppressor cut soft
+        // syllables and word endings (bad for speech-to-text), and forcing a sample rate makes some Android
+        // phones resample. Keep automatic gain so quiet readers are still loud enough.
         const audioConstraints = {
             audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
+                echoCancellation: false,
+                noiseSuppression: false,
                 autoGainControl: true,
-                channelCount: 1,
-                sampleRate: 44100
+                channelCount: 1
             }
         };
         _audioStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
-        let recStream = _audioStream;
-        try {
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (AudioContextClass) {
-                const audioCtx = new AudioContextClass();
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume().catch(() => {});
-                }
-                const source = audioCtx.createMediaStreamSource(_audioStream);
-                const gainNode = audioCtx.createGain();
-                gainNode.gain.value = 2.0;
-                const dest = audioCtx.createMediaStreamDestination();
-                source.connect(gainNode);
-                gainNode.connect(dest);
-                recStream = dest.stream;
-                window._activeAudioCtx = audioCtx;
-            }
-        } catch(audioCtxErr) {
-            console.warn('[AudioContext Gain] Web Audio boost fallback:', audioCtxErr);
-        }
+        // Record the microphone stream directly: no extra Web Audio graph (a suspended AudioContext can give
+        // silent or clipped recordings, and the old 2x gain distorted loud voices).
+        const recStream = _audioStream;
+        window._activeAudioCtx = null;
 
         // Configure MediaRecorder with lightweight 64kbps Opus compression (~1.5 MB for 3.5 minutes)
         let preferredMime = 'audio/webm;codecs=opus';
@@ -15326,7 +15328,8 @@ async function startAudioRecording(idx, isResume = false) {
         // Continuous Speech Recognition with auto-restart in Chrome & pronunciation matching
         window._liveTranscripts = window._liveTranscripts || {};
         window._speechRec = window._speechRec || {};
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const isPhoneBrowser = /Android|iPhone|iPad|iPod|Mobile/i.test((navigator && navigator.userAgent) || '');
+        if (!isPhoneBrowser && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
             try {
                 const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const rec = new SpeechClass();

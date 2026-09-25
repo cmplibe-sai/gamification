@@ -328,6 +328,19 @@ async function transcribeAudioWithAssemblyAI(audioFilePath, options = {}) {
         return null;
     }
 }
+// Transcription for scoring a student's recording. A 3-4 minute reading usually needs 40-90 seconds at
+// AssemblyAI; the old 37-second wait gave up too early, and the scorer then fell back to the browser's
+// rough live transcript (which loses many words) and wrongly reported a match below 50%.
+const EVAL_TRANSCRIBE_MAX_POLLS = 120; // 120 polls x 2.5 s = up to 5 minutes per attempt
+async function transcribeForEvaluation(mediaUrl, label) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        const text = await transcribeAudioWithAssemblyAI(mediaUrl, { maxAttempts: EVAL_TRANSCRIBE_MAX_POLLS });
+        if (text && text.trim()) return text;
+        console.warn(`[AssemblyAI] ${label}: no transcript on attempt ${attempt}/2`);
+    }
+    return null;
+}
+
 // ==============================================================
 // cMPLi POD - SYNCED LYRICS (word-level timings from the actual audio)
 // The lyrics text is the AssemblyAI transcript of the generated audio itself, so what is
@@ -2355,38 +2368,105 @@ app.get(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req,
     res.json({ success: true, data });
 });
 
-// POST endpoint — saves milestone configs to dedicated file
+// Keeps creator-uploaded POD questions safe: a save that does not carry a NEWER creator upload (for example a
+// stale browser tab, an old cached app.js, or a bulk push) can never replace or empty an existing creator upload.
+function protectCreatorPodQuestions(existingDay, incomingDay, context) {
+    if (!existingDay || typeof existingDay !== 'object' || !incomingDay || typeof incomingDay !== 'object') return incomingDay;
+    const exQs = Array.isArray(existingDay.questions) ? existingDay.questions : [];
+    const locked = Boolean(existingDay.manualQuestionsUploaded || existingDay.questionsSource === 'creator_upload');
+    if (!locked || exQs.length < 3) return incomingDay;
+
+    const inQs = Array.isArray(incomingDay.questions) ? incomingDay.questions : [];
+    const incomingIsCreatorUpload = Boolean(incomingDay.manualQuestionsUploaded || incomingDay.questionsSource === 'creator_upload');
+    const incomingIsNewerOrEqual = Number(incomingDay.lastQuestionsUpdate || 0) >= Number(existingDay.lastQuestionsUpdate || 0);
+    if (incomingIsCreatorUpload && incomingIsNewerOrEqual && inQs.length >= 3) return incomingDay;
+
+    console.log(`[POD Questions Guard] ${context}: kept the creator-uploaded pool (${exQs.length} questions); ignored an incoming save carrying ${inQs.length} question(s) that is not a newer creator upload.`);
+    return {
+        ...incomingDay,
+        questions: exQs,
+        manualQuestionsUploaded: true,
+        questionsSource: 'creator_upload',
+        lastQuestionsUpdate: existingDay.lastQuestionsUpdate
+    };
+}
+
+const MILESTONE_CONFIG_KEY_RE = /^\d{1,4}$/;
+const MILESTONE_CONFIG_MODULE_RE = /^[a-z][a-z0-9_]{1,30}$/;
+const MILESTONE_CONFIG_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// POST endpoint — saves ONE check-in day (preferred) for a creator, or adds missing days from a bulk map.
+// Only creators may write. A bulk map can only ADD days that do not exist yet: it never replaces an existing day,
+// so a stale browser can no longer overwrite the newer setup another device saved.
 app.post(['/api/milestone-configs', '/gamification/api/milestone-configs'], (req, res) => {
     try {
-        const { milestoneId, moduleName, dateKey, config, allConfigs } = req.body;
+        if (!checkCreatorAuth(req)) {
+            return res.status(403).json({ success: false, error: 'Creator login required to save check-in setup.' });
+        }
+        const { milestoneId, moduleName, dateKey, config, allConfigs } = req.body || {};
         const current = getMilestoneConfigsFromDb();
+        let savedDay = null;
+        let addedDays = 0;
 
-        if (allConfigs && typeof allConfigs === 'object' && Object.keys(allConfigs).length > 0) {
-            // Deep merge allConfigs into current
-            for (const msId of Object.keys(allConfigs)) {
-                if (!current[msId]) current[msId] = {};
-                for (const mod of Object.keys(allConfigs[msId] || {})) {
-                    if (!current[msId][mod]) current[msId][mod] = {};
-                    for (const dKey of Object.keys(allConfigs[msId][mod] || {})) {
-                        current[msId][mod][dKey] = allConfigs[msId][mod][dKey];
-                    }
-                }
-            }
-        } else if (milestoneId && moduleName && dateKey && config) {
+        // 1) The specific day the creator just saved
+        if (milestoneId !== undefined && moduleName && dateKey && config && typeof config === 'object') {
             const msId = String(milestoneId);
             const mod = String(moduleName);
             const dKey = String(dateKey);
+            if (!MILESTONE_CONFIG_KEY_RE.test(msId) || !MILESTONE_CONFIG_MODULE_RE.test(mod) || !MILESTONE_CONFIG_DATE_RE.test(dKey)) {
+                return res.status(400).json({ success: false, error: 'Invalid milestoneId, moduleName or dateKey' });
+            }
             if (!current[msId]) current[msId] = {};
             if (!current[msId][mod]) current[msId][mod] = {};
-            current[msId][mod][dKey] = config;
+            const existingDay = Object.prototype.hasOwnProperty.call(current[msId][mod], dKey) ? current[msId][mod][dKey] : null;
+            let toSave = config;
+            if (mod === 'pod') toSave = protectCreatorPodQuestions(existingDay, config, `MS${msId} pod ${dKey}`);
+            current[msId][mod][dKey] = toSave;
+            savedDay = toSave;
+            if (mod === 'pod') {
+                const n = Array.isArray(toSave.questions) ? toSave.questions.length : 0;
+                console.log(`[POD Questions Audit] MS${msId} ${dKey}: saved ${n} question(s), source=${toSave.questionsSource || 'unknown'}, manualUpload=${Boolean(toSave.manualQuestionsUploaded)}`);
+            }
         }
 
-        const saved = saveMilestoneConfigsToDb(current);
-        res.json({ success: true, data: saved });
+        // 2) Optional bulk map: only adds days that are missing on the server
+        if (allConfigs && typeof allConfigs === 'object') {
+            for (const msId of Object.keys(allConfigs)) {
+                if (!MILESTONE_CONFIG_KEY_RE.test(msId) || !allConfigs[msId] || typeof allConfigs[msId] !== 'object') continue;
+                for (const mod of Object.keys(allConfigs[msId])) {
+                    if (!MILESTONE_CONFIG_MODULE_RE.test(mod) || !allConfigs[msId][mod] || typeof allConfigs[msId][mod] !== 'object') continue;
+                    for (const dKey of Object.keys(allConfigs[msId][mod])) {
+                        if (!MILESTONE_CONFIG_DATE_RE.test(dKey)) continue;
+                        if (!current[msId]) current[msId] = {};
+                        if (!current[msId][mod]) current[msId][mod] = {};
+                        if (!Object.prototype.hasOwnProperty.call(current[msId][mod], dKey)) {
+                            current[msId][mod][dKey] = allConfigs[msId][mod][dKey];
+                            addedDays++;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!savedDay && addedDays === 0 && !(allConfigs && typeof allConfigs === 'object')) {
+            return res.status(400).json({ success: false, error: 'Nothing to save: send milestoneId, moduleName, dateKey and config.' });
+        }
+
+        saveMilestoneConfigsToDb(current);
+        // Small response (the full map can be large): the saved day is enough for the client to confirm.
+        return res.json({ success: true, data: savedDay || null, addedDays });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+// Lets the owner confirm which server code is actually running on the VPS after a pull and restart
+const SERVER_BUILD = '2026-09-25-pod-questions-guard';
+const SERVER_STARTED_AT = new Date().toISOString();
+app.get(['/api/version', '/gamification/api/version'], (req, res) => {
+    res.json({ success: true, build: SERVER_BUILD, startedAt: SERVER_STARTED_AT });
+});
+
 
 
 // ==============================================================
@@ -3729,7 +3809,12 @@ async function syncGoogleSheetData(sheetIdInput) {
 
             const rawDesc = descIdx !== -1 ? String(row[descIdx] || '').trim() : '';
             const cleanTitleKey = (rawTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            const richDesc = richTextMap[cleanTitleKey] || '';
+            // Rich text (bold/italics) is looked up per module + title and only used when it is the formatted
+            // version of THIS row's own text. Dip, POD and Immerse rows share one title but have different scripts,
+            // so a title-only match would copy another module's text into this one.
+            const plainKey = (s) => String(s || '').replace(/[*_]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const richCandidate = richTextMap[module + '|' + cleanTitleKey] || '';
+            const richDesc = (richCandidate && rawDesc && plainKey(richCandidate) === plainKey(rawDesc)) ? richCandidate : '';
             let articleText = richDesc || rawDesc || existing.articleText || existing.description || '';
             let description = articleText;
 
@@ -7049,7 +7134,7 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
                 if (a.transcription && a.transcription.trim().length > 10) return;
 
                 console.log(`[AssemblyAI Immerse] Transcribing Q${idx+1} video/media: ${mediaUrl}`);
-                const transcript = await transcribeAudioWithAssemblyAI(mediaUrl);
+                const transcript = await transcribeForEvaluation(mediaUrl, 'Immerse Q' + (idx + 1));
                 if (transcript && transcript.trim().length > 0) {
                     a.transcription = transcript.trim();
                     console.log(`[AssemblyAI Immerse] Q${idx+1} transcript (${transcript.split(/\s+/).length} words): "${transcript.slice(0, 100)}..."`);
@@ -7217,12 +7302,12 @@ async function finalizeSubmissionEvaluation(subId, sub, subAnswers, msId, dayNum
             if (!audioUrl || (!audioUrl.startsWith('/') && !audioUrl.includes('/uploads/') && !audioUrl.startsWith('http'))) return;
 
             console.log(`[AssemblyAI] Starting transcription for Q${idx+1} audio: ${audioUrl}`);
-            const transcript = await transcribeAudioWithAssemblyAI(audioUrl);
+            const transcript = await transcribeForEvaluation(audioUrl, 'Dip Q' + (idx + 1));
             if (transcript && transcript.trim().length > 0) {
                 a.transcription = transcript.trim();
                 console.log(`[AssemblyAI] Q${idx+1} transcript (${transcript.split(/\s+/).length} words): "${transcript.slice(0, 100)}..."`);
             } else if (a.transcription && a.transcription.trim().length > 0) {
-                console.log(`[AssemblyAI] Preserving existing client transcript for Q${idx+1}: "${a.transcription.slice(0, 60)}..."`);
+                console.warn(`[AssemblyAI] Q${idx+1}: NO server transcript, scoring with the browser's rough live transcript instead (${a.transcription.trim().split(/\s+/).length} words): "${a.transcription.slice(0, 60)}..."`);
             }
         });
         // Wait for all transcriptions to complete before rubric comparison
